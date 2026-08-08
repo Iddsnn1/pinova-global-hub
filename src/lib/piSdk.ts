@@ -56,6 +56,7 @@ export interface PiPaymentCallbacks {
 }
 
 let piInitialized = false;
+let piInitPromise: Promise<boolean> | null = null;
 
 export function isPiBrowser(): boolean {
   if (typeof window === 'undefined') return false;
@@ -63,16 +64,36 @@ export function isPiBrowser(): boolean {
   return userAgent.includes('PiBrowser') || Boolean(window.Pi);
 }
 
+export function isPiSdkInitialized(): boolean {
+  return piInitialized && typeof window !== 'undefined' && Boolean(window.Pi);
+}
+
 export async function loadPiSdkScript(): Promise<boolean> {
   if (typeof window === 'undefined') return false;
   if (window.Pi) return true;
 
   return new Promise((resolve) => {
+    const existingScript = document.querySelector('script[src*="sdk.minepi.com/pi-sdk.js"]');
+    if (existingScript) {
+      let attempts = 0;
+      const interval = setInterval(() => {
+        attempts++;
+        if (window.Pi) {
+          clearInterval(interval);
+          resolve(true);
+        } else if (attempts > 20) {
+          clearInterval(interval);
+          resolve(Boolean(window.Pi));
+        }
+      }, 150);
+      return;
+    }
+
     const script = document.createElement('script');
     script.src = 'https://sdk.minepi.com/pi-sdk.js';
     script.async = true;
     script.onload = () => {
-      resolve(true);
+      resolve(Boolean(window.Pi));
     };
     script.onerror = () => {
       console.warn('Pi SDK script failed to load or running in standalone browser.');
@@ -83,21 +104,55 @@ export async function loadPiSdkScript(): Promise<boolean> {
 }
 
 export async function initPiSdk(sandbox: boolean = true): Promise<boolean> {
-  if (piInitialized) return true;
-  await loadPiSdkScript();
+  if (piInitialized && typeof window !== 'undefined' && window.Pi) return true;
+  if (piInitPromise) return piInitPromise;
 
-  if (window.Pi) {
-    try {
-      window.Pi.init({ version: '2.0', sandbox });
-      piInitialized = true;
-      console.log(`Pi SDK v2.0 initialized successfully. Sandbox: ${sandbox}`);
-      return true;
-    } catch (err) {
-      console.error('Error initializing Pi SDK:', err);
-      return false;
+  piInitPromise = (async () => {
+    if (typeof window === 'undefined') return false;
+
+    // Retry loop to load script & invoke window.Pi.init()
+    for (let attempt = 0; attempt < 10; attempt++) {
+      if (window.Pi) {
+        try {
+          window.Pi.init({ version: '2.0', sandbox });
+          piInitialized = true;
+          console.log(`[Pi SDK] v2.0 initialized successfully. Sandbox: ${sandbox}`);
+          return true;
+        } catch (err: any) {
+          const errMsg = String(err?.message || err);
+          console.warn(`[Pi SDK] init warning (attempt ${attempt + 1}):`, errMsg);
+          if (errMsg.toLowerCase().includes('initialized')) {
+            piInitialized = true;
+            return true;
+          }
+        }
+      } else {
+        await loadPiSdkScript();
+      }
+      await new Promise((res) => setTimeout(res, 200));
     }
+
+    if (window.Pi) {
+      try {
+        window.Pi.init({ version: '2.0', sandbox });
+        piInitialized = true;
+        return true;
+      } catch (err: any) {
+        if (String(err?.message || err).toLowerCase().includes('initialized')) {
+          piInitialized = true;
+          return true;
+        }
+      }
+    }
+
+    return piInitialized;
+  })();
+
+  const success = await piInitPromise;
+  if (!success) {
+    piInitPromise = null;
   }
-  return false;
+  return success;
 }
 
 export async function authenticatePiUser(
@@ -153,6 +208,17 @@ export async function createPiPayment(params: {
   message?: string;
   data?: any;
 }> {
+  if (params.onStatusUpdate) params.onStatusUpdate('Initializing Pi SDK...');
+
+  // Ensure Pi SDK v2 is fully initialized before starting payment
+  const isReady = await initPiSdk(true);
+  if (!isReady && isPiBrowser()) {
+    return {
+      success: false,
+      message: 'Pi Network SDK is not initialized. Please ensure you are opening the app within Pi Browser and have a stable network connection.'
+    };
+  }
+
   return new Promise((resolve) => {
     executePiPayment(
       {
@@ -174,6 +240,8 @@ export async function createPiPayment(params: {
                 paymentId,
                 txid,
                 category: params.metadata?.category || 'utility',
+                country: params.metadata?.country,
+                countryCode: params.metadata?.countryCode,
                 providerId: params.metadata?.providerId || 'unknown',
                 accountNumber: params.metadata?.accountNumber || '',
                 fiatAmount: params.metadata?.fiatAmount || 0,
@@ -264,6 +332,15 @@ export function executePiPayment(
   }, 35000);
 
   if (window.Pi) {
+    if (!piInitialized) {
+      try {
+        window.Pi.init({ version: '2.0', sandbox: true });
+        piInitialized = true;
+      } catch (e) {
+        // Ignored if already initialized
+      }
+    }
+
     updateStatus('Connecting to Pi Network...');
     try {
       window.Pi.createPayment(paymentData, {

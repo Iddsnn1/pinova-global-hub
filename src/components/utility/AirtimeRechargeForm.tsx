@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { 
   Globe, 
   Smartphone, 
@@ -6,7 +6,6 @@ import {
   Search, 
   AlertCircle, 
   CheckCircle2, 
-  Sparkles, 
   ShieldCheck, 
   RefreshCw,
   PhoneCall
@@ -20,6 +19,8 @@ interface AirtimeRechargeFormProps {
   userBalancePi?: number;
   buyerUsername?: string;
   onExecutePayment: (params: {
+    country: string;
+    countryCode: string;
     provider: UtilityServiceProvider;
     phoneNumber: string;
     fiatAmount: number;
@@ -38,11 +39,11 @@ export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
   isProcessingPayment,
   errorMessage
 }) => {
-  // Step 1: Country Selection State
-  const [selectedCountryCode, setSelectedCountryCode] = useState<string>('NG');
+  // Step 1: Country Selection State - Default to unselected (NO default country)
+  const [selectedCountryCode, setSelectedCountryCode] = useState<string>('');
   const [countrySearchQuery, setCountrySearchQuery] = useState<string>('');
 
-  // Step 2: Network Operator Selection State
+  // Step 2: Network Operator Selection State - Default to null (NO preselected network)
   const [selectedProvider, setSelectedProvider] = useState<UtilityServiceProvider | null>(null);
 
   // Step 3: Mobile Phone Number State
@@ -55,35 +56,25 @@ export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
   const [selectedPackage, setSelectedPackage] = useState<UtilityProviderPackage | null>(null);
 
   // Active Country details
-  const activeCountry = AIRTIME_COUNTRIES.find((c) => c.code === selectedCountryCode) || AIRTIME_COUNTRIES[0];
+  const activeCountry = AIRTIME_COUNTRIES.find((c) => c.code === selectedCountryCode);
 
   // Dynamically query available networks for selected country
-  const availableNetworks = SAMPLE_UTILITY_PROVIDERS.filter((p) => {
+  const availableNetworks = selectedCountryCode ? SAMPLE_UTILITY_PROVIDERS.filter((p) => {
     if (p.category !== 'airtime' || !p.enabled) return false;
     if (p.countryCode) return p.countryCode === selectedCountryCode;
-    return p.country.toLowerCase().includes(activeCountry.name.toLowerCase());
-  });
+    return activeCountry ? p.country.toLowerCase().includes(activeCountry.name.toLowerCase()) : false;
+  }) : [];
 
   // Reset Network, Phone Number, and Packages whenever Country changes
-  useEffect(() => {
+  const handleSelectCountry = (code: string) => {
+    if (code === selectedCountryCode) return;
+    setSelectedCountryCode(code);
+    setSelectedProvider(null);
     setPhoneNumber('');
     setPhoneValidation(null);
-
-    if (availableNetworks.length > 0) {
-      const firstNetwork = availableNetworks[0];
-      setSelectedProvider(firstNetwork);
-      if (firstNetwork.supportsCustomAmount) {
-        setPurchaseMode('custom');
-        setCustomFiatAmount(firstNetwork.minCustomFiat || 5.00);
-      } else if (firstNetwork.supportsFixedPackages && firstNetwork.packages.length > 0) {
-        setPurchaseMode('package');
-        setSelectedPackage(firstNetwork.packages[0]);
-      }
-    } else {
-      setSelectedProvider(null);
-      setSelectedPackage(null);
-    }
-  }, [selectedCountryCode]);
+    setSelectedPackage(null);
+    setCountrySearchQuery('');
+  };
 
   // Handle Network Change
   const handleSelectNetwork = (prov: UtilityServiceProvider) => {
@@ -100,7 +91,7 @@ export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
   // Real-time Phone Validation on change
   const handlePhoneChange = (val: string) => {
     setPhoneNumber(val);
-    if (val.trim()) {
+    if (val.trim() && selectedCountryCode) {
       const status = validateAirtimePhoneNumber(val, selectedCountryCode);
       setPhoneValidation(status);
     } else {
@@ -122,6 +113,8 @@ export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
     calculatedPiAmount <= piConversionConfig.maxPurchasePi;
 
   const canProceed =
+    !!selectedCountryCode &&
+    !!activeCountry &&
     !!selectedProvider &&
     !!phoneNumber.trim() &&
     !!phoneValidation?.isValid &&
@@ -139,9 +132,11 @@ export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!canProceed || !selectedProvider) return;
+    if (!canProceed || !selectedProvider || !activeCountry) return;
 
     await onExecutePayment({
+      country: activeCountry.name,
+      countryCode: activeCountry.code,
       provider: selectedProvider,
       phoneNumber: phoneValidation?.formatted || phoneNumber,
       fiatAmount: getActiveFiatPrice(),
@@ -158,21 +153,27 @@ export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
         <div className="flex items-center justify-between">
           <label className="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
             <span className="w-5 h-5 rounded-full bg-purple-600 text-white flex items-center justify-center text-[10px]">1</span>
-            <span>Select Country</span>
+            <span>Select Destination Country</span>
           </label>
-          <span className="text-[11px] font-bold text-amber-500 flex items-center gap-1">
-            <span>{activeCountry.flag}</span>
-            <span>{activeCountry.name} ({activeCountry.dialCode})</span>
-          </span>
+          {activeCountry ? (
+            <span className="text-[11px] font-bold text-emerald-500 flex items-center gap-1">
+              <span>{activeCountry.flag}</span>
+              <span>{activeCountry.name} ({activeCountry.dialCode})</span>
+            </span>
+          ) : (
+            <span className="text-[11px] font-bold text-amber-500">
+              * Required (Select a country)
+            </span>
+          )}
         </div>
 
-        {/* Country Selector Cards or Searchable Dropdown */}
+        {/* Country Selector Cards & Search */}
         <div className="p-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl space-y-3">
           <div className="relative">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
-              placeholder="Search country name or dial code (e.g. Nigeria, +234, Kenya)..."
+              placeholder="Search country (e.g. Nigeria, Kenya, Ghana, India, USA)..."
               value={countrySearchQuery}
               onChange={(e) => setCountrySearchQuery(e.target.value)}
               className="w-full pl-9 pr-3 py-2 rounded-xl text-xs bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-purple-500"
@@ -186,10 +187,7 @@ export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
                 <button
                   key={country.code}
                   type="button"
-                  onClick={() => {
-                    setSelectedCountryCode(country.code);
-                    setCountrySearchQuery('');
-                  }}
+                  onClick={() => handleSelectCountry(country.code)}
                   className={`p-2.5 rounded-xl border text-left transition-all flex items-center gap-2 ${
                     isSelected
                       ? 'bg-purple-600 text-white border-purple-500 shadow-md ring-2 ring-purple-400/30'
@@ -218,18 +216,27 @@ export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
           <span>Select Mobile Network Operator</span>
         </label>
 
-        {availableNetworks.length === 0 ? (
-          /* EMPTY STATE */
+        {!selectedCountryCode ? (
+          /* NO COUNTRY SELECTED NOTICE */
+          <div className="p-4 rounded-2xl bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-center space-y-1">
+            <Globe className="w-6 h-6 text-slate-400 mx-auto" />
+            <p className="text-xs font-bold text-slate-600 dark:text-slate-300">
+              Please select a country in Step 1 to view supported mobile operators.
+            </p>
+          </div>
+        ) : availableNetworks.length === 0 ? (
+          /* EMPTY STATE FOR COUNTRY */
           <div className="p-5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-center space-y-2">
             <AlertCircle className="w-8 h-8 text-amber-500 mx-auto" />
             <h4 className="font-bold text-xs text-amber-600 dark:text-amber-400">
-              No supported mobile networks available for {activeCountry.name} currently.
+              No supported mobile networks available for {activeCountry?.name} currently.
             </h4>
             <p className="text-[11px] text-slate-500 dark:text-slate-400 max-w-sm mx-auto">
-              Please select another supported country (such as Nigeria, Kenya, Ghana, or India) to top up airtime instantly.
+              Please select another supported country (such as Nigeria, Kenya, Ghana, or India).
             </p>
           </div>
         ) : (
+          /* NETWORK OPERATOR GRID */
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {availableNetworks.map((network) => {
               const isSelected = selectedProvider?.id === network.id;
@@ -239,7 +246,7 @@ export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
                   onClick={() => handleSelectNetwork(network)}
                   className={`p-3 rounded-2xl border transition-all cursor-pointer flex flex-col items-center text-center gap-2 ${
                     isSelected
-                      ? 'bg-purple-50 dark:bg-purple-950/60 border-purple-600 ring-2 ring-purple-500/30'
+                      ? 'bg-purple-50 dark:bg-purple-950/60 border-purple-600 ring-2 ring-purple-500/30 shadow-md'
                       : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-purple-400'
                   }`}
                 >
@@ -251,11 +258,15 @@ export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
                   />
                   <div>
                     <h4 className="font-bold text-xs text-slate-900 dark:text-slate-100">{network.name}</h4>
-                    <span className="text-[10px] text-purple-600 dark:text-purple-400 font-bold uppercase">{activeCountry.name}</span>
+                    <span className="text-[10px] text-purple-600 dark:text-purple-400 font-bold uppercase">{activeCountry?.name}</span>
                   </div>
-                  {isSelected && (
+                  {isSelected ? (
                     <span className="px-2 py-0.5 rounded-full bg-purple-600 text-white text-[9px] font-bold">
                       Selected
+                    </span>
+                  ) : (
+                    <span className="text-[9px] text-slate-400 font-semibold">
+                      Click to select
                     </span>
                   )}
                 </div>
@@ -266,7 +277,7 @@ export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
       </div>
 
       {/* STEP 3: MOBILE PHONE NUMBER INPUT & COUNTRY VALIDATION */}
-      {selectedProvider && (
+      {selectedProvider && activeCountry && (
         <div className="space-y-2">
           <label className="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center justify-between">
             <span className="flex items-center gap-1.5">
@@ -443,9 +454,17 @@ export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
         </div>
       )}
 
-      {/* REAL-TIME PI CALCULATOR CARD */}
-      {selectedProvider && (
-        <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 text-white space-y-2">
+      {/* STEP 5: ORDER REVIEW & PI CALCULATOR CARD */}
+      {selectedProvider && activeCountry && (
+        <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 text-white space-y-2.5">
+          <div className="flex justify-between items-center text-xs pb-2 border-b border-slate-800/80">
+            <span className="text-slate-400">Destination:</span>
+            <span className="font-bold text-purple-300 flex items-center gap-1">
+              <span>{activeCountry.flag}</span>
+              <span>{activeCountry.name}</span>
+              <span className="text-slate-400">• {selectedProvider.name}</span>
+            </span>
+          </div>
           <div className="flex justify-between text-xs">
             <span className="text-slate-400">Target Airtime Value:</span>
             <span className="font-bold text-white">${getActiveFiatPrice().toFixed(2)} USD</span>
@@ -468,7 +487,7 @@ export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
         </div>
       )}
 
-      {/* STEP 5: EXECUTE PI PAYMENT BUTTON */}
+      {/* STEP 6: EXECUTE PI PAYMENT BUTTON */}
       <button
         type="submit"
         disabled={!canProceed}
@@ -477,12 +496,22 @@ export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
         {isProcessingPayment ? (
           <>
             <RefreshCw className="w-5 h-5 animate-spin text-amber-300" />
-            <span>Connecting Pi SDK Wallet...</span>
+            <span>Connecting Pi Wallet...</span>
           </>
         ) : (
           <>
             <ShieldCheck className="w-5 h-5 text-amber-300" />
-            <span>Pay {calculatedPiAmount.toFixed(4)} π Now</span>
+            <span>
+              {canProceed
+                ? `Pay ${calculatedPiAmount.toFixed(4)} π Now`
+                : !selectedCountryCode
+                ? 'Select Country to Continue'
+                : !selectedProvider
+                ? 'Select Network Operator'
+                : !phoneValidation?.isValid
+                ? 'Enter Valid Phone Number'
+                : 'Complete Form to Pay'}
+            </span>
           </>
         )}
       </button>

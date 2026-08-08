@@ -379,6 +379,8 @@ export const UtilitiesView: React.FC<UtilitiesViewProps> = ({
                       memo: `${params.provider.name} - ${params.phoneNumber}`,
                       metadata: {
                         category: selectedUtility.id,
+                        country: params.country,
+                        countryCode: params.countryCode,
                         providerId: params.provider.id,
                         accountNumber: params.phoneNumber,
                         fiatAmount: params.fiatAmount,

@@ -564,11 +564,51 @@ app.post('/api/v2/payments/complete', async (req, res) => {
 
 // Server-side Utility Fulfillment & Verification Endpoint
 app.post('/api/v2/utility/fulfill', async (req, res) => {
-  const { paymentId, txid, category, providerId, accountNumber, fiatAmount, piAmount, packageName, idempotencyKey } = req.body;
+  const { paymentId, txid, category, country, countryCode, providerId, accountNumber, fiatAmount, piAmount, packageName, idempotencyKey } = req.body;
 
   if (!paymentId) {
     res.status(400).json({ success: false, error: 'Missing paymentId parameter' });
     return;
+  }
+
+  // Validate Airtime Category Country-Provider consistency
+  if (category === 'airtime' || category === 'mobile_data') {
+    if (countryCode && providerId) {
+      const providerCountryMap: Record<string, string> = {
+        'prov-airtime-mtn-ng': 'NG',
+        'prov-airtime-airtel-ng': 'NG',
+        'prov-airtime-glo-ng': 'NG',
+        'prov-airtime-9mobile-ng': 'NG',
+        'prov-airtime-safaricom-ke': 'KE',
+        'prov-airtime-airtel-ke': 'KE',
+        'prov-airtime-mtn-gh': 'GH',
+        'prov-airtime-vodafone-gh': 'GH',
+        'prov-airtime-airtel-in': 'IN',
+        'prov-airtime-jio-in': 'IN',
+        'prov-airtime-att-us': 'US',
+        'prov-airtime-tmobile-us': 'US',
+        'prov-airtime-ee-gb': 'GB',
+        'prov-airtime-vodafone-gb': 'GB',
+        'prov-airtime-vodacom-za': 'ZA',
+        'prov-airtime-mtn-za': 'ZA',
+        'prov-airtime-globe-ph': 'PH',
+        'prov-airtime-smart-ph': 'PH',
+        'prov-airtime-telkomsel-id': 'ID',
+        'prov-airtime-indosat-id': 'ID',
+        'prov-airtime-viettel-vn': 'VN',
+        'prov-airtime-vinaphone-vn': 'VN'
+      };
+
+      const expectedCountry = providerCountryMap[providerId];
+      if (expectedCountry && expectedCountry !== countryCode) {
+        res.status(400).json({
+          success: false,
+          status: 'INVALID_PROVIDER_COUNTRY',
+          message: `Validation Error: Provider ${providerId} does not belong to target country code ${countryCode}.`
+        });
+        return;
+      }
+    }
   }
 
   // Idempotency check: If this paymentId or idempotencyKey was already fulfilled, return cached record

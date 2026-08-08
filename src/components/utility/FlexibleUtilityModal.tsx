@@ -364,6 +364,8 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                       memo: `${params.provider.name} - ${params.phoneNumber} (${params.packageName || 'Airtime'})`,
                       metadata: {
                         category: 'airtime',
+                        country: params.country,
+                        countryCode: params.countryCode,
                         providerId: params.provider.id,
                         accountNumber: params.phoneNumber,
                         fiatAmount: params.fiatAmount,
