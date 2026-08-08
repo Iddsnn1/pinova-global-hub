@@ -1,0 +1,167 @@
+import { TranslationDictionary } from '../../types/i18n';
+
+export const enDictionary: TranslationDictionary = {
+  // Common
+  'common.appName': 'PiNova Global Marketplace',
+  'common.tagline': 'Enterprise Pi Network Commerce & Utility Platform',
+  'common.search': 'Search products, utilities, vendors...',
+  'common.save': 'Save Changes',
+  'common.cancel': 'Cancel',
+  'common.confirm': 'Confirm',
+  'common.close': 'Close',
+  'common.back': 'Back',
+  'common.filter': 'Filters',
+  'common.viewAll': 'View All',
+  'common.loading': 'Processing...',
+  'common.success': 'Operation Completed Successfully',
+  'common.error': 'An error occurred. Please try again.',
+  'common.total': 'Total',
+  'common.subtotal': 'Subtotal',
+  'common.piBalance': 'Pi Wallet Balance',
+  'common.learnMore': 'Learn More',
+  'common.dismiss': 'Dismiss',
+  'common.status': 'Status',
+  'common.actions': 'Actions',
+
+  // Nav
+  'nav.marketplace': 'Marketplace Catalog',
+  'nav.buyerDashboard': 'Buyer Orders & Escrow',
+  'nav.sellerDashboard': 'Seller Storefront',
+  'nav.adminDashboard': 'Admin Governance',
+  'nav.aiSearch': 'AI Smart Search',
+  'nav.cart': 'Cart',
+  'nav.notifications': 'Notifications',
+  'nav.pstpShield': 'PSTP Shield Center',
+  'nav.piWallet': 'Pi Wallet',
+  'nav.utilityServices': 'Airtime & Utilities',
+  'nav.selectLanguage': 'Select Language & Region',
+  'nav.switchLanguage': 'Language',
+
+  // Hero Section
+  'hero.badge': 'Official Pi Network Ecosystem Partner',
+  'hero.title': 'The World\'s Leading Pi Coin Marketplace & Utility Hub',
+  'hero.subtitle': 'Buy physical goods, digital assets, airtime, and utility bills seamlessly with 100% PSTP Escrow Protection.',
+  'hero.ctaShop': 'Explore Marketplace',
+  'hero.ctaUtility': 'Buy Airtime & Pay Bills',
+  'hero.escrowStat': '100% Guaranteed PSTP Escrow',
+  'hero.vendorsStat': '5,000+ Verified Global Sellers',
+  'hero.countriesStat': '180+ Countries Supported',
+
+  // Catalog & Filters
+  'catalog.allCategories': 'All Categories',
+  'catalog.physicalGoods': 'Physical Goods',
+  'catalog.digitalAssets': 'Digital Assets & Downloads',
+  'catalog.airtimeUtility': 'Airtime & Utility Bills',
+  'catalog.giftCards': 'Gift Cards & Vouchers',
+  'catalog.sortBy': 'Sort By',
+  'catalog.priceLowHigh': 'Price: Low to High',
+  'catalog.priceHighLow': 'Price: High to Low',
+  'catalog.topRated': 'Top Rated Sellers',
+  'catalog.newest': 'Newest Arrivals',
+  'catalog.minPrice': 'Min Pi',
+  'catalog.maxPrice': 'Max Pi',
+  'catalog.applyFilters': 'Apply Filters',
+  'catalog.resetFilters': 'Reset',
+
+  // Product Details
+  'product.buyNow': 'Instant Buy (Escrow)',
+  'product.addToCart': 'Add to Cart',
+  'product.escrowProtected': 'PSTP Escrow Shield Active',
+  'product.vendor': 'Seller',
+  'product.verifiedVendor': 'Verified Pioneer Seller',
+  'product.rating': 'Rating',
+  'product.inStock': 'In Stock',
+  'product.outOfStock': 'Out of Stock',
+  'product.digitalDownload': 'Instant Digital Download',
+  'product.shippingInfo': 'Global Shipping Available',
+  'product.description': 'Product Description',
+  'product.reviewsCount': 'reviews',
+
+  // Cart & Escrow Checkout
+  'cart.title': 'Your Shopping Cart',
+  'cart.empty': 'Your cart is currently empty.',
+  'cart.proceedCheckout': 'Proceed to PSTP Escrow Checkout',
+  'cart.escrowFee': 'PSTP Protection Fee (0%)',
+  'cart.networkFee': 'Pi Network Gas (0.01 π)',
+  'cart.totalPi': 'Total Pi Payment',
+  'cart.clearCart': 'Clear Cart',
+
+  // Escrow Checkout Modal
+  'checkout.title': 'PSTP Multi-Sig Escrow Checkout',
+  'checkout.step1': 'Order Summary & Address',
+  'checkout.step2': 'Pi SDK Authentication',
+  'checkout.step3': 'Escrow Lock & Confirmation',
+  'checkout.escrowNote': 'Your Pi coins remain locked safely in the PSTP smart escrow until you confirm delivery of your order.',
+  'checkout.shippingAddress': 'Shipping Address',
+  'checkout.enterAddress': 'Enter recipient address',
+  'checkout.confirmOrder': 'Lock Pi in Escrow & Place Order',
+  'checkout.successTitle': 'Escrow Locked Successfully!',
+  'checkout.successMessage': 'Your payment is now held in PSTP Escrow. The vendor has been notified to dispatch your items.',
+
+  // Utility Services
+  'utility.title': 'Global Airtime & Utility Services',
+  'utility.subtitle': 'Instant top-up and bill payments across 180+ countries powered by dynamic Pi conversion engine.',
+  'utility.airtime': 'Airtime Top-Up',
+  'utility.data': 'Mobile Data Bundles',
+  'utility.electricity': 'Electricity Bills',
+  'utility.cable': 'Cable TV Subscriptions',
+  'utility.education': 'WAEC / JAMB Pins',
+  'utility.water': 'Water Utilities',
+  'utility.accountNumber': 'Account / Meter / Phone Number',
+  'utility.selectProvider': 'Select Service Provider',
+  'utility.amountPi': 'Amount in Pi (π)',
+  'utility.estimatedValue': 'Estimated Fiat Value',
+  'utility.validateAccount': 'Verify Account Owner',
+  'utility.payUtility': 'Complete Purchase with Pi',
+  'utility.verifiedOwner': 'Verified Account Holder',
+  'utility.tokenCode': 'Recharge PIN / Token',
+
+  // Buyer Dashboard
+  'buyer.title': 'Buyer Dashboard',
+  'buyer.overview': 'Orders & Escrow Holdings',
+  'buyer.activeOrders': 'Active Escrow Orders',
+  'buyer.orderHistory': 'Past Orders',
+  'buyer.disputeCenter': 'Dispute Resolution',
+  'buyer.confirmDelivery': 'Confirm Receipt & Release Pi',
+  'buyer.raiseDispute': 'Open Dispute',
+
+  // Seller Dashboard
+  'seller.title': 'Seller Merchant Portal',
+  'seller.storeOverview': 'Storefront Analytics',
+  'seller.totalSales': 'Total Pi Sales',
+  'seller.escrowPending': 'Pending Escrow Release',
+  'seller.addProduct': 'List New Product',
+  'seller.manageProducts': 'Manage Listings',
+
+  // Admin Dashboard
+  'admin.title': 'Platform Governance & Admin Console',
+  'admin.overview': 'Ecosystem Overview',
+  'admin.languageManagement': 'Global Language & Localization Engine',
+  'admin.rateEngine': 'Pi Conversion Rate Engine',
+  'admin.disputes': 'Escrow Dispute Center',
+
+  // Admin Language Management Tab
+  'admin.i18n.title': 'Global Language Management',
+  'admin.i18n.subtitle': 'Configure supported languages, edit translation keys, track completion, and import/export localization bundles.',
+  'admin.i18n.activeLangs': 'Active Supported Languages',
+  'admin.i18n.addLanguage': 'Add New Supported Language',
+  'admin.i18n.editTranslations': 'Translation Editor',
+  'admin.i18n.searchKeys': 'Filter translation keys or strings...',
+  'admin.i18n.completion': 'Completion Status',
+  'admin.i18n.exportJson': 'Export Translation JSON',
+  'admin.i18n.importJson': 'Import Translation JSON',
+  'admin.i18n.publishChanges': 'Publish Translation Bundle',
+  'admin.i18n.missingKeys': 'Missing Translations',
+  'admin.i18n.rtlBadge': 'RTL Layout Enabled',
+
+  // PSTP Shield Center
+  'pstp.title': 'PSTP Protocol Security & Escrow Shield',
+  'pstp.status': 'Security Status: 100% OPERATIONAL',
+  'pstp.multiSigActive': '3-of-4 Multi-Sig Consensus Active',
+
+  // Receipt
+  'receipt.title': 'Official PiNova Digital Receipt',
+  'receipt.download': 'Download PDF Receipt',
+  'receipt.fulfilled': 'FULFILLED & DELIVERED',
+  'receipt.date': 'Transaction Date'
+};

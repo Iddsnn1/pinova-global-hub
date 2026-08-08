@@ -1,0 +1,789 @@
+import React, { useState, useEffect } from 'react';
+import { 
+  Sparkles, 
+  ShieldCheck, 
+  Zap, 
+  ShoppingBag, 
+  Package, 
+  Download, 
+  Smartphone, 
+  Gift, 
+  TrendingUp, 
+  CheckCircle2, 
+  Lock,
+  ArrowRight,
+  Star,
+  Award,
+  Clock,
+  Flame,
+  ChevronRight,
+  Store
+} from 'lucide-react';
+
+import { Product, Order, OrderItem, Vendor, Review, Coupon, Notification, Message, PiUser, ProductCategory, PstpOrderStatus, UserRole } from './types';
+import { INITIAL_PRODUCTS, MOCK_VENDORS, MOCK_REVIEWS, MOCK_COUPONS, SAMPLE_ORDERS } from './data/mockData';
+import { authenticatePiUser } from './lib/piSdk';
+
+import { MainSection, MarketplaceCategory, UtilityCategory, BreadcrumbItem, VisitedCategory } from './types/navigation';
+import { MARKETPLACE_CATEGORIES, UTILITY_CATEGORIES } from './data/categoryData';
+
+import { FullScreenNavHeader } from './components/navigation/FullScreenNavHeader';
+import { FullScreenMobileBottomNav } from './components/navigation/FullScreenMobileBottomNav';
+import { QRScannerModal } from './components/QRScannerModal';
+import { ScanToPayModal } from './components/ScanToPayModal';
+
+import { HomeView } from './components/views/HomeView';
+import { MarketplaceView } from './components/views/MarketplaceView';
+import { UtilitiesView } from './components/views/UtilitiesView';
+import { ServicesView } from './components/views/ServicesView';
+import { AiSearchView } from './components/views/AiSearchView';
+import { CartView } from './components/views/CartView';
+import { OrdersView } from './components/views/OrdersView';
+import { ProfileView } from './components/views/ProfileView';
+import { FinanceAnalyticsView } from './components/views/FinanceAnalyticsView';
+import { PlatformAdminView } from './components/views/PlatformAdminView';
+import { EnterpriseSecurityView } from './components/views/EnterpriseSecurityView';
+import { DeveloperPlatformView } from './components/views/DeveloperPlatformView';
+
+import { UniversalSearchModal } from './components/UniversalSearchModal';
+import { PiBrowserBanner } from './components/PiBrowserBanner';
+import { Footer } from './components/Footer';
+import { ProductDetailModal } from './components/ProductDetailModal';
+import { QuickViewModal } from './components/QuickViewModal';
+import { EscrowCheckoutModal } from './components/EscrowCheckoutModal';
+import { MessagingModal } from './components/MessagingModal';
+import { NotificationCenter } from './components/NotificationCenter';
+import { PstpShieldCenter } from './components/PstpShieldCenter';
+import { SellerStorefrontModal } from './components/SellerStorefrontModal';
+import { SocialCommunityHub } from './components/social/SocialCommunityHub';
+
+import { PiConversionConfig, ConversionRateLog } from './types/utility';
+import { INITIAL_PI_CONVERSION_CONFIG, INITIAL_CONVERSION_RATE_LOGS } from './data/utilityData';
+
+import { LanguageProvider } from './context/LanguageContext';
+import { LanguageSelectorModal } from './components/i18n/LanguageSelectorModal';
+
+function MainAppContent() {
+  // Dark mode
+  const [darkMode, setDarkMode] = useState(true);
+
+  // Full-Screen Navigation Section State (Default to 'home' as central command center)
+  const [activeSection, setActiveSection] = useState<MainSection>('home');
+  const [selectedMarketplaceCategory, setSelectedMarketplaceCategory] = useState<MarketplaceCategory>('all');
+  
+  // Back navigation stack & History tracking
+  const [navigationStack, setNavigationStack] = useState<{ section: MainSection; category: MarketplaceCategory }[]>([
+    { section: 'home', category: 'all' }
+  ]);
+  const [recentlyVisitedCategories, setRecentlyVisitedCategories] = useState<VisitedCategory[]>([]);
+  const [recentlyViewedProducts, setRecentlyViewedProducts] = useState<Product[]>([]);
+
+  // Universal Search Engine Modal State
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isUniversalSearchOpen, setIsUniversalSearchOpen] = useState(false);
+  const [universalSearchInitialQuery, setUniversalSearchInitialQuery] = useState('');
+
+  // Language Modal
+  const [isLanguageModalOpen, setIsLanguageModalOpen] = useState(false);
+
+  // Utility Conversion Engine State
+  const [utilityConfig, setUtilityConfig] = useState<PiConversionConfig>(INITIAL_PI_CONVERSION_CONFIG);
+  const [utilityRateLogs, setUtilityRateLogs] = useState<ConversionRateLog[]>(INITIAL_CONVERSION_RATE_LOGS);
+
+  // User & Wallet State
+  const [user, setUser] = useState<PiUser>({
+    username: 'Pi_Pioneer_01',
+    uid: 'user-uid-892341',
+    walletAddress: 'GD5X...PINOVA_KEY',
+    authenticated: true,
+    role: 'buyer'
+  });
+  const [userBalancePi, setUserBalancePi] = useState<number>(250.00);
+
+  // Data Collections
+  const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS);
+  const [orders, setOrders] = useState<Order[]>(SAMPLE_ORDERS);
+  const [vendors, setVendors] = useState<Vendor[]>(MOCK_VENDORS);
+  const [reviews, setReviews] = useState<Review[]>(MOCK_REVIEWS);
+  const [coupons, setCoupons] = useState<Coupon[]>(MOCK_COUPONS);
+  const [cartItems, setCartItems] = useState<OrderItem[]>([]);
+  const [wishlist, setWishlist] = useState<Product[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([
+    {
+      id: 'notif-001',
+      title: 'Payment Authorized & Order Protection Active',
+      message: 'Your order ORD-PI-892341 was authorized and confirmed via official Pi Network platform API.',
+      type: 'order_protection',
+      timestamp: new Date().toISOString(),
+      read: false
+    }
+  ]);
+  const [messages, setMessages] = useState<Message[]>([]);
+
+  // Modals
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
+  const [selectedVendor, setSelectedVendor] = useState<Vendor | null>(null);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
+  const [isPstpShieldOpen, setIsPstpShieldOpen] = useState(false);
+  const [isQrScannerOpen, setIsQrScannerOpen] = useState(false);
+  const [isScanToPayOpen, setIsScanToPayOpen] = useState(false);
+  const [scanToPayRawQr, setScanToPayRawQr] = useState<string>('');
+  const [checkoutAppliedCoupon, setCheckoutAppliedCoupon] = useState<Coupon | undefined>();
+  const [checkoutShippingCountry, setCheckoutShippingCountry] = useState<string>('United States');
+  const [activeChatUser, setActiveChatUser] = useState<string | null>(null);
+  const [activeChatOrderId, setActiveChatOrderId] = useState<string | undefined>();
+
+  // Dark Mode side effect
+  useEffect(() => {
+    if (darkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [darkMode]);
+
+  // Open Universal Search Modal
+  const handleOpenUniversalSearch = (query?: string) => {
+    setUniversalSearchInitialQuery(query || searchQuery || '');
+    setIsUniversalSearchOpen(true);
+  };
+
+  // Navigate to Section Handler with Stack Push
+  const handleNavigateSection = (newSection: MainSection, newCategory: MarketplaceCategory = 'all') => {
+    setActiveSection(newSection);
+    if (newSection === 'marketplace') {
+      setSelectedMarketplaceCategory(newCategory);
+    }
+    
+    // Push onto navigation history stack if distinct
+    setNavigationStack((prev) => {
+      const top = prev[prev.length - 1];
+      if (top && top.section === newSection && top.category === newCategory) return prev;
+      return [...prev, { section: newSection, category: newCategory }];
+    });
+  };
+
+  // Select Marketplace Category Handler
+  const handleSelectMarketplaceCategory = (cat: MarketplaceCategory) => {
+    setSelectedMarketplaceCategory(cat);
+    setActiveSection('marketplace');
+
+    if (cat !== 'all') {
+      const found = MARKETPLACE_CATEGORIES.find((c) => c.id === cat);
+      if (found) {
+        setRecentlyVisitedCategories((prev) => {
+          const filtered = prev.filter((item) => item.id !== cat);
+          return [
+            {
+              id: cat,
+              name: found.name,
+              type: 'marketplace',
+              iconName: found.iconName,
+              timestamp: new Date().toISOString()
+            },
+            ...filtered
+          ].slice(0, 5);
+        });
+      }
+    }
+
+    setNavigationStack((prev) => [...prev, { section: 'marketplace', category: cat }]);
+  };
+
+  // Back Navigation Handler
+  const handleGoBack = () => {
+    if (navigationStack.length <= 1) return;
+    const newStack = [...navigationStack];
+    newStack.pop(); // remove current
+    const previous = newStack[newStack.length - 1];
+    setNavigationStack(newStack);
+    if (previous) {
+      setActiveSection(previous.section);
+      setSelectedMarketplaceCategory(previous.category);
+    }
+  };
+
+  // Select Product Handler (with recently viewed tracking)
+  const handleSelectProduct = (product: Product) => {
+    setSelectedProduct(product);
+    setRecentlyViewedProducts((prev) => {
+      const filtered = prev.filter((p) => p.id !== product.id);
+      return [product, ...filtered].slice(0, 6);
+    });
+  };
+
+  // Cart operations
+  const handleAddToCart = (product: Product, quantity: number = 1, customDetails?: any) => {
+    setCartItems((prev) => {
+      const existingIdx = prev.findIndex((item) => item.product.id === product.id);
+      if (existingIdx > -1) {
+        const updated = [...prev];
+        updated[existingIdx].quantity += quantity;
+        if (customDetails) updated[existingIdx].customDetails = customDetails;
+        return updated;
+      }
+      return [...prev, { product, quantity, customDetails }];
+    });
+    // Jump to dedicated Cart view
+    handleNavigateSection('cart');
+  };
+
+  const handleInstantBuy = (product: Product, quantity: number = 1, customDetails?: any) => {
+    setCartItems([{ product, quantity, customDetails }]);
+    setCheckoutAppliedCoupon(undefined);
+    setCheckoutShippingCountry('United States');
+    setIsCheckoutOpen(true);
+  };
+
+  const handleUpdateQuantity = (productId: string, qty: number) => {
+    if (qty <= 0) {
+      handleRemoveItem(productId);
+      return;
+    }
+    setCartItems((prev) =>
+      prev.map((item) => (item.product.id === productId ? { ...item, quantity: qty } : item))
+    );
+  };
+
+  const handleRemoveItem = (productId: string) => {
+    setCartItems((prev) => prev.filter((item) => item.product.id !== productId));
+  };
+
+  // Wishlist toggle
+  const handleToggleWishlist = (product: Product, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setWishlist((prev) => {
+      const exists = prev.some((p) => p.id === product.id);
+      if (exists) return prev.filter((p) => p.id !== product.id);
+      return [...prev, product];
+    });
+  };
+
+  // Open Storefront by seller name
+  const handleOpenStorefrontByName = (sellerName: string) => {
+    const targetName = (sellerName || '').toLowerCase();
+    const foundVendor = vendors.find(
+      (v) => (v.storeName || '').toLowerCase() === targetName || (v.sellerUsername || '').toLowerCase() === targetName
+    ) || {
+      id: `ven-${Date.now()}`,
+      sellerUsername: sellerName,
+      storeName: sellerName,
+      bio: 'Verified Merchant offering global products and instant digital delivery on Pi Network.',
+      rating: 4.9,
+      reviewsCount: 88,
+      verified: true,
+      totalSalesPi: 1250.00,
+      bannerImage: 'https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&w=1200&q=80',
+      logoImage: 'https://images.unsplash.com/photo-1560179707-f14e90ef3623?auto=format&fit=crop&w=300&q=80',
+      joinedDate: '2025-01-15',
+      shippingCountries: ['Worldwide']
+    };
+    setSelectedVendor(foundVendor);
+  };
+
+  // Checkout Payment Callback
+  const handlePaymentSuccess = (newOrder: Order) => {
+    setOrders((prev) => [newOrder, ...prev]);
+    setUserBalancePi((prev) => Math.max(0, prev - newOrder.totalPi));
+    setCartItems([]);
+
+    setNotifications((prev) => [
+      {
+        id: `notif-${Date.now()}`,
+        title: 'Payment Verified & Order Confirmed',
+        message: `Order ${newOrder.id} for ${newOrder.totalPi.toFixed(2)} π successfully authorized and verified via official Pi Network platform API.`,
+        type: 'order_protection',
+        timestamp: new Date().toISOString(),
+        read: false
+      },
+      ...prev
+    ]);
+
+    handleNavigateSection('orders');
+  };
+
+  // Confirm Receipt & Complete Order
+  const handleConfirmReceipt = (orderId: string) => {
+    setOrders((prev) =>
+      prev.map((o) => (o.id === orderId ? { ...o, escrowStatus: 'released', pstpStatus: 'Completed', updatedAt: new Date().toISOString() } : o))
+    );
+
+    setNotifications((prev) => [
+      {
+        id: `notif-${Date.now()}`,
+        title: 'Order Completed',
+        message: `Order ${orderId} has been confirmed received and funds released to seller. Thank you!`,
+        type: 'order_protection',
+        timestamp: new Date().toISOString(),
+        read: false
+      },
+      ...prev
+    ]);
+  };
+
+  // Request Return
+  const handleRequestReturn = (orderId: string, reason: string) => {
+    setOrders((prev) =>
+      prev.map((o) => (o.id === orderId ? { ...o, pstpStatus: 'Disputed', updatedAt: new Date().toISOString() } : o))
+    );
+  };
+
+  // Open Dispute
+  const handleOpenDispute = (orderId: string, statement: string) => {
+    setOrders((prev) =>
+      prev.map((o) => (o.id === orderId ? { ...o, pstpStatus: 'Disputed', updatedAt: new Date().toISOString() } : o))
+    );
+  };
+
+  // Resolve Dispute
+  const handleResolveDispute = (orderId: string, resolution: 'buyer_refund' | 'seller_payout', note: string) => {
+    setOrders((prev) =>
+      prev.map((o) =>
+        o.id === orderId
+          ? {
+              ...o,
+              escrowStatus: resolution === 'buyer_refund' ? 'refunded' : 'released',
+              pstpStatus: resolution === 'buyer_refund' ? 'Refunded' : 'Completed',
+              updatedAt: new Date().toISOString()
+            }
+          : o
+      )
+    );
+  };
+
+  // Update Order Lifecycle Status
+  const handleUpdateOrderStatus = (orderId: string, newStatus: PstpOrderStatus, note?: string) => {
+    setOrders((prev) =>
+      prev.map((o) => {
+        if (o.id !== orderId) return o;
+        const existingTimeline = o.timeline || [];
+        const newLog = {
+          status: newStatus,
+          timestamp: new Date().toISOString(),
+          actor: user.username,
+          actorRole: user.role,
+          note: note || `Order status updated to ${newStatus}`
+        };
+        return {
+          ...o,
+          pstpStatus: newStatus,
+          timeline: [...existingTimeline, newLog],
+          updatedAt: new Date().toISOString()
+        };
+      })
+    );
+  };
+
+  // Add Review
+  const handleAddReview = (productId: string, rating: number, comment: string) => {
+    const newRev: Review = {
+      id: `rev-${Date.now()}`,
+      productId,
+      username: user.username,
+      rating,
+      comment,
+      date: new Date().toISOString().split('T')[0],
+      verifiedPurchase: true,
+      helpfulCount: 0
+    };
+    setReviews((prev) => [newRev, ...prev]);
+  };
+
+  // Send Message
+  const handleSendMessage = (recipientUsername: string, text: string, orderId?: string) => {
+    const newMsg: Message = {
+      id: `msg-${Date.now()}`,
+      senderUsername: user.username,
+      recipientUsername,
+      text,
+      orderId,
+      timestamp: new Date().toISOString(),
+      read: false
+    };
+    setMessages((prev) => [...prev, newMsg]);
+  };
+
+  // Build breadcrumbs for header
+  const getBreadcrumbs = (): BreadcrumbItem[] => {
+    const breadcrumbs: BreadcrumbItem[] = [
+      { label: activeSection.toUpperCase(), section: activeSection }
+    ];
+
+    if (activeSection === 'marketplace' && selectedMarketplaceCategory !== 'all') {
+      const catDef = MARKETPLACE_CATEGORIES.find((c) => c.id === selectedMarketplaceCategory);
+      breadcrumbs.push({
+        label: catDef?.name || selectedMarketplaceCategory,
+        section: 'marketplace',
+        category: selectedMarketplaceCategory
+      });
+    }
+
+    return breadcrumbs;
+  };
+
+  const unreadNotifsCount = notifications.filter((n) => !n.read).length;
+
+  return (
+    <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans transition-colors pb-16 md:pb-0">
+      
+      {/* Top Banner */}
+      <PiBrowserBanner sandboxMode={true} userBalancePi={userBalancePi} />
+
+      {/* Enterprise Full-Screen Navigation Header */}
+      <FullScreenNavHeader
+        activeSection={activeSection}
+        onNavigateSection={(sec) => handleNavigateSection(sec)}
+        breadcrumbs={getBreadcrumbs()}
+        canGoBack={navigationStack.length > 1}
+        onGoBack={handleGoBack}
+        searchQuery={searchQuery}
+        onSearchChange={(q) => setSearchQuery(q)}
+        onOpenUniversalSearch={handleOpenUniversalSearch}
+        cartCount={cartItems.reduce((acc, item) => acc + item.quantity, 0)}
+        unreadNotifsCount={unreadNotifsCount}
+        user={user}
+        userBalancePi={userBalancePi}
+        darkMode={darkMode}
+        onToggleDarkMode={() => setDarkMode(!darkMode)}
+        onOpenNotifications={() => setIsNotificationsOpen(true)}
+        onOpenPstpShield={() => setIsPstpShieldOpen(true)}
+        onOpenQrScanner={() => setIsQrScannerOpen(true)}
+        recentlyVisitedCategories={recentlyVisitedCategories}
+        onSelectVisitedCategory={(visited) => handleSelectMarketplaceCategory(visited.id as MarketplaceCategory)}
+      />
+
+      {/* Dedicated View Rendering */}
+      <main className="flex-1 mt-4">
+        
+        {activeSection === 'home' && (
+          <HomeView
+            user={user}
+            userBalancePi={userBalancePi}
+            products={products}
+            vendors={vendors}
+            activeOrders={orders}
+            recentlyViewedProducts={recentlyViewedProducts}
+            wishlistProducts={wishlist}
+            onNavigateSection={handleNavigateSection}
+            onOpenUniversalSearch={handleOpenUniversalSearch}
+            onSelectProduct={handleSelectProduct}
+            onAddToCart={(p) => handleAddToCart(p, 1)}
+            onInstantBuy={(p) => handleInstantBuy(p, 1)}
+            onToggleWishlist={handleToggleWishlist}
+            onOpenPstpShield={() => setIsPstpShieldOpen(true)}
+            onOpenQrScanner={() => setIsQrScannerOpen(true)}
+            onOpenStorefrontByName={handleOpenStorefrontByName}
+            onConfirmReceipt={handleConfirmReceipt}
+          />
+        )}
+
+        {activeSection === 'marketplace' && (
+          <MarketplaceView
+            selectedCategory={selectedMarketplaceCategory}
+            onSelectCategory={handleSelectMarketplaceCategory}
+            products={products}
+            vendors={vendors}
+            wishlistProductIds={wishlist.map((w) => w.id)}
+            onSelectProduct={handleSelectProduct}
+            onAddToCart={(p, qty) => handleAddToCart(p, qty)}
+            onInstantBuy={(p, qty) => handleInstantBuy(p, qty)}
+            onToggleWishlist={handleToggleWishlist}
+            onOpenStorefront={handleOpenStorefrontByName}
+            onQuickView={(p) => setQuickViewProduct(p)}
+            onOpenAiSearch={() => handleNavigateSection('ai_search')}
+            recentlyViewedProducts={recentlyViewedProducts}
+          />
+        )}
+
+        {activeSection === 'utilities' && (
+          <UtilitiesView
+            selectedUtilityCategory={selectedMarketplaceCategory}
+            utilityConfig={utilityConfig}
+            userBalancePi={userBalancePi}
+            buyerUsername={user.username}
+            onTransactionSuccess={(receipt) => {
+              setUserBalancePi((prev) => Math.max(0, prev - receipt.piAmount));
+              setNotifications((prev) => [
+                {
+                  id: `notif-${Date.now()}`,
+                  title: 'Utility Purchase Fulfilled',
+                  message: `Successfully purchased ${receipt.providerName} (${receipt.accountNumber}) for ${receipt.piAmount.toFixed(4)} π. Token: ${receipt.tokenOrCode || 'Delivered'}`,
+                  type: 'order_protection',
+                  timestamp: new Date().toISOString(),
+                  read: false
+                },
+                ...prev
+              ]);
+            }}
+          />
+        )}
+
+        {activeSection === 'services' && (
+          <ServicesView userBalancePi={userBalancePi} />
+        )}
+
+        {activeSection === 'ai_search' && (
+          <AiSearchView
+            products={products}
+            onSelectProduct={handleSelectProduct}
+            onAddToCart={(p) => handleAddToCart(p, 1)}
+            onInstantBuy={(p) => handleInstantBuy(p, 1)}
+            onToggleWishlist={handleToggleWishlist}
+            wishlistProductIds={wishlist.map((w) => w.id)}
+          />
+        )}
+
+        {activeSection === 'cart' && (
+          <CartView
+            cart={cartItems}
+            appliedCoupon={checkoutAppliedCoupon || null}
+            onUpdateQuantity={handleUpdateQuantity}
+            onRemoveItem={handleRemoveItem}
+            onClearCart={() => setCartItems([])}
+            onApplyCoupon={(code) => {
+              const found = coupons.find((c) => c.code === code && c.active);
+              if (found) setCheckoutAppliedCoupon(found);
+            }}
+            onRemoveCoupon={() => setCheckoutAppliedCoupon(undefined)}
+            onOpenCheckoutModal={() => setIsCheckoutOpen(true)}
+            onNavigateSection={handleNavigateSection}
+          />
+        )}
+
+        {activeSection === 'orders' && (
+          <OrdersView
+            orders={orders}
+            currentUserRole={user.role}
+            currentUsername={user.username}
+            onUpdateOrderStatus={handleUpdateOrderStatus}
+            onConfirmReceipt={handleConfirmReceipt}
+            onRequestReturn={handleRequestReturn}
+            onOpenDispute={handleOpenDispute}
+            onResolveDispute={handleResolveDispute}
+          />
+        )}
+
+        {activeSection === 'community' && (
+          <SocialCommunityHub
+            user={user}
+            products={products}
+            vendors={vendors}
+            orders={orders}
+            onOpenMessaging={(recipient) => setActiveChatUser(recipient)}
+            onOpenProductDetail={handleSelectProduct}
+            onOpenVendorStorefront={(vendor) => setSelectedVendor(vendor)}
+          />
+        )}
+
+        {activeSection === 'profile' && (
+          <ProfileView
+            user={user}
+            currentUserRole={user.role}
+            onSwitchRole={(role) => setUser((prev) => ({ ...prev, role }))}
+            onOpenPstpShield={() => setIsPstpShieldOpen(true)}
+            onNavigateSection={handleNavigateSection}
+            onOpenNotifications={() => setIsNotificationsOpen(true)}
+          />
+        )}
+
+        {activeSection === 'finance_analytics' && (
+          <FinanceAnalyticsView
+            products={products}
+            orders={orders}
+            onOpenPstpShield={() => setIsPstpShieldOpen(true)}
+          />
+        )}
+
+        {activeSection === 'admin_governance' && (
+          <PlatformAdminView
+            currentAdminUsername={user.username}
+            onNavigateSection={handleNavigateSection}
+          />
+        )}
+
+        {activeSection === 'security_trust' && (
+          <EnterpriseSecurityView
+            userRole={user.role}
+            onNavigateSection={handleNavigateSection}
+          />
+        )}
+
+        {activeSection === 'developer_platform' && (
+          <DeveloperPlatformView
+            userRole={user.role}
+            onNavigateSection={handleNavigateSection}
+          />
+        )}
+
+      </main>
+
+      {/* Footer */}
+      <Footer 
+        onSelectCategory={(cat) => handleNavigateSection('marketplace', cat as any)} 
+        onOpenLanguageModal={() => setIsLanguageModalOpen(true)}
+      />
+
+      {/* Streamlined 5-Destination Mobile Bottom Navigation */}
+      <FullScreenMobileBottomNav
+        activeSection={activeSection}
+        onNavigateSection={(sec) => handleNavigateSection(sec)}
+        cartCount={cartItems.reduce((acc, item) => acc + item.quantity, 0)}
+      />
+
+      {/* Universal Search Modal Overlay */}
+      <UniversalSearchModal
+        isOpen={isUniversalSearchOpen}
+        onClose={() => setIsUniversalSearchOpen(false)}
+        initialQuery={universalSearchInitialQuery}
+        products={products}
+        vendors={vendors}
+        orders={orders}
+        onSelectProduct={handleSelectProduct}
+        onSelectVendorByName={handleOpenStorefrontByName}
+        onNavigateSection={handleNavigateSection}
+        onAddToCart={(p) => handleAddToCart(p, 1)}
+        onInstantBuy={(p) => handleInstantBuy(p, 1)}
+      />
+
+      {/* Modals & Overlays */}
+      {selectedProduct && (
+        <ProductDetailModal
+          product={selectedProduct}
+          onClose={() => setSelectedProduct(null)}
+          onAddToCart={handleAddToCart}
+          onInstantBuy={handleInstantBuy}
+          reviews={reviews}
+          onAddReview={handleAddReview}
+        />
+      )}
+
+      {quickViewProduct && (
+        <QuickViewModal
+          product={quickViewProduct}
+          onClose={() => setQuickViewProduct(null)}
+          onFullDetails={(p) => {
+            setQuickViewProduct(null);
+            handleSelectProduct(p);
+          }}
+          onAddToCart={(p, qty) => handleAddToCart(p, qty)}
+          onInstantBuy={(p, qty) => handleInstantBuy(p, qty)}
+          onToggleWishlist={handleToggleWishlist}
+          isWishlisted={wishlist.some((w) => w.id === quickViewProduct.id)}
+          onOpenStorefront={(sellerName) => {
+            setQuickViewProduct(null);
+            handleOpenStorefrontByName(sellerName);
+          }}
+        />
+      )}
+
+      {selectedVendor && (
+        <SellerStorefrontModal
+          vendor={selectedVendor}
+          products={products}
+          onClose={() => setSelectedVendor(null)}
+          onSelectProduct={handleSelectProduct}
+          onAddToCart={(p, e) => handleAddToCart(p, 1)}
+          onToggleWishlist={handleToggleWishlist}
+          wishlistProductIds={wishlist.map((w) => w.id)}
+          onInstantBuy={(p, e) => handleInstantBuy(p, 1)}
+          onContactSeller={(sellerUsername) => setActiveChatUser(sellerUsername)}
+        />
+      )}
+
+      {isCheckoutOpen && (
+        <EscrowCheckoutModal
+          cartItems={cartItems}
+          appliedCoupon={checkoutAppliedCoupon}
+          shippingCountry={checkoutShippingCountry}
+          onClose={() => setIsCheckoutOpen(false)}
+          onPaymentSuccess={handlePaymentSuccess}
+          userUsername={user.username}
+        />
+      )}
+
+      {isNotificationsOpen && (
+        <NotificationCenter
+          notifications={notifications}
+          onClose={() => setIsNotificationsOpen(false)}
+          onMarkAllRead={() =>
+            setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
+          }
+        />
+      )}
+
+      {activeChatUser && (
+        <MessagingModal
+          recipientUsername={activeChatUser}
+          orderId={activeChatOrderId}
+          onClose={() => setActiveChatUser(null)}
+          messages={messages}
+          onSendMessage={handleSendMessage}
+          userUsername={user.username}
+        />
+      )}
+
+      {isPstpShieldOpen && (
+        <PstpShieldCenter
+          onClose={() => setIsPstpShieldOpen(false)}
+          orders={orders}
+          onUpdateOrderStatus={handleUpdateOrderStatus}
+          currentUser={user}
+        />
+      )}
+
+      {isLanguageModalOpen && (
+        <LanguageSelectorModal
+          isOpen={isLanguageModalOpen}
+          onClose={() => setIsLanguageModalOpen(false)}
+        />
+      )}
+
+      {isQrScannerOpen && (
+        <QRScannerModal
+          isOpen={isQrScannerOpen}
+          onClose={() => setIsQrScannerOpen(false)}
+          onScanToPay={(rawQr) => {
+            setIsQrScannerOpen(false);
+            setScanToPayRawQr(rawQr);
+            setIsScanToPayOpen(true);
+          }}
+        />
+      )}
+
+      {isScanToPayOpen && (
+        <ScanToPayModal
+          isOpen={isScanToPayOpen}
+          onClose={() => setIsScanToPayOpen(false)}
+          rawQrCode={scanToPayRawQr}
+          userUsername={user.username}
+          userBalancePi={userBalancePi}
+          onPaymentSuccess={(result) => {
+            setNotifications((prev) => [
+              {
+                id: `notif-scan-pay-${Date.now()}`,
+                title: 'Scan-to-Pay Completed',
+                message: `Successfully transferred ${result.amount} π to ${result.recipient}. Payment ID: ${result.paymentId}`,
+                type: 'order_protection',
+                timestamp: new Date().toISOString(),
+                read: false
+              },
+              ...prev
+            ]);
+            setUserBalancePi((prev) => Math.max(0, prev - result.amount));
+          }}
+        />
+      )}
+
+    </div>
+  );
+}
+
+export default function App() {
+  return (
+    <LanguageProvider>
+      <MainAppContent />
+    </LanguageProvider>
+  );
+}
