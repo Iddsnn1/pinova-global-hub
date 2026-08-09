@@ -110,15 +110,29 @@ export const PstpShieldCenter: React.FC<PstpShieldCenterProps> = ({
   const fetchPstpData = async () => {
     setLoading(true);
     try {
+      const fetchJson = async (url: string) => {
+        try {
+          const r = await fetch(url);
+          if (!r.ok) return null;
+          const contentType = r.headers.get('content-type') || '';
+          if (contentType.includes('application/json')) {
+            return await r.json();
+          }
+        } catch {
+          return null;
+        }
+        return null;
+      };
+
       const [logsRes, disputesRes, secRes] = await Promise.all([
-        fetch('/api/pstp/audit-logs').then((r) => r.json()),
-        fetch('/api/pstp/disputes').then((r) => r.json()),
-        fetch('/api/pstp/security-events').then((r) => r.json())
+        fetchJson('/api/pstp/audit-logs'),
+        fetchJson('/api/pstp/disputes'),
+        fetchJson('/api/pstp/security-events')
       ]);
 
-      if (logsRes.logs) setAuditLogs(logsRes.logs);
-      if (disputesRes.disputes) setDisputes(disputesRes.disputes);
-      if (secRes.events) setSecurityEvents(secRes.events);
+      if (logsRes && logsRes.logs) setAuditLogs(logsRes.logs);
+      if (disputesRes && disputesRes.disputes) setDisputes(disputesRes.disputes);
+      if (secRes && secRes.events) setSecurityEvents(secRes.events);
     } catch (err) {
       console.error('Error fetching PSTP data:', err);
     } finally {

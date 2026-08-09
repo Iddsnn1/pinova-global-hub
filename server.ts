@@ -11,6 +11,17 @@ const PORT = 3000;
 
 app.use(express.json());
 
+// Vercel Serverless Request URL Restoration Middleware
+app.use((req, res, next) => {
+  const invokePath = (req.headers['x-invoke-path'] as string) || (req.headers['x-matched-path'] as string) || (req.headers['x-original-url'] as string);
+  if (invokePath && invokePath.startsWith('/api') && invokePath !== '/api/index') {
+    const queryIdx = req.url.indexOf('?');
+    const queryString = queryIdx !== -1 ? req.url.slice(queryIdx) : '';
+    req.url = invokePath + queryString;
+  }
+  next();
+});
+
 // CORS & Pi Browser Iframe Security Headers
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -159,12 +170,12 @@ app.get('/api/health', (req, res) => {
 // PSTP REST API Endpoints
 
 // 1. Audit Logs Retrieval
-app.get('/api/pstp/audit-logs', (req, res) => {
+app.get(['/api/pstp/audit-logs', '/api/v1/pstp/audit-logs'], (req, res) => {
   res.json({ success: true, count: PSTP_AUDIT_LOGS.length, logs: PSTP_AUDIT_LOGS });
 });
 
 // Create Audit Log Entry
-app.post('/api/pstp/audit-logs', (req, res) => {
+app.post(['/api/pstp/audit-logs', '/api/v1/pstp/audit-logs'], (req, res) => {
   const { orderId, paymentId, actor, actorRole, action, details, ipAddress, deviceInfo } = req.body;
   const newLog = {
     id: `LOG-UUID-${Date.now()}`,
@@ -183,11 +194,11 @@ app.post('/api/pstp/audit-logs', (req, res) => {
 });
 
 // 2. Disputes API
-app.get('/api/pstp/disputes', (req, res) => {
+app.get(['/api/pstp/disputes', '/api/v1/pstp/disputes'], (req, res) => {
   res.json({ success: true, disputes: PSTP_DISPUTES });
 });
 
-app.post('/api/pstp/disputes', (req, res) => {
+app.post(['/api/pstp/disputes', '/api/v1/pstp/disputes'], (req, res) => {
   const { orderId, buyerUsername, sellerUsername, reason, description, amountPi, evidenceFiles } = req.body;
   const newDispute = {
     id: `DSP-UUID-${Date.now()}`,
@@ -229,7 +240,7 @@ app.post('/api/pstp/disputes', (req, res) => {
   res.json({ success: true, dispute: newDispute });
 });
 
-app.post('/api/pstp/disputes/:id/comment', (req, res) => {
+app.post(['/api/pstp/disputes/:id/comment', '/api/v1/pstp/disputes/:id/comment'], (req, res) => {
   const { id } = req.params;
   const { sender, role, text } = req.body;
   const dispute = PSTP_DISPUTES.find((d) => d.id === id);
@@ -252,7 +263,7 @@ app.post('/api/pstp/disputes/:id/comment', (req, res) => {
   res.json({ success: true, dispute });
 });
 
-app.post('/api/pstp/disputes/:id/resolve', (req, res) => {
+app.post(['/api/pstp/disputes/:id/resolve', '/api/v1/pstp/disputes/:id/resolve'], (req, res) => {
   const { id } = req.params;
   const { decision, note, refundAmountPi, resolvedBy } = req.body;
   const dispute = PSTP_DISPUTES.find((d) => d.id === id);
@@ -289,8 +300,21 @@ app.post('/api/pstp/disputes/:id/resolve', (req, res) => {
 });
 
 // 3. Security Events API
-app.get('/api/pstp/security-events', (req, res) => {
+app.get(['/api/pstp/security-events', '/api/v1/pstp/security-events'], (req, res) => {
   res.json({ success: true, events: PSTP_SECURITY_EVENTS });
+});
+
+app.post(['/api/pstp/security-events', '/api/v1/pstp/security-events'], (req, res) => {
+  const { eventType, severity, description } = req.body;
+  const newEvent = {
+    id: `SEC-EVENT-${Date.now()}`,
+    eventType: eventType || 'SECURITY_AUDIT',
+    severity: severity || 'info',
+    description: description || 'PSTP Security Event Recorded',
+    timestamp: new Date().toISOString()
+  };
+  PSTP_SECURITY_EVENTS.unshift(newEvent);
+  res.json({ success: true, event: newEvent });
 });
 
 // 4. Platform Pricing Configuration & Utility Config APIs
@@ -809,9 +833,20 @@ Instructions:
 app.post('/api/ai/search', handleAiSearch);
 app.post('/api/v1/ai/search', handleAiSearch);
 
+// Catch-all 404 Handler for ALL /api endpoints - Guarantees JSON response, never HTML
+app.use('/api', (req, res) => {
+  res.setHeader('Content-Type', 'application/json');
+  res.status(404).json({
+    success: false,
+    error: `API endpoint not found: ${req.method} ${req.path}`,
+    path: req.path
+  });
+});
+
 // Global Error Handling Middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   console.error('[Global API Error Handler]:', err);
+  res.setHeader('Content-Type', 'application/json');
   res.status(err.status || 500).json({
     success: false,
     error: err.message || 'Internal Server Error',

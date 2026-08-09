@@ -182,9 +182,8 @@ export async function authenticatePiUser(
 
   if (inPiBrowser && hasSdk && typeof window !== 'undefined' && window.Pi) {
     console.log('[PI] SDK initialized');
-    console.log('[PI] Authentication started');
+    console.log('[PI] authentication started');
     const requestedScopes = ['username', 'payments'];
-    console.log(`[PI] Requested scopes: ${JSON.stringify(requestedScopes)}`);
 
     try {
       const nativeAuthPromise = window.Pi.authenticate(
@@ -204,7 +203,7 @@ export async function authenticatePiUser(
 
       if (raceResult && (raceResult as any).user) {
         const auth = raceResult as any;
-        console.log('[PI] Authentication succeeded', auth);
+        console.log('[PI] authentication success');
         return {
           username: auth.user.username,
           uid: auth.user.uid,
@@ -214,6 +213,7 @@ export async function authenticatePiUser(
         };
       }
     } catch (err: any) {
+      console.log('[PI] authentication error', err?.message || String(err));
       console.warn('[PI] Native authentication attempt encountered error, utilizing sandbox fallback profile:', err);
     }
   }
