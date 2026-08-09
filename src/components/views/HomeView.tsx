@@ -197,37 +197,23 @@ export const HomeView: React.FC<HomeViewProps> = ({
           <span className="text-xs text-slate-500 font-medium">Instant One-Tap Access</span>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           
-          {/* Action 1: Airtime & Data */}
+          {/* Action 1: Airtime & Utilities */}
           <div
-            onClick={() => onNavigateSection('utilities', 'airtime' as any)}
+            onClick={() => onNavigateSection('utilities')}
             className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-emerald-500 transition-all cursor-pointer group shadow-sm flex flex-col items-center text-center space-y-2"
           >
             <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
               <PhoneCall className="w-6 h-6" />
             </div>
             <h3 className="text-xs font-bold text-slate-900 dark:text-slate-100 group-hover:text-emerald-500">
-              Airtime & Data
+              Airtime & Utilities
             </h3>
-            <p className="text-[10px] text-slate-500">Instant Global Topup</p>
+            <p className="text-[10px] text-slate-500">Topup, Bills & Data</p>
           </div>
 
-          {/* Action 2: Utility Bills */}
-          <div
-            onClick={() => onNavigateSection('utilities', 'electricity' as any)}
-            className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-amber-500 transition-all cursor-pointer group shadow-sm flex flex-col items-center text-center space-y-2"
-          >
-            <div className="w-12 h-12 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
-              <Lightbulb className="w-6 h-6" />
-            </div>
-            <h3 className="text-xs font-bold text-slate-900 dark:text-slate-100 group-hover:text-amber-500">
-              Pay Utility Bills
-            </h3>
-            <p className="text-[10px] text-slate-500">Power, Water & Cable</p>
-          </div>
-
-          {/* Action 3: Marketplace Catalog */}
+          {/* Action 2: Marketplace Catalog */}
           <div
             onClick={() => onNavigateSection('marketplace', 'all')}
             className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-purple-500 transition-all cursor-pointer group shadow-sm flex flex-col items-center text-center space-y-2"
@@ -241,7 +227,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             <p className="text-[10px] text-slate-500">Physical & Digital</p>
           </div>
 
-          {/* Action 4: AI Shopping Concierge */}
+          {/* Action 3: AI Shopping Concierge */}
           <div
             onClick={() => onNavigateSection('ai_search')}
             className="p-4 rounded-2xl bg-gradient-to-br from-purple-900 via-indigo-900 to-slate-900 border border-purple-700/60 text-white transition-all cursor-pointer group shadow-md flex flex-col items-center text-center space-y-2"
@@ -255,21 +241,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             <p className="text-[10px] text-slate-300">Smart Shopping AI</p>
           </div>
 
-          {/* Action 5: Track Active Orders */}
-          <div
-            onClick={() => onNavigateSection('orders')}
-            className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-blue-500 transition-all cursor-pointer group shadow-sm flex flex-col items-center text-center space-y-2"
-          >
-            <div className="w-12 h-12 rounded-2xl bg-blue-500/10 text-blue-500 flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
-              <Package className="w-6 h-6" />
-            </div>
-            <h3 className="text-xs font-bold text-slate-900 dark:text-slate-100 group-hover:text-blue-500">
-              Track Orders
-            </h3>
-            <p className="text-[10px] text-slate-500">Live Carrier Sync</p>
-          </div>
-
-          {/* Action 6: PSTP Shield Protection */}
+          {/* Action 4: PSTP Shield Protection */}
           <div
             onClick={onOpenPstpShield}
             className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-emerald-500 transition-all cursor-pointer group shadow-sm flex flex-col items-center text-center space-y-2"
@@ -280,29 +252,29 @@ export const HomeView: React.FC<HomeViewProps> = ({
             <h3 className="text-xs font-bold text-slate-900 dark:text-slate-100 group-hover:text-emerald-500">
               Order Protection
             </h3>
-            <p className="text-[10px] text-slate-500">Security & Disputes</p>
+            <p className="text-[10px] text-slate-500">Escrow & Security</p>
           </div>
 
         </div>
       </div>
 
-      {/* 3. ACTIVE ORDERS SUMMARY CARD */}
-      {activeOrders.length > 0 && (
-        <div className="p-6 rounded-3xl bg-white dark:bg-slate-900 border border-purple-500/30 shadow-xl space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm sm:text-base font-black text-slate-900 dark:text-slate-100 flex items-center gap-2">
-              <Package className="w-5 h-5 text-purple-500" />
-              <span>Active Orders & Logistics Track</span>
-            </h2>
-            <button
-              onClick={() => onNavigateSection('orders')}
-              className="text-xs font-bold text-purple-600 dark:text-purple-400 hover:underline flex items-center gap-1"
-            >
-              <span>View All Orders ({activeOrders.length})</span>
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
+      {/* 3. AUTHORITATIVE ORDER TRACKING & LOGISTICS SECTION */}
+      <div className="p-6 rounded-3xl bg-white dark:bg-slate-900 border border-purple-500/30 shadow-xl space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm sm:text-base font-black text-slate-900 dark:text-slate-100 flex items-center gap-2">
+            <Package className="w-5 h-5 text-purple-500" />
+            <span>Active Orders & Logistics Track</span>
+          </h2>
+          <button
+            onClick={() => onNavigateSection('orders')}
+            className="text-xs font-bold text-purple-600 dark:text-purple-400 hover:underline flex items-center gap-1"
+          >
+            <span>{activeOrders.length > 0 ? `View All Orders (${activeOrders.length})` : 'Order History'}</span>
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
 
+        {activeOrders.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {activeOrders.slice(0, 2).map((ord) => (
               <div
@@ -341,8 +313,26 @@ export const HomeView: React.FC<HomeViewProps> = ({
               </div>
             ))}
           </div>
-        </div>
-      )}
+        ) : (
+          <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950/60 border border-dashed border-slate-300 dark:border-slate-800 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-purple-500/10 text-purple-400 flex items-center justify-center shrink-0">
+                <Package className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-slate-800 dark:text-slate-200">No Active Shipments in Transit</p>
+                <p className="text-[11px] text-slate-500">All completed orders remain protected under PSTP Escrow.</p>
+              </div>
+            </div>
+            <button
+              onClick={() => onNavigateSection('orders')}
+              className="px-3 py-1.5 rounded-xl bg-slate-200 dark:bg-slate-800 hover:bg-purple-600 hover:text-white text-xs font-bold transition-all shrink-0"
+            >
+              View History
+            </button>
+          </div>
+        )}
+      </div>
 
       {/* 4. CONTINUE SHOPPING / RECENTLY VIEWED */}
       {recentlyViewedProducts.length > 0 && (
