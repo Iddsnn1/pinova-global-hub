@@ -77,7 +77,7 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
   } | null>(null);
 
   // Amount & Package Selection
-  const [customFiatAmount, setCustomFiatAmount] = useState<number>(10);
+  const [customFiatAmount, setCustomFiatAmount] = useState<number | ''>('');
   const [selectedPackage, setSelectedPackage] = useState<UtilityProviderPackage | null>(null);
 
   // Processing state
@@ -97,7 +97,7 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
       setAccountValidationResult(null);
       if (firstProv.supportsCustomAmount) {
         setPurchaseMode('custom');
-        setCustomFiatAmount(firstProv.minCustomFiat || 10);
+        setCustomFiatAmount('');
       } else if (firstProv.supportsFixedPackages && firstProv.packages.length > 0) {
         setPurchaseMode('package');
         setSelectedPackage(firstProv.packages[0]);
@@ -114,7 +114,7 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
     setAccountValidationResult(null);
     if (prov.supportsCustomAmount) {
       setPurchaseMode('custom');
-      setCustomFiatAmount(prov.minCustomFiat || 10);
+      setCustomFiatAmount('');
     } else if (prov.supportsFixedPackages && prov.packages.length > 0) {
       setPurchaseMode('package');
       setSelectedPackage(prov.packages[0]);
@@ -192,23 +192,34 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
     if (purchaseMode === 'package' && selectedPackage) {
       return selectedPackage.fiatPrice;
     }
-    return customFiatAmount || 0;
+    const num = Number(customFiatAmount);
+    return typeof num === 'number' && !isNaN(num) && isFinite(num) && num > 0 ? num : 0;
   };
 
   const calculatedPiAmount = getActiveFiatPrice() / piConversionConfig.piRateUsd;
+  const minPiThreshold = piConversionConfig.minPurchasePi || 0.000001;
   const isWithinLimits =
-    calculatedPiAmount >= piConversionConfig.minPurchasePi &&
-    calculatedPiAmount <= piConversionConfig.maxPurchasePi;
+    calculatedPiAmount >= minPiThreshold &&
+    calculatedPiAmount <= (piConversionConfig.maxPurchasePi || 1000.00);
 
   // Execute Pi Payment
   const handleExecutePayment = async () => {
+    const finalPiAmount = Number(calculatedPiAmount < 0.0001 ? calculatedPiAmount.toFixed(6) : calculatedPiAmount.toFixed(4));
+    console.log('[PI PAYMENT] button clicked (FlexibleUtilityModal)', {
+      category: selectedCategory,
+      provider: selectedProvider?.name,
+      accountNumber,
+      fiatAmount: getActiveFiatPrice(),
+      piAmount: finalPiAmount
+    });
+
     if (!selectedProvider) return;
     if (!accountNumber.trim()) {
       setErrorMessage(`Please enter your ${selectedProvider.accountLabel}.`);
       return;
     }
-    if (purchaseMode === 'custom' && (!customFiatAmount || customFiatAmount <= 0)) {
-      setErrorMessage('Please enter a valid custom amount.');
+    if (purchaseMode === 'custom' && Number(getActiveFiatPrice()) <= 0) {
+      setErrorMessage('Please enter a valid custom amount greater than $0.');
       return;
     }
     if (purchaseMode === 'package' && !selectedPackage) {
@@ -216,7 +227,7 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
       return;
     }
     if (!isWithinLimits) {
-      setErrorMessage(`Calculated Pi amount (${calculatedPiAmount.toFixed(4)} π) is outside limits (${piConversionConfig.minPurchasePi} π - ${piConversionConfig.maxPurchasePi} π).`);
+      setErrorMessage(`Calculated Pi amount (${calculatedPiAmount < 0.0001 ? calculatedPiAmount.toFixed(6) : calculatedPiAmount.toFixed(4)} π) is outside limits.`);
       return;
     }
 
@@ -224,11 +235,11 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
     setIsProcessingPayment(true);
 
     const activeFiat = getActiveFiatPrice();
-    const memoText = `${selectedProvider.name} - ${accountNumber} ($${activeFiat.toFixed(2)})`;
+    const memoText = `${selectedProvider.name} - ${accountNumber} ($${activeFiat < 0.01 ? activeFiat.toString() : activeFiat.toFixed(2)})`;
 
     try {
       const paymentResult = await createPiPayment({
-        amountPi: Number(calculatedPiAmount.toFixed(4)),
+        amountPi: Number(calculatedPiAmount < 0.0001 ? calculatedPiAmount.toFixed(6) : calculatedPiAmount.toFixed(4)),
         memo: memoText,
         metadata: {
           category: selectedCategory,
@@ -581,11 +592,20 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                         <span className="absolute left-3.5 top-2.5 text-base font-black text-slate-400">$</span>
                         <input
                           type="number"
-                          step="0.50"
+                          step="any"
+                          min="0.0001"
+                          max={selectedProvider.maxCustomFiat || 1000}
                           value={customFiatAmount}
-                          onChange={(e) => setCustomFiatAmount(Number(e.target.value))}
-                          min={selectedProvider.minCustomFiat || 1}
-                          max={selectedProvider.maxCustomFiat || 500}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val === '') {
+                              setCustomFiatAmount('');
+                            } else {
+                              const parsed = parseFloat(val);
+                              setCustomFiatAmount(isNaN(parsed) ? '' : parsed);
+                            }
+                          }}
+                          placeholder="0.00"
                           className="w-full pl-8 pr-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 font-black text-lg text-slate-900 dark:text-slate-100 focus:outline-none focus:border-purple-500"
                         />
                       </div>
@@ -686,7 +706,7 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
 
                   <div className="flex justify-between items-center text-slate-300">
                     <span>Local Fiat Value:</span>
-                    <span className="font-bold text-white">${getActiveFiatPrice().toFixed(2)} USD</span>
+                    <span className="font-bold text-white">${getActiveFiatPrice() < 0.01 ? getActiveFiatPrice().toString() : getActiveFiatPrice().toFixed(2)} USD</span>
                   </div>
 
                   <div className="flex justify-between items-center text-slate-300 pt-2 border-t border-slate-800">
@@ -698,7 +718,7 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                   <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-1 text-center">
                     <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Total Pi Coin Cost</span>
                     <div className="text-3xl font-black text-amber-400 tracking-tight">
-                      {calculatedPiAmount.toFixed(4)} π
+                      {calculatedPiAmount < 0.0001 ? calculatedPiAmount.toFixed(6) : calculatedPiAmount.toFixed(4)} π
                     </div>
                     <span className="text-[10px] text-slate-400 block">
                       Wallet Balance: {userBalancePi.toFixed(2)} π
@@ -734,7 +754,7 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                   ) : (
                     <>
                       <Lock className="w-4 h-4 text-amber-300" />
-                      <span>Pay {calculatedPiAmount.toFixed(4)} π with Pi Wallet</span>
+                      <span>Pay {calculatedPiAmount < 0.0001 ? calculatedPiAmount.toFixed(6) : calculatedPiAmount.toFixed(4)} π with Pi Wallet</span>
                     </>
                   )}
                 </button>

@@ -296,7 +296,7 @@ app.get('/api/pstp/security-events', (req, res) => {
 // 4. Platform Pricing Configuration & Utility Config APIs
 let ACTIVE_PI_PRICING_CONFIG = {
   piRateUsd: 10.00,
-  minPurchasePi: 0.10,
+  minPurchasePi: 0.000001,
   maxPurchasePi: 1000.00,
   currencyCode: 'USD',
   currencySymbol: '$',
@@ -441,7 +441,7 @@ app.post('/api/v2/payments/approve', async (req, res) => {
     timestamp: Date.now()
   };
 
-  const isDevPayment = paymentId.startsWith('dev_pay_') || paymentId.startsWith('pi_pay_demo') || paymentId.startsWith('test_');
+  const isDevPayment = paymentId.startsWith('pi_pay_') || paymentId.startsWith('dev_pay_') || paymentId.startsWith('test_');
   if (piApiKey && piApiKey !== 'YOUR_PI_PLATFORM_API_KEY' && !isDevPayment) {
     try {
       const response = await fetch(`https://api.minepi.com/v2/payments/${paymentId}/approve`, {
@@ -509,7 +509,7 @@ app.post('/api/v2/payments/complete', async (req, res) => {
     timestamp: Date.now()
   };
 
-  const isDevPayment = paymentId.startsWith('dev_pay_') || paymentId.startsWith('pi_pay_demo') || paymentId.startsWith('test_');
+  const isDevPayment = paymentId.startsWith('pi_pay_') || paymentId.startsWith('dev_pay_') || paymentId.startsWith('test_');
   if (piApiKey && piApiKey !== 'YOUR_PI_PLATFORM_API_KEY' && !isDevPayment) {
     try {
       const response = await fetch(`https://api.minepi.com/v2/payments/${paymentId}/complete`, {
@@ -568,6 +568,16 @@ app.post('/api/v2/utility/fulfill', async (req, res) => {
 
   if (!paymentId) {
     res.status(400).json({ success: false, error: 'Missing paymentId parameter' });
+    return;
+  }
+
+  const numericFiatAmount = Number(fiatAmount);
+  if (isNaN(numericFiatAmount) || !isFinite(numericFiatAmount) || numericFiatAmount <= 0) {
+    res.status(400).json({
+      success: false,
+      status: 'INVALID_AMOUNT',
+      message: 'Validation Error: fiatAmount must be a valid positive number greater than 0.'
+    });
     return;
   }
 

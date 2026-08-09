@@ -52,7 +52,7 @@ export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
 
   // Step 4: Amount & Package Selection State
   const [purchaseMode, setPurchaseMode] = useState<'custom' | 'package'>('custom');
-  const [customFiatAmount, setCustomFiatAmount] = useState<number>(5.00);
+  const [customFiatAmount, setCustomFiatAmount] = useState<number | ''>('');
   const [selectedPackage, setSelectedPackage] = useState<UtilityProviderPackage | null>(null);
 
   // Active Country details
@@ -81,7 +81,7 @@ export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
     setSelectedProvider(prov);
     if (prov.supportsCustomAmount) {
       setPurchaseMode('custom');
-      setCustomFiatAmount(prov.minCustomFiat || 5.00);
+      setCustomFiatAmount('');
     } else if (prov.supportsFixedPackages && prov.packages.length > 0) {
       setPurchaseMode('package');
       setSelectedPackage(prov.packages[0]);
@@ -104,13 +104,16 @@ export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
     if (purchaseMode === 'package' && selectedPackage) {
       return selectedPackage.fiatPrice;
     }
-    return customFiatAmount || 0;
+    return typeof customFiatAmount === 'number' && !isNaN(customFiatAmount) && isFinite(customFiatAmount) && customFiatAmount > 0 ? customFiatAmount : 0;
   };
 
-  const calculatedPiAmount = getActiveFiatPrice() / piConversionConfig.piRateUsd;
+  const activeFiatPrice = getActiveFiatPrice();
+  const calculatedPiAmount = activeFiatPrice / piConversionConfig.piRateUsd;
+  const isValidPositiveAmount = typeof activeFiatPrice === 'number' && !isNaN(activeFiatPrice) && isFinite(activeFiatPrice) && activeFiatPrice > 0;
+  const minPiThreshold = piConversionConfig.minPurchasePi || 0.000001;
   const isWithinLimits =
-    calculatedPiAmount >= piConversionConfig.minPurchasePi &&
-    calculatedPiAmount <= piConversionConfig.maxPurchasePi;
+    calculatedPiAmount >= minPiThreshold &&
+    calculatedPiAmount <= (piConversionConfig.maxPurchasePi || 1000.00);
 
   const canProceed =
     !!selectedCountryCode &&
@@ -118,7 +121,7 @@ export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
     !!selectedProvider &&
     !!phoneNumber.trim() &&
     !!phoneValidation?.isValid &&
-    getActiveFiatPrice() > 0 &&
+    isValidPositiveAmount &&
     isWithinLimits &&
     !isProcessingPayment;
 
@@ -132,6 +135,15 @@ export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const finalPiAmount = Number(calculatedPiAmount < 0.0001 ? calculatedPiAmount.toFixed(6) : calculatedPiAmount.toFixed(4));
+    console.log('[PI PAYMENT] button clicked (AirtimeRechargeForm)', {
+      country: activeCountry?.name,
+      provider: selectedProvider?.name,
+      phoneNumber,
+      fiatAmount: getActiveFiatPrice(),
+      piAmount: finalPiAmount
+    });
+
     if (!canProceed || !selectedProvider || !activeCountry) return;
 
     await onExecutePayment({
@@ -140,7 +152,7 @@ export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
       provider: selectedProvider,
       phoneNumber: phoneValidation?.formatted || phoneNumber,
       fiatAmount: getActiveFiatPrice(),
-      piAmount: Number(calculatedPiAmount.toFixed(4)),
+      piAmount: finalPiAmount,
       packageName: purchaseMode === 'package' ? selectedPackage?.name : 'Custom Airtime Purchase'
     });
   };
@@ -173,7 +185,7 @@ export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
-              placeholder="Search country (e.g. Nigeria, Kenya, Ghana, India, USA)..."
+              placeholder="Search global country (e.g. Canada, Germany, Japan, Nigeria, Kenya, USA)..."
               value={countrySearchQuery}
               onChange={(e) => setCountrySearchQuery(e.target.value)}
               className="w-full pl-9 pr-3 py-2 rounded-xl text-xs bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:border-purple-500"
@@ -406,12 +418,20 @@ export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
                 <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">$</span>
                 <input
                   type="number"
-                  step="0.5"
-                  min={selectedProvider.minCustomFiat || 1}
-                  max={selectedProvider.maxCustomFiat || 200}
-                  value={customFiatAmount || ''}
-                  onChange={(e) => setCustomFiatAmount(parseFloat(e.target.value) || 0)}
-                  placeholder="Enter custom USD value (e.g. 10.00)"
+                  step="any"
+                  min="0.0001"
+                  max={selectedProvider?.maxCustomFiat || 1000}
+                  value={customFiatAmount}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === '') {
+                      setCustomFiatAmount('');
+                    } else {
+                      const parsed = parseFloat(val);
+                      setCustomFiatAmount(isNaN(parsed) ? '' : parsed);
+                    }
+                  }}
+                  placeholder="Enter custom USD value (e.g. 5.00)"
                   className="w-full pl-8 pr-3 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-xs font-bold text-slate-900 dark:text-slate-100"
                 />
               </div>
@@ -467,7 +487,7 @@ export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
           </div>
           <div className="flex justify-between text-xs">
             <span className="text-slate-400">Target Airtime Value:</span>
-            <span className="font-bold text-white">${getActiveFiatPrice().toFixed(2)} USD</span>
+            <span className="font-bold text-white">${getActiveFiatPrice() < 0.01 ? getActiveFiatPrice().toString() : getActiveFiatPrice().toFixed(2)} USD</span>
           </div>
           <div className="flex justify-between text-xs">
             <span className="text-slate-400">Pi Platform Exchange Rate:</span>
@@ -475,7 +495,7 @@ export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
           </div>
           <div className="flex justify-between items-center pt-2 border-t border-slate-800">
             <span className="text-xs font-black uppercase tracking-wider text-slate-200">Required Pi Amount:</span>
-            <span className="text-xl font-black text-amber-400">{calculatedPiAmount.toFixed(4)} π</span>
+            <span className="text-xl font-black text-amber-400">{calculatedPiAmount < 0.0001 ? calculatedPiAmount.toFixed(6) : calculatedPiAmount.toFixed(4)} π</span>
           </div>
         </div>
       )}
@@ -503,7 +523,7 @@ export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
             <ShieldCheck className="w-5 h-5 text-amber-300" />
             <span>
               {canProceed
-                ? `Pay ${calculatedPiAmount.toFixed(4)} π Now`
+                ? `Pay ${calculatedPiAmount < 0.0001 ? calculatedPiAmount.toFixed(6) : calculatedPiAmount.toFixed(4)} π Now`
                 : !selectedCountryCode
                 ? 'Select Country to Continue'
                 : !selectedProvider

@@ -2,7 +2,7 @@ import { UtilityServiceProvider, PiConversionConfig, ConversionRateLog, UtilityT
 
 export const INITIAL_PI_CONVERSION_CONFIG: PiConversionConfig = {
   piRateUsd: 10.00, // Default: 1 Pi = $10.00 USD
-  minPurchasePi: 0.10,
+  minPurchasePi: 0.000001,
   maxPurchasePi: 1000.00,
   currencyCode: 'USD',
   currencySymbol: '$',

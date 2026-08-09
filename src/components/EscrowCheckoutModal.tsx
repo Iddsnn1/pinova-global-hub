@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { X, ShieldCheck, Lock, CheckCircle2, Loader2, AlertCircle, ArrowRight, Smartphone, MapPin } from 'lucide-react';
 import { OrderItem, Coupon } from '../types';
-import { executePiPayment } from '../lib/piSdk';
+import { executePiPayment, authenticatePiUser } from '../lib/piSdk';
 
 interface EscrowCheckoutModalProps {
   cartItems: OrderItem[];
@@ -51,10 +51,23 @@ export const EscrowCheckoutModal: React.FC<EscrowCheckoutModalProps> = ({
     setStatusLogs((prev) => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`]);
   };
 
-  const handleStartPayment = () => {
+  const handleStartPayment = async () => {
     setPaymentStep('processing');
     setStatusLogs([]);
-    addLog('Preparing payment metadata for Pi Network SDK...');
+    addLog('Connecting wallets...');
+    addLog('Initializing Pi SDK...');
+
+    try {
+      addLog('Authenticating user with Pi Network...');
+      const authUser = await authenticatePiUser();
+      addLog(`Authenticated as ${authUser.username}`);
+    } catch (authErr: any) {
+      const errMsg = authErr?.message || String(authErr);
+      setPaymentStep('failed');
+      setErrorMessage(`Pi Authentication failed: ${errMsg}`);
+      addLog(`Authentication error: ${errMsg}`);
+      return;
+    }
 
     const memo = `PiNova Purchase (${cartItems.length} items) - Order by ${userUsername}`;
     const metadata = {

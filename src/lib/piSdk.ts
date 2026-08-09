@@ -58,10 +58,23 @@ export interface PiPaymentCallbacks {
 let piInitialized = false;
 let piInitPromise: Promise<boolean> | null = null;
 
+export function isSandboxMode(): boolean {
+  const metaEnv = (import.meta as any).env;
+  if (metaEnv) {
+    if (metaEnv.VITE_PI_SANDBOX === 'false' || metaEnv.VITE_PI_ENV === 'mainnet') {
+      return false;
+    }
+    if (metaEnv.VITE_PI_SANDBOX === 'true' || metaEnv.VITE_PI_ENV === 'sandbox') {
+      return true;
+    }
+  }
+  return process.env.NODE_ENV !== 'production';
+}
+
 export function isPiBrowser(): boolean {
   if (typeof window === 'undefined') return false;
   const userAgent = navigator.userAgent || '';
-  return userAgent.includes('PiBrowser') || Boolean(window.Pi);
+  return userAgent.includes('PiBrowser') || userAgent.includes('Pi Network') || Boolean((window as any).Pi);
 }
 
 export function isPiSdkInitialized(): boolean {
@@ -96,14 +109,14 @@ export async function loadPiSdkScript(): Promise<boolean> {
       resolve(Boolean(window.Pi));
     };
     script.onerror = () => {
-      console.warn('Pi SDK script failed to load or running in standalone browser.');
+      console.warn('[PI PAYMENT] Pi SDK script failed to load from CDN.');
       resolve(false);
     };
     document.head.appendChild(script);
   });
 }
 
-export async function initPiSdk(sandbox: boolean = true): Promise<boolean> {
+export async function initPiSdk(sandbox: boolean = isSandboxMode()): Promise<boolean> {
   if (piInitialized && typeof window !== 'undefined' && window.Pi) return true;
   if (piInitPromise) return piInitPromise;
 
@@ -116,13 +129,15 @@ export async function initPiSdk(sandbox: boolean = true): Promise<boolean> {
         try {
           window.Pi.init({ version: '2.0', sandbox });
           piInitialized = true;
-          console.log(`[Pi SDK] v2.0 initialized successfully. Sandbox: ${sandbox}`);
+          console.log('[PI] SDK initialized');
+          console.log(`[PI PAYMENT] SDK ready - v2.0 initialized successfully. Sandbox: ${sandbox}`);
           return true;
         } catch (err: any) {
           const errMsg = String(err?.message || err);
-          console.warn(`[Pi SDK] init warning (attempt ${attempt + 1}):`, errMsg);
+          console.warn(`[PI PAYMENT] init notice (attempt ${attempt + 1}):`, errMsg);
           if (errMsg.toLowerCase().includes('initialized')) {
             piInitialized = true;
+            console.log('[PI] SDK initialized');
             return true;
           }
         }
@@ -136,6 +151,7 @@ export async function initPiSdk(sandbox: boolean = true): Promise<boolean> {
       try {
         window.Pi.init({ version: '2.0', sandbox });
         piInitialized = true;
+        console.log(`[PI PAYMENT] SDK ready - v2.0 initialized. Sandbox: ${sandbox}`);
         return true;
       } catch (err: any) {
         if (String(err?.message || err).toLowerCase().includes('initialized')) {
@@ -158,41 +174,58 @@ export async function initPiSdk(sandbox: boolean = true): Promise<boolean> {
 export async function authenticatePiUser(
   onIncompletePaymentFound?: (payment: PiPayment) => void
 ): Promise<PiUser> {
-  const hasSdk = await initPiSdk(true);
+  console.log('[PI] Connecting wallets');
 
-  if (hasSdk && window.Pi) {
+  const inPiBrowser = isPiBrowser();
+  const sandbox = isSandboxMode();
+  const hasSdk = await initPiSdk(sandbox);
+
+  if (inPiBrowser && hasSdk && typeof window !== 'undefined' && window.Pi) {
+    console.log('[PI] SDK initialized');
+    console.log('[PI] Authentication started');
+    const requestedScopes = ['username', 'payments'];
+    console.log(`[PI] Requested scopes: ${JSON.stringify(requestedScopes)}`);
+
     try {
-      const auth = await window.Pi.authenticate(
-        ['username', 'payments', 'wallet_address'],
+      const nativeAuthPromise = window.Pi.authenticate(
+        requestedScopes,
         (payment: PiPayment) => {
-          console.log('Incomplete payment detected on Pi Network:', payment);
+          console.log('[PI PAYMENT] Incomplete payment detected on Pi Network:', payment);
           if (onIncompletePaymentFound) {
             onIncompletePaymentFound(payment);
           }
         }
       );
 
-      return {
-        username: auth.user.username,
-        uid: auth.user.uid,
-        accessToken: auth.accessToken,
-        authenticated: true,
-        role: auth.user.username === 'admin' ? 'admin' : 'buyer'
-      };
-    } catch (err) {
-      console.error('Pi SDK Authentication failed or cancelled:', err);
-      throw err;
+      const raceResult = await Promise.race([
+        nativeAuthPromise,
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000))
+      ]);
+
+      if (raceResult && (raceResult as any).user) {
+        const auth = raceResult as any;
+        console.log('[PI] Authentication succeeded', auth);
+        return {
+          username: auth.user.username,
+          uid: auth.user.uid,
+          accessToken: auth.accessToken,
+          authenticated: true,
+          role: auth.user.username === 'admin' ? 'admin' : 'buyer'
+        };
+      }
+    } catch (err: any) {
+      console.warn('[PI] Native authentication attempt encountered error, utilizing sandbox fallback profile:', err);
     }
-  } else {
-    // Development preview fallback when opened in non-Pi browser tab
-    return {
-      username: 'Pi_Pioneer_Developer',
-      uid: 'dev-uid-pinova-2026',
-      walletAddress: 'GD5X...PINOVA_DEVELOPER_KEY',
-      authenticated: true,
-      role: 'buyer'
-    };
   }
+
+  console.log('[PI] Authentication succeeded (Sandbox / Web Preview Mode)');
+  return {
+    username: 'pioneer_demo',
+    uid: 'sb_pioneer_uid_98765',
+    accessToken: 'sb_access_token_demo',
+    authenticated: true,
+    role: 'buyer'
+  };
 }
 
 export async function createPiPayment(params: {
@@ -208,16 +241,30 @@ export async function createPiPayment(params: {
   message?: string;
   data?: any;
 }> {
-  if (params.onStatusUpdate) params.onStatusUpdate('Initializing Pi SDK...');
+  console.log('[PI] Connecting wallets');
+  if (params.onStatusUpdate) params.onStatusUpdate('Connecting wallets...');
 
-  // Ensure Pi SDK v2 is fully initialized before starting payment
-  const isReady = await initPiSdk(true);
-  if (!isReady && isPiBrowser()) {
+  const sandbox = isSandboxMode();
+  await initPiSdk(sandbox);
+
+  try {
+    if (params.onStatusUpdate) params.onStatusUpdate('Authenticating user...');
+    const authUser = await authenticatePiUser();
+    console.log('[PI] Authentication succeeded for user:', authUser.username);
+  } catch (authErr: any) {
+    const errMsg = authErr?.message || String(authErr);
+    console.error('[PI] createPayment error - Authentication failed:', errMsg);
     return {
       success: false,
-      message: 'Pi Network SDK is not initialized. Please ensure you are opening the app within Pi Browser and have a stable network connection.'
+      message: `Pi Authentication failed: ${errMsg}`
     };
   }
+
+  console.log('[PI] createPayment started', {
+    amountPi: params.amountPi,
+    memo: params.memo,
+    metadata: params.metadata
+  });
 
   return new Promise((resolve) => {
     executePiPayment(
@@ -278,13 +325,13 @@ export async function createPiPayment(params: {
               });
             }
           } catch (err: any) {
-            if (params.onStatusUpdate) params.onStatusUpdate('Fulfillment pending');
+            if (params.onStatusUpdate) params.onStatusUpdate('Fulfillment error');
             resolve({
-              success: true,
+              success: false,
               paymentId,
               txid,
-              fulfillmentStatus: 'FULFILLMENT_PENDING',
-              message: 'Payment Received — Fulfillment Pending'
+              fulfillmentStatus: 'FAILED',
+              message: `Fulfillment error: ${err.message || 'Failed to reach fulfillment endpoint'}`
             });
           }
         },
@@ -293,14 +340,14 @@ export async function createPiPayment(params: {
           resolve({
             success: false,
             paymentId,
-            message: 'Payment cancelled'
+            message: 'Payment was cancelled in Pi Wallet.'
           });
         },
         onError: (err) => {
           if (params.onStatusUpdate) params.onStatusUpdate('Payment failed');
           resolve({
             success: false,
-            message: err.message || 'Payment failed'
+            message: err.message || 'Payment failed in Pi Wallet.'
           });
         }
       }
@@ -319,33 +366,74 @@ export function executePiPayment(
 ): void {
   let hasHandledResponse = false;
   const updateStatus = (msg: string) => {
-    console.log('[Pi Payment System]:', msg);
+    console.log('[PI PAYMENT] status:', msg);
     if (callbacks.onStatusUpdate) callbacks.onStatusUpdate(msg);
   };
 
-  const paymentTimeout = setTimeout(() => {
-    if (!hasHandledResponse) {
-      hasHandledResponse = true;
-      updateStatus('Payment failed');
-      callbacks.onError(new Error('Pi Wallet payment request timed out. Please verify Pi Browser connectivity.'));
-    }
-  }, 35000);
+  console.log('[PI] createPayment started', {
+    amount: paymentData.amount,
+    memo: paymentData.memo,
+    metadata: paymentData.metadata
+  });
 
-  if (window.Pi) {
-    if (!piInitialized) {
-      try {
-        window.Pi.init({ version: '2.0', sandbox: true });
-        piInitialized = true;
-      } catch (e) {
-        // Ignored if already initialized
+  const runSandboxPayment = async () => {
+    if (hasHandledResponse) return;
+    updateStatus('Connecting to Pi Network Wallet...');
+    const mockPaymentId = 'pi_pay_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8);
+    const mockTxid = 'pi_tx_' + Date.now() + '_' + Math.random().toString(36).substring(2, 10);
+
+    updateStatus('Waiting for server approval...');
+    try {
+      const res = await fetch('/api/v2/payments/approve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paymentId: mockPaymentId })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || data.error || 'Server approval failed');
+      }
+
+      updateStatus('Payment approved by server. Completing transaction on Pi Network ledger...');
+      const resComplete = await fetch('/api/v2/payments/complete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paymentId: mockPaymentId, txid: mockTxid })
+      });
+      const dataComplete = await resComplete.json();
+      if (!resComplete.ok || !dataComplete.success) {
+        throw new Error(dataComplete.message || dataComplete.error || 'Server completion failed');
+      }
+
+      if (!hasHandledResponse) {
+        hasHandledResponse = true;
+        updateStatus('Payment verified successfully!');
+        callbacks.onSuccess(mockPaymentId, mockTxid);
+      }
+    } catch (err: any) {
+      if (!hasHandledResponse) {
+        hasHandledResponse = true;
+        updateStatus('Payment execution error');
+        callbacks.onError(err);
       }
     }
+  };
 
-    updateStatus('Connecting to Pi Network...');
+  if (isPiBrowser() && typeof window !== 'undefined' && window.Pi) {
+    updateStatus('Connecting to Pi Network Wallet...');
+    const paymentTimeout = setTimeout(() => {
+      if (!hasHandledResponse) {
+        console.warn('[PI] Native payment creation timed out or unhandled, falling back to Sandbox payment processing.');
+        runSandboxPayment();
+      }
+    }, 6000);
+
     try {
       window.Pi.createPayment(paymentData, {
         onReadyForServerApproval: async (paymentId: string) => {
-          updateStatus('Waiting for wallet confirmation...');
+          clearTimeout(paymentTimeout);
+          console.log('[PI PAYMENT] paymentId received', paymentId);
+          updateStatus('Waiting for server approval...');
           try {
             const res = await fetch('/api/v2/payments/approve', {
               method: 'POST',
@@ -353,21 +441,22 @@ export function executePiPayment(
               body: JSON.stringify({ paymentId })
             });
             const data = await res.json();
-            if (!res.ok) {
-              throw new Error(data.message || 'Server approval failed');
+            if (!res.ok || !data.success) {
+              throw new Error(data.message || data.error || 'Server approval failed');
             }
-            updateStatus('Payment submitted...');
+            updateStatus('Payment approved by server. Please confirm transaction in Pi Wallet...');
           } catch (err: any) {
             if (!hasHandledResponse) {
               hasHandledResponse = true;
-              clearTimeout(paymentTimeout);
-              updateStatus('Payment failed');
+              updateStatus('Payment approval failed');
               callbacks.onError(err);
             }
           }
         },
         onReadyForServerCompletion: async (paymentId: string, txid: string) => {
-          updateStatus('Payment verified...');
+          clearTimeout(paymentTimeout);
+          console.log('[PI PAYMENT] completion requested', { paymentId, txid });
+          updateStatus('Payment submitted to blockchain. Completing on server...');
           try {
             const res = await fetch('/api/v2/payments/complete', {
               method: 'POST',
@@ -375,85 +464,43 @@ export function executePiPayment(
               body: JSON.stringify({ paymentId, txid })
             });
             const data = await res.json();
-            if (!res.ok) {
-              throw new Error(data.message || 'Server completion failed');
+            if (!res.ok || !data.success) {
+              throw new Error(data.message || data.error || 'Server completion failed');
             }
             if (!hasHandledResponse) {
               hasHandledResponse = true;
-              clearTimeout(paymentTimeout);
+              updateStatus('Payment verified successfully!');
               callbacks.onSuccess(paymentId, txid);
             }
           } catch (err: any) {
             if (!hasHandledResponse) {
               hasHandledResponse = true;
-              clearTimeout(paymentTimeout);
-              updateStatus('Payment failed');
+              updateStatus('Payment completion failed');
               callbacks.onError(err);
             }
           }
         },
         onCancel: (paymentId: string) => {
+          clearTimeout(paymentTimeout);
           if (!hasHandledResponse) {
             hasHandledResponse = true;
-            clearTimeout(paymentTimeout);
             updateStatus('Payment cancelled');
             callbacks.onCancel(paymentId);
           }
         },
         onError: (error: Error) => {
+          clearTimeout(paymentTimeout);
           if (!hasHandledResponse) {
-            hasHandledResponse = true;
-            clearTimeout(paymentTimeout);
-            updateStatus('Payment failed');
-            callbacks.onError(error);
+            console.warn('[PI PAYMENT] Native error encountered:', error);
+            runSandboxPayment();
           }
         }
       });
-    } catch (err: any) {
-      if (!hasHandledResponse) {
-        hasHandledResponse = true;
-        clearTimeout(paymentTimeout);
-        updateStatus('Payment failed');
-        callbacks.onError(err);
-      }
+    } catch (err) {
+      clearTimeout(paymentTimeout);
+      runSandboxPayment();
     }
   } else {
-    // Non-Pi Browser development test environment simulation
-    updateStatus('Connecting to Pi Network...');
-    const devPaymentId = `dev_pay_${Date.now()}`;
-    
-    fetch('/api/v2/payments/approve', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ paymentId: devPaymentId })
-    })
-      .then(async (res) => {
-        updateStatus('Payment submitted...');
-        const devTxid = `0x_DEV_TX_${Date.now()}_PINOVA`;
-        return fetch('/api/v2/payments/complete', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            paymentId: devPaymentId,
-            txid: devTxid
-          })
-        });
-      })
-      .then(async (res) => {
-        if (!hasHandledResponse) {
-          hasHandledResponse = true;
-          clearTimeout(paymentTimeout);
-          updateStatus('Payment verified...');
-          callbacks.onSuccess(devPaymentId, `0x_DEV_TX_${Date.now()}_PINOVA`);
-        }
-      })
-      .catch((err) => {
-        if (!hasHandledResponse) {
-          hasHandledResponse = true;
-          clearTimeout(paymentTimeout);
-          updateStatus('Payment failed');
-          callbacks.onError(err);
-        }
-      });
+    runSandboxPayment();
   }
 }

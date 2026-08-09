@@ -70,6 +70,7 @@ function MainAppContent() {
   // Full-Screen Navigation Section State (Default to 'home' as central command center)
   const [activeSection, setActiveSection] = useState<MainSection>('home');
   const [selectedMarketplaceCategory, setSelectedMarketplaceCategory] = useState<MarketplaceCategory>('all');
+  const [selectedUtilityCategory, setSelectedUtilityCategory] = useState<string>('airtime');
   
   // Back navigation stack & History tracking
   const [navigationStack, setNavigationStack] = useState<{ section: MainSection; category: MarketplaceCategory }[]>([
@@ -151,10 +152,12 @@ function MainAppContent() {
   };
 
   // Navigate to Section Handler with Stack Push
-  const handleNavigateSection = (newSection: MainSection, newCategory: MarketplaceCategory = 'all') => {
+  const handleNavigateSection = (newSection: MainSection, newCategory: MarketplaceCategory | string = 'all') => {
     setActiveSection(newSection);
     if (newSection === 'marketplace') {
-      setSelectedMarketplaceCategory(newCategory);
+      setSelectedMarketplaceCategory(newCategory as MarketplaceCategory);
+    } else if (newSection === 'utilities') {
+      setSelectedUtilityCategory((newCategory && newCategory !== 'all' ? newCategory : 'airtime') as string);
     }
     
     // Push onto navigation history stack if distinct
@@ -499,7 +502,7 @@ function MainAppContent() {
 
         {activeSection === 'utilities' && (
           <UtilitiesView
-            selectedUtilityCategory={selectedMarketplaceCategory}
+            selectedUtilityCategory={selectedUtilityCategory}
             utilityConfig={utilityConfig}
             userBalancePi={userBalancePi}
             buyerUsername={user.username}

@@ -135,7 +135,7 @@ export const UtilitiesView: React.FC<UtilitiesViewProps> = ({
         amountPi: calculatedPi,
         memo: `${selectedProvider} - ${accountNumber} ($${effectiveUsd.toFixed(2)})`,
         metadata: {
-          category: selectedUtility?.id || 'utility',
+          category: selectedUtility || 'utility',
           providerId: selectedProvider,
           accountNumber,
           fiatAmount: effectiveUsd,
@@ -365,7 +365,7 @@ export const UtilitiesView: React.FC<UtilitiesViewProps> = ({
                   </button>
                 </div>
               </div>
-            ) : selectedUtility?.id === 'airtime' || selectedUtility?.id === 'mobile_data' ? (
+            ) : selectedUtility === 'airtime' || selectedUtility === 'mobile_data' ? (
               /* AIRTIME DEPENDENT SELECTION FLOW (COUNTRY -> NETWORK -> MOBILE -> AMOUNT) */
               <AirtimeRechargeForm
                 piConversionConfig={utilityConfig}
@@ -378,7 +378,7 @@ export const UtilitiesView: React.FC<UtilitiesViewProps> = ({
                       amountPi: params.piAmount,
                       memo: `${params.provider.name} - ${params.phoneNumber}`,
                       metadata: {
-                        category: selectedUtility.id,
+                        category: selectedUtility,
                         country: params.country,
                         countryCode: params.countryCode,
                         providerId: params.provider.id,
