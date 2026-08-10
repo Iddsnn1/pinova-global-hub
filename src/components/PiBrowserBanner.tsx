@@ -38,7 +38,12 @@ export const PiBrowserBanner: React.FC<PiBrowserBannerProps> = ({
 
         {/* Center: Environment & Diagnostic Info */}
         <div className="flex flex-wrap items-center gap-2 text-slate-300">
-          {!inPiBrowser ? (
+          {diagState.authState === 'pending' ? (
+            <div className="flex items-center gap-1.5 bg-amber-500/20 border border-amber-500/50 text-amber-200 px-3 py-0.5 rounded-md animate-pulse">
+              <span className="w-2 h-2 rounded-full bg-amber-400" />
+              <span className="font-medium text-[11px]">Waiting for Pi Browser authorization…</span>
+            </div>
+          ) : !inPiBrowser ? (
             <div className="hidden md:flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/30 text-amber-300 px-3 py-0.5 rounded-md">
               <Info className="w-3.5 h-3.5 text-amber-400 shrink-0" />
               <span>

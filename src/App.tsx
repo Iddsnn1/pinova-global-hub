@@ -22,7 +22,7 @@ import {
 
 import { Product, Order, OrderItem, Vendor, Review, Coupon, Notification, Message, PiUser, ProductCategory, PstpOrderStatus, UserRole } from './types';
 import { INITIAL_PRODUCTS, MOCK_VENDORS, MOCK_REVIEWS, MOCK_COUPONS, SAMPLE_ORDERS } from './data/mockData';
-import { authenticatePiUser } from './lib/piSdk';
+import { initAndAuthenticateProactively, subscribePiSdkState } from './lib/piSdk';
 
 import { MainSection, MarketplaceCategory, UtilityCategory, BreadcrumbItem, VisitedCategory } from './types/navigation';
 import { MARKETPLACE_CATEGORIES, UTILITY_CATEGORIES } from './data/categoryData';
@@ -144,6 +144,23 @@ function MainAppContent() {
       document.documentElement.classList.remove('dark');
     }
   }, [darkMode]);
+
+  // Proactive Pi Browser Authentication on Application Load
+  useEffect(() => {
+    initAndAuthenticateProactively();
+
+    const unsubscribe = subscribePiSdkState((state) => {
+      if (state.username && state.userState === 'authenticated') {
+        setUser((prev) => ({
+          ...prev,
+          username: state.username!,
+          authenticated: true
+        }));
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   // Open Universal Search Modal
   const handleOpenUniversalSearch = (query?: string) => {
