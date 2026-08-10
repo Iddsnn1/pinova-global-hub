@@ -38,10 +38,20 @@ export const PiBrowserBanner: React.FC<PiBrowserBannerProps> = ({
 
         {/* Center: Environment & Diagnostic Info */}
         <div className="flex flex-wrap items-center gap-2 text-slate-300">
-          {diagState.authState === 'pending' ? (
+          {diagState.authState === 'AUTH_INVOKING' || diagState.authState === 'AUTH_WAITING_NATIVE_BRIDGE' ? (
             <div className="flex items-center gap-1.5 bg-amber-500/20 border border-amber-500/50 text-amber-200 px-3 py-0.5 rounded-md animate-pulse">
               <span className="w-2 h-2 rounded-full bg-amber-400" />
               <span className="font-medium text-[11px]">Waiting for Pi Browser authorization…</span>
+            </div>
+          ) : diagState.authState === 'AUTH_NATIVE_BRIDGE_PENDING' ? (
+            <div className="flex items-center gap-1.5 bg-rose-500/20 border border-rose-500/50 text-rose-200 px-3 py-0.5 rounded-md">
+              <span className="w-2 h-2 rounded-full bg-rose-400 animate-pulse" />
+              <span className="font-medium text-[11px]">Pi Browser authentication is not responding.</span>
+            </div>
+          ) : diagState.authState === 'PI_AUTH_UNAVAILABLE' ? (
+            <div className="flex items-center gap-1.5 bg-rose-500/20 border border-rose-500/50 text-rose-200 px-3 py-0.5 rounded-md">
+              <span className="w-2 h-2 rounded-full bg-rose-400" />
+              <span className="font-medium text-[11px]">Pi Authentication API unavailable</span>
             </div>
           ) : !inPiBrowser ? (
             <div className="hidden md:flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/30 text-amber-300 px-3 py-0.5 rounded-md">
@@ -57,11 +67,11 @@ export const PiBrowserBanner: React.FC<PiBrowserBannerProps> = ({
             </div>
           )}
 
-          {/* Temporary Safe Diagnostic Badge (Requirement 19) */}
+          {/* Diagnostic Badge */}
           <div className="flex items-center gap-2 text-[11px] font-mono bg-slate-900/90 border border-purple-500/40 px-2.5 py-0.5 rounded-md text-slate-200">
             <span>SDK: <strong className={diagState.sdkState === 'ready' ? 'text-emerald-400' : 'text-amber-400'}>{diagState.sdkState}</strong></span>
             <span className="text-slate-600">|</span>
-            <span>Auth: <strong className={diagState.authState === 'success' ? 'text-emerald-400' : diagState.authState === 'pending' ? 'text-amber-300 animate-pulse' : 'text-slate-400'}>{diagState.authState}</strong></span>
+            <span>Auth: <strong className={diagState.authState === 'AUTH_SUCCESS' ? 'text-emerald-400' : diagState.authState.includes('WAITING') || diagState.authState.includes('INVOKING') ? 'text-amber-300 animate-pulse' : 'text-slate-400'}>{diagState.authState}</strong></span>
             <span className="text-slate-600">|</span>
             <span>Scope: <strong className={diagState.paymentScope === 'granted' ? 'text-emerald-400' : 'text-rose-400'}>{diagState.paymentScope}</strong></span>
             <span className="text-slate-600">|</span>

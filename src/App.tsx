@@ -145,12 +145,22 @@ function MainAppContent() {
     }
   }, [darkMode]);
 
-  // Proactive Pi Browser Authentication on Application Load
+  // Proactive Pi Browser Authentication on Application Load (Controlled Lifecycle)
   useEffect(() => {
-    initAndAuthenticateProactively();
+    let active = true;
+
+    initAndAuthenticateProactively().then((piUser) => {
+      if (active && piUser) {
+        setUser((prev) => ({
+          ...prev,
+          username: piUser.username,
+          authenticated: true
+        }));
+      }
+    });
 
     const unsubscribe = subscribePiSdkState((state) => {
-      if (state.username && state.userState === 'authenticated') {
+      if (active && state.username && state.userState === 'authenticated') {
         setUser((prev) => ({
           ...prev,
           username: state.username!,
@@ -159,7 +169,10 @@ function MainAppContent() {
       }
     });
 
-    return () => unsubscribe();
+    return () => {
+      active = false;
+      unsubscribe();
+    };
   }, []);
 
   // Open Universal Search Modal
