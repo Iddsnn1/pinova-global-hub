@@ -12,30 +12,41 @@ app.use(express.json());
 
 // Vercel Serverless Request URL Restoration Middleware
 app.use((req, res, next) => {
-  let targetPath = '';
+  try {
+    let targetPath = '';
+    const rawUrl = req.url || '';
 
-  if (req.query && typeof req.query.__path === 'string') {
-    targetPath = req.query.__path;
-  } else if (req.headers['x-forwarded-uri']) {
-    targetPath = req.headers['x-forwarded-uri'] as string;
-  } else if (req.headers['x-original-url']) {
-    targetPath = req.headers['x-original-url'] as string;
-  } else if (req.headers['x-matched-path']) {
-    targetPath = req.headers['x-matched-path'] as string;
-  } else if (req.headers['x-invoke-path']) {
-    targetPath = req.headers['x-invoke-path'] as string;
-  }
-
-  if (targetPath) {
-    if (!targetPath.startsWith('/api')) {
-      targetPath = '/api' + (targetPath.startsWith('/') ? targetPath : '/' + targetPath);
+    if (rawUrl.includes('__path=')) {
+      const match = rawUrl.match(/__path=([^&]+)/);
+      if (match && match[1]) {
+        targetPath = decodeURIComponent(match[1]);
+      }
     }
-    const [pathOnly, queryPart] = targetPath.split('?');
-    const existingQuery = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
-    req.url = pathOnly + (queryPart ? '?' + queryPart : existingQuery);
-  } else if (req.url.startsWith('/api/index')) {
-    req.url = req.url.replace('/api/index', '/api');
-    if (req.url === '/api/' || req.url === '') req.url = '/api';
+
+    if (!targetPath && req.query && typeof req.query.__path === 'string') {
+      targetPath = req.query.__path;
+    } else if (!targetPath && req.headers['x-forwarded-uri']) {
+      targetPath = req.headers['x-forwarded-uri'] as string;
+    } else if (!targetPath && req.headers['x-original-url']) {
+      targetPath = req.headers['x-original-url'] as string;
+    } else if (!targetPath && req.headers['x-matched-path']) {
+      targetPath = req.headers['x-matched-path'] as string;
+    } else if (!targetPath && req.headers['x-invoke-path']) {
+      targetPath = req.headers['x-invoke-path'] as string;
+    }
+
+    if (targetPath) {
+      if (!targetPath.startsWith('/api')) {
+        targetPath = '/api' + (targetPath.startsWith('/') ? targetPath : '/' + targetPath);
+      }
+      const [pathOnly, queryPart] = targetPath.split('?');
+      req.url = pathOnly + (queryPart ? '?' + queryPart : '');
+    } else if (req.url.startsWith('/api/index')) {
+      req.url = req.url.replace('/api/index', '/api');
+      if (req.url === '/api/' || req.url === '') req.url = '/api';
+    }
+  } catch (err) {
+    console.error('[URL Restoration Middleware Error]:', err);
   }
 
   next();
