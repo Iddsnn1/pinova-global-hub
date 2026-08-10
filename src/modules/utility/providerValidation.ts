@@ -1,3 +1,5 @@
+import { safeFetchJson } from '../../lib/safeFetch';
+
 export interface ValidationResult {
   valid: boolean;
   accountNumber: string;
@@ -26,13 +28,13 @@ export class DirectApiValidationAdapter implements IProviderValidationAdapter {
 
   async validateAccount(accountNumber: string, providerName: string): Promise<ValidationResult> {
     try {
-      const response = await fetch('/api/v1/utility/validate', {
+      const result = await safeFetchJson('/api/v1/utility/validate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ providerId: this.providerId, accountNumber })
       });
-      if (response.ok) {
-        const data = await response.json();
+      if (result.ok && result.data) {
+        const data = result.data;
         return {
           valid: data.valid ?? true,
           accountNumber,

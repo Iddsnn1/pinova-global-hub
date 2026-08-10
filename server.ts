@@ -2,7 +2,6 @@ import express from 'express';
 import path from 'path';
 import dotenv from 'dotenv';
 import { GoogleGenAI } from '@google/genai';
-import { createServer as createViteServer } from 'vite';
 
 dotenv.config();
 
@@ -13,12 +12,32 @@ app.use(express.json());
 
 // Vercel Serverless Request URL Restoration Middleware
 app.use((req, res, next) => {
-  const invokePath = (req.headers['x-invoke-path'] as string) || (req.headers['x-matched-path'] as string) || (req.headers['x-original-url'] as string);
-  if (invokePath && invokePath.startsWith('/api') && invokePath !== '/api/index') {
-    const queryIdx = req.url.indexOf('?');
-    const queryString = queryIdx !== -1 ? req.url.slice(queryIdx) : '';
-    req.url = invokePath + queryString;
+  let targetPath = '';
+
+  if (req.query && typeof req.query.__path === 'string') {
+    targetPath = req.query.__path;
+  } else if (req.headers['x-forwarded-uri']) {
+    targetPath = req.headers['x-forwarded-uri'] as string;
+  } else if (req.headers['x-original-url']) {
+    targetPath = req.headers['x-original-url'] as string;
+  } else if (req.headers['x-matched-path']) {
+    targetPath = req.headers['x-matched-path'] as string;
+  } else if (req.headers['x-invoke-path']) {
+    targetPath = req.headers['x-invoke-path'] as string;
   }
+
+  if (targetPath) {
+    if (!targetPath.startsWith('/api')) {
+      targetPath = '/api' + (targetPath.startsWith('/') ? targetPath : '/' + targetPath);
+    }
+    const [pathOnly, queryPart] = targetPath.split('?');
+    const existingQuery = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
+    req.url = pathOnly + (queryPart ? '?' + queryPart : existingQuery);
+  } else if (req.url.startsWith('/api/index')) {
+    req.url = req.url.replace('/api/index', '/api');
+    if (req.url === '/api/' || req.url === '') req.url = '/api';
+  }
+
   next();
 });
 
@@ -157,13 +176,23 @@ const PSTP_SECURITY_EVENTS: any[] = [
   }
 ];
 
-// System health check
-app.get('/api/health', (req, res) => {
-  res.json({
+// System health check - minimal, zero dependencies
+app.get(['/api/health', '/health'], (req, res) => {
+  res.setHeader('Content-Type', 'application/json');
+  res.status(200).json({
     status: 'ok',
-    app: 'PiNova Global Marketplace - PSTP Security Engine',
-    time: new Date().toISOString(),
-    sandbox: process.env.PI_SANDBOX_MODE === 'true'
+    runtime: 'vercel'
+  });
+});
+
+// Diagnostic API Endpoint
+app.get(['/api/debug/runtime', '/debug/runtime'], (req, res) => {
+  res.setHeader('Content-Type', 'application/json');
+  res.status(200).json({
+    ok: true,
+    runtime: 'vercel',
+    nodeVersion: process.version,
+    requestUrl: req.url
   });
 });
 
@@ -731,7 +760,7 @@ app.post('/api/v2/utility/fulfill', async (req, res) => {
   const resultRecord = {
     transactionId: `UTIL-TX-${Date.now()}`,
     paymentId,
-    txid: txid || recordedPayment?.txid || `0x_${Date.now()}`,
+    txid: txid || recordedPayment?.txid || '',
     status: fulfillmentStatus,
     message: fulfillmentMessage,
     category: category || 'utility',
@@ -855,7 +884,8 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 });
 
 async function startServer() {
-  if (process.env.NODE_ENV !== 'production') {
+  if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL && !process.env.NOW_REGION) {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa'
@@ -876,6 +906,15 @@ async function startServer() {
 
 export default app;
 
-if (!process.env.VERCEL) {
-  startServer();
+const isMainModule = Boolean(
+  process.argv[1] &&
+  (process.argv[1].endsWith('server.ts') ||
+   process.argv[1].endsWith('server.js') ||
+   process.argv[1].endsWith('server.cjs'))
+);
+
+if (isMainModule && !process.env.VERCEL && !process.env.NOW_REGION) {
+  startServer().catch(err => {
+    console.error('Failed to start server:', err);
+  });
 }

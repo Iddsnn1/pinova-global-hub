@@ -1,4 +1,5 @@
 import { PiUser } from '../types';
+import { safeFetchJson } from './safeFetch';
 
 declare global {
   interface Window {
@@ -280,7 +281,7 @@ export async function createPiPayment(params: {
 
           try {
             if (params.onStatusUpdate) params.onStatusUpdate('Processing utility purchase...');
-            const fulfillRes = await fetch('/api/v2/utility/fulfill', {
+            const fulfillResult = await safeFetchJson('/api/v2/utility/fulfill', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -298,8 +299,8 @@ export async function createPiPayment(params: {
               })
             });
 
-            const fulfillData = await fulfillRes.json();
-            if (fulfillRes.ok && fulfillData.success) {
+            const fulfillData = fulfillResult.data || {};
+            if (fulfillResult.ok && fulfillData.success) {
               const status = fulfillData.data?.status;
               if (status === 'FULFILLED') {
                 if (params.onStatusUpdate) params.onStatusUpdate('Fulfilled successfully');
@@ -376,57 +377,16 @@ export function executePiPayment(
     metadata: paymentData.metadata
   });
 
-  const runSandboxPayment = async () => {
-    if (hasHandledResponse) return;
-    updateStatus('Connecting to Pi Network Wallet...');
-    const mockPaymentId = 'pi_pay_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8);
-    const mockTxid = 'pi_tx_' + Date.now() + '_' + Math.random().toString(36).substring(2, 10);
-
-    updateStatus('Waiting for server approval...');
-    try {
-      const res = await fetch('/api/v2/payments/approve', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ paymentId: mockPaymentId })
-      });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.message || data.error || 'Server approval failed');
-      }
-
-      updateStatus('Payment approved by server. Completing transaction on Pi Network ledger...');
-      const resComplete = await fetch('/api/v2/payments/complete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ paymentId: mockPaymentId, txid: mockTxid })
-      });
-      const dataComplete = await resComplete.json();
-      if (!resComplete.ok || !dataComplete.success) {
-        throw new Error(dataComplete.message || dataComplete.error || 'Server completion failed');
-      }
-
-      if (!hasHandledResponse) {
-        hasHandledResponse = true;
-        updateStatus('Payment verified successfully!');
-        callbacks.onSuccess(mockPaymentId, mockTxid);
-      }
-    } catch (err: any) {
-      if (!hasHandledResponse) {
-        hasHandledResponse = true;
-        updateStatus('Payment execution error');
-        callbacks.onError(err);
-      }
-    }
-  };
-
   if (isPiBrowser() && typeof window !== 'undefined' && window.Pi) {
     updateStatus('Connecting to Pi Network Wallet...');
     const paymentTimeout = setTimeout(() => {
       if (!hasHandledResponse) {
-        console.warn('[PI] Native payment creation timed out or unhandled, falling back to Sandbox payment processing.');
-        runSandboxPayment();
+        hasHandledResponse = true;
+        console.warn('[PI] Native payment creation timed out.');
+        updateStatus('Pi Wallet connection timed out');
+        callbacks.onError(new Error('Pi Network wallet connection timed out. Please retry inside Pi Browser.'));
       }
-    }, 6000);
+    }, 15000);
 
     try {
       window.Pi.createPayment(paymentData, {
@@ -435,14 +395,14 @@ export function executePiPayment(
           console.log('[PI PAYMENT] paymentId received', paymentId);
           updateStatus('Waiting for server approval...');
           try {
-            const res = await fetch('/api/v2/payments/approve', {
+            const res = await safeFetchJson('/api/v2/payments/approve', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ paymentId })
             });
-            const data = await res.json();
+            const data = res.data || {};
             if (!res.ok || !data.success) {
-              throw new Error(data.message || data.error || 'Server approval failed');
+              throw new Error(data.message || data.error || res.error || 'Server approval failed');
             }
             updateStatus('Payment approved by server. Please confirm transaction in Pi Wallet...');
           } catch (err: any) {
@@ -458,14 +418,14 @@ export function executePiPayment(
           console.log('[PI PAYMENT] completion requested', { paymentId, txid });
           updateStatus('Payment submitted to blockchain. Completing on server...');
           try {
-            const res = await fetch('/api/v2/payments/complete', {
+            const res = await safeFetchJson('/api/v2/payments/complete', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ paymentId, txid })
             });
-            const data = await res.json();
+            const data = res.data || {};
             if (!res.ok || !data.success) {
-              throw new Error(data.message || data.error || 'Server completion failed');
+              throw new Error(data.message || data.error || res.error || 'Server completion failed');
             }
             if (!hasHandledResponse) {
               hasHandledResponse = true;
@@ -491,16 +451,25 @@ export function executePiPayment(
         onError: (error: Error) => {
           clearTimeout(paymentTimeout);
           if (!hasHandledResponse) {
+            hasHandledResponse = true;
             console.warn('[PI PAYMENT] Native error encountered:', error);
-            runSandboxPayment();
+            updateStatus('Payment error: ' + (error?.message || 'Transaction rejected'));
+            callbacks.onError(error || new Error('Payment error encountered in Pi Wallet'));
           }
         }
       });
-    } catch (err) {
+    } catch (err: any) {
       clearTimeout(paymentTimeout);
-      runSandboxPayment();
+      if (!hasHandledResponse) {
+        hasHandledResponse = true;
+        callbacks.onError(err || new Error('Failed to initialize Pi Wallet payment'));
+      }
     }
   } else {
-    runSandboxPayment();
+    updateStatus('Pi Browser required');
+    if (!hasHandledResponse) {
+      hasHandledResponse = true;
+      callbacks.onError(new Error('Official Pi Browser is required to execute Pi payments. Please open this app inside Pi Browser.'));
+    }
   }
 }

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { safeFetchJson } from '../lib/safeFetch';
 import { X, Sparkles, Search, ArrowRight, Loader2, Bot, CheckCircle2 } from 'lucide-react';
 import { Product } from '../types';
 
@@ -35,13 +36,14 @@ export const AiSearchModal: React.FC<AiSearchModalProps> = ({
     setLoading(true);
 
     try {
-      const res = await fetch('/api/ai/search', {
+      const res = await safeFetchJson('/api/ai/search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query: searchPrompt, catalog: products })
       });
-      const data = await res.json();
-      setAiResult(data);
+      if (res.data) {
+        setAiResult(res.data);
+      }
     } catch (err) {
       console.error('AI Search client error:', err);
     } finally {

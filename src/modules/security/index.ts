@@ -128,6 +128,8 @@ export class DisasterRecoveryPlanner {
   }
 }
 
+import { safeFetchJson } from '../../lib/safeFetch';
+
 export class SecurityModule {
   sessionManager = new UserSessionManager();
   deviceTrust = new DeviceTrustEngine();
@@ -151,7 +153,7 @@ export class SecurityModule {
 
   async recordAuditLog(action: string, details: string, orderId?: string) {
     try {
-      await fetch('/api/v1/pstp/audit-logs', {
+      await safeFetchJson('/api/v1/pstp/audit-logs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action, details, orderId, timestamp: new Date().toISOString() })

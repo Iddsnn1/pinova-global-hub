@@ -4,12 +4,12 @@
   "outputDirectory": "dist",
   "rewrites": [
     {
-      "source": "/api",
-      "destination": "/api/index"
+      "source": "/api/(.*)",
+      "destination": "/api/index?__path=/$1"
     },
     {
-      "source": "/api/(.*)",
-      "destination": "/api/index"
+      "source": "/api",
+      "destination": "/api/index?__path=/"
     },
     {
       "source": "/((?!api).*)",

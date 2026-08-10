@@ -1,5 +1,7 @@
 import type { Notification as AppNotification } from '../../types';
 
+import { safeFetchJson } from '../../lib/safeFetch';
+
 export interface NotificationPayload {
   title: string;
   message: string;
@@ -91,7 +93,7 @@ export class WebhookNotificationAdapter implements INotificationAdapter {
 
   async send(payload: NotificationPayload) {
     try {
-      await fetch('/api/v1/pstp/security-events', {
+      await safeFetchJson('/api/v1/pstp/security-events', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

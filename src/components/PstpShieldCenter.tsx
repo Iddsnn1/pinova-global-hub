@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { safeFetchJson } from '../lib/safeFetch';
 import {
   ShieldCheck,
   Lock,
@@ -110,29 +111,15 @@ export const PstpShieldCenter: React.FC<PstpShieldCenterProps> = ({
   const fetchPstpData = async () => {
     setLoading(true);
     try {
-      const fetchJson = async (url: string) => {
-        try {
-          const r = await fetch(url);
-          if (!r.ok) return null;
-          const contentType = r.headers.get('content-type') || '';
-          if (contentType.includes('application/json')) {
-            return await r.json();
-          }
-        } catch {
-          return null;
-        }
-        return null;
-      };
-
       const [logsRes, disputesRes, secRes] = await Promise.all([
-        fetchJson('/api/pstp/audit-logs'),
-        fetchJson('/api/pstp/disputes'),
-        fetchJson('/api/pstp/security-events')
+        safeFetchJson('/api/pstp/audit-logs'),
+        safeFetchJson('/api/pstp/disputes'),
+        safeFetchJson('/api/pstp/security-events')
       ]);
 
-      if (logsRes && logsRes.logs) setAuditLogs(logsRes.logs);
-      if (disputesRes && disputesRes.disputes) setDisputes(disputesRes.disputes);
-      if (secRes && secRes.events) setSecurityEvents(secRes.events);
+      if (logsRes.data && logsRes.data.logs) setAuditLogs(logsRes.data.logs);
+      if (disputesRes.data && disputesRes.data.disputes) setDisputes(disputesRes.data.disputes);
+      if (secRes.data && secRes.data.events) setSecurityEvents(secRes.data.events);
     } catch (err) {
       console.error('Error fetching PSTP data:', err);
     } finally {
@@ -154,7 +141,7 @@ export const PstpShieldCenter: React.FC<PstpShieldCenterProps> = ({
       onUpdateOrderStatus(currentSelectedOrder.id, newStatus, note);
     }
     // Record to PSTP audit log backend
-    await fetch('/api/pstp/audit-logs', {
+    await safeFetchJson('/api/pstp/audit-logs', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -185,7 +172,7 @@ export const PstpShieldCenter: React.FC<PstpShieldCenterProps> = ({
       uploadedAt: new Date().toISOString()
     }] : [];
 
-    const res = await fetch('/api/pstp/disputes', {
+    const res = await safeFetchJson('/api/pstp/disputes', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -199,7 +186,7 @@ export const PstpShieldCenter: React.FC<PstpShieldCenterProps> = ({
       })
     });
 
-    const data = await res.json();
+    const data = res.data || {};
     if (data.success) {
       setIsFilingDispute(false);
       setDisputeForm({
@@ -216,7 +203,7 @@ export const PstpShieldCenter: React.FC<PstpShieldCenterProps> = ({
   // Post comment on dispute
   const handleAddComment = async (disputeId: string) => {
     if (!commentText.trim()) return;
-    const res = await fetch(`/api/pstp/disputes/${disputeId}/comment`, {
+    const res = await safeFetchJson(`/api/pstp/disputes/${disputeId}/comment`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -225,7 +212,7 @@ export const PstpShieldCenter: React.FC<PstpShieldCenterProps> = ({
         text: commentText
       })
     });
-    const data = await res.json();
+    const data = res.data || {};
     if (data.success) {
       setCommentText('');
       fetchPstpData();
@@ -234,7 +221,7 @@ export const PstpShieldCenter: React.FC<PstpShieldCenterProps> = ({
 
   // Admin Dispute Resolution
   const handleResolveDispute = async (disputeId: string, decision: 'full_refund' | 'partial_refund' | 'release_seller' | 'dismiss') => {
-    const res = await fetch(`/api/pstp/disputes/${disputeId}/resolve`, {
+    const res = await safeFetchJson(`/api/pstp/disputes/${disputeId}/resolve`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -244,7 +231,7 @@ export const PstpShieldCenter: React.FC<PstpShieldCenterProps> = ({
         resolvedBy: currentUser.username
       })
     });
-    const data = await res.json();
+    const data = res.data || {};
     if (data.success) {
       setAdminResolutionNote('');
       fetchPstpData();

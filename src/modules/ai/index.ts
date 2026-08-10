@@ -262,6 +262,8 @@ export function redactSensitiveData(text: string): { sanitized: string; redacted
   return { sanitized, redactedCount };
 }
 
+import { safeFetchJson } from '../../lib/safeFetch';
+
 export interface AISearchRequest {
   query: string;
   catalog: Product[];
@@ -326,15 +328,14 @@ export class GeminiAIAdapter implements IAIProviderAdapter {
   async searchCatalog(request: AISearchRequest): Promise<AISearchResponse> {
     const start = Date.now();
     try {
-      const response = await fetch('/api/v1/ai/search', {
+      const result = await safeFetchJson('/api/v1/ai/search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...request, provider: 'gemini' })
       });
-      if (response.ok) {
-        const data = await response.json();
+      if (result.ok && result.data) {
         return {
-          ...data,
+          ...result.data,
           providerUsed: this.providerName,
           latencyMs: Date.now() - start
         };
