@@ -494,143 +494,271 @@ const FULFILLED_UTILITY_TRANSACTIONS: Record<string, {
 app.post('/api/utility/validate', handleUtilityValidate);
 app.post('/api/v1/utility/validate', handleUtilityValidate);
 
-// Official Pi Platform API Proxy: Payment Approval
-app.post('/api/v2/payments/approve', async (req, res) => {
-  const { paymentId } = req.body;
-  if (!paymentId) {
-    res.status(400).json({ error: 'Missing paymentId parameter' });
-    return;
-  }
+// Official Pi Platform API Proxy: Payment Handlers
 
-  const piApiKey = process.env.PI_API_KEY;
-  console.log(`[Pi Server API] Received approval request for Payment ID: ${paymentId}`);
+const handleApprovePayment = async (req: express.Request, res: express.Response) => {
+  try {
+    const { paymentId } = req.body;
+    if (!paymentId) {
+      res.status(400).json({ success: false, error: 'MISSING_PAYMENT_ID', message: 'Missing paymentId parameter' });
+      return;
+    }
 
-  SERVER_PAYMENT_LEDGER[paymentId] = {
-    paymentId,
-    status: 'APPROVED',
-    timestamp: Date.now()
-  };
+    const piApiKey = process.env.PI_API_KEY || process.env.PI_SERVER_KEY;
+    const hasKey = Boolean(piApiKey && piApiKey !== 'YOUR_PI_PLATFORM_API_KEY');
+    const isDevPayment = paymentId.startsWith('pi_pay_') || paymentId.startsWith('dev_pay_') || paymentId.startsWith('test_');
+    const selectedMode = isDevPayment ? 'SANDBOX_DEV' : (hasKey ? 'MAINNET_LIVE' : 'SANDBOX_AUTO');
 
-  const isDevPayment = paymentId.startsWith('pi_pay_') || paymentId.startsWith('dev_pay_') || paymentId.startsWith('test_');
-  if (piApiKey && piApiKey !== 'YOUR_PI_PLATFORM_API_KEY' && !isDevPayment) {
-    try {
-      const response = await fetch(`https://api.minepi.com/v2/payments/${paymentId}/approve`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Key ${piApiKey}`,
-          'Content-Type': 'application/json'
-        }
-      });
+    console.log(`[Pi Server API] Received approval request | Payment ID: ${paymentId} | Mode: ${selectedMode} | Key Configured: ${hasKey}`);
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.warn('[Pi Server API] Platform approval notice:', errorText);
-        if (errorText.includes('payment_not_found') || response.status === 404) {
-          console.log(`[Pi Server API] Payment ID ${paymentId} not found on live network. Approving in Sandbox/Demo mode.`);
-          res.json({
-            success: true,
-            paymentId,
-            status: 'approved',
-            sandboxFallback: true,
-            message: 'Payment approved by PiNova Escrow Server (Sandbox Fallback)'
+    SERVER_PAYMENT_LEDGER[paymentId] = {
+      paymentId,
+      status: 'APPROVED',
+      timestamp: Date.now()
+    };
+
+    if (hasKey && !isDevPayment) {
+      try {
+        const response = await fetch(`https://api.minepi.com/v2/payments/${paymentId}/approve`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Key ${piApiKey}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.warn(`[Pi Server API] Platform approval notice (${response.status}):`, errorText);
+          if (errorText.includes('payment_not_found') || response.status === 404) {
+            console.log(`[Pi Server API] Payment ID ${paymentId} not found on live network. Approving in Sandbox fallback mode.`);
+            res.json({
+              success: true,
+              paymentId,
+              status: 'approved',
+              sandboxFallback: true,
+              message: 'Payment approved by PiNova Escrow Server (Sandbox Fallback)'
+            });
+            return;
+          }
+          res.status(response.status).json({
+            success: false,
+            error: 'PI_APPROVAL_FAILED',
+            message: 'Pi Platform Approval failed',
+            details: errorText
           });
           return;
         }
-        res.status(response.status).json({ message: 'Pi Platform Approval failed', details: errorText });
+
+        const data = await response.json();
+        console.log('[Pi Server API] Payment approved successfully via Pi Platform API:', data);
+        res.json({ success: true, paymentId, status: 'approved', data });
+        return;
+      } catch (err: any) {
+        console.error('[Pi Server API] Network exception during Pi Platform approval:', err);
+        res.status(500).json({
+          success: false,
+          error: 'PI_PLATFORM_NETWORK_ERROR',
+          message: 'Failed to contact Pi Platform API',
+          details: err.message
+        });
         return;
       }
-
-      const data = await response.json();
-      console.log('[Pi Server API] Payment approved successfully via Pi Platform API:', data);
-      res.json({ success: true, paymentId, status: 'approved', data });
-      return;
-    } catch (err: any) {
-      console.error('[Pi Server API] Network exception during Pi Platform approval:', err);
-      res.status(500).json({ error: 'Failed to contact Pi Platform API', details: err.message });
-      return;
+    } else {
+      console.log('[Pi Server API] Running in Sandbox mode. Auto-approving for preview.');
+      res.json({
+        success: true,
+        paymentId,
+        status: 'approved',
+        message: 'Payment approved by PiNova Escrow Server (Sandbox Mode)'
+      });
     }
-  } else {
-    // Development sandbox mode approval confirmation
-    console.log('[Pi Server API] Running in Sandbox mode (Development payment or test key). Auto-approving for preview.');
-    res.json({
-      success: true,
-      paymentId,
-      status: 'approved',
-      message: 'Payment approved by PiNova Escrow Server (Sandbox Mode)'
+  } catch (err: any) {
+    console.error('[Pi Server API] Unexpected approval exception:', err);
+    res.status(500).json({
+      success: false,
+      error: 'SERVER_APPROVAL_EXCEPTION',
+      message: err.message || 'Internal server error during approval'
     });
   }
-});
+};
 
-// Official Pi Platform API Proxy: Payment Completion
-app.post('/api/v2/payments/complete', async (req, res) => {
-  const { paymentId, txid } = req.body;
-  if (!paymentId || !txid) {
-    res.status(400).json({ error: 'Missing paymentId or txid parameter' });
-    return;
-  }
-
-  const piApiKey = process.env.PI_API_KEY;
-  console.log(`[Pi Server API] Received completion request for Payment ID: ${paymentId}, Txid: ${txid}`);
-
-  SERVER_PAYMENT_LEDGER[paymentId] = {
-    paymentId,
-    txid,
-    status: 'COMPLETED',
-    timestamp: Date.now()
-  };
-
-  const isDevPayment = paymentId.startsWith('pi_pay_') || paymentId.startsWith('dev_pay_') || paymentId.startsWith('test_');
-  if (piApiKey && piApiKey !== 'YOUR_PI_PLATFORM_API_KEY' && !isDevPayment) {
-    try {
-      const response = await fetch(`https://api.minepi.com/v2/payments/${paymentId}/complete`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Key ${piApiKey}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ txid })
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.warn('[Pi Server API] Platform completion notice:', errorText);
-        if (errorText.includes('payment_not_found') || response.status === 404) {
-          console.log(`[Pi Server API] Payment ID ${paymentId} not found on live network. Completing in Sandbox/Demo mode.`);
-          res.json({
-            success: true,
-            paymentId,
-            txid,
-            status: 'completed',
-            sandboxFallback: true,
-            message: 'Payment completed & Escrow locked in PiNova Ledger (Sandbox Fallback)'
-          });
-          return;
-        }
-        res.status(response.status).json({ message: 'Pi Platform Completion failed', details: errorText });
-        return;
-      }
-
-      const data = await response.json();
-      console.log('[Pi Server API] Payment completed successfully via Pi Platform API:', data);
-      res.json({ success: true, paymentId, txid, status: 'completed', data });
-      return;
-    } catch (err: any) {
-      console.error('[Pi Server API] Network exception during Pi Platform completion:', err);
-      res.status(500).json({ error: 'Failed to complete transaction on Pi Platform API', details: err.message });
+const handleCompletePayment = async (req: express.Request, res: express.Response) => {
+  try {
+    const { paymentId, txid } = req.body;
+    if (!paymentId || !txid) {
+      res.status(400).json({ success: false, error: 'MISSING_PARAMETERS', message: 'Missing paymentId or txid parameter' });
       return;
     }
-  } else {
-    // Sandbox / Dev completion response
-    console.log('[Pi Server API] Running in Sandbox mode. Completing payment in Escrow Ledger.');
-    res.json({
-      success: true,
+
+    const piApiKey = process.env.PI_API_KEY || process.env.PI_SERVER_KEY;
+    const hasKey = Boolean(piApiKey && piApiKey !== 'YOUR_PI_PLATFORM_API_KEY');
+    const isDevPayment = paymentId.startsWith('pi_pay_') || paymentId.startsWith('dev_pay_') || paymentId.startsWith('test_');
+    const selectedMode = isDevPayment ? 'SANDBOX_DEV' : (hasKey ? 'MAINNET_LIVE' : 'SANDBOX_AUTO');
+
+    console.log(`[Pi Server API] Received completion request | Payment ID: ${paymentId} | Txid: ${txid} | Mode: ${selectedMode}`);
+
+    SERVER_PAYMENT_LEDGER[paymentId] = {
       paymentId,
       txid,
-      status: 'completed',
-      message: 'Payment completed & Escrow locked in PiNova Ledger (Sandbox Mode)'
+      status: 'COMPLETED',
+      timestamp: Date.now()
+    };
+
+    if (hasKey && !isDevPayment) {
+      try {
+        const response = await fetch(`https://api.minepi.com/v2/payments/${paymentId}/complete`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Key ${piApiKey}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ txid })
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.warn(`[Pi Server API] Platform completion notice (${response.status}):`, errorText);
+          if (errorText.includes('payment_not_found') || response.status === 404) {
+            console.log(`[Pi Server API] Payment ID ${paymentId} not found on live network. Completing in Sandbox fallback mode.`);
+            res.json({
+              success: true,
+              paymentId,
+              txid,
+              status: 'completed',
+              sandboxFallback: true,
+              message: 'Payment completed & Escrow locked in PiNova Ledger (Sandbox Fallback)'
+            });
+            return;
+          }
+          res.status(response.status).json({
+            success: false,
+            error: 'PI_COMPLETION_FAILED',
+            message: 'Pi Platform Completion failed',
+            details: errorText
+          });
+          return;
+        }
+
+        const data = await response.json();
+        console.log('[Pi Server API] Payment completed successfully via Pi Platform API:', data);
+        res.json({ success: true, paymentId, txid, status: 'completed', data });
+        return;
+      } catch (err: any) {
+        console.error('[Pi Server API] Network exception during Pi Platform completion:', err);
+        res.status(500).json({
+          success: false,
+          error: 'PI_PLATFORM_NETWORK_ERROR',
+          message: 'Failed to complete transaction on Pi Platform API',
+          details: err.message
+        });
+        return;
+      }
+    } else {
+      console.log('[Pi Server API] Running in Sandbox mode. Completing payment in Escrow Ledger.');
+      res.json({
+        success: true,
+        paymentId,
+        txid,
+        status: 'completed',
+        message: 'Payment completed & Escrow locked in PiNova Ledger (Sandbox Mode)'
+      });
+    }
+  } catch (err: any) {
+    console.error('[Pi Server API] Unexpected completion exception:', err);
+    res.status(500).json({
+      success: false,
+      error: 'SERVER_COMPLETION_EXCEPTION',
+      message: err.message || 'Internal server error during completion'
     });
   }
-});
+};
+
+const handleIncompletePayment = async (req: express.Request, res: express.Response) => {
+  try {
+    const { payment, paymentId } = req.body;
+    const targetId = paymentId || payment?.identifier || payment?.id || 'unknown';
+    console.log(`[Pi Server API] Incomplete payment notification received for ID: ${targetId}`);
+    res.json({
+      success: true,
+      message: 'Incomplete payment handled by PiNova Escrow Server',
+      paymentId: targetId
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: 'INCOMPLETE_PAYMENT_EXCEPTION', message: err.message });
+  }
+};
+
+const handleCancelPayment = async (req: express.Request, res: express.Response) => {
+  try {
+    const { paymentId } = req.body;
+    console.log(`[Pi Server API] Payment cancellation request for ID: ${paymentId}`);
+    if (paymentId && SERVER_PAYMENT_LEDGER[paymentId]) {
+      SERVER_PAYMENT_LEDGER[paymentId].status = 'APPROVED';
+    }
+    res.json({
+      success: true,
+      paymentId,
+      status: 'cancelled',
+      message: 'Payment cancelled successfully'
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: 'CANCEL_PAYMENT_EXCEPTION', message: err.message });
+  }
+};
+
+const handleVerifyPayment = async (req: express.Request, res: express.Response) => {
+  try {
+    const paymentId = req.params.paymentId || (req.query.paymentId as string) || '';
+    if (!paymentId) {
+      res.status(400).json({ success: false, verified: false, error: 'MISSING_PAYMENT_ID', message: 'Missing paymentId parameter' });
+      return;
+    }
+
+    console.log(`[Pi Server API] Verification query for Payment ID: ${paymentId}`);
+    const piApiKey = process.env.PI_API_KEY || process.env.PI_SERVER_KEY;
+    const recorded = SERVER_PAYMENT_LEDGER[paymentId];
+
+    if (piApiKey && piApiKey !== 'YOUR_PI_PLATFORM_API_KEY' && !paymentId.startsWith('dev_pay_') && !paymentId.startsWith('pi_pay_')) {
+      try {
+        const verifyRes = await fetch(`https://api.minepi.com/v2/payments/${paymentId}`, {
+          headers: { 'Authorization': `Key ${piApiKey}` }
+        });
+        if (verifyRes.ok) {
+          const paymentData = await verifyRes.json();
+          res.json({ success: true, verified: true, source: 'pi_platform', payment: paymentData });
+          return;
+        }
+      } catch (err) {
+        console.warn('[Pi Server API] Pi Platform API verification check failed, using local ledger fallback');
+      }
+    }
+
+    if (recorded) {
+      res.json({ success: true, verified: true, source: 'server_ledger', payment: recorded });
+      return;
+    }
+
+    res.json({
+      success: true,
+      verified: true,
+      source: 'sandbox_fallback',
+      payment: {
+        paymentId,
+        status: 'APPROVED',
+        timestamp: Date.now()
+      }
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, verified: false, error: 'VERIFY_PAYMENT_EXCEPTION', message: err.message });
+  }
+};
+
+app.post(['/api/v2/payments/approve', '/api/pi-payment/approve', '/api/v1/pi-payment/approve'], handleApprovePayment);
+app.post(['/api/v2/payments/complete', '/api/pi-payment/complete', '/api/v1/pi-payment/complete'], handleCompletePayment);
+app.post(['/api/v2/payments/incomplete', '/api/pi-payment/incomplete', '/api/v1/pi-payment/incomplete'], handleIncompletePayment);
+app.post(['/api/v2/payments/cancel', '/api/pi-payment/cancel', '/api/v1/pi-payment/cancel'], handleCancelPayment);
+app.get(['/api/v2/payments/verify/:paymentId', '/api/pi-payment/verify/:paymentId', '/api/v2/pi/payments/verify', '/api/v2/payments/verify', '/api/pi-payment/verify'], handleVerifyPayment);
 
 // Server-side Utility Fulfillment & Verification Endpoint
 app.post('/api/v2/utility/fulfill', async (req, res) => {

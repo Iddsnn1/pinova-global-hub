@@ -1,6 +1,26 @@
 import type { IncomingMessage, ServerResponse } from 'http';
+import { createRequire } from 'module';
 
-export default async function handler(req: IncomingMessage, res: ServerResponse) {
+const require = createRequire(import.meta.url);
+
+function getApp() {
+  try {
+    const mod = require('../dist/server.cjs');
+    return mod.default || mod;
+  } catch (err1: any) {
+    try {
+      const mod = require('../server');
+      return mod.default || mod;
+    } catch (err2: any) {
+      console.error('[Vercel Handler] Error loading server module:', { err1: err1?.message, err2: err2?.message });
+      throw new Error(`Failed to load server module: ${err1?.message || String(err1)}`);
+    }
+  }
+}
+
+let cachedApp: any = null;
+
+export default function handler(req: IncomingMessage, res: ServerResponse) {
   const reqUrl = req.url || '';
 
   // Isolated validation key endpoint
@@ -58,20 +78,23 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   }
 
   try {
-    const serverModule = await import('../server');
-    const app = serverModule.default;
-    return app(req, res);
+    if (!cachedApp) {
+      cachedApp = getApp();
+    }
+    return cachedApp(req, res);
   } catch (err: any) {
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.statusCode = 500;
     res.end(JSON.stringify({
       success: false,
-      error: 'Server Module Initialization Exception',
+      error: 'SERVER_HANDLER_EXCEPTION',
       message: err?.message || String(err),
       stack: err?.stack || null
     }));
   }
 }
+
+
 
 
