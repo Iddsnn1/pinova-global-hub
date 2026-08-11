@@ -208,6 +208,26 @@ function notifyDiagnosticStateChange() {
 
 export function isSandboxMode(): boolean {
   if (typeof window === 'undefined') return false;
+
+  // 1. Check user override from localStorage
+  try {
+    const override = localStorage.getItem('pi_sandbox_override');
+    if (override === 'true') return true;
+    if (override === 'false') return false;
+  } catch (e) {
+    // Ignore storage errors
+  }
+
+  // 2. Check URL query params (?sandbox=true / ?sandbox=false / ?env=sandbox / ?env=mainnet)
+  const search = window.location.search || '';
+  if (search.includes('sandbox=true') || search.includes('sandbox=1') || search.includes('env=sandbox')) {
+    return true;
+  }
+  if (search.includes('sandbox=false') || search.includes('sandbox=0') || search.includes('env=mainnet')) {
+    return false;
+  }
+
+  // 3. Check VITE_PI_SANDBOX or VITE_PI_ENV
   const metaEnv = (import.meta as any).env;
   if (metaEnv) {
     if (metaEnv.VITE_PI_SANDBOX === 'false' || metaEnv.VITE_PI_ENV === 'mainnet') {
@@ -217,11 +237,25 @@ export function isSandboxMode(): boolean {
       return true;
     }
   }
+
   const origin = window.location.origin || '';
   if (origin.includes('pinova-global-marketplace.vercel.app') || metaEnv?.MODE === 'production' || metaEnv?.PROD) {
     return false;
   }
   return process.env.NODE_ENV !== 'production';
+}
+
+export function setCustomSandboxMode(sandbox: boolean) {
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.setItem('pi_sandbox_override', sandbox ? 'true' : 'false');
+    } catch (e) {
+      console.warn('Could not save sandbox override to localStorage', e);
+    }
+  }
+  sdkInitialized = false;
+  piInitPromise = null;
+  initPiSdk(sandbox);
 }
 
 export function isPiBrowser(): boolean {
@@ -527,7 +561,7 @@ export async function authenticatePiUser(
         throw new Error('Pi Authentication did not return user credentials or access token.');
       }
     } catch (err: any) {
-      console.log('[PI BRIDGE] authenticate promise rejected:', err?.message || err);
+      console.log('[PI BRIDGE] authenticate promise rejected:', err);
       if (nativeBridgeState !== 'call_blocked') {
         nativeBridgeState = 'promise_rejected';
       }
@@ -535,7 +569,13 @@ export async function authenticatePiUser(
       paymentScopeGranted = false;
       authenticatedUser = null;
 
-      const rawMsg = String(err?.message || err || 'Pi Network authentication failed');
+      let rawMsg = 'Pi Network authentication failed';
+      if (typeof err === 'string') {
+        rawMsg = err;
+      } else if (err && typeof err === 'object') {
+        rawMsg = err.message || err.error || err.description || (err.toString && err.toString() !== '[object Object]' ? err.toString() : JSON.stringify(err));
+      }
+
       const isTimeout = rawMsg.includes('AUTH_BRIDGE_TIMEOUT') || rawMsg.includes('120000ms') || rawMsg.toLowerCase().includes('timed out');
       const isCancelled = rawMsg.toLowerCase().includes('cancel') || rawMsg.toLowerCase().includes('denied') || rawMsg.toLowerCase().includes('dismiss') || rawMsg.toLowerCase().includes('user_cancelled');
       const isUnavailable = rawMsg === 'PI_AUTHENTICATE_UNAVAILABLE' || rawMsg.includes('not a function');
@@ -557,7 +597,7 @@ export async function authenticatePiUser(
         console.log('[PI AUTH] PI_AUTHENTICATE_UNAVAILABLE');
       } else {
         authLifecycleState = 'AUTH_ERROR';
-        authErrorType = rawMsg.includes('bridge') || rawMsg.includes('AUTH_ERROR') ? 'AUTH_BRIDGE_REJECTED' : 'AUTH_ERROR';
+        authErrorType = 'AUTH_BRIDGE_REJECTED';
         authenticationError = rawMsg;
         console.error('[PI AUTH] AUTH_ERROR:', rawMsg);
       }
@@ -593,8 +633,16 @@ export async function initAndAuthenticateProactively(
       return null;
     }
 
+    // Wait for document/webview readiness before calling authenticate
+    if (typeof document !== 'undefined' && document.readyState !== 'complete') {
+      await new Promise((resolve) => {
+        window.addEventListener('load', resolve, { once: true });
+        setTimeout(resolve, 1000);
+      });
+    }
+
     // Settlement delay for native webview bridge event listeners on initial page mount
-    await new Promise((r) => setTimeout(r, 400));
+    await new Promise((r) => setTimeout(r, 600));
 
     console.log('[PI AUTH] Proactive authentication starting...');
     return await authenticatePiUser(onIncompletePaymentFound, false);

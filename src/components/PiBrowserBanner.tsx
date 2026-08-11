@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ShieldCheck, Info, Sparkles, Terminal, ChevronDown, ChevronUp, RefreshCw } from 'lucide-react';
-import { isPiBrowser, subscribePiSdkState, getPiSdkDiagnosticState, authenticatePiUser, PiSdkDiagnosticState } from '../lib/piSdk';
+import { isPiBrowser, subscribePiSdkState, getPiSdkDiagnosticState, authenticatePiUser, setCustomSandboxMode, PiSdkDiagnosticState } from '../lib/piSdk';
 
 interface PiBrowserBannerProps {
   sandboxMode: boolean;
@@ -165,7 +165,7 @@ export const PiBrowserBanner: React.FC<PiBrowserBannerProps> = ({
             </div>
             <div className="space-y-1">
               <div><span className="text-slate-500">Production origin:</span> <strong className="text-purple-300 select-all">{diagState.productionOrigin || 'none'}</strong></div>
-              <div><span className="text-slate-500">Sandbox mode:</span> <strong className="text-slate-200">{String(diagState.sandbox)}</strong></div>
+              <div className="flex items-center gap-1.5"><span className="text-slate-500">Sandbox mode:</span> <button onClick={() => setCustomSandboxMode(!diagState.sandbox)} className="text-[10px] px-1.5 py-0.2 rounded bg-purple-900/80 hover:bg-purple-800 text-purple-200 border border-purple-700 font-sans cursor-pointer transition-colors" title="Click to toggle Testnet Sandbox vs Mainnet">{diagState.sandbox ? 'Testnet Sandbox (Active)' : 'Mainnet (Active)'}</button></div>
               <div><span className="text-slate-500">Build commit:</span> <strong className="text-emerald-300 font-bold">{diagState.buildCommit}</strong></div>
             </div>
           </div>
