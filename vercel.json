@@ -4,6 +4,14 @@
   "outputDirectory": "dist",
   "rewrites": [
     {
+      "source": "/validation-key.txt",
+      "destination": "/api/index?__path=/validation-key.txt"
+    },
+    {
+      "source": "/validation-key",
+      "destination": "/api/index?__path=/validation-key.txt"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "/api/index?__path=/$1"
     },
@@ -12,7 +20,7 @@
       "destination": "/api/index?__path=/"
     },
     {
-      "source": "/((?!api|validation-key).*)",
+      "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
   ],
