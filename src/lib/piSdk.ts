@@ -216,7 +216,10 @@ export function isSandboxMode(): boolean {
 export function isPiBrowser(): boolean {
   if (typeof window === 'undefined') return false;
   const userAgent = navigator.userAgent || '';
-  return userAgent.includes('PiBrowser') || userAgent.includes('Pi Network') || Boolean((window as any).Pi);
+  const isPiUa = userAgent.includes('PiBrowser') || userAgent.includes('Pi Network');
+  const hasPiNative = Boolean((window as any).PiNative);
+  const hasUrlParam = typeof window.location !== 'undefined' && window.location.search.includes('pi_browser=1');
+  return isPiUa || hasPiNative || hasUrlParam;
 }
 
 export function isPiSdkInitialized(): boolean {
@@ -473,7 +476,13 @@ export async function authenticatePiUser(
         (err) => console.log('[PI BRIDGE] authPromise rejected in native bridge:', err?.message || err)
       );
 
-      const auth = await authPromise;
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => {
+          reject(new Error('Pi Network authentication timed out waiting for Pi Browser bridge.'));
+        }, 20000);
+      });
+
+      const auth = await Promise.race([authPromise, timeoutPromise]);
 
       console.log('[PI BRIDGE] authenticate promise resolved');
       nativeBridgeState = 'promise_resolved';
