@@ -12,11 +12,24 @@
       "destination": "/api/index?__path=/"
     },
     {
-      "source": "/((?!api).*)",
+      "source": "/((?!api|validation-key).*)",
       "destination": "/index.html"
     }
   ],
   "headers": [
+    {
+      "source": "/validation-key.txt",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "text/plain; charset=utf-8"
+        },
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "*"
+        }
+      ]
+    },
     {
       "source": "/(.*)",
       "headers": [
