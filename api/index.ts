@@ -77,6 +77,26 @@ export default function handler(req: IncomingMessage, res: ServerResponse) {
     return;
   }
 
+  // Normalize URL if Vercel rewrite passed __path query parameter
+  if (req.url) {
+    try {
+      const parsedUrl = new URL(req.url, 'http://localhost');
+      const pathQuery = parsedUrl.searchParams.get('__path');
+      if (pathQuery) {
+        let cleanPath = pathQuery;
+        if (!cleanPath.startsWith('/')) cleanPath = '/' + cleanPath;
+        if (!cleanPath.startsWith('/api/') && cleanPath !== '/api') {
+          cleanPath = '/api' + cleanPath;
+        }
+        parsedUrl.searchParams.delete('__path');
+        const searchStr = parsedUrl.searchParams.toString();
+        req.url = cleanPath + (searchStr ? '?' + searchStr : '');
+      }
+    } catch (e) {
+      // ignore parse error
+    }
+  }
+
   try {
     if (!cachedApp) {
       cachedApp = getApp();

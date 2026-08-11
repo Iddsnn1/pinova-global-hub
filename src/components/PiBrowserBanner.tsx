@@ -147,26 +147,62 @@ export const PiBrowserBanner: React.FC<PiBrowserBannerProps> = ({
       {/* Expandable Diagnostic Panel */}
       {showDiagPanel && (
         <div className="bg-slate-950/95 border-t border-purple-800/40 px-4 py-3 font-mono text-[11px] text-slate-300">
-          <div className="max-w-7xl mx-auto grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-            <div className="space-y-1">
-              <div><span className="text-slate-500">Pi Browser detected:</span> <strong className={diagState.piEnvDetected ? 'text-emerald-400' : 'text-amber-400'}>{diagState.piEnvDetected ? 'yes' : 'no'}</strong></div>
-              <div><span className="text-slate-500">SDK script state:</span> <strong className={diagState.sdkScriptState === 'loaded' ? 'text-emerald-400' : 'text-rose-400'}>{diagState.sdkScriptState}</strong></div>
-              <div><span className="text-slate-500">Pi.init status:</span> <strong className={diagState.piInitState === 'success' ? 'text-emerald-400' : 'text-amber-400'}>{diagState.piInitState}</strong></div>
+          <div className="max-w-7xl mx-auto space-y-3">
+            {/* Required Standard Diagnostic Metrics Bar */}
+            <div className="p-2 bg-slate-900/90 border border-purple-700/40 rounded-lg grid grid-cols-2 sm:grid-cols-5 gap-2 text-center text-[10px]">
+              <div>
+                <span className="text-slate-400 block text-[9px] uppercase tracking-wider">Pi SDK</span>
+                <strong className={diagState.sdkReadyState === 'ready' ? 'text-emerald-400' : 'text-rose-400'}>
+                  {diagState.sdkReadyState === 'ready' ? 'READY' : 'NOT READY'}
+                </strong>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[9px] uppercase tracking-wider">Network</span>
+                <strong className={diagState.network === 'SANDBOX' ? 'text-purple-300' : 'text-amber-400'}>
+                  {diagState.network}
+                </strong>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[9px] uppercase tracking-wider">Pi Auth</span>
+                <strong className={diagState.piAuthenticationState === 'success' ? 'text-emerald-400' : diagState.piAuthenticationState === 'pending' ? 'text-amber-400 animate-pulse' : 'text-rose-400'}>
+                  {diagState.piAuthenticationState.toUpperCase()}
+                </strong>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[9px] uppercase tracking-wider">Payment Scope</span>
+                <strong className={diagState.paymentScopeState === 'granted' ? 'text-emerald-400' : 'text-rose-400'}>
+                  {diagState.paymentScopeState === 'granted' ? 'GRANTED' : 'NOT GRANTED'}
+                </strong>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[9px] uppercase tracking-wider">API Config</span>
+                <strong className={diagState.apiConfiguration === 'configured' ? 'text-emerald-400' : 'text-rose-400'}>
+                  {diagState.apiConfiguration === 'configured' ? 'CONFIGURED' : 'MISSING'}
+                </strong>
+              </div>
             </div>
-            <div className="space-y-1">
-              <div><span className="text-slate-500">authenticate status:</span> <strong className={diagState.piAuthApiState === 'available' ? 'text-emerald-400' : 'text-rose-400'}>{diagState.piAuthApiState}</strong></div>
-              <div><span className="text-slate-500">Invocation count:</span> <strong className="text-purple-300 font-bold">{diagState.authenticateInvocationCount}</strong></div>
-              <div><span className="text-slate-500">Authentication state:</span> <strong className={diagState.authState === 'AUTH_SUCCESS' ? 'text-emerald-400' : 'text-amber-300'}>{diagState.authState}</strong></div>
-            </div>
-            <div className="space-y-1">
-              <div><span className="text-slate-500">Native promise:</span> <strong className={diagState.nativeBridgeState === 'promise_resolved' ? 'text-emerald-400' : diagState.nativeBridgeState.includes('pending') ? 'text-rose-400 animate-pulse' : 'text-amber-300'}>{diagState.nativeBridgeState}</strong></div>
-              <div><span className="text-slate-500">Payment scope:</span> <strong className={diagState.paymentScope === 'granted' ? 'text-emerald-400' : 'text-rose-400'}>{diagState.paymentScope}</strong></div>
-              <div><span className="text-slate-500">Authenticated username:</span> <strong className={diagState.username ? 'text-emerald-300 font-bold' : 'text-slate-400'}>{diagState.username ? `@${diagState.username}` : 'none'}</strong></div>
-            </div>
-            <div className="space-y-1">
-              <div><span className="text-slate-500">Production origin:</span> <strong className="text-purple-300 select-all">{diagState.productionOrigin || 'none'}</strong></div>
-              <div className="flex items-center gap-1.5"><span className="text-slate-500">Sandbox mode:</span> <button onClick={() => setCustomSandboxMode(!diagState.sandbox)} className="text-[10px] px-1.5 py-0.2 rounded bg-purple-900/80 hover:bg-purple-800 text-purple-200 border border-purple-700 font-sans cursor-pointer transition-colors" title="Click to toggle Testnet Sandbox vs Mainnet">{diagState.sandbox ? 'Testnet Sandbox (Active)' : 'Mainnet (Active)'}</button></div>
-              <div><span className="text-slate-500">Build commit:</span> <strong className="text-emerald-300 font-bold">{diagState.buildCommit}</strong></div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+              <div className="space-y-1">
+                <div><span className="text-slate-500">Pi Browser detected:</span> <strong className={diagState.piEnvDetected ? 'text-emerald-400' : 'text-amber-400'}>{diagState.piEnvDetected ? 'yes' : 'no'}</strong></div>
+                <div><span className="text-slate-500">SDK script state:</span> <strong className={diagState.sdkScriptState === 'loaded' ? 'text-emerald-400' : 'text-rose-400'}>{diagState.sdkScriptState}</strong></div>
+                <div><span className="text-slate-500">Pi.init status:</span> <strong className={diagState.piInitState === 'success' ? 'text-emerald-400' : 'text-amber-400'}>{diagState.piInitState}</strong></div>
+              </div>
+              <div className="space-y-1">
+                <div><span className="text-slate-500">authenticate status:</span> <strong className={diagState.piAuthApiState === 'available' ? 'text-emerald-400' : 'text-rose-400'}>{diagState.piAuthApiState}</strong></div>
+                <div><span className="text-slate-500">Invocation count:</span> <strong className="text-purple-300 font-bold">{diagState.authenticateInvocationCount}</strong></div>
+                <div><span className="text-slate-500">Authentication state:</span> <strong className={diagState.authState === 'AUTH_SUCCESS' ? 'text-emerald-400' : 'text-amber-300'}>{diagState.authState}</strong></div>
+              </div>
+              <div className="space-y-1">
+                <div><span className="text-slate-500">Native promise:</span> <strong className={diagState.nativeBridgeState === 'promise_resolved' ? 'text-emerald-400' : diagState.nativeBridgeState.includes('pending') ? 'text-rose-400 animate-pulse' : 'text-amber-300'}>{diagState.nativeBridgeState}</strong></div>
+                <div><span className="text-slate-500">Payment scope:</span> <strong className={diagState.paymentScope === 'granted' ? 'text-emerald-400' : 'text-rose-400'}>{diagState.paymentScope}</strong></div>
+                <div><span className="text-slate-500">Authenticated user:</span> <strong className={diagState.username ? 'text-emerald-300 font-bold' : 'text-slate-400'}>{diagState.username ? `@${diagState.username}` : 'none'}</strong></div>
+              </div>
+              <div className="space-y-1">
+                <div><span className="text-slate-500">Production origin:</span> <strong className="text-purple-300 select-all">{diagState.productionOrigin || 'none'}</strong></div>
+                <div className="flex items-center gap-1.5"><span className="text-slate-500">Sandbox mode:</span> <button onClick={() => setCustomSandboxMode(!diagState.sandbox)} className="text-[10px] px-1.5 py-0.2 rounded bg-purple-900/80 hover:bg-purple-800 text-purple-200 border border-purple-700 font-sans cursor-pointer transition-colors" title="Click to toggle Testnet Sandbox vs Mainnet">{diagState.sandbox ? 'Testnet Sandbox (Active)' : 'Mainnet (Active)'}</button></div>
+                <div><span className="text-slate-500">Build commit:</span> <strong className="text-emerald-300 font-bold">{diagState.buildCommit}</strong></div>
+              </div>
             </div>
           </div>
           {diagState.error && (

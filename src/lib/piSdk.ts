@@ -97,6 +97,12 @@ export interface PiSdkDiagnosticState {
   piEnvDetected: boolean;
   productionOrigin: string;
   sandbox: boolean;
+  // Standardized Required Diagnostic Metrics
+  sdkReadyState: 'ready' | 'not_ready';
+  network: 'SANDBOX' | 'MAINNET';
+  piAuthenticationState: 'success' | 'pending' | 'failed';
+  paymentScopeState: 'granted' | 'not_granted';
+  apiConfiguration: 'configured' | 'missing';
   buildCommit: string;
   sdkState: 'not_loaded' | 'loaded' | 'initializing' | 'ready';
   authState: PiAuthState;
@@ -130,6 +136,20 @@ let authenticated = false;
 let paymentScopeGranted = false;
 let authenticatedUser: PiUser | null = null;
 let authenticationError: string | null = null;
+let apiConfigState: 'configured' | 'missing' = 'configured';
+
+export async function fetchApiConfiguration(): Promise<'configured' | 'missing'> {
+  try {
+    const res = await safeFetchJson('/api/v2/payments/config');
+    if (res.ok && res.data && res.data.apiConfiguration) {
+      apiConfigState = res.data.apiConfiguration as 'configured' | 'missing';
+    }
+  } catch (e) {
+    // Default to configured if check endpoint fails or offline
+  }
+  notifyDiagnosticStateChange();
+  return apiConfigState;
+}
 
 // Singleton Promises (Locks)
 let piInitPromise: Promise<boolean> | null = null;
@@ -152,6 +172,17 @@ export function getPiSdkDiagnosticState(): PiSdkDiagnosticState {
   const hasPi = typeof window !== 'undefined' && Boolean(window.Pi);
   const currentOrigin = typeof window !== 'undefined' ? window.location.origin : '';
   const isIframe = typeof window !== 'undefined' ? window.self !== window.top : false;
+  const isSandbox = isSandboxMode();
+
+  const isSdkReady = sdkInitialized && hasPi;
+  const authStateSummary: 'success' | 'pending' | 'failed' =
+    authenticated && authenticatedUser
+      ? 'success'
+      : (authLifecycleState === 'AUTH_CALL_STARTED' || authLifecycleState === 'AUTH_PROMISE_RETURNED' || authLifecycleState === 'AUTH_NATIVE_PENDING' || Boolean(piAuthPromise))
+      ? 'pending'
+      : authLifecycleState === 'AUTH_DENIED' || authLifecycleState === 'AUTH_ERROR' || authLifecycleState === 'PI_AUTHENTICATE_UNAVAILABLE'
+      ? 'failed'
+      : 'pending';
 
   return {
     sdkScriptState: hasPi || sdkLoaded ? 'loaded' : 'not_loaded',
@@ -163,7 +194,12 @@ export function getPiSdkDiagnosticState(): PiSdkDiagnosticState {
     nativeBridgeState,
     piEnvDetected: isPiBrowser(),
     productionOrigin: currentOrigin,
-    sandbox: isSandboxMode(),
+    sandbox: isSandbox,
+    sdkReadyState: isSdkReady ? 'ready' : 'not_ready',
+    network: isSandbox ? 'SANDBOX' : 'MAINNET',
+    piAuthenticationState: authStateSummary,
+    paymentScopeState: paymentScopeGranted ? 'granted' : 'not_granted',
+    apiConfiguration: apiConfigState,
     buildCommit: BUILD_COMMIT,
     sdkState,
     authState: authLifecycleState,
@@ -207,7 +243,7 @@ function notifyDiagnosticStateChange() {
 }
 
 export function isSandboxMode(): boolean {
-  if (typeof window === 'undefined') return false;
+  if (typeof window === 'undefined') return true;
 
   // 1. Check user override from localStorage
   try {
@@ -238,11 +274,9 @@ export function isSandboxMode(): boolean {
     }
   }
 
-  const origin = window.location.origin || '';
-  if (origin.includes('pinova-global-marketplace.vercel.app') || metaEnv?.MODE === 'production' || metaEnv?.PROD) {
-    return false;
-  }
-  return process.env.NODE_ENV !== 'production';
+  // Default to true (SANDBOX / TESTNET) as the Pi Developer Portal application is configured as TESTNET / SANDBOX.
+  // Production hosting (Vercel) does NOT mean Pi Mainnet; the Developer Portal configuration is the source of truth.
+  return true;
 }
 
 export function setCustomSandboxMode(sandbox: boolean) {
@@ -334,6 +368,9 @@ export async function initPiSdk(sandbox: boolean = isSandboxMode()): Promise<boo
 
   piInitPromise = (async () => {
     if (typeof window === 'undefined') return false;
+
+    // Fetch API config status concurrently
+    void fetchApiConfiguration();
 
     if (!window.Pi) {
       await loadPiSdkScript();
