@@ -46,6 +46,7 @@ export interface UtilityServiceProvider {
   currency: string; // e.g. "USD"
   enabled: boolean;
   hasDirectValidationApi?: boolean;
+  designations?: string[];
   packages: UtilityProviderPackage[];
 }
 

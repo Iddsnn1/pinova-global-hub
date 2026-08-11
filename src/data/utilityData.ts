@@ -702,31 +702,111 @@ export const SAMPLE_UTILITY_PROVIDERS: UtilityServiceProvider[] = [
 
   // 2. DATA
   {
-    id: 'prov-data-mtn',
-    name: 'MTN 4G/5G Data Bundles',
+    id: 'prov-data-mtn-ng',
+    name: 'MTN Nigeria 4G/5G Data',
     category: 'data',
     logo: 'https://images.unsplash.com/photo-1544197150-b99a580bb7a8?auto=format&fit=crop&w=200&q=80',
-    country: 'Global',
+    country: 'Nigeria',
+    countryCode: 'NG',
     supportsCustomAmount: false,
     supportsFixedPackages: true,
-    accountLabel: 'Recipient Mobile Number',
-    accountPlaceholder: '+234 803 123 4567',
+    accountLabel: 'Recipient Mobile Phone Number',
+    accountPlaceholder: '0803 123 4567 or +234 803 123 4567',
     currency: 'USD',
     enabled: true,
+    hasDirectValidationApi: true,
+    designations: ['SME Data Bundle', 'Direct 4G/5G Top-Up', 'Corporate Unlimited', 'Night Streamer Pack'],
     packages: [
-      { id: 'pkg-data-5gb', name: '5GB Monthly Data Plan', description: 'High-speed 5G network bundle', fiatPrice: 4.50, currency: 'USD', validity: '30 Days', badge: 'Starter' },
-      { id: 'pkg-data-15gb', name: '15GB Monthly Data Plan', description: 'High-speed 5G network bundle', fiatPrice: 10.00, currency: 'USD', validity: '30 Days', badge: 'Popular' },
-      { id: 'pkg-data-40gb', name: '40GB Heavy Streamer Bundle', description: 'Includes night streaming bonus', fiatPrice: 22.00, currency: 'USD', validity: '30 Days', badge: 'Pro Plan' }
+      { id: 'pkg-data-mtn-1gb', name: 'MTN 1GB Monthly SME Data', description: 'Instant high-speed 4G/5G data delivery', fiatPrice: 1.20, currency: 'USD', validity: '30 Days', badge: 'Popular' },
+      { id: 'pkg-data-mtn-5gb', name: 'MTN 5GB Monthly Data Plan', description: 'High-speed 5G network bundle', fiatPrice: 4.50, currency: 'USD', validity: '30 Days', badge: 'Starter' },
+      { id: 'pkg-data-mtn-15gb', name: 'MTN 15GB Monthly Data Plan', description: 'High-speed 5G network bundle', fiatPrice: 10.00, currency: 'USD', validity: '30 Days', badge: 'Best Seller' }
+    ]
+  },
+  {
+    id: 'prov-data-airtel-ng',
+    name: 'Airtel Nigeria Data Bundles',
+    category: 'data',
+    logo: 'https://images.unsplash.com/photo-1526304640581-d334cdbbf45e?auto=format&fit=crop&w=200&q=80',
+    country: 'Nigeria',
+    countryCode: 'NG',
+    supportsCustomAmount: false,
+    supportsFixedPackages: true,
+    accountLabel: 'Airtel Mobile Number',
+    accountPlaceholder: '0802 123 4567 or +234 802 123 4567',
+    currency: 'USD',
+    enabled: true,
+    hasDirectValidationApi: true,
+    designations: ['Direct Data Bundle', 'Router 4G LTE Pass'],
+    packages: [
+      { id: 'pkg-data-airtel-3gb', name: 'Airtel 3GB Weekly Plan', description: '3GB 4G data valid for 7 days', fiatPrice: 2.50, currency: 'USD', validity: '7 Days' },
+      { id: 'pkg-data-airtel-10gb', name: 'Airtel 10GB Monthly Data', description: '10GB data valid for 30 days', fiatPrice: 7.50, currency: 'USD', validity: '30 Days', badge: 'Popular' }
+    ]
+  },
+  {
+    id: 'prov-data-saf-ke',
+    name: 'Safaricom Kenya Data Bundles',
+    category: 'data',
+    logo: 'https://images.unsplash.com/photo-1526304640581-d334cdbbf45e?auto=format&fit=crop&w=200&q=80',
+    country: 'Kenya',
+    countryCode: 'KE',
+    supportsCustomAmount: false,
+    supportsFixedPackages: true,
+    accountLabel: 'Safaricom Phone Number',
+    accountPlaceholder: '0712 345 678 or +254 712 345 678',
+    currency: 'USD',
+    enabled: true,
+    designations: ['Safaricom Data Bundle', 'No-Expiry Data Pass'],
+    packages: [
+      { id: 'pkg-saf-data-2gb', name: 'Safaricom 2.5GB 30-Day Plan', description: '30-day mobile data package', fiatPrice: 3.50, currency: 'USD', validity: '30 Days' },
+      { id: 'pkg-saf-data-10gb', name: 'Safaricom 10GB Monthly Data', description: 'Unlimited 4G/5G speeds', fiatPrice: 12.00, currency: 'USD', validity: '30 Days', badge: 'Popular' }
+    ]
+  },
+  {
+    id: 'prov-data-jio-in',
+    name: 'Reliance Jio India Data Boosters',
+    category: 'data',
+    logo: 'https://images.unsplash.com/photo-1563986768609-322da13575f3?auto=format&fit=crop&w=200&q=80',
+    country: 'India',
+    countryCode: 'IN',
+    supportsCustomAmount: false,
+    supportsFixedPackages: true,
+    accountLabel: 'Jio Phone Number',
+    accountPlaceholder: '98765 43210',
+    currency: 'USD',
+    enabled: true,
+    designations: ['4G/5G Data Booster', 'Work From Home Pack'],
+    packages: [
+      { id: 'pkg-jio-data-6gb', name: 'Jio ₹61 6GB Data Booster', description: 'Add-on data pack for active plan', fiatPrice: 0.85, currency: 'USD', validity: 'Active Plan' },
+      { id: 'pkg-jio-data-50gb', name: 'Jio ₹301 50GB Work From Home', description: 'High-speed 50GB data voucher', fiatPrice: 3.80, currency: 'USD', validity: '30 Days', badge: 'Popular' }
+    ]
+  },
+  {
+    id: 'prov-data-att-us',
+    name: 'AT&T USA Mobile Data Pass',
+    category: 'data',
+    logo: 'https://images.unsplash.com/photo-1563986768609-322da13575f3?auto=format&fit=crop&w=200&q=80',
+    country: 'United States',
+    countryCode: 'US',
+    supportsCustomAmount: false,
+    supportsFixedPackages: true,
+    accountLabel: 'AT&T Wireless Number',
+    accountPlaceholder: '(555) 019-2834',
+    currency: 'USD',
+    enabled: true,
+    designations: ['Mobile Data Pass', 'Hotspot Refill'],
+    packages: [
+      { id: 'pkg-att-data-15gb', name: 'AT&T $20 15GB Prepaid Data Pass', description: 'Instant high-speed 5G hotspot refill', fiatPrice: 20.00, currency: 'USD', validity: '30 Days' }
     ]
   },
 
   // 3. ELECTRICITY
   {
     id: 'prov-elec-ikeja',
-    name: 'Ikeja Electric (Prepaid & Postpaid)',
+    name: 'Ikeja Electric (IKEDC)',
     category: 'electricity',
     logo: 'https://images.unsplash.com/photo-1473341304170-971dccb5ac1e?auto=format&fit=crop&w=200&q=80',
     country: 'Nigeria',
+    countryCode: 'NG',
     supportsCustomAmount: true,
     supportsFixedPackages: true,
     accountLabel: 'Meter Number / Customer ID',
@@ -735,10 +815,54 @@ export const SAMPLE_UTILITY_PROVIDERS: UtilityServiceProvider[] = [
     maxCustomFiat: 500.00,
     currency: 'USD',
     enabled: true,
+    hasDirectValidationApi: true,
+    designations: ['Prepaid Meter Token', 'Postpaid Utility Bill'],
     packages: [
       { id: 'pkg-elec-10usd', name: '100 Units Token Pass', description: '20-digit prepaid meter token code', fiatPrice: 10.00, currency: 'USD' },
       { id: 'pkg-elec-25usd', name: '280 Units Family Token Pass', description: '20-digit prepaid meter token code', fiatPrice: 25.00, currency: 'USD', badge: 'Popular' },
       { id: 'pkg-elec-50usd', name: '600 Units Commercial Power', description: 'Instant token generation via Pi Platform', fiatPrice: 50.00, currency: 'USD' }
+    ]
+  },
+  {
+    id: 'prov-elec-eko',
+    name: 'Eko Electricity (EKEDC)',
+    category: 'electricity',
+    logo: 'https://images.unsplash.com/photo-1473341304170-971dccb5ac1e?auto=format&fit=crop&w=200&q=80',
+    country: 'Nigeria',
+    countryCode: 'NG',
+    supportsCustomAmount: true,
+    supportsFixedPackages: true,
+    accountLabel: 'Meter / Account ID',
+    accountPlaceholder: '0401 9283 7410',
+    minCustomFiat: 2.00,
+    maxCustomFiat: 500.00,
+    currency: 'USD',
+    enabled: true,
+    hasDirectValidationApi: true,
+    designations: ['Prepaid Meter Token', 'Postpaid Utility Bill'],
+    packages: [
+      { id: 'pkg-eko-15usd', name: '160 Units Prepaid Token Pass', description: 'Instant 20-digit recharge PIN', fiatPrice: 15.00, currency: 'USD' }
+    ]
+  },
+  {
+    id: 'prov-elec-kplc',
+    name: 'Kenya Power (KPLC Stima)',
+    category: 'electricity',
+    logo: 'https://images.unsplash.com/photo-1509391365360-2e959784a276?auto=format&fit=crop&w=200&q=80',
+    country: 'Kenya',
+    countryCode: 'KE',
+    supportsCustomAmount: true,
+    supportsFixedPackages: true,
+    accountLabel: 'KPLC Meter Number',
+    accountPlaceholder: '3719 2837 410',
+    minCustomFiat: 2.00,
+    maxCustomFiat: 300.00,
+    currency: 'USD',
+    enabled: true,
+    hasDirectValidationApi: true,
+    designations: ['Prepaid Stima Token', 'Postpaid Electricity Bill'],
+    packages: [
+      { id: 'pkg-kplc-10usd', name: 'KPLC KSh 1,200 Token Pass', description: 'Instant Stima 20-digit recharge token', fiatPrice: 10.00, currency: 'USD', badge: 'Popular' }
     ]
   },
   {
@@ -747,15 +871,37 @@ export const SAMPLE_UTILITY_PROVIDERS: UtilityServiceProvider[] = [
     category: 'electricity',
     logo: 'https://images.unsplash.com/photo-1509391365360-2e959784a276?auto=format&fit=crop&w=200&q=80',
     country: 'United States',
+    countryCode: 'US',
     supportsCustomAmount: true,
     supportsFixedPackages: false,
     accountLabel: 'ConEd Account Number',
-    accountPlaceholder: '10-digit ConEd Account ID (e.g. 9812-4019-22)',
+    accountPlaceholder: '9812-4019-22',
     minCustomFiat: 10.00,
     maxCustomFiat: 800.00,
     currency: 'USD',
     enabled: true,
+    designations: ['Postpaid Power Utility Bill', 'Commercial Electricity Deposit'],
     packages: []
+  },
+  {
+    id: 'prov-elec-edf',
+    name: 'EDF Energy UK Electricity',
+    category: 'electricity',
+    logo: 'https://images.unsplash.com/photo-1509391365360-2e959784a276?auto=format&fit=crop&w=200&q=80',
+    country: 'United Kingdom',
+    countryCode: 'GB',
+    supportsCustomAmount: true,
+    supportsFixedPackages: true,
+    accountLabel: 'EDF Account / Meter Key ID',
+    accountPlaceholder: 'MTR-UK-981203',
+    minCustomFiat: 10.00,
+    maxCustomFiat: 500.00,
+    currency: 'USD',
+    enabled: true,
+    designations: ['Prepaid Key Token', 'Monthly Energy Bill'],
+    packages: [
+      { id: 'pkg-edf-25usd', name: 'EDF £20 Energy Top-up', description: 'Prepaid key card voucher code', fiatPrice: 25.00, currency: 'USD' }
+    ]
   },
 
   // 4. CABLE TV
@@ -764,27 +910,87 @@ export const SAMPLE_UTILITY_PROVIDERS: UtilityServiceProvider[] = [
     name: 'DStv Subscriptions & Upgrades',
     category: 'cable',
     logo: 'https://images.unsplash.com/photo-1593784991095-a205069470b6?auto=format&fit=crop&w=200&q=80',
-    country: 'Pan-Africa',
+    country: 'Nigeria',
+    countryCode: 'NG',
     supportsCustomAmount: false,
     supportsFixedPackages: true,
     accountLabel: 'Smartcard / IUC Number',
     accountPlaceholder: '10-digit Smartcard Number (e.g. 7019283741)',
     currency: 'USD',
     enabled: true,
+    hasDirectValidationApi: true,
+    designations: ['Decoder Subscription', 'Bouquet Upgrade', 'Monthly Package Renewal'],
     packages: [
       { id: 'pkg-dstv-yanga', name: 'DStv Yanga Package', description: 'Over 85 channels including HD sports', fiatPrice: 8.00, currency: 'USD', validity: '30 Days' },
       { id: 'pkg-dstv-compact', name: 'DStv Compact Package', description: 'Over 130 channels, Premier League & Movies', fiatPrice: 22.00, currency: 'USD', validity: '30 Days', badge: 'Best Seller' },
       { id: 'pkg-dstv-premium', name: 'DStv Premium Package', description: 'All channels, Champions League, Showmax access', fiatPrice: 55.00, currency: 'USD', validity: '30 Days', badge: 'VIP' }
     ]
   },
+  {
+    id: 'prov-cable-gotv',
+    name: 'GOtv Subscription Packages',
+    category: 'cable',
+    logo: 'https://images.unsplash.com/photo-1593784991095-a205069470b6?auto=format&fit=crop&w=200&q=80',
+    country: 'Nigeria',
+    countryCode: 'NG',
+    supportsCustomAmount: false,
+    supportsFixedPackages: true,
+    accountLabel: 'IUC / Decoder Number',
+    accountPlaceholder: '2019 2837 41',
+    currency: 'USD',
+    enabled: true,
+    hasDirectValidationApi: true,
+    designations: ['GOtv Package Renewal', 'Decoder Upgrade'],
+    packages: [
+      { id: 'pkg-gotv-jolli', name: 'GOtv Jolli Package', description: 'Over 65 popular entertainment channels', fiatPrice: 6.00, currency: 'USD', validity: '30 Days' },
+      { id: 'pkg-gotv-max', name: 'GOtv Max Package', description: 'Over 75 channels including La Liga & Serie A', fiatPrice: 9.50, currency: 'USD', validity: '30 Days', badge: 'Popular' }
+    ]
+  },
+  {
+    id: 'prov-cable-dstv-ke',
+    name: 'DStv Kenya Packages',
+    category: 'cable',
+    logo: 'https://images.unsplash.com/photo-1593784991095-a205069470b6?auto=format&fit=crop&w=200&q=80',
+    country: 'Kenya',
+    countryCode: 'KE',
+    supportsCustomAmount: false,
+    supportsFixedPackages: true,
+    accountLabel: 'Smartcard / IUC Number',
+    accountPlaceholder: '1001 9283 74',
+    currency: 'USD',
+    enabled: true,
+    designations: ['Decoder Subscription', 'Bouquet Upgrade'],
+    packages: [
+      { id: 'pkg-dstv-ke-compact', name: 'DStv Kenya Compact', description: 'Over 120 channels Premier League & Movies', fiatPrice: 24.00, currency: 'USD', validity: '30 Days', badge: 'Popular' }
+    ]
+  },
+  {
+    id: 'prov-cable-sky',
+    name: 'Sky Digital TV UK',
+    category: 'cable',
+    logo: 'https://images.unsplash.com/photo-1593784991095-a205069470b6?auto=format&fit=crop&w=200&q=80',
+    country: 'United Kingdom',
+    countryCode: 'GB',
+    supportsCustomAmount: false,
+    supportsFixedPackages: true,
+    accountLabel: 'Sky Viewing Card ID',
+    accountPlaceholder: 'UK-SKY-981203',
+    currency: 'USD',
+    enabled: true,
+    designations: ['Sky Sports Pass', 'Cinema Pass', 'Monthly Subscription'],
+    packages: [
+      { id: 'pkg-sky-sports', name: 'Sky Sports Monthly Pass', description: 'All 8 Sky Sports Premier League & F1 channels', fiatPrice: 40.00, currency: 'USD', validity: '30 Days' }
+    ]
+  },
 
   // 5. INTERNET & STARLINK
   {
     id: 'prov-net-starlink',
-    name: 'Starlink Satellite Internet Top-up',
+    name: 'Starlink Satellite Internet',
     category: 'internet',
     logo: 'https://images.unsplash.com/photo-1516849841032-87cbac4d88f7?auto=format&fit=crop&w=200&q=80',
     country: 'Global',
+    countryCode: 'GLOBAL',
     supportsCustomAmount: true,
     supportsFixedPackages: true,
     accountLabel: 'Starlink Account Ref / User Email',
@@ -793,27 +999,128 @@ export const SAMPLE_UTILITY_PROVIDERS: UtilityServiceProvider[] = [
     maxCustomFiat: 1000.00,
     currency: 'USD',
     enabled: true,
+    designations: ['Residential Satellite', 'Priority Broadband', 'Roam Mobile Pass'],
     packages: [
       { id: 'pkg-starlink-res', name: 'Starlink Residential Monthly Service', description: 'Unlimited high-speed satellite broadband', fiatPrice: 75.00, currency: 'USD', validity: '30 Days', badge: 'Official' },
       { id: 'pkg-starlink-roam', name: 'Starlink Roam / Global Mobile Plan', description: 'Global satellite coverage on the go', fiatPrice: 120.00, currency: 'USD', validity: '30 Days' }
     ]
   },
+  {
+    id: 'prov-net-spectranet',
+    name: 'Spectranet 4G LTE Nigeria',
+    category: 'internet',
+    logo: 'https://images.unsplash.com/photo-1516849841032-87cbac4d88f7?auto=format&fit=crop&w=200&q=80',
+    country: 'Nigeria',
+    countryCode: 'NG',
+    supportsCustomAmount: true,
+    supportsFixedPackages: true,
+    accountLabel: 'Spectranet User ID / Account Number',
+    accountPlaceholder: 'SPEC-981203',
+    minCustomFiat: 10.00,
+    maxCustomFiat: 300.00,
+    currency: 'USD',
+    enabled: true,
+    designations: ['Unlimited 4G LTE', 'Capped High Speed'],
+    packages: [
+      { id: 'pkg-spec-50gb', name: 'Spectranet 50GB Monthly Data', description: '50GB high-speed 4G broadband', fiatPrice: 20.00, currency: 'USD', validity: '30 Days', badge: 'Popular' }
+    ]
+  },
+  {
+    id: 'prov-net-saf-fibre',
+    name: 'Safaricom Home Fibre Kenya',
+    category: 'internet',
+    logo: 'https://images.unsplash.com/photo-1516849841032-87cbac4d88f7?auto=format&fit=crop&w=200&q=80',
+    country: 'Kenya',
+    countryCode: 'KE',
+    supportsCustomAmount: false,
+    supportsFixedPackages: true,
+    accountLabel: 'Fibre Account ID',
+    accountPlaceholder: 'SAF-FIB-98120',
+    currency: 'USD',
+    enabled: true,
+    designations: ['Home Fibre Bronze', 'Home Fibre Gold'],
+    packages: [
+      { id: 'pkg-saf-fibre-bronze', name: '10 Mbps Bronze Unlimited', description: 'Unlimited home fibre internet', fiatPrice: 25.00, currency: 'USD', validity: '30 Days' }
+    ]
+  },
+  {
+    id: 'prov-net-xfinity',
+    name: 'Comcast Xfinity Broadband USA',
+    category: 'internet',
+    logo: 'https://images.unsplash.com/photo-1516849841032-87cbac4d88f7?auto=format&fit=crop&w=200&q=80',
+    country: 'United States',
+    countryCode: 'US',
+    supportsCustomAmount: true,
+    supportsFixedPackages: true,
+    accountLabel: 'Xfinity Account Number',
+    accountPlaceholder: '8200-1928-371',
+    minCustomFiat: 25.00,
+    maxCustomFiat: 500.00,
+    currency: 'USD',
+    enabled: true,
+    designations: ['Residential Broadband', 'Gigabit Fiber'],
+    packages: [
+      { id: 'pkg-xfinity-500', name: '500 Mbps High-Speed Pass', description: 'Unlimited high-speed home internet', fiatPrice: 50.00, currency: 'USD', validity: '30 Days' }
+    ]
+  },
 
   // 6. WATER
   {
-    id: 'prov-water-board',
-    name: 'Municipal Water Board Settlement',
+    id: 'prov-water-lagos',
+    name: 'Lagos Water Corporation (LSWC)',
     category: 'water',
     logo: 'https://images.unsplash.com/photo-1541888946425-d0fbb186a5b3?auto=format&fit=crop&w=200&q=80',
-    country: 'Global',
+    country: 'Nigeria',
+    countryCode: 'NG',
     supportsCustomAmount: true,
     supportsFixedPackages: true,
-    accountLabel: 'Water Customer Account ID',
-    accountPlaceholder: 'WTR-9918230',
+    accountLabel: 'LSWC Customer Account ID',
+    accountPlaceholder: 'LSWC-9918230',
     minCustomFiat: 5.00,
     maxCustomFiat: 400.00,
     currency: 'USD',
     enabled: true,
+    designations: ['Prepaid Water Meter', 'Postpaid Municipal Bill'],
+    packages: [
+      { id: 'pkg-water-ng-10', name: 'LSWC $10 Utility Credit', description: 'Settles Lagos municipal water bill balance', fiatPrice: 10.00, currency: 'USD' }
+    ]
+  },
+  {
+    id: 'prov-water-nairobi',
+    name: 'Nairobi City Water (NCWSC)',
+    category: 'water',
+    logo: 'https://images.unsplash.com/photo-1541888946425-d0fbb186a5b3?auto=format&fit=crop&w=200&q=80',
+    country: 'Kenya',
+    countryCode: 'KE',
+    supportsCustomAmount: true,
+    supportsFixedPackages: true,
+    accountLabel: 'NCWSC Meter / Account ID',
+    accountPlaceholder: 'NC-WATER-98120',
+    minCustomFiat: 5.00,
+    maxCustomFiat: 300.00,
+    currency: 'USD',
+    enabled: true,
+    designations: ['Water Meter Token', 'Monthly Utility Bill'],
+    packages: [
+      { id: 'pkg-water-ke-15', name: 'Nairobi Water KSh 1,800 Credit', description: 'Direct municipal water bill settlement', fiatPrice: 15.00, currency: 'USD', badge: 'Popular' }
+    ]
+  },
+  {
+    id: 'prov-water-board',
+    name: 'US Municipal Water Board',
+    category: 'water',
+    logo: 'https://images.unsplash.com/photo-1541888946425-d0fbb186a5b3?auto=format&fit=crop&w=200&q=80',
+    country: 'United States',
+    countryCode: 'US',
+    supportsCustomAmount: true,
+    supportsFixedPackages: true,
+    accountLabel: 'Water Customer Account ID',
+    accountPlaceholder: 'WTR-9918230',
+    minCustomFiat: 10.00,
+    maxCustomFiat: 500.00,
+    currency: 'USD',
+    enabled: true,
+    designations: ['Municipal Water Credit', 'Commercial Water Bill'],
     packages: [
       { id: 'pkg-water-20', name: '$20 Water Utility Credit', description: 'Settles municipal water bill balance', fiatPrice: 20.00, currency: 'USD' }
     ]
@@ -822,16 +1129,19 @@ export const SAMPLE_UTILITY_PROVIDERS: UtilityServiceProvider[] = [
   // 7. EXAM CARDS
   {
     id: 'prov-exam-waec',
-    name: 'WAEC / JAMB / NECO Result E-PINs',
+    name: 'WAEC Direct Result E-PINs',
     category: 'exam',
     logo: 'https://images.unsplash.com/photo-1434030216411-0b793f4b4173?auto=format&fit=crop&w=200&q=80',
-    country: 'West Africa',
+    country: 'Nigeria',
+    countryCode: 'NG',
     supportsCustomAmount: false,
     supportsFixedPackages: true,
-    accountLabel: 'Recipient Email / SMS Phone',
-    accountPlaceholder: 'candidate@gmail.com or +234 812 345 6789',
+    accountLabel: 'Candidate Registration Number / Phone',
+    accountPlaceholder: '4101928374 or candidate@gmail.com',
     currency: 'USD',
     enabled: true,
+    hasDirectValidationApi: true,
+    designations: ['Result Checker PIN', 'Candidate Registration e-PIN', 'Verification Token'],
     packages: [
       { id: 'pkg-waec-pin', name: 'WAEC Direct Result Checker PIN', description: '5-use electronic result pin code', fiatPrice: 4.50, currency: 'USD', validity: 'Instant PIN', badge: 'Official' },
       { id: 'pkg-jamb-pin', name: 'JAMB UTME Registration E-PIN', description: 'Official Profile Code UTME pin', fiatPrice: 12.00, currency: 'USD', validity: 'Instant PIN', badge: 'Official' },
@@ -839,13 +1149,76 @@ export const SAMPLE_UTILITY_PROVIDERS: UtilityServiceProvider[] = [
     ]
   },
 
-  // 8. GIFT CARDS
+  // 8. EDUCATION
+  {
+    id: 'prov-edu-unilag',
+    name: 'UNILAG Student Tuition Portal',
+    category: 'education',
+    logo: 'https://images.unsplash.com/photo-1434030216411-0b793f4b4173?auto=format&fit=crop&w=200&q=80',
+    country: 'Nigeria',
+    countryCode: 'NG',
+    supportsCustomAmount: true,
+    supportsFixedPackages: true,
+    accountLabel: 'Student Matriculation Number',
+    accountPlaceholder: '190407019 or MAT-2026-981',
+    minCustomFiat: 10.00,
+    maxCustomFiat: 2000.00,
+    currency: 'USD',
+    enabled: true,
+    hasDirectValidationApi: true,
+    designations: ['Tuition Fee Portal', 'Acceptance Fee Deposit', 'Hostel / Accommodation Fee'],
+    packages: [
+      { id: 'pkg-edu-unilag-acc', name: 'Acceptance Fee Portal Clearance', description: 'Instant portal clearance receipt', fiatPrice: 30.00, currency: 'USD', badge: 'Official' },
+      { id: 'pkg-edu-unilag-sem', name: 'Semester School Fees Deposit', description: 'Direct university Bursary credit', fiatPrice: 150.00, currency: 'USD' }
+    ]
+  },
+  {
+    id: 'prov-edu-uon',
+    name: 'University of Nairobi (UoN)',
+    category: 'education',
+    logo: 'https://images.unsplash.com/photo-1434030216411-0b793f4b4173?auto=format&fit=crop&w=200&q=80',
+    country: 'Kenya',
+    countryCode: 'KE',
+    supportsCustomAmount: true,
+    supportsFixedPackages: true,
+    accountLabel: 'Student Reg Number',
+    accountPlaceholder: 'F17/19203/2026',
+    minCustomFiat: 10.00,
+    maxCustomFiat: 1500.00,
+    currency: 'USD',
+    enabled: true,
+    designations: ['University Semester Tuition', 'Application Fee'],
+    packages: [
+      { id: 'pkg-edu-uon-fee', name: 'UoN Semester Fee Voucher', description: 'Direct tuition portal settlement', fiatPrice: 100.00, currency: 'USD' }
+    ]
+  },
+  {
+    id: 'prov-edu-coursera',
+    name: 'Coursera Global Learning',
+    category: 'education',
+    logo: 'https://images.unsplash.com/photo-1434030216411-0b793f4b4173?auto=format&fit=crop&w=200&q=80',
+    country: 'Global',
+    countryCode: 'GLOBAL',
+    supportsCustomAmount: false,
+    supportsFixedPackages: true,
+    accountLabel: 'Learner Account Email',
+    accountPlaceholder: 'student@domain.com',
+    currency: 'USD',
+    enabled: true,
+    designations: ['Specialization Pass', 'Monthly Learning Subscription'],
+    packages: [
+      { id: 'pkg-coursera-sub', name: 'Coursera Plus Monthly Subscription', description: 'Unlimited access to 7,000+ courses and certificates', fiatPrice: 39.00, currency: 'USD', badge: 'Popular' }
+    ]
+  },
+
+  // 9. GIFT CARDS
   {
     id: 'prov-gift-amazon',
     name: 'Amazon Global E-Gift Cards',
     category: 'giftcard',
     logo: 'https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&w=200&q=80',
-    country: 'Global',
+    country: 'United States',
+    countryCode: 'US',
     supportsCustomAmount: true,
     supportsFixedPackages: true,
     accountLabel: 'Recipient Delivery Email',
@@ -854,6 +1227,7 @@ export const SAMPLE_UTILITY_PROVIDERS: UtilityServiceProvider[] = [
     maxCustomFiat: 500.00,
     currency: 'USD',
     enabled: true,
+    designations: ['Store Region Voucher', 'Digital Gift Code'],
     packages: [
       { id: 'pkg-gc-amz-25', name: '$25 Amazon E-Gift Code', description: 'Redeemable on all Amazon regional stores', fiatPrice: 25.00, currency: 'USD', badge: 'Best Seller' },
       { id: 'pkg-gc-amz-50', name: '$50 Amazon E-Gift Code', description: 'Redeemable on all Amazon regional stores', fiatPrice: 50.00, currency: 'USD' },
@@ -866,25 +1240,88 @@ export const SAMPLE_UTILITY_PROVIDERS: UtilityServiceProvider[] = [
     category: 'giftcard',
     logo: 'https://images.unsplash.com/photo-1611186871348-b1ce696e52c9?auto=format&fit=crop&w=200&q=80',
     country: 'Global',
+    countryCode: 'GLOBAL',
     supportsCustomAmount: false,
     supportsFixedPackages: true,
     accountLabel: 'Apple ID Email',
     accountPlaceholder: 'user@icloud.com',
     currency: 'USD',
     enabled: true,
+    designations: ['App Store & iTunes Code', 'Apple Store Gift Card'],
     packages: [
       { id: 'pkg-gc-app-15', name: '$15 Apple Gift Card Code', description: 'App Store, Apple Music, iCloud storage', fiatPrice: 15.00, currency: 'USD' },
       { id: 'pkg-gc-app-50', name: '$50 Apple Gift Card Code', description: 'App Store, Apple Music, hardware store credit', fiatPrice: 50.00, currency: 'USD', badge: 'Popular' }
     ]
   },
 
-  // 9. BETTING
+  // 10. VOUCHERS
+  {
+    id: 'prov-vch-uber',
+    name: 'Uber Rides & Eats Cash Voucher',
+    category: 'voucher',
+    logo: 'https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&w=200&q=80',
+    country: 'Global',
+    countryCode: 'GLOBAL',
+    supportsCustomAmount: true,
+    supportsFixedPackages: true,
+    accountLabel: 'Uber User Account Email',
+    accountPlaceholder: 'rider@example.com',
+    minCustomFiat: 10.00,
+    maxCustomFiat: 300.00,
+    currency: 'USD',
+    enabled: true,
+    designations: ['Uber Ride Pass', 'Uber Eats Food Credit'],
+    packages: [
+      { id: 'pkg-vch-uber-20', name: '$20 Uber Cash Gift Code', description: 'Redeemable for rides and food orders', fiatPrice: 20.00, currency: 'USD', badge: 'Popular' }
+    ]
+  },
+  {
+    id: 'prov-vch-starbucks',
+    name: 'Starbucks Coffee Voucher',
+    category: 'voucher',
+    logo: 'https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&w=200&q=80',
+    country: 'United States',
+    countryCode: 'US',
+    supportsCustomAmount: false,
+    supportsFixedPackages: true,
+    accountLabel: 'Recipient Email',
+    accountPlaceholder: 'coffee@example.com',
+    currency: 'USD',
+    enabled: true,
+    designations: ['Coffee Gift Pass', 'Rewards Balance Top-up'],
+    packages: [
+      { id: 'pkg-vch-sbux-15', name: '$15 Starbucks Digital Card', description: 'Redeemable at all participating Starbucks stores', fiatPrice: 15.00, currency: 'USD' }
+    ]
+  },
+  {
+    id: 'prov-vch-jumia',
+    name: 'Jumia E-Commerce Voucher',
+    category: 'voucher',
+    logo: 'https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&w=200&q=80',
+    country: 'Nigeria',
+    countryCode: 'NG',
+    supportsCustomAmount: true,
+    supportsFixedPackages: true,
+    accountLabel: 'Jumia Customer Email',
+    accountPlaceholder: 'buyer@jumia.com',
+    minCustomFiat: 5.00,
+    maxCustomFiat: 500.00,
+    currency: 'USD',
+    enabled: true,
+    designations: ['E-Commerce Shopping Pass', 'Express Delivery Voucher'],
+    packages: [
+      { id: 'pkg-vch-jumia-25', name: 'Jumia ₦15,000 Voucher', description: 'Instant shopping credit for Jumia marketplace', fiatPrice: 25.00, currency: 'USD', badge: 'Popular' }
+    ]
+  },
+
+  // 11. BETTING
   {
     id: 'prov-bet-1xbet',
     name: '1xBet Wallet Deposit',
     category: 'betting',
     logo: 'https://images.unsplash.com/photo-1518609878373-06d740f60d8b?auto=format&fit=crop&w=200&q=80',
     country: 'Global',
+    countryCode: 'GLOBAL',
     supportsCustomAmount: true,
     supportsFixedPackages: true,
     accountLabel: '1xBet Account User ID',
@@ -893,58 +1330,206 @@ export const SAMPLE_UTILITY_PROVIDERS: UtilityServiceProvider[] = [
     maxCustomFiat: 500.00,
     currency: 'USD',
     enabled: true,
+    designations: ['Player Wallet Deposit', 'Bonus Promo Top-Up'],
     packages: [
       { id: 'pkg-bet-10usd', name: '$10 Instant Wallet Credit', description: 'Direct wallet deposit via Pi Network', fiatPrice: 10.00, currency: 'USD' },
       { id: 'pkg-bet-50usd', name: '$50 Wallet Credit + Bonus', description: 'Direct wallet deposit via Pi Network', fiatPrice: 50.00, currency: 'USD' }
     ]
   },
+  {
+    id: 'prov-bet-sporty',
+    name: 'SportyBet Nigeria Top-up',
+    category: 'betting',
+    logo: 'https://images.unsplash.com/photo-1518609878373-06d740f60d8b?auto=format&fit=crop&w=200&q=80',
+    country: 'Nigeria',
+    countryCode: 'NG',
+    supportsCustomAmount: true,
+    supportsFixedPackages: true,
+    accountLabel: 'SportyBet User Mobile Number',
+    accountPlaceholder: '0803 123 4567',
+    minCustomFiat: 2.00,
+    maxCustomFiat: 500.00,
+    currency: 'USD',
+    enabled: true,
+    designations: ['User Account Deposit', 'Virtual Game Top-up'],
+    packages: [
+      { id: 'pkg-bet-sporty-10', name: 'SportyBet ₦5,000 Deposit', description: 'Instant wallet top-up', fiatPrice: 10.00, currency: 'USD', badge: 'Popular' }
+    ]
+  },
 
-  // 10. GAMING
+  // 12. GAMING
   {
     id: 'prov-game-pubg',
     name: 'PUBG Mobile Unknown Cash (UC)',
     category: 'gaming',
     logo: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=200&q=80',
     country: 'Global',
+    countryCode: 'GLOBAL',
     supportsCustomAmount: false,
     supportsFixedPackages: true,
     accountLabel: 'PUBG Character ID (UID)',
     accountPlaceholder: '5192837410',
     currency: 'USD',
     enabled: true,
+    designations: ['Direct In-Game Top-Up (UID)', 'Royale Pass Redemption Voucher'],
     packages: [
       { id: 'pkg-pubg-60', name: '60 UC Pack', description: 'Instant game account top-up', fiatPrice: 1.20, currency: 'USD' },
       { id: 'pkg-pubg-660', name: '660 UC Royale Pass Pack', description: 'Includes 600 UC + 60 Extra Bonus UC', fiatPrice: 10.00, currency: 'USD', badge: 'Popular' },
       { id: 'pkg-pubg-1800', name: '1800 UC Pack', description: 'Includes 1500 UC + 300 Extra Bonus UC', fiatPrice: 25.00, currency: 'USD', badge: 'Best Value' }
     ]
   },
+  {
+    id: 'prov-game-freefire',
+    name: 'Free Fire Diamonds Top-Up',
+    category: 'gaming',
+    logo: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=200&q=80',
+    country: 'Global',
+    countryCode: 'GLOBAL',
+    supportsCustomAmount: false,
+    supportsFixedPackages: true,
+    accountLabel: 'Free Fire Player ID',
+    accountPlaceholder: '891029384',
+    currency: 'USD',
+    enabled: true,
+    designations: ['Player ID Diamonds Refill', 'Weekly Membership Pass'],
+    packages: [
+      { id: 'pkg-ff-530', name: '530 Diamonds Pack', description: 'Instant diamond delivery to player UID', fiatPrice: 5.00, currency: 'USD', badge: 'Popular' }
+    ]
+  },
 
-  // 11. STREAMING
+  // 13. STREAMING
   {
     id: 'prov-stream-netflix',
     name: 'Netflix Subscription Voucher',
     category: 'streaming',
     logo: 'https://images.unsplash.com/photo-1574375927938-d5a98e8ffe85?auto=format&fit=crop&w=200&q=80',
     country: 'Global',
+    countryCode: 'GLOBAL',
     supportsCustomAmount: false,
     supportsFixedPackages: true,
     accountLabel: 'Recipient Email',
     accountPlaceholder: 'streamer@example.com',
     currency: 'USD',
     enabled: true,
+    designations: ['Individual Subscription', 'Family Plan Voucher', '4K Ultra HD Pass'],
     packages: [
       { id: 'pkg-nflx-1m', name: '1-Month Standard 1080p Pass', description: 'Watch on 2 screens simultaneously in Full HD', fiatPrice: 12.00, currency: 'USD' },
       { id: 'pkg-nflx-premium', name: '1-Month Premium 4K Ultra HD Pass', description: 'Watch on 4 screens in 4K HDR with Spatial Audio', fiatPrice: 18.00, currency: 'USD', badge: 'VIP' }
     ]
   },
+  {
+    id: 'prov-stream-spotify',
+    name: 'Spotify Premium Gift Voucher',
+    category: 'streaming',
+    logo: 'https://images.unsplash.com/photo-1574375927938-d5a98e8ffe85?auto=format&fit=crop&w=200&q=80',
+    country: 'Global',
+    countryCode: 'GLOBAL',
+    supportsCustomAmount: false,
+    supportsFixedPackages: true,
+    accountLabel: 'Spotify User Email',
+    accountPlaceholder: 'music@domain.com',
+    currency: 'USD',
+    enabled: true,
+    designations: ['Individual Premium Code', 'Duo/Family Subscription Pass'],
+    packages: [
+      { id: 'pkg-spot-1m', name: '1-Month Premium Individual Pass', description: 'Ad-free music streaming & offline downloads', fiatPrice: 10.00, currency: 'USD', badge: 'Popular' }
+    ]
+  },
 
-  // 12. TRANSPORT & FLIGHTS
+  // 14. INSURANCE
+  {
+    id: 'prov-ins-sanlam',
+    name: 'Sanlam Life Insurance Cover',
+    category: 'insurance',
+    logo: 'https://images.unsplash.com/photo-1450133064473-71024230f91b?auto=format&fit=crop&w=200&q=80',
+    country: 'South Africa',
+    countryCode: 'ZA',
+    supportsCustomAmount: true,
+    supportsFixedPackages: true,
+    accountLabel: 'Sanlam Policy Reference ID',
+    accountPlaceholder: 'POL-ZA-981203',
+    minCustomFiat: 10.00,
+    maxCustomFiat: 1000.00,
+    currency: 'USD',
+    enabled: true,
+    designations: ['Policy Premium Renewal', 'Life Protection Cover'],
+    packages: [
+      { id: 'pkg-ins-sanlam-monthly', name: 'Monthly Policy Premium Pass', description: 'Direct policy premium settlement', fiatPrice: 25.00, currency: 'USD' }
+    ]
+  },
+  {
+    id: 'prov-ins-leadway',
+    name: 'Leadway Assurance Nigeria',
+    category: 'insurance',
+    logo: 'https://images.unsplash.com/photo-1450133064473-71024230f91b?auto=format&fit=crop&w=200&q=80',
+    country: 'Nigeria',
+    countryCode: 'NG',
+    supportsCustomAmount: true,
+    supportsFixedPackages: true,
+    accountLabel: 'Leadway Policy Number',
+    accountPlaceholder: 'LAD-2026-9812',
+    minCustomFiat: 10.00,
+    maxCustomFiat: 1000.00,
+    currency: 'USD',
+    enabled: true,
+    hasDirectValidationApi: true,
+    designations: ['Health Insurance Cover', 'Auto Protection Premium'],
+    packages: [
+      { id: 'pkg-ins-leadway-health', name: 'Comprehensive Health Plan', description: 'Instant HMO portal activation', fiatPrice: 35.00, currency: 'USD', badge: 'Popular' }
+    ]
+  },
+
+  // 15. GOVERNMENT
+  {
+    id: 'prov-gov-remita',
+    name: 'Remita TSA Govt Taxes & Passports',
+    category: 'government',
+    logo: 'https://images.unsplash.com/photo-1541888946425-d0fbb186a5b3?auto=format&fit=crop&w=200&q=80',
+    country: 'Nigeria',
+    countryCode: 'NG',
+    supportsCustomAmount: true,
+    supportsFixedPackages: true,
+    accountLabel: 'Remita Retrieval Reference (RRR)',
+    accountPlaceholder: '1203-9812-3841',
+    minCustomFiat: 5.00,
+    maxCustomFiat: 2000.00,
+    currency: 'USD',
+    enabled: true,
+    hasDirectValidationApi: true,
+    designations: ['Federal Tax / TSA Levy', 'Passport Renewal RRR', 'Customs Duty Fee'],
+    packages: [
+      { id: 'pkg-gov-passport', name: 'Standard e-Passport RRR Payment', description: 'Official Immigration RRR fee settlement', fiatPrice: 45.00, currency: 'USD', badge: 'Official' }
+    ]
+  },
+  {
+    id: 'prov-gov-ecitizen',
+    name: 'Kenya eCitizen Portal Services',
+    category: 'government',
+    logo: 'https://images.unsplash.com/photo-1541888946425-d0fbb186a5b3?auto=format&fit=crop&w=200&q=80',
+    country: 'Kenya',
+    countryCode: 'KE',
+    supportsCustomAmount: true,
+    supportsFixedPackages: true,
+    accountLabel: 'eCitizen Bill / Ref Number',
+    accountPlaceholder: 'EC-2026-9812',
+    minCustomFiat: 5.00,
+    maxCustomFiat: 1500.00,
+    currency: 'USD',
+    enabled: true,
+    designations: ['National ID / Passport Fee', 'Driving License Renewal'],
+    packages: [
+      { id: 'pkg-gov-ke-dl', name: 'Driving License Renewal Fee', description: 'Instant eCitizen portal clearance', fiatPrice: 20.00, currency: 'USD' }
+    ]
+  },
+
+  // 16. TRANSPORT & FLIGHTS
   {
     id: 'prov-trans-airline',
     name: 'Global Airline Flight Voucher',
     category: 'transport',
     logo: 'https://images.unsplash.com/photo-1436491865332-7a61a109cc05?auto=format&fit=crop&w=200&q=80',
     country: 'Global',
+    countryCode: 'GLOBAL',
     supportsCustomAmount: true,
     supportsFixedPackages: true,
     accountLabel: 'Passenger Full Name & Email',
@@ -953,9 +1538,54 @@ export const SAMPLE_UTILITY_PROVIDERS: UtilityServiceProvider[] = [
     maxCustomFiat: 2000.00,
     currency: 'USD',
     enabled: true,
+    designations: ['Flight e-Voucher', 'Star Alliance Flight Pass'],
     packages: [
       { id: 'pkg-flight-100', name: '$100 Flight Ticket Pass', description: 'Redeemable on Star Alliance & SkyTeam carriers', fiatPrice: 100.00, currency: 'USD' },
       { id: 'pkg-flight-300', name: '$300 International Flight Pass', description: 'Redeemable on Star Alliance & SkyTeam carriers', fiatPrice: 300.00, currency: 'USD', badge: 'Popular' }
+    ]
+  },
+
+  // 17. EVENTS
+  {
+    id: 'prov-event-eventbrite',
+    name: 'Eventbrite Global Summit Tickets',
+    category: 'events',
+    logo: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?auto=format&fit=crop&w=200&q=80',
+    country: 'Global',
+    countryCode: 'GLOBAL',
+    supportsCustomAmount: true,
+    supportsFixedPackages: true,
+    accountLabel: 'Attendee Email / Ticket ID',
+    accountPlaceholder: 'attendee@example.com',
+    minCustomFiat: 10.00,
+    maxCustomFiat: 1000.00,
+    currency: 'USD',
+    enabled: true,
+    designations: ['VIP Access Pass', 'Regular Event Ticket', 'Early Bird Delegate'],
+    packages: [
+      { id: 'pkg-event-vip', name: 'Global Tech Conference VIP Pass', description: 'Includes Keynote Access & Networking Gala', fiatPrice: 75.00, currency: 'USD', badge: 'VIP' }
+    ]
+  },
+
+  // 18. ECOMMERCE
+  {
+    id: 'prov-ecom-pinova',
+    name: 'PiNova Store Credit Voucher',
+    category: 'ecommerce',
+    logo: 'https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&w=200&q=80',
+    country: 'Global',
+    countryCode: 'GLOBAL',
+    supportsCustomAmount: true,
+    supportsFixedPackages: true,
+    accountLabel: 'PiNova User Account Email',
+    accountPlaceholder: 'shopper@pinova.com',
+    minCustomFiat: 5.00,
+    maxCustomFiat: 1000.00,
+    currency: 'USD',
+    enabled: true,
+    designations: ['Store Credit Voucher', 'Retail Gift Certificate'],
+    packages: [
+      { id: 'pkg-ecom-50', name: '$50 Marketplace Store Credit', description: 'Redeemable on all global merchant goods', fiatPrice: 50.00, currency: 'USD', badge: 'Popular' }
     ]
   }
 ];
