@@ -26,9 +26,23 @@ import {
 } from 'lucide-react';
 import { UtilityCategory } from '../../types/navigation';
 import { UTILITY_CATEGORIES, UtilityCategoryDef } from '../../data/categoryData';
-import { PiConversionConfig } from '../../types/utility';
+import { PiConversionConfig, UtilityCategoryType } from '../../types/utility';
 import { AirtimeRechargeForm } from '../utility/AirtimeRechargeForm';
+import { FlexibleUtilityModal } from '../utility/FlexibleUtilityModal';
 import { createPiPayment } from '../../lib/piSdk';
+
+const getMappedCategoryType = (utilityId: string | null): UtilityCategoryType => {
+  if (!utilityId) return 'airtime';
+  if (utilityId === 'mobile_data' || utilityId === 'data') return 'data';
+  if (utilityId === 'water_bills' || utilityId === 'water') return 'water';
+  if (utilityId === 'cable_tv' || utilityId === 'cable') return 'cable';
+  if (utilityId === 'internet_services' || utilityId === 'internet') return 'internet';
+  if (utilityId === 'exam_cards' || utilityId === 'exam') return 'exam';
+  if (utilityId === 'education_payments' || utilityId === 'education') return 'education';
+  if (utilityId === 'gift_cards' || utilityId === 'giftcard') return 'giftcard';
+  if (utilityId === 'vouchers' || utilityId === 'voucher') return 'voucher';
+  return utilityId as UtilityCategoryType;
+};
 
 interface UtilitiesViewProps {
   selectedUtilityCategory?: string;
@@ -365,154 +379,25 @@ export const UtilitiesView: React.FC<UtilitiesViewProps> = ({
                   </button>
                 </div>
               </div>
-            ) : selectedUtility === 'airtime' || selectedUtility === 'mobile_data' ? (
-              /* AIRTIME DEPENDENT SELECTION FLOW (COUNTRY -> NETWORK -> MOBILE -> AMOUNT) */
-              <AirtimeRechargeForm
+            ) : (
+              /* UNIVERSAL 8-STEP UTILITY FLOW ENGINE WITH COUNTRY SELECTOR FOR ALL 18 CATEGORIES */
+              <FlexibleUtilityModal
+                isEmbedded={true}
+                defaultCategory={getMappedCategoryType(selectedUtility)}
                 piConversionConfig={utilityConfig}
                 userBalancePi={userBalancePi}
                 buyerUsername={buyerUsername}
-                onExecutePayment={async (params) => {
-                  setIsProcessing(true);
-                  try {
-                    const paymentResult = await createPiPayment({
-                      amountPi: params.piAmount,
-                      memo: `${params.provider.name} - ${params.phoneNumber}`,
-                      metadata: {
-                        category: selectedUtility,
-                        country: params.country,
-                        countryCode: params.countryCode,
-                        providerId: params.provider.id,
-                        accountNumber: params.phoneNumber,
-                        fiatAmount: params.fiatAmount,
-                        packageName: params.packageName
-                      }
-                    });
-
-                    if (paymentResult && paymentResult.success) {
-                      const isFulfilled = paymentResult.fulfillmentStatus === 'FULFILLED';
-                      const token = isFulfilled ? (paymentResult.data?.tokenOrCode || paymentResult.data?.providerReference) : undefined;
-
-                      setPurchaseReceipt({
-                        txId: paymentResult.txid || `pi_tx_${Date.now()}`,
-                        provider: params.provider.name,
-                        account: params.phoneNumber,
-                        amountPi: params.piAmount,
-                        token: token || 'Payment Received — Fulfillment Pending',
-                        timestamp: new Date().toISOString()
-                      });
-                      onTransactionSuccess({
-                        providerName: params.provider.name,
-                        accountNumber: params.phoneNumber,
-                        piAmount: params.piAmount,
-                        tokenOrCode: token
-                      });
-                    } else {
-                      alert(paymentResult?.message || 'Payment failed.');
-                    }
-                  } catch (err: any) {
-                    alert(err.message || 'Error processing payment.');
-                  } finally {
-                    setIsProcessing(false);
-                  }
+                onClose={() => setSelectedUtility(null)}
+                onTransactionSuccess={(receipt) => {
+                  onTransactionSuccess({
+                    providerName: receipt.providerName,
+                    accountNumber: receipt.accountNumber,
+                    piAmount: receipt.piAmount,
+                    tokenOrCode: receipt.tokenOrCode
+                  });
+                  setSelectedUtility(null);
                 }}
-                isProcessingPayment={isProcessing}
               />
-            ) : (
-              /* STANDARD FORM VIEW FOR OTHER UTILITIES */
-              <div className="space-y-5">
-                
-                {/* Provider Selector */}
-                <div>
-                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                    Select Service Provider
-                  </label>
-                  <select
-                    value={selectedProvider}
-                    onChange={(e) => setSelectedProvider(e.target.value)}
-                    className="w-full text-xs p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-semibold"
-                  >
-                    {activeDef?.popularProviders.map((p, idx) => (
-                      <option key={idx} value={p}>{p}</option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Account / Phone Number Input */}
-                <div>
-                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                    {activeDef?.fieldLabel}
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={accountNumber}
-                    onChange={(e) => setAccountNumber(e.target.value)}
-                    placeholder={activeDef?.placeholder}
-                    className="w-full text-xs p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-mono font-bold"
-                  />
-                </div>
-
-                {/* Amount / Denomination Selector */}
-                <div>
-                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                    Select Package / USD Amount
-                  </label>
-                  <div className="grid grid-cols-4 gap-2 mb-2">
-                    {activeDef?.defaultAmountsUsd.map((amt) => (
-                      <button
-                        key={amt}
-                        type="button"
-                        onClick={() => {
-                          setAmountUsd(amt);
-                          setCustomAmountUsd('');
-                        }}
-                        className={`p-2.5 rounded-xl border text-xs font-bold transition-all ${
-                          amountUsd === amt && !customAmountUsd
-                            ? 'bg-emerald-600 text-white border-emerald-600 shadow-md'
-                            : 'bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-800'
-                        }`}
-                      >
-                        ${amt} USD
-                      </button>
-                    ))}
-                  </div>
-
-                  <input
-                    type="number"
-                    placeholder="Or enter custom USD amount..."
-                    value={customAmountUsd}
-                    onChange={(e) => setCustomAmountUsd(e.target.value)}
-                    className="w-full text-xs p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100"
-                  />
-                </div>
-
-                {/* Real-time Pi Conversion Calculator Card */}
-                <div className="p-4 rounded-xl bg-slate-950 text-white space-y-2 border border-slate-800">
-                  <div className="flex justify-between text-xs">
-                    <span className="text-slate-400">USD Value:</span>
-                    <span className="font-bold">${effectiveUsd.toFixed(2)} USD</span>
-                  </div>
-                  <div className="flex justify-between text-xs">
-                    <span className="text-slate-400">Exchange Rate:</span>
-                    <span className="text-amber-300 font-bold">1 π = ${utilityConfig.piRateUsd.toFixed(2)} USD</span>
-                  </div>
-                  <div className="flex justify-between items-center pt-2 border-t border-slate-800">
-                    <span className="text-xs font-extrabold text-slate-200">Total Pi Required:</span>
-                    <span className="text-lg font-black text-emerald-400">{calculatedPi.toFixed(4)} π</span>
-                  </div>
-                </div>
-
-                {/* Pay Button */}
-                <button
-                  onClick={handleExecutePayment}
-                  disabled={!accountNumber || calculatedPi <= 0 || isProcessing}
-                  className="w-full py-3.5 rounded-xl bg-gradient-to-r from-emerald-600 via-teal-600 to-indigo-600 text-white font-extrabold text-sm shadow-xl hover:opacity-95 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
-                >
-                  <ShieldCheck className="w-5 h-5 text-amber-300" />
-                  <span>{isProcessing ? 'Authorizing Pi Payment...' : `Pay ${calculatedPi.toFixed(4)} π Now`}</span>
-                </button>
-
-              </div>
             )}
 
           </div>

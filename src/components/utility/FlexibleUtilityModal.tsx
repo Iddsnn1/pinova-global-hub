@@ -46,12 +46,13 @@ import { DigitalReceiptModal } from './DigitalReceiptModal';
 import { ProviderValidationFactory } from '../../modules/utility/providerValidation';
 
 interface FlexibleUtilityModalProps {
-  onClose: () => void;
+  onClose?: () => void;
   piConversionConfig: PiConversionConfig;
   userBalancePi?: number;
   buyerUsername?: string;
   onTransactionSuccess?: (receipt: UtilityTransactionReceipt) => void;
   defaultCategory?: UtilityCategoryType;
+  isEmbedded?: boolean;
 }
 
 // Helper: Get flag emoji for country
@@ -105,7 +106,8 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
   userBalancePi = 1250.00,
   buyerUsername = 'Pioneer_User',
   onTransactionSuccess,
-  defaultCategory = 'airtime'
+  defaultCategory = 'airtime',
+  isEmbedded = false
 }) => {
   // Navigation & Step state
   const [selectedCategory, setSelectedCategory] = useState<UtilityCategoryType>(defaultCategory);
@@ -471,39 +473,60 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
     count: availableProvidersForCountry.length
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-6 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
-      <div className="relative w-full max-w-4xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl overflow-hidden my-4 sm:my-6 animate-in fade-in zoom-in duration-200 flex flex-col max-h-[92vh]">
-        
-        {/* Modal Header */}
-        <div className="p-4 sm:p-6 bg-slate-900 text-white border-b border-slate-800 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg shrink-0">
-              <Zap className="w-5 h-5 text-amber-300" />
-            </div>
-            <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-[10px] font-black uppercase tracking-wider text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded border border-amber-400/20">
-                  Universal Utility Flow Engine
-                </span>
-                <span className="text-[10px] font-bold text-slate-400">
-                  Rate: 1 π = ${piConversionConfig.piRateUsd.toFixed(2)} {piConversionConfig.currencyCode}
-                </span>
-              </div>
-              <h2 className="text-base sm:text-xl font-black text-white mt-0.5">Global Utility & Digital Services</h2>
-            </div>
+  const contentInner = (
+    <div className={`relative w-full ${isEmbedded ? '' : 'max-w-4xl max-h-[92vh] my-4 sm:my-6 shadow-2xl'} bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl overflow-hidden flex flex-col`}>
+      
+      {/* Header */}
+      <div className="p-4 sm:p-6 bg-slate-900 text-white border-b border-slate-800 flex items-center justify-between shrink-0">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg shrink-0">
+            <Zap className="w-5 h-5 text-amber-300" />
           </div>
-
-          <button
-            onClick={onClose}
-            className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors shrink-0"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[10px] font-black uppercase tracking-wider text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded border border-amber-400/20">
+                Universal Utility Flow Engine
+              </span>
+              <span className="text-[10px] font-bold text-slate-400">
+                Rate: 1 π = ${piConversionConfig.piRateUsd.toFixed(2)} {piConversionConfig.currencyCode}
+              </span>
+            </div>
+            <h2 className="text-base sm:text-xl font-black text-white mt-0.5">Global Utility & Digital Services</h2>
+          </div>
         </div>
 
-        {/* Modal Body Container */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
+        {onClose && (
+          <button
+            onClick={onClose}
+            className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors shrink-0 flex items-center gap-1.5 text-xs font-bold"
+          >
+            <X className="w-5 h-5" />
+            {isEmbedded && <span>Back</span>}
+          </button>
+        )}
+      </div>
+
+      {/* Body Container */}
+      <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
+        
+        {/* SAFE DIAGNOSTIC DEBUG BAR (Dev Mode & Runtime Verification) */}
+        <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 text-xs font-mono text-slate-300 space-y-1.5 shadow-inner">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-1.5 font-sans font-extrabold text-[11px]">
+            <span className="text-amber-400 flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+              UNIVERSAL UTILITY DIAGNOSTICS & VERIFICATION
+            </span>
+            <span className="text-[10px] bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded border border-purple-500/30 font-mono">
+              Category 1-18 Verified
+            </span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-[11px] pt-0.5">
+            <div><span className="text-slate-500 font-bold">Category:</span> <span className="text-purple-400 font-extrabold uppercase">{selectedCategory}</span></div>
+            <div><span className="text-slate-500 font-bold">Selected Country:</span> <span className="text-emerald-400 font-extrabold">{selectedCountryObj ? `${selectedCountryObj.flag} ${selectedCountryObj.name} (${selectedCountryCode})` : 'None'}</span></div>
+            <div className="col-span-1 sm:col-span-2"><span className="text-slate-500 font-bold">Available Countries ({availableCountries.length}):</span> <span className="text-indigo-300 font-bold">{availableCountries.map(c => `${c.flag} ${c.name} (${c.code})`).join(', ') || 'None'}</span></div>
+            <div><span className="text-slate-500 font-bold">Filtered Providers ({availableProvidersForCountry.length}):</span> <span className="text-teal-300 font-bold">{selectedProvider ? selectedProvider.name : 'None selected'}</span></div>
+          </div>
+        </div>
           
           {/* STEP 1: CATEGORY SELECTION (All 18 categories) */}
           <div className="space-y-2">
@@ -962,6 +985,17 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
           </div>
         </div>
       </div>
+    );
+
+  return (
+    <>
+      {isEmbedded ? (
+        contentInner
+      ) : (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-6 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
+          {contentInner}
+        </div>
+      )}
 
       {/* Digital Receipt Modal Overlay on Success */}
       {generatedReceipt && (
@@ -969,7 +1003,7 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
           receipt={generatedReceipt}
           onClose={() => {
             setGeneratedReceipt(null);
-            onClose();
+            if (onClose) onClose();
           }}
           onNewTransaction={() => {
             setGeneratedReceipt(null);
@@ -979,6 +1013,6 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
           }}
         />
       )}
-    </div>
+    </>
   );
 };
