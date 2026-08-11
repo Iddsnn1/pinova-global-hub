@@ -78,6 +78,14 @@ export type PiAuthState =
   | 'AUTH_NATIVE_PENDING'
   | 'PI_AUTHENTICATE_UNAVAILABLE';
 
+export type PiAuthErrorType =
+  | 'AUTH_BRIDGE_TIMEOUT'
+  | 'AUTH_BRIDGE_REJECTED'
+  | 'AUTH_USER_CANCELLED'
+  | 'AUTH_ERROR'
+  | 'PI_AUTHENTICATE_UNAVAILABLE'
+  | null;
+
 export interface PiSdkDiagnosticState {
   sdkScriptState: 'loaded' | 'not_loaded';
   piInitState: 'success' | 'failed' | 'not_called';
@@ -92,6 +100,7 @@ export interface PiSdkDiagnosticState {
   buildCommit: string;
   sdkState: 'not_loaded' | 'loaded' | 'initializing' | 'ready';
   authState: PiAuthState;
+  authErrorType: PiAuthErrorType;
   paymentScope: 'granted' | 'not_granted';
   userState: 'authenticated' | 'not_authenticated';
   username: string | null;
@@ -116,6 +125,7 @@ let authenticateInvocation: 'called' | 'not_called' = 'not_called';
 let authInvocationCount = 0;
 let nativeBridgeState: NativeBridgeState = 'idle';
 let authLifecycleState: PiAuthState = 'AUTH_NOT_STARTED';
+let authErrorType: PiAuthErrorType = null;
 let authenticated = false;
 let paymentScopeGranted = false;
 let authenticatedUser: PiUser | null = null;
@@ -157,6 +167,7 @@ export function getPiSdkDiagnosticState(): PiSdkDiagnosticState {
     buildCommit: BUILD_COMMIT,
     sdkState,
     authState: authLifecycleState,
+    authErrorType,
     paymentScope: paymentScopeGranted ? 'granted' : 'not_granted',
     userState: authenticated && authenticatedUser ? 'authenticated' : 'not_authenticated',
     username: authenticatedUser?.username || null,
@@ -385,6 +396,7 @@ export async function authenticatePiUser(
   piAuthPromise = (async () => {
     console.log('[PI AUTH] AUTH_CALL_STARTED');
     authLifecycleState = 'AUTH_CALL_STARTED';
+    authErrorType = null;
     authenticationError = null;
     notifyDiagnosticStateChange();
 
@@ -394,9 +406,15 @@ export async function authenticatePiUser(
       const hasSdk = await initPiSdk(sandbox);
       if (!hasSdk || typeof window === 'undefined' || !window.Pi) {
         authLifecycleState = 'PI_AUTHENTICATE_UNAVAILABLE';
+        authErrorType = 'PI_AUTHENTICATE_UNAVAILABLE';
         piAuthApiState = 'unavailable';
         notifyDiagnosticStateChange();
         throw new Error('Pi Network SDK failed to initialize in Pi Browser.');
+      }
+
+      // Ensure native webview bridge event listeners are attached and settled
+      if (typeof document !== 'undefined' && document.readyState !== 'complete') {
+        await new Promise((r) => setTimeout(r, 300));
       }
 
       const piObjectExists = Boolean(window.Pi);
@@ -411,6 +429,7 @@ export async function authenticatePiUser(
 
       if (!authFnExists) {
         authLifecycleState = 'PI_AUTHENTICATE_UNAVAILABLE';
+        authErrorType = 'PI_AUTHENTICATE_UNAVAILABLE';
         piAuthApiState = 'unavailable';
         authenticationError = 'window.Pi.authenticate is not a function in runtime environment.';
         notifyDiagnosticStateChange();
@@ -465,6 +484,7 @@ export async function authenticatePiUser(
         console.error('[PI BRIDGE] AUTHENTICATE_CALL_BLOCKED:', syncErr);
         nativeBridgeState = 'call_blocked';
         authLifecycleState = 'AUTH_ERROR';
+        authErrorType = 'AUTH_BRIDGE_REJECTED';
         authenticationError = `[PI BRIDGE] AUTHENTICATE_CALL_BLOCKED: ${syncErr?.message || syncErr}`;
         notifyDiagnosticStateChange();
         throw syncErr;
@@ -478,8 +498,8 @@ export async function authenticatePiUser(
 
       const timeoutPromise = new Promise((_, reject) => {
         setTimeout(() => {
-          reject(new Error('Pi Network authentication timed out waiting for Pi Browser bridge.'));
-        }, 20000);
+          reject(new Error('AUTH_BRIDGE_TIMEOUT: Pi Network authentication timed out waiting for Pi Browser bridge response.'));
+        }, 25000);
       });
 
       const auth = await Promise.race([authPromise, timeoutPromise]);
@@ -491,6 +511,7 @@ export async function authenticatePiUser(
         authenticated = true;
         paymentScopeGranted = true;
         authLifecycleState = 'AUTH_SUCCESS';
+        authErrorType = null;
         console.log('[PI AUTH] AUTH_SUCCESS for user:', auth.user.username);
         authenticationError = null;
         authenticatedUser = {
@@ -515,18 +536,28 @@ export async function authenticatePiUser(
       authenticatedUser = null;
 
       const rawMsg = String(err?.message || err || 'Pi Network authentication failed');
-      const isCancelled = rawMsg.toLowerCase().includes('cancel') || rawMsg.toLowerCase().includes('denied') || rawMsg.toLowerCase().includes('reject');
+      const isTimeout = rawMsg.includes('AUTH_BRIDGE_TIMEOUT') || rawMsg.includes('120000ms') || rawMsg.toLowerCase().includes('timed out');
+      const isCancelled = rawMsg.toLowerCase().includes('cancel') || rawMsg.toLowerCase().includes('denied') || rawMsg.toLowerCase().includes('dismiss') || rawMsg.toLowerCase().includes('user_cancelled');
+      const isUnavailable = rawMsg === 'PI_AUTHENTICATE_UNAVAILABLE' || rawMsg.includes('not a function');
 
       if (isCancelled) {
         authLifecycleState = 'AUTH_DENIED';
+        authErrorType = 'AUTH_USER_CANCELLED';
         authenticationError = 'Pioneer cancelled or denied permission in Pi Browser.';
         console.log('[PI AUTH] AUTH_DENIED');
-      } else if (rawMsg === 'PI_AUTHENTICATE_UNAVAILABLE') {
+      } else if (isTimeout) {
+        authLifecycleState = 'AUTH_ERROR';
+        authErrorType = 'AUTH_BRIDGE_TIMEOUT';
+        authenticationError = 'Pi Browser bridge response timed out. Please tap "Retry Pi Authentication" to reconnect.';
+        console.warn('[PI AUTH] AUTH_BRIDGE_TIMEOUT:', rawMsg);
+      } else if (isUnavailable) {
         authLifecycleState = 'PI_AUTHENTICATE_UNAVAILABLE';
+        authErrorType = 'PI_AUTHENTICATE_UNAVAILABLE';
         authenticationError = 'window.Pi.authenticate API is unavailable in this environment.';
         console.log('[PI AUTH] PI_AUTHENTICATE_UNAVAILABLE');
       } else {
         authLifecycleState = 'AUTH_ERROR';
+        authErrorType = rawMsg.includes('bridge') || rawMsg.includes('AUTH_ERROR') ? 'AUTH_BRIDGE_REJECTED' : 'AUTH_ERROR';
         authenticationError = rawMsg;
         console.error('[PI AUTH] AUTH_ERROR:', rawMsg);
       }
@@ -562,10 +593,13 @@ export async function initAndAuthenticateProactively(
       return null;
     }
 
+    // Settlement delay for native webview bridge event listeners on initial page mount
+    await new Promise((r) => setTimeout(r, 400));
+
     console.log('[PI AUTH] Proactive authentication starting...');
     return await authenticatePiUser(onIncompletePaymentFound, false);
   } catch (err: any) {
-    console.warn('[PI AUTH] Proactive authentication notice:', err?.message || err);
+    console.warn('[PI AUTH] Proactive authentication notice (caught gracefully):', err?.message || err);
     return null;
   }
 }
