@@ -99,11 +99,33 @@ function MainAppContent() {
     authenticated: true,
     role: 'buyer'
   });
-  const [userBalancePi, setUserBalancePi] = useState<number>(250.00);
+  const [userBalancePi, setUserBalancePi] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('pinova_user_balance');
+      if (saved) {
+        const val = parseFloat(saved);
+        if (!isNaN(val)) return val;
+      }
+    } catch (e) {
+      // fallback
+    }
+    return 250.00;
+  });
 
   // Data Collections
   const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS);
-  const [orders, setOrders] = useState<Order[]>(SAMPLE_ORDERS);
+  const [orders, setOrders] = useState<Order[]>(() => {
+    try {
+      const saved = localStorage.getItem('pinova_orders_cache');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {
+      // fallback
+    }
+    return SAMPLE_ORDERS;
+  });
   const [vendors, setVendors] = useState<Vendor[]>(MOCK_VENDORS);
   const [reviews, setReviews] = useState<Review[]>(MOCK_REVIEWS);
   const [coupons, setCoupons] = useState<Coupon[]>(MOCK_COUPONS);
@@ -135,6 +157,23 @@ function MainAppContent() {
   const [checkoutShippingCountry, setCheckoutShippingCountry] = useState<string>('United States');
   const [activeChatUser, setActiveChatUser] = useState<string | null>(null);
   const [activeChatOrderId, setActiveChatOrderId] = useState<string | undefined>();
+
+  // Persistence Sync Side Effects
+  useEffect(() => {
+    try {
+      localStorage.setItem('pinova_orders_cache', JSON.stringify(orders));
+    } catch (e) {
+      console.warn('Failed to cache orders:', e);
+    }
+  }, [orders]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('pinova_user_balance', userBalancePi.toString());
+    } catch (e) {
+      console.warn('Failed to cache balance:', e);
+    }
+  }, [userBalancePi]);
 
   // Dark Mode side effect
   useEffect(() => {
@@ -537,12 +576,100 @@ function MainAppContent() {
             userBalancePi={userBalancePi}
             buyerUsername={user.username}
             onTransactionSuccess={(receipt) => {
+              const transactionId = receipt.transactionId || `UTIL-TX-${Date.now()}`;
+              const orderId = transactionId.startsWith('ORD-') ? transactionId : `ORD-${transactionId}`;
+              
+              const providerTitle = receipt.providerName || 'Utility Service';
+              const categoryName = (receipt.category || 'utility').toUpperCase();
+              const pkgTitle = receipt.packageName ? ` (${receipt.packageName})` : '';
+
+              const newUtilityOrder: Order = {
+                id: orderId,
+                buyerUsername: user.username,
+                items: [
+                  {
+                    product: {
+                      id: `prod-util-${providerTitle.toLowerCase().replace(/\s+/g, '-')}-${Date.now().toString().slice(-4)}`,
+                      title: `${providerTitle}${pkgTitle}`,
+                      description: `Utility fulfillment for account ${receipt.accountNumber} via ${providerTitle}. Category: ${categoryName}.`,
+                      pricePi: receipt.piAmount,
+                      category: 'utility',
+                      subcategory: receipt.category || 'utility',
+                      images: ['https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&fit=crop&w=800&q=80'],
+                      stock: 999,
+                      rating: 5.0,
+                      reviewsCount: 1,
+                      sellerId: 'system-utility-gateway',
+                      sellerName: providerTitle,
+                      sellerVerified: true,
+                      features: ['Instant Digital Fulfillment', 'PSTP Order Protection Active'],
+                      shippingWeightKg: 0,
+                      tags: ['utility', receipt.category || 'utility', providerTitle],
+                      utilityProvider: providerTitle
+                    },
+                    quantity: 1,
+                    customDetails: {
+                      accountNumber: receipt.accountNumber,
+                      phoneNumber: receipt.accountNumber
+                    }
+                  }
+                ],
+                totalPi: receipt.piAmount,
+                escrowStatus: 'released',
+                pstpStatus: 'Completed',
+                piPaymentId: receipt.piPaymentId || `pi_pay_util_${Date.now()}`,
+                piTxid: receipt.piTxid || `0x${Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('')}`,
+                trackingNumber: receipt.tokenOrCode ? `TOKEN-${receipt.tokenOrCode}` : `UTIL-REF-${transactionId}`,
+                carrier: 'Digital Direct Fulfillment',
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                serverVerified: true,
+                digitalDeliveries: receipt.tokenOrCode ? [
+                  {
+                    productId: `prod-util-${providerTitle.toLowerCase().replace(/\s+/g, '-')}`,
+                    codeOrUrl: receipt.tokenOrCode,
+                    title: `${providerTitle} Digital Voucher / Ref Token`
+                  }
+                ] : undefined,
+                timeline: [
+                  {
+                    status: 'Pending Payment',
+                    timestamp: new Date(Date.now() - 5000).toISOString(),
+                    actor: user.username,
+                    actorRole: 'buyer',
+                    note: 'Utility payment initiated via Pi Network SDK.'
+                  },
+                  {
+                    status: 'Payment Verified',
+                    timestamp: new Date(Date.now() - 2000).toISOString(),
+                    actor: 'PSTP_Protection_Server',
+                    actorRole: 'system',
+                    note: 'Payment completed & verified server-side via Pi Platform API.'
+                  },
+                  {
+                    status: 'Completed',
+                    timestamp: new Date().toISOString(),
+                    actor: providerTitle,
+                    actorRole: 'seller',
+                    note: receipt.tokenOrCode
+                      ? `Service fulfilled. Digital Token/Code: ${receipt.tokenOrCode}`
+                      : `Service fulfilled & applied directly to account ${receipt.accountNumber}.`
+                  }
+                ]
+              };
+
+              setOrders((prev) => {
+                if (prev.some((o) => o.id === orderId)) return prev;
+                return [newUtilityOrder, ...prev];
+              });
+
               setUserBalancePi((prev) => Math.max(0, prev - receipt.piAmount));
+
               setNotifications((prev) => [
                 {
                   id: `notif-${Date.now()}`,
-                  title: 'Utility Purchase Fulfilled',
-                  message: `Successfully purchased ${receipt.providerName} (${receipt.accountNumber}) for ${receipt.piAmount.toFixed(4)} π. Token: ${receipt.tokenOrCode || 'Delivered'}`,
+                  title: 'Utility Purchase Fulfilled & Order Recorded',
+                  message: `Successfully purchased ${providerTitle} (${receipt.accountNumber}) for ${receipt.piAmount.toFixed(4)} π. Order ID: ${orderId}. Token: ${receipt.tokenOrCode || 'Delivered'}`,
                   type: 'order_protection',
                   timestamp: new Date().toISOString(),
                   read: false

@@ -54,6 +54,11 @@ interface UtilitiesViewProps {
     accountNumber: string;
     piAmount: number;
     tokenOrCode?: string;
+    transactionId?: string;
+    category?: string;
+    packageName?: string;
+    piPaymentId?: string;
+    piTxid?: string;
   }) => void;
 }
 
@@ -393,7 +398,12 @@ export const UtilitiesView: React.FC<UtilitiesViewProps> = ({
                     providerName: receipt.providerName,
                     accountNumber: receipt.accountNumber,
                     piAmount: receipt.piAmount,
-                    tokenOrCode: receipt.tokenOrCode
+                    tokenOrCode: receipt.tokenOrCode,
+                    transactionId: receipt.transactionId,
+                    category: receipt.category,
+                    packageName: receipt.packageName,
+                    piPaymentId: receipt.piPaymentId,
+                    piTxid: receipt.piTxid
                   });
                   setSelectedUtility(null);
                 }}
