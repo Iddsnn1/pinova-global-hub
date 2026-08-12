@@ -517,7 +517,7 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
               UNIVERSAL UTILITY DIAGNOSTICS & VERIFICATION
             </span>
             <span className="text-[10px] bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded border border-purple-500/30 font-mono">
-              Category 1-18 Verified
+              Flow State: {selectedProvider ? (accountNumber ? 'Step 6-8 Active' : 'Step 3-5 Active') : 'Step 1-2 Active'}
             </span>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-[11px] pt-0.5">
@@ -673,7 +673,20 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                       return (
                         <button
                           key={desig}
-                          onClick={() => setSelectedDesignation(desig)}
+                          onClick={() => {
+                            setSelectedDesignation(desig);
+                            setShowReviewStage(false);
+                            setErrorMessage(null);
+                            setAccountNumber('');
+                            setAccountValidationResult(null);
+                            if (selectedProvider?.supportsCustomAmount) {
+                              setPurchaseMode('custom');
+                              setCustomFiatAmount('');
+                            } else if (selectedProvider?.supportsFixedPackages && selectedProvider.packages.length > 0) {
+                              setPurchaseMode('package');
+                              setSelectedPackage(selectedProvider.packages[0]);
+                            }
+                          }}
                           className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all ${
                             isSelected
                               ? 'bg-purple-600 text-white border-purple-600 shadow-sm'

@@ -1106,6 +1106,46 @@ export const SAMPLE_UTILITY_PROVIDERS: UtilityServiceProvider[] = [
     ]
   },
   {
+    id: 'prov-water-rand',
+    name: 'Rand Water Utility Board',
+    category: 'water',
+    logo: 'https://images.unsplash.com/photo-1541888946425-d0fbb186a5b3?auto=format&fit=crop&w=200&q=80',
+    country: 'South Africa',
+    countryCode: 'ZA',
+    supportsCustomAmount: true,
+    supportsFixedPackages: true,
+    accountLabel: 'Rand Water Account Ref',
+    accountPlaceholder: 'RW-ZA-981203',
+    minCustomFiat: 10.00,
+    maxCustomFiat: 500.00,
+    currency: 'USD',
+    enabled: true,
+    designations: ['Municipal Water Meter', 'Commercial Water Bill'],
+    packages: [
+      { id: 'pkg-water-za-20', name: 'Rand Water R350 Credit', description: 'Direct municipal water bill settlement', fiatPrice: 20.00, currency: 'USD' }
+    ]
+  },
+  {
+    id: 'prov-water-manila',
+    name: 'Manila Water Company',
+    category: 'water',
+    logo: 'https://images.unsplash.com/photo-1541888946425-d0fbb186a5b3?auto=format&fit=crop&w=200&q=80',
+    country: 'Philippines',
+    countryCode: 'PH',
+    supportsCustomAmount: true,
+    supportsFixedPackages: true,
+    accountLabel: 'Manila Water Account ID',
+    accountPlaceholder: 'MW-PH-88120',
+    minCustomFiat: 5.00,
+    maxCustomFiat: 300.00,
+    currency: 'USD',
+    enabled: true,
+    designations: ['Residential Water Bill', 'Commercial Water Credit'],
+    packages: [
+      { id: 'pkg-water-ph-10', name: 'Manila Water ₱500 Credit', description: 'Direct water bill settlement', fiatPrice: 10.00, currency: 'USD' }
+    ]
+  },
+  {
     id: 'prov-water-board',
     name: 'US Municipal Water Board',
     category: 'water',
@@ -1146,6 +1186,42 @@ export const SAMPLE_UTILITY_PROVIDERS: UtilityServiceProvider[] = [
       { id: 'pkg-waec-pin', name: 'WAEC Direct Result Checker PIN', description: '5-use electronic result pin code', fiatPrice: 4.50, currency: 'USD', validity: 'Instant PIN', badge: 'Official' },
       { id: 'pkg-jamb-pin', name: 'JAMB UTME Registration E-PIN', description: 'Official Profile Code UTME pin', fiatPrice: 12.00, currency: 'USD', validity: 'Instant PIN', badge: 'Official' },
       { id: 'pkg-neco-token', name: 'NECO Result Verification Token', description: 'Instant token delivery to email & dashboard', fiatPrice: 3.50, currency: 'USD', validity: 'Instant PIN' }
+    ]
+  },
+  {
+    id: 'prov-exam-knec',
+    name: 'KNEC Exam Verification Kenya',
+    category: 'exam',
+    logo: 'https://images.unsplash.com/photo-1434030216411-0b793f4b4173?auto=format&fit=crop&w=200&q=80',
+    country: 'Kenya',
+    countryCode: 'KE',
+    supportsCustomAmount: false,
+    supportsFixedPackages: true,
+    accountLabel: 'Candidate Index / Email',
+    accountPlaceholder: 'INDEX-2026-9812',
+    currency: 'USD',
+    enabled: true,
+    designations: ['KCSE Result Verification', 'KCPE Portal Token'],
+    packages: [
+      { id: 'pkg-knec-token', name: 'KNEC Result Checker Token', description: 'Instant Kenya National Exams Portal Token', fiatPrice: 5.00, currency: 'USD', badge: 'Official' }
+    ]
+  },
+  {
+    id: 'prov-exam-waec-gh',
+    name: 'WAEC Ghana Result Checker E-PIN',
+    category: 'exam',
+    logo: 'https://images.unsplash.com/photo-1434030216411-0b793f4b4173?auto=format&fit=crop&w=200&q=80',
+    country: 'Ghana',
+    countryCode: 'GH',
+    supportsCustomAmount: false,
+    supportsFixedPackages: true,
+    accountLabel: 'Candidate Index Number',
+    accountPlaceholder: '0010293841',
+    currency: 'USD',
+    enabled: true,
+    designations: ['WASSCE Result Voucher', 'BECE Result Checker'],
+    packages: [
+      { id: 'pkg-waec-gh-pin', name: 'WAEC Ghana WASSCE Result PIN', description: 'Official Ghana Result Checker Voucher', fiatPrice: 4.50, currency: 'USD', badge: 'Official' }
     ]
   },
 
