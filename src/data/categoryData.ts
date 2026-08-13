@@ -310,6 +310,39 @@ export const UTILITY_CATEGORIES: UtilityCategoryDef[] = [
     placeholder: 'Alex Pioneer (alex@pi.org)',
     badgeText: 'NFT Entry Pass',
     defaultAmountsUsd: [20, 50, 120, 300]
+  },
+  {
+    id: 'vouchers',
+    name: 'Shopping Vouchers',
+    description: 'Purchase digital retail, supermarket, and dining discount vouchers.',
+    iconName: 'Ticket',
+    popularProviders: ['Jumia Shopping Voucher', 'Carrefour Express Pass', 'Shoprite Discount Pass'],
+    fieldLabel: 'Recipient Phone or Email',
+    placeholder: 'pioneer.shopper@pi.net',
+    badgeText: 'Instant Voucher',
+    defaultAmountsUsd: [10, 25, 50, 100]
+  },
+  {
+    id: 'betting',
+    name: 'Sports Betting',
+    description: 'Instant wallet deposit to licensed sportsbooks and gaming accounts.',
+    iconName: 'Coins',
+    popularProviders: ['Bet9ja Direct', 'SportyBet Instant', '1xBet Wallet', 'Betika Kenya'],
+    fieldLabel: 'Player Account User ID',
+    placeholder: 'USER-BET-991823',
+    badgeText: 'Instant Deposit',
+    defaultAmountsUsd: [5, 10, 20, 50]
+  },
+  {
+    id: 'ecommerce',
+    name: 'E-Commerce Credit',
+    description: 'Load store credit for Jumia, Amazon, AliExpress, and online merchant hubs.',
+    iconName: 'Gift',
+    popularProviders: ['Jumia Store Credit', 'Amazon Shopper Pass', 'AliExpress Credit PIN'],
+    fieldLabel: 'Customer Account / Email',
+    placeholder: 'buyer@ecomstore.com',
+    badgeText: 'Store Credit',
+    defaultAmountsUsd: [10, 20, 50, 100]
   }
 ];
 

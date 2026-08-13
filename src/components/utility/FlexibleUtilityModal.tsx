@@ -57,27 +57,33 @@ interface FlexibleUtilityModalProps {
   buyerUsername?: string;
   onTransactionSuccess?: (receipt: UtilityTransactionReceipt) => void;
   defaultCategory?: UtilityCategoryType;
+  initialCountryCode?: string;
   isEmbedded?: boolean;
 }
 
 // Helper: Get flag emoji for country
 function getCountryFlagEmoji(countryCodeOrName: string): string {
   if (!countryCodeOrName) return '🌐';
-  const code = countryCodeOrName.toUpperCase();
-  if (code === 'NG' || countryCodeOrName === 'Nigeria') return '🇳🇬';
-  if (code === 'KE' || countryCodeOrName === 'Kenya') return '🇰🇪';
-  if (code === 'GH' || countryCodeOrName === 'Ghana') return '🇬🇭';
-  if (code === 'IN' || countryCodeOrName === 'India') return '🇮🇳';
-  if (code === 'US' || countryCodeOrName === 'United States') return '🇺🇸';
-  if (code === 'GB' || countryCodeOrName === 'United Kingdom') return '🇬🇧';
-  if (code === 'ZA' || countryCodeOrName === 'South Africa') return '🇿🇦';
-  if (code === 'PH' || countryCodeOrName === 'Philippines') return '🇵🇭';
-  if (code === 'ID' || countryCodeOrName === 'Indonesia') return '🇮🇩';
-  if (code === 'VN' || countryCodeOrName === 'Vietnam') return '🇻🇳';
-  if (code === 'GLOBAL' || countryCodeOrName === 'Global') return '🌐';
-  if (code === 'PAN-AFRICA' || countryCodeOrName === 'Pan-Africa') return '🌍';
-  if (code === 'WEST AFRICA' || countryCodeOrName === 'West Africa') return '🌍';
-  return '🏳️';
+  const code = countryCodeOrName.trim().toUpperCase();
+  if (code === 'GLOBAL' || code === 'GLOBAL SERVICES' || countryCodeOrName === 'Global') return '🌐';
+  if (code === 'PAN-AFRICA' || code === 'WEST AFRICA') return '🌍';
+  if (code.length === 2 && /^[A-Z]{2}$/.test(code)) {
+    return String.fromCodePoint(...code.split('').map(c => 127397 + c.charCodeAt(0)));
+  }
+  if (countryCodeOrName === 'Nigeria') return '🇳🇬';
+  if (countryCodeOrName === 'Kenya') return '🇰🇪';
+  if (countryCodeOrName === 'United Arab Emirates' || countryCodeOrName === 'UAE') return '🇦🇪';
+  if (countryCodeOrName === 'United Kingdom' || countryCodeOrName === 'UK') return '🇬🇧';
+  if (countryCodeOrName === 'United States' || countryCodeOrName === 'USA') return '🇺🇸';
+  if (countryCodeOrName === 'Saudi Arabia') return '🇸🇦';
+  if (countryCodeOrName === 'Turkey' || countryCodeOrName === 'Türkiye') return '🇹🇷';
+  if (countryCodeOrName === 'Ghana') return '🇬🇭';
+  if (countryCodeOrName === 'India') return '🇮🇳';
+  if (countryCodeOrName === 'South Africa') return '🇿🇦';
+  if (countryCodeOrName === 'Philippines') return '🇵🇭';
+  if (countryCodeOrName === 'Indonesia') return '🇮🇩';
+  if (countryCodeOrName === 'Vietnam') return '🇻🇳';
+  return '🌐';
 }
 
 // Helper: Get default designations for category if provider doesn't specify
@@ -112,13 +118,14 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
   buyerUsername = 'Pioneer_User',
   onTransactionSuccess,
   defaultCategory = 'airtime',
+  initialCountryCode,
   isEmbedded = false
 }) => {
   // Navigation & Step state
   const [selectedCategory, setSelectedCategory] = useState<UtilityCategoryType>(defaultCategory);
   
   // Country Selection State
-  const [selectedCountryCode, setSelectedCountryCode] = useState<string>('');
+  const [selectedCountryCode, setSelectedCountryCode] = useState<string>(initialCountryCode || '');
   const [countrySearchQuery, setCountrySearchQuery] = useState<string>('');
 
   // Provider & Designation State

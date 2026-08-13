@@ -40,12 +40,15 @@ export type UtilityCategory =
   | 'exam_cards'
   | 'education_payments'
   | 'gift_cards'
+  | 'vouchers'
+  | 'betting'
   | 'gaming'
   | 'streaming'
   | 'government_services'
   | 'insurance'
   | 'transport'
-  | 'event_tickets';
+  | 'event_tickets'
+  | 'ecommerce';
 
 export type ServiceCategory =
   | 'consultation'
