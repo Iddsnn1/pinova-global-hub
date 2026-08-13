@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { UtilityServiceProvider } from '../../../types/utility';
 import { searchInstitutions } from '../../../lib/utility/serviceDiscovery';
-import { LocationSelector, NIGERIAN_STATES } from './LocationSelector';
+import { LocationSelector } from './LocationSelector';
 
 interface EducationDiscoveryProps {
   providers: UtilityServiceProvider[];
@@ -31,14 +31,19 @@ export const EducationDiscovery: React.FC<EducationDiscoveryProps> = ({
   onSelectInstitutionService
 }) => {
   const [selectedState, setSelectedState] = useState<string>('');
-  const [searchQuery, setSearchQuery] = useState<string>('Bayero'); // Default helpful initial query
+  const [searchQuery, setSearchQuery] = useState<string>('');
   const [institutionTypeFilter, setInstitutionTypeFilter] = useState<
     'all' | 'university' | 'polytechnic' | 'college' | 'exam_board' | 'e_learning'
   >('all');
 
   const handleCountrySelect = (code: string) => {
     setSelectedState('');
+    setSearchQuery('');
     onCountryChange(code);
+  };
+
+  const handleStateSelect = (st: string) => {
+    setSelectedState(st);
   };
 
   const eduResult = searchInstitutions(providers, {
@@ -75,9 +80,8 @@ export const EducationDiscovery: React.FC<EducationDiscoveryProps> = ({
         <LocationSelector
           countryCode={selectedCountryCode || 'NG'}
           state={selectedState}
-          availableStates={selectedCountryCode === 'NG' ? NIGERIAN_STATES : undefined}
           onCountryChange={handleCountrySelect}
-          onStateChange={setSelectedState}
+          onStateChange={handleStateSelect}
           showStateSelector={true}
           stateLabel="State / Region"
         />
@@ -85,7 +89,7 @@ export const EducationDiscovery: React.FC<EducationDiscoveryProps> = ({
         {/* Search Input */}
         <div className="space-y-2 pt-1 border-t border-slate-800">
           <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
-            Search Institution Name or Alias
+            Search Institution Name or Code
           </label>
           <div className="relative">
             <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
@@ -93,7 +97,7 @@ export const EducationDiscovery: React.FC<EducationDiscoveryProps> = ({
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="e.g. Bayero, Nairobi, Lagos, WAEC, JAMB..."
+              placeholder="Search institution, e.g. Bayero, Nairobi, Legon, BUK, WAEC..."
               className="w-full bg-slate-800 border border-slate-700 rounded-xl pl-10 pr-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:ring-2 focus:ring-pink-500/50"
             />
           </div>
@@ -101,11 +105,11 @@ export const EducationDiscovery: React.FC<EducationDiscoveryProps> = ({
           {/* Quick Search Chips */}
           <div className="flex items-center gap-1.5 pt-1 overflow-x-auto pb-1">
             {[
-              { label: 'Bayero (BUK)', query: 'Bayero' },
-              { label: 'Univ of Nairobi', query: 'Nairobi' },
-              { label: 'UNILAG', query: 'Lagos' },
+              { label: 'All Universities', query: 'University' },
+              { label: 'Polytechnics', query: 'Polytechnic' },
+              { label: 'Colleges', query: 'College' },
               { label: 'Exam Boards', query: 'Exam' },
-              { label: 'Coursera / EdX', query: 'Coursera' }
+              { label: 'E-Learning', query: 'Coursera' }
             ].map((chip) => (
               <button
                 key={chip.label}
@@ -228,8 +232,10 @@ export const EducationDiscovery: React.FC<EducationDiscoveryProps> = ({
         ) : (
           <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-6 text-center space-y-1">
             <GraduationCap className="w-8 h-8 text-slate-500 mx-auto" />
-            <p className="text-sm font-semibold text-slate-300">No institutions match "{searchQuery}"</p>
-            <p className="text-xs text-slate-400">Try searching for broader terms like "University", "Polytechnic", "Lagos", or "Exam".</p>
+            <p className="text-sm font-semibold text-slate-300">
+              {searchQuery ? `No institutions match "${searchQuery}"` : 'No institutions match selected location & filter'}
+            </p>
+            <p className="text-xs text-slate-400">Try selecting "All States / Regions" or searching broader terms.</p>
           </div>
         )}
       </div>

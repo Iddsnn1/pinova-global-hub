@@ -51,6 +51,7 @@ export interface UtilityServiceProvider {
 
   // --- Phase 2 Service Discovery Schema Extensions (Optional) ---
   state?: string;
+  supportedStates?: string[];
   region?: string;
   city?: string;
   lga?: string; // Local Government Area

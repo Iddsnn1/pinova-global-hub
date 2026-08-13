@@ -30405,12 +30405,315 @@ export const SAMPLE_UTILITY_PROVIDERS: UtilityServiceProvider[] =
     ]
   },
   {
+    "id": "prov-edu-ng-bayero-university-kano-buk",
+    "name": "Bayero University Kano (BUK) Portal",
+    "category": "education",
+    "logo": "https://images.unsplash.com/photo-1556742049-0a67daf28d2a?auto=format&fit=crop&w=200&q=80",
+    "country": "Nigeria",
+    "countryCode": "NG",
+    "state": "Kano",
+    "institutionName": "Bayero University Kano (BUK)",
+    "institutionCode": "BUK",
+    "institutionType": "university",
+    "institutionAliases": ["BUK", "Bayero", "Kano"],
+    "supportsCustomAmount": true,
+    "supportsFixedPackages": true,
+    "accountLabel": "Student Reg No / Admission Number",
+    "accountPlaceholder": "e.g. CKS/BUS/21/0012 or BUK/2024/9912",
+    "minCustomFiat": 1,
+    "maxCustomFiat": 500,
+    "currency": "USD",
+    "enabled": true,
+    "hasDirectValidationApi": true,
+    "designations": [
+      "Semester Tuition Fee Clearance",
+      "Fresh Student Acceptance Fee",
+      "Hostel Accommodation Pass",
+      "Statement of Result / Transcript Token"
+    ],
+    "packages": [
+      {
+        "id": "pkg-edu-buk-1",
+        "name": "BUK $25 Portal Fee Token",
+        "description": "Direct student portal tuition clearance",
+        "fiatPrice": 25,
+        "currency": "USD",
+        "validity": "Instant Deposit"
+      },
+      {
+        "id": "pkg-edu-buk-2",
+        "name": "BUK $100 Full Semester Clearance",
+        "description": "Full semester tuition fee settlement",
+        "fiatPrice": 100,
+        "currency": "USD",
+        "validity": "Instant Deposit",
+        "badge": "Popular"
+      }
+    ]
+  },
+  {
+    "id": "prov-edu-ng-kano-state-polytechnic",
+    "name": "Kano State Polytechnic Portal",
+    "category": "education",
+    "logo": "https://images.unsplash.com/photo-1556742049-0a67daf28d2a?auto=format&fit=crop&w=200&q=80",
+    "country": "Nigeria",
+    "countryCode": "NG",
+    "state": "Kano",
+    "institutionName": "Kano State Polytechnic",
+    "institutionCode": "KANOPOLY",
+    "institutionType": "polytechnic",
+    "institutionAliases": ["Kano Poly", "Kano State Poly"],
+    "supportsCustomAmount": true,
+    "supportsFixedPackages": true,
+    "accountLabel": "Student Reg / Matriculation No",
+    "accountPlaceholder": "Enter Kano Poly student ID",
+    "minCustomFiat": 1,
+    "maxCustomFiat": 500,
+    "currency": "USD",
+    "enabled": true,
+    "hasDirectValidationApi": true,
+    "designations": [
+      "ND / HND Tuition Settlement",
+      "Acceptance Fee Deposit",
+      "Polytechnic Exam Fee"
+    ],
+    "packages": [
+      {
+        "id": "pkg-edu-kanopoly-1",
+        "name": "Kano Poly $20 Fee Voucher",
+        "description": "Direct fee clearance deposit",
+        "fiatPrice": 20,
+        "currency": "USD",
+        "validity": "Instant"
+      }
+    ]
+  },
+  {
+    "id": "prov-edu-ng-yusuf-maitama-sule-univ-kano",
+    "name": "Yusuf Maitama Sule University Kano",
+    "category": "education",
+    "logo": "https://images.unsplash.com/photo-1556742049-0a67daf28d2a?auto=format&fit=crop&w=200&q=80",
+    "country": "Nigeria",
+    "countryCode": "NG",
+    "state": "Kano",
+    "institutionName": "Yusuf Maitama Sule University Kano",
+    "institutionCode": "YUMSUK",
+    "institutionType": "university",
+    "institutionAliases": ["YUMSUK", "NWU", "North West Univ"],
+    "supportsCustomAmount": true,
+    "supportsFixedPackages": true,
+    "accountLabel": "Student Matric No",
+    "accountPlaceholder": "Enter YUMSUK student ID",
+    "minCustomFiat": 1,
+    "maxCustomFiat": 500,
+    "currency": "USD",
+    "enabled": true,
+    "designations": [
+      "Undergraduate Tuition Deposit",
+      "Acceptance Fee Clearance"
+    ],
+    "packages": [
+      {
+        "id": "pkg-edu-yumsuk-1",
+        "name": "YUMSUK $30 Portal Clearance",
+        "description": "Student fee portal credit",
+        "fiatPrice": 30,
+        "currency": "USD",
+        "validity": "Instant"
+      }
+    ]
+  },
+  {
+    "id": "prov-edu-ng-saadatu-rimi-college-kano",
+    "name": "Sa'adatu Rimi College of Education Kano",
+    "category": "education",
+    "logo": "https://images.unsplash.com/photo-1556742049-0a67daf28d2a?auto=format&fit=crop&w=200&q=80",
+    "country": "Nigeria",
+    "countryCode": "NG",
+    "state": "Kano",
+    "institutionName": "Sa'adatu Rimi College of Education Kano",
+    "institutionCode": "SRCOE",
+    "institutionType": "college",
+    "institutionAliases": ["SRCOE", "Saadatu Rimi"],
+    "supportsCustomAmount": true,
+    "supportsFixedPackages": true,
+    "accountLabel": "NCE / Degree Reg No",
+    "accountPlaceholder": "Enter student ID",
+    "minCustomFiat": 1,
+    "maxCustomFiat": 500,
+    "currency": "USD",
+    "enabled": true,
+    "designations": [
+      "NCE Tuition Clearance",
+      "Degree Program Registration Fee"
+    ],
+    "packages": [
+      {
+        "id": "pkg-edu-srcoe-1",
+        "name": "SRCOE $15 Tuition Pass",
+        "description": "College fee clearance",
+        "fiatPrice": 15,
+        "currency": "USD",
+        "validity": "Instant"
+      }
+    ]
+  },
+  {
+    "id": "prov-edu-ng-kaduna-state-university-kasu",
+    "name": "Kaduna State University (KASU) Portal",
+    "category": "education",
+    "logo": "https://images.unsplash.com/photo-1556742049-0a67daf28d2a?auto=format&fit=crop&w=200&q=80",
+    "country": "Nigeria",
+    "countryCode": "NG",
+    "state": "Kaduna",
+    "institutionName": "Kaduna State University (KASU)",
+    "institutionCode": "KASU",
+    "institutionType": "university",
+    "institutionAliases": ["KASU", "Kaduna University"],
+    "supportsCustomAmount": true,
+    "supportsFixedPackages": true,
+    "accountLabel": "KASU Matric / Reg No",
+    "accountPlaceholder": "Enter KASU matriculation number",
+    "minCustomFiat": 1,
+    "maxCustomFiat": 500,
+    "currency": "USD",
+    "enabled": true,
+    "hasDirectValidationApi": true,
+    "designations": [
+      "Undergraduate Tuition Deposit",
+      "Postgraduate Fee Settlement",
+      "Acceptance Fee Clearance"
+    ],
+    "packages": [
+      {
+        "id": "pkg-edu-kasu-1",
+        "name": "KASU $25 Portal Credit",
+        "description": "Direct student fee deposit",
+        "fiatPrice": 25,
+        "currency": "USD",
+        "validity": "Instant"
+      }
+    ]
+  },
+  {
+    "id": "prov-edu-ng-kaduna-polytechnic",
+    "name": "Kaduna Polytechnic Portal",
+    "category": "education",
+    "logo": "https://images.unsplash.com/photo-1556742049-0a67daf28d2a?auto=format&fit=crop&w=200&q=80",
+    "country": "Nigeria",
+    "countryCode": "NG",
+    "state": "Kaduna",
+    "institutionName": "Kaduna Polytechnic",
+    "institutionCode": "KADPOLY",
+    "institutionType": "polytechnic",
+    "institutionAliases": ["KadPoly", "Kaduna Poly"],
+    "supportsCustomAmount": true,
+    "supportsFixedPackages": true,
+    "accountLabel": "Student Reg No",
+    "accountPlaceholder": "Enter KadPoly student ID",
+    "minCustomFiat": 1,
+    "maxCustomFiat": 500,
+    "currency": "USD",
+    "enabled": true,
+    "designations": [
+      "ND / HND Fee Clearance",
+      "Acceptance Fee Deposit"
+    ],
+    "packages": [
+      {
+        "id": "pkg-edu-kadpoly-1",
+        "name": "KadPoly $20 Fee Voucher",
+        "description": "Student fee portal credit",
+        "fiatPrice": 20,
+        "currency": "USD",
+        "validity": "Instant"
+      }
+    ]
+  },
+  {
+    "id": "prov-edu-gh-university-of-ghana-legon",
+    "name": "University of Ghana Legon",
+    "category": "education",
+    "logo": "https://images.unsplash.com/photo-1556742049-0a67daf28d2a?auto=format&fit=crop&w=200&q=80",
+    "country": "Ghana",
+    "countryCode": "GH",
+    "state": "Greater Accra",
+    "institutionName": "University of Ghana Legon",
+    "institutionCode": "UG-LEGON",
+    "institutionType": "university",
+    "institutionAliases": ["Legon", "Univ of Ghana"],
+    "supportsCustomAmount": true,
+    "supportsFixedPackages": true,
+    "accountLabel": "UG Student ID / Index Number",
+    "accountPlaceholder": "Enter Legon student index number",
+    "minCustomFiat": 1,
+    "maxCustomFiat": 500,
+    "currency": "USD",
+    "enabled": true,
+    "hasDirectValidationApi": true,
+    "designations": [
+      "Academic Facility User Fee (AFUF)",
+      "Residential Accommodation Fee",
+      "International Student Tuition"
+    ],
+    "packages": [
+      {
+        "id": "pkg-edu-ug-1",
+        "name": "UG Legon $30 Fee Voucher",
+        "description": "Direct student portal tuition clearance",
+        "fiatPrice": 30,
+        "currency": "USD",
+        "validity": "Instant"
+      }
+    ]
+  },
+  {
+    "id": "prov-edu-gh-knust-kumasi-portal",
+    "name": "KNUST Kumasi Fee Portal",
+    "category": "education",
+    "logo": "https://images.unsplash.com/photo-1556742049-0a67daf28d2a?auto=format&fit=crop&w=200&q=80",
+    "country": "Ghana",
+    "countryCode": "GH",
+    "state": "Ashanti",
+    "institutionName": "Kwame Nkrumah Univ of Science & Tech (KNUST)",
+    "institutionCode": "KNUST",
+    "institutionType": "university",
+    "institutionAliases": ["KNUST", "Kumasi Univ"],
+    "supportsCustomAmount": true,
+    "supportsFixedPackages": true,
+    "accountLabel": "KNUST Student ID / Index No",
+    "accountPlaceholder": "Enter KNUST student ID",
+    "minCustomFiat": 1,
+    "maxCustomFiat": 500,
+    "currency": "USD",
+    "enabled": true,
+    "designations": [
+      "Semester Tuition Deposit",
+      "E-Learning Resource Fee"
+    ],
+    "packages": [
+      {
+        "id": "pkg-edu-knust-1",
+        "name": "KNUST $35 Fee Voucher",
+        "description": "Tuition clearance deposit",
+        "fiatPrice": 35,
+        "currency": "USD",
+        "validity": "Instant"
+      }
+    ]
+  },
+  {
     "id": "prov-edu-ng-unilag-student-tuition-portal",
     "name": "UNILAG Student Tuition Portal",
     "category": "education",
     "logo": "https://images.unsplash.com/photo-1556742049-0a67daf28d2a?auto=format&fit=crop&w=200&q=80",
     "country": "Nigeria",
     "countryCode": "NG",
+    "state": "Lagos",
+    "institutionName": "University of Lagos (UNILAG)",
+    "institutionCode": "UNILAG",
+    "institutionType": "university",
+    "institutionAliases": ["UNILAG", "Lagos Univ"],
     "supportsCustomAmount": true,
     "supportsFixedPackages": true,
     "accountLabel": "Student Matric / Admission Number / Account ID",
@@ -30495,6 +30798,11 @@ export const SAMPLE_UTILITY_PROVIDERS: UtilityServiceProvider[] =
     "logo": "https://images.unsplash.com/photo-1556742049-0a67daf28d2a?auto=format&fit=crop&w=200&q=80",
     "country": "Nigeria",
     "countryCode": "NG",
+    "state": "Kaduna",
+    "institutionName": "Ahmadu Bello University (ABU Zaria)",
+    "institutionCode": "ABU",
+    "institutionType": "university",
+    "institutionAliases": ["ABU", "Ahmadu Bello", "Zaria"],
     "supportsCustomAmount": true,
     "supportsFixedPackages": true,
     "accountLabel": "Student Matric / Admission Number / Account ID",

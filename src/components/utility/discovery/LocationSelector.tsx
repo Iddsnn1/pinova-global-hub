@@ -1,5 +1,6 @@
 import React from 'react';
 import { MapPin, Globe, Building } from 'lucide-react';
+import { getSubdivisionInfo, COUNTRY_SUBDIVISIONS_MAP } from '../../../data/countrySubdivisions';
 
 export interface LocationSelectorProps {
   countryCode: string;
@@ -17,14 +18,7 @@ export interface LocationSelectorProps {
   disabled?: boolean;
 }
 
-// Complete list of Nigerian States + FCT Abuja for authentic state filtering
-export const NIGERIAN_STATES = [
-  'Abia', 'Adamawa', 'Akwa Ibom', 'Anambra', 'Bauchi', 'Bayelsa', 'Benue', 'Borno',
-  'Cross River', 'Delta', 'Ebonyi', 'Edo', 'Ekiti', 'Enugu', 'FCT Abuja', 'Gombe',
-  'Imo', 'Jigawa', 'Kaduna', 'Kano', 'Katsina', 'Kebbi', 'Kogi', 'Kwara', 'Lagos',
-  'Nasarawa', 'Niger', 'Ogun', 'Ondo', 'Osun', 'Oyo', 'Plateau', 'Rivers', 'Sokoto',
-  'Taraba', 'Yobe', 'Zamfara'
-];
+export const NIGERIAN_STATES = COUNTRY_SUBDIVISIONS_MAP.NG.subdivisions;
 
 export const LocationSelector: React.FC<LocationSelectorProps> = ({
   countryCode,
@@ -40,6 +34,7 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
     { code: 'IN', name: 'India', flag: '🇮🇳' },
     { code: 'US', name: 'United States', flag: '🇺🇸' },
     { code: 'GB', name: 'United Kingdom', flag: '🇬🇧' },
+    { code: 'TR', name: 'Turkey / Türkiye', flag: '🇹🇷' },
     { code: 'GLOBAL', name: 'Global / International', flag: '🌐' }
   ],
   availableStates,
@@ -48,11 +43,12 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
   onCityOrLgaChange,
   showStateSelector = true,
   showCitySelector = false,
-  stateLabel = 'State / Province',
+  stateLabel,
   disabled = false
 }) => {
-  // Determine state list for selected country
-  const resolvedStates = availableStates || (countryCode === 'NG' ? NIGERIAN_STATES : []);
+  const subInfo = getSubdivisionInfo(countryCode);
+  const resolvedStates = availableStates !== undefined ? availableStates : subInfo.subdivisions;
+  const computedStateLabel = stateLabel || (subInfo.subdivisionName ? `${subInfo.subdivisionName} / Region` : 'State / Region');
 
   return (
     <div className="space-y-3 w-full">
@@ -64,7 +60,10 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
         </label>
         <select
           value={countryCode}
-          onChange={(e) => onCountryChange(e.target.value)}
+          onChange={(e) => {
+            onCountryChange(e.target.value);
+            onStateChange('');
+          }}
           disabled={disabled}
           className="w-full bg-slate-800/90 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all disabled:opacity-50"
         >
@@ -82,7 +81,7 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
         <div>
           <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
             <MapPin className="w-3.5 h-3.5 text-blue-400" />
-            {stateLabel}
+            {computedStateLabel}
           </label>
           {resolvedStates.length > 0 ? (
             <select
@@ -91,7 +90,7 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
               disabled={disabled || !countryCode}
               className="w-full bg-slate-800/90 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all disabled:opacity-50"
             >
-              <option value="">All States / Regions</option>
+              <option value="">All {subInfo.subdivisionName ? `${subInfo.subdivisionName}s` : 'States'} / Regions</option>
               {resolvedStates.map((st) => (
                 <option key={st} value={st}>
                   {st}
@@ -103,7 +102,7 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
               type="text"
               value={state}
               onChange={(e) => onStateChange(e.target.value)}
-              placeholder="e.g. State or Province name"
+              placeholder={`e.g. ${subInfo.subdivisionName || 'State or Province'} name`}
               disabled={disabled || !countryCode}
               className="w-full bg-slate-800/90 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all disabled:opacity-50"
             />
@@ -116,7 +115,7 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
         <div>
           <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
             <Building className="w-3.5 h-3.5 text-amber-400" />
-            City / Local Government Area (LGA)
+            City / District
           </label>
           <input
             type="text"

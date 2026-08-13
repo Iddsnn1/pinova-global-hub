@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { UtilityServiceProvider } from '../../../types/utility';
 import { resolveGovernmentServices } from '../../../lib/utility/serviceDiscovery';
-import { LocationSelector, NIGERIAN_STATES } from './LocationSelector';
+import { LocationSelector } from './LocationSelector';
 
 interface GovernmentDiscoveryProps {
   providers: UtilityServiceProvider[];
@@ -78,11 +78,10 @@ export const GovernmentDiscovery: React.FC<GovernmentDiscoveryProps> = ({
         <LocationSelector
           countryCode={selectedCountryCode || 'NG'}
           state={selectedState}
-          availableStates={selectedCountryCode === 'NG' ? NIGERIAN_STATES : undefined}
           onCountryChange={handleCountrySelect}
           onStateChange={handleStateSelect}
           showStateSelector={true}
-          stateLabel="State / Federal Territory"
+          stateLabel="State / Region"
         />
 
         {/* Agency Search & Jurisdiction Buttons */}

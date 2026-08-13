@@ -33,7 +33,7 @@ import { UTILITY_CATEGORIES, UtilityCategoryDef } from '../../data/categoryData'
 import { PiConversionConfig, UtilityCategoryType } from '../../types/utility';
 import { FlexibleUtilityModal } from '../utility/FlexibleUtilityModal';
 import { SAMPLE_UTILITY_PROVIDERS } from '../../data/utilityData';
-import { NIGERIAN_STATES } from '../utility/discovery/LocationSelector';
+import { getSubdivisionInfo } from '../../data/countrySubdivisions';
 
 const getMappedCategoryType = (utilityId: string | null): UtilityCategoryType => {
   if (!utilityId) return 'airtime';
@@ -340,7 +340,7 @@ export const UtilitiesView: React.FC<UtilitiesViewProps> = ({
                 <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-purple-200 dark:bg-purple-900 text-purple-800 dark:text-purple-200">
                   {selectedCountryObj.code}
                 </span>
-                {selectedCountryCode === 'NG' && selectedState && (
+                {selectedState && (
                   <span className="text-xs text-amber-600 dark:text-amber-400 font-extrabold border-l border-purple-300 dark:border-purple-700 pl-2">
                     {selectedState}
                   </span>
@@ -369,6 +369,7 @@ export const UtilitiesView: React.FC<UtilitiesViewProps> = ({
                     key={c.code}
                     onClick={() => {
                       setSelectedCountryCode(c.code);
+                      setSelectedState('');
                       setCountrySearchInput('');
                     }}
                     className={`px-3 py-2 rounded-2xl border text-xs font-bold transition-all flex items-center gap-2 ${
@@ -389,25 +390,29 @@ export const UtilitiesView: React.FC<UtilitiesViewProps> = ({
               })}
             </div>
 
-            {/* CONDITIONAL STATE / REGION SELECTOR FOR NIGERIA OR GEOGRAPHICALLY SUBDIVIDED COUNTRIES */}
-            {selectedCountryCode === 'NG' && (
-              <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center gap-3">
-                <div className="flex items-center gap-1.5 shrink-0 text-xs font-extrabold text-slate-700 dark:text-slate-300">
-                  <MapPin className="w-3.5 h-3.5 text-amber-500" />
-                  <span>Select State / Region:</span>
+            {/* CONDITIONAL STATE / REGION SELECTOR FOR ALL SUBDIVIDED COUNTRIES */}
+            {(() => {
+              const subInfo = getSubdivisionInfo(selectedCountryCode);
+              if (!subInfo.subdivisions || subInfo.subdivisions.length === 0) return null;
+              return (
+                <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center gap-3">
+                  <div className="flex items-center gap-1.5 shrink-0 text-xs font-extrabold text-slate-700 dark:text-slate-300">
+                    <MapPin className="w-3.5 h-3.5 text-amber-500" />
+                    <span>Select {subInfo.subdivisionName || 'State / Region'}:</span>
+                  </div>
+                  <select
+                    value={selectedState}
+                    onChange={(e) => setSelectedState(e.target.value)}
+                    className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-900 dark:text-slate-100 focus:outline-none focus:border-purple-500"
+                  >
+                    <option value="">All {subInfo.subdivisionName ? `${subInfo.subdivisionName}s` : 'States'} / Regions</option>
+                    {subInfo.subdivisions.map((st) => (
+                      <option key={st} value={st}>{st}</option>
+                    ))}
+                  </select>
                 </div>
-                <select
-                  value={selectedState}
-                  onChange={(e) => setSelectedState(e.target.value)}
-                  className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-900 dark:text-slate-100 focus:outline-none focus:border-purple-500"
-                >
-                  <option value="">All States / Regions</option>
-                  {NIGERIAN_STATES.map((st) => (
-                    <option key={st} value={st}>{st}</option>
-                  ))}
-                </select>
-              </div>
-            )}
+              );
+            })()}
 
           </div>
 

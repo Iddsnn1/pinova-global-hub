@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Droplets, MapPin, AlertCircle, CheckCircle2, ChevronRight, Building } from 'lucide-react';
 import { UtilityServiceProvider } from '../../../types/utility';
 import { resolveWaterProviders } from '../../../lib/utility/serviceDiscovery';
-import { LocationSelector, NIGERIAN_STATES } from './LocationSelector';
+import { LocationSelector } from './LocationSelector';
 
 interface WaterDiscoveryProps {
   providers: UtilityServiceProvider[];
@@ -67,13 +67,12 @@ export const WaterDiscovery: React.FC<WaterDiscoveryProps> = ({
           countryCode={selectedCountryCode || 'NG'}
           state={selectedState}
           cityOrLga={cityOrLga}
-          availableStates={selectedCountryCode === 'NG' ? NIGERIAN_STATES : undefined}
           onCountryChange={handleCountrySelect}
           onStateChange={handleStateSelect}
           onCityOrLgaChange={setCityOrLga}
           showStateSelector={true}
           showCitySelector={true}
-          stateLabel="State / Province"
+          stateLabel="State / Region"
         />
       </div>
 
@@ -170,7 +169,7 @@ export const WaterDiscovery: React.FC<WaterDiscoveryProps> = ({
               </p>
             </div>
             <p className="text-[11px] text-slate-400 italic">
-              Try selecting a neighboring state with digital billing infrastructure (e.g. Lagos State, FCT Abuja, Ogun State, or Enugu State).
+              Try selecting a neighboring region or major metropolis with digital billing infrastructure (e.g. Lagos State, FCT Abuja, Nairobi, or Greater Accra).
             </p>
           </div>
         )}
