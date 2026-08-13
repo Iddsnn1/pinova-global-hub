@@ -36,35 +36,44 @@ export function filterProvidersByCountry(
 }
 
 /**
- * Filter utility providers by state or province name.
+ * Filter utility providers by state, province, or administrative subdivision.
  */
 export function filterProvidersByState(
   providers: UtilityServiceProvider[],
-  state?: string
+  stateOrSubdivision?: string
 ): UtilityServiceProvider[] {
-  if (!state || state.trim() === '' || state.toUpperCase() === 'ALL') {
+  if (!stateOrSubdivision || stateOrSubdivision.trim() === '' || stateOrSubdivision.toUpperCase() === 'ALL') {
     return providers;
   }
 
-  const targetState = state.trim().toLowerCase();
+  const target = stateOrSubdivision.trim().toLowerCase();
+
   return providers.filter((p) => {
-    // 1. Direct state attribute match
-    if (p.state && (p.state.toLowerCase() === targetState || targetState.includes(p.state.toLowerCase()))) {
+    // 1. Direct subdivisionCode match
+    if (p.subdivisionCode && p.subdivisionCode.toLowerCase() === target) {
       return true;
     }
-    // 2. Multi-state coverage array
-    if (p.supportedStates && p.supportedStates.some((s) => s.toLowerCase() === targetState || targetState.includes(s.toLowerCase()))) {
+
+    // 2. Direct state attribute match
+    if (p.state && (p.state.toLowerCase() === target || target.includes(p.state.toLowerCase()) || p.state.toLowerCase().includes(target))) {
       return true;
     }
-    // 3. Provider name contains state keyword
-    const pName = p.name.toLowerCase();
-    if (pName.includes(targetState)) {
+
+    // 3. Multi-subdivision coverage array
+    if (p.supportedSubdivisions && p.supportedSubdivisions.some((sub) => sub.toLowerCase() === target || target.includes(sub.toLowerCase()))) {
       return true;
     }
-    // 4. Provider designations contain state
-    if (p.designations && p.designations.some((d) => d.toLowerCase().includes(targetState))) {
+
+    // 4. Multi-state coverage array
+    if (p.supportedStates && p.supportedStates.some((s) => s.toLowerCase() === target || target.includes(s.toLowerCase()) || s.toLowerCase().includes(target))) {
       return true;
     }
+
+    // 5. National or Global providers without state restriction (e.g., National Exam boards or Global platforms)
+    if (!p.state && !p.subdivisionCode && (p.category === 'exam' || p.countryCode === 'GLOBAL')) {
+      return true;
+    }
+
     return false;
   });
 }
@@ -112,8 +121,11 @@ export function searchProviders(
     if (p.name.toLowerCase().includes(q)) return true;
     if (p.country.toLowerCase().includes(q)) return true;
     if (p.countryCode && p.countryCode.toLowerCase().includes(q)) return true;
+    if (p.state && p.state.toLowerCase().includes(q)) return true;
+    if (p.subdivisionCode && p.subdivisionCode.toLowerCase().includes(q)) return true;
     if (p.accountLabel.toLowerCase().includes(q)) return true;
     if (p.institutionName && p.institutionName.toLowerCase().includes(q)) return true;
+    if (p.institutionCode && p.institutionCode.toLowerCase().includes(q)) return true;
     if (p.institutionAliases && p.institutionAliases.some((a) => a.toLowerCase().includes(q))) return true;
     if (p.designations && p.designations.some((d) => d.toLowerCase().includes(q))) return true;
     if (p.packages && p.packages.some((pkg) => pkg.name.toLowerCase().includes(q))) return true;
@@ -175,24 +187,28 @@ export function searchInstitutions(
 
   let filtered = eduProviders;
 
+  // 1. Country Filter
   if (criteria.countryCode && criteria.countryCode !== 'GLOBAL' && criteria.countryCode !== 'ALL') {
     filtered = filterProvidersByCountry(filtered, criteria.countryCode);
   }
 
-  if (criteria.state) {
+  // 2. Region / State Filter
+  if (criteria.state && criteria.state.trim() !== '' && criteria.state.toUpperCase() !== 'ALL') {
     filtered = filterProvidersByState(filtered, criteria.state);
   }
 
-  if (criteria.searchQuery && criteria.searchQuery.trim() !== '') {
-    filtered = searchProviders(filtered, criteria.searchQuery);
-  }
-
+  // 3. Institution Type Filter
   if (criteria.institutionType && criteria.institutionType !== 'all') {
     filtered = filtered.filter(
       (p) =>
         p.institutionType === criteria.institutionType ||
         (criteria.institutionType === 'exam_board' && p.category === 'exam')
     );
+  }
+
+  // 4. Text Search Query Filter
+  if (criteria.searchQuery && criteria.searchQuery.trim() !== '') {
+    filtered = searchProviders(filtered, criteria.searchQuery);
   }
 
   const items: InstitutionSearchResultItem[] = filtered.map((p) => ({

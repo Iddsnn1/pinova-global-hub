@@ -28,6 +28,17 @@ export interface UtilityProviderPackage {
   badge?: string; // e.g. Popular, Best Value, Hot
 }
 
+export interface UtilityProviderServiceItem {
+  id: string;
+  name: string;
+  institutionId?: string;
+  type?: string;
+  price?: number;
+  fixedFiatAmount?: number;
+  requiredFields?: string[];
+  description?: string;
+}
+
 export interface UtilityServiceProvider {
   id: string;
   name: string;
@@ -35,6 +46,8 @@ export interface UtilityServiceProvider {
   logo: string;
   country: string;
   countryCode?: string;
+  subdivisionCode?: string;
+  supportedSubdivisions?: string[];
   dialCode?: string;
   supportsCustomAmount: boolean;
   supportsFixedPackages: boolean;
@@ -47,6 +60,7 @@ export interface UtilityServiceProvider {
   enabled: boolean;
   hasDirectValidationApi?: boolean;
   designations?: string[];
+  services?: UtilityProviderServiceItem[];
   packages: UtilityProviderPackage[];
 
   // --- Phase 2 Service Discovery Schema Extensions (Optional) ---

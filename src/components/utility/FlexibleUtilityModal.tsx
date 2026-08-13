@@ -509,11 +509,20 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
               <WaterDiscovery
                 providers={SAMPLE_UTILITY_PROVIDERS}
                 selectedCountryCode={selectedCountryCode}
-                onCountryChange={(code) => setSelectedCountryCode(code)}
+                initialState={selectedState}
+                piConversionConfig={piConversionConfig}
+                userBalancePi={userBalancePi}
+                buyerUsername={buyerUsername}
+                onCountryChange={(code) => {
+                  setSelectedCountryCode(code);
+                  setSelectedState('');
+                }}
+                onStateChange={(st) => setSelectedState(st)}
                 onSelectWaterService={(provider, designation) => {
                   handleSelectProvider(provider);
                   setSelectedDesignation(designation);
                 }}
+                onTransactionSuccess={onTransactionSuccess}
               />
             )}
 
@@ -521,11 +530,20 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
               <GovernmentDiscovery
                 providers={SAMPLE_UTILITY_PROVIDERS}
                 selectedCountryCode={selectedCountryCode}
-                onCountryChange={(code) => setSelectedCountryCode(code)}
+                initialState={selectedState}
+                piConversionConfig={piConversionConfig}
+                userBalancePi={userBalancePi}
+                buyerUsername={buyerUsername}
+                onCountryChange={(code) => {
+                  setSelectedCountryCode(code);
+                  setSelectedState('');
+                }}
+                onStateChange={(st) => setSelectedState(st)}
                 onSelectGovernmentAgency={(provider, serviceName) => {
                   handleSelectProvider(provider);
                   setSelectedDesignation(serviceName);
                 }}
+                onTransactionSuccess={onTransactionSuccess}
               />
             )}
 
@@ -533,11 +551,20 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
               <EducationDiscovery
                 providers={SAMPLE_UTILITY_PROVIDERS}
                 selectedCountryCode={selectedCountryCode}
-                onCountryChange={(code) => setSelectedCountryCode(code)}
+                initialState={selectedState}
+                piConversionConfig={piConversionConfig}
+                userBalancePi={userBalancePi}
+                buyerUsername={buyerUsername}
+                onCountryChange={(code) => {
+                  setSelectedCountryCode(code);
+                  setSelectedState('');
+                }}
+                onStateChange={(st) => setSelectedState(st)}
                 onSelectInstitutionService={(provider, serviceName) => {
                   handleSelectProvider(provider);
                   setSelectedDesignation(serviceName);
                 }}
+                onTransactionSuccess={onTransactionSuccess}
               />
             )}
           </div>
