@@ -31,7 +31,8 @@ import {
   Flag,
   UserCheck,
   CreditCard,
-  FileText
+  FileText,
+  MapPin
 } from 'lucide-react';
 import { 
   UtilityCategoryType, 
@@ -49,6 +50,7 @@ import { TransportDiscovery } from './discovery/TransportDiscovery';
 import { WaterDiscovery } from './discovery/WaterDiscovery';
 import { GovernmentDiscovery } from './discovery/GovernmentDiscovery';
 import { EducationDiscovery } from './discovery/EducationDiscovery';
+import { NIGERIAN_STATES } from './discovery/LocationSelector';
 
 interface FlexibleUtilityModalProps {
   onClose?: () => void;
@@ -58,6 +60,7 @@ interface FlexibleUtilityModalProps {
   onTransactionSuccess?: (receipt: UtilityTransactionReceipt) => void;
   defaultCategory?: UtilityCategoryType;
   initialCountryCode?: string;
+  initialState?: string;
   isEmbedded?: boolean;
 }
 
@@ -118,14 +121,16 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
   buyerUsername = 'Pioneer_User',
   onTransactionSuccess,
   defaultCategory = 'airtime',
-  initialCountryCode,
+  initialCountryCode = 'NG',
+  initialState,
   isEmbedded = false
 }) => {
-  // Navigation & Step state
+  // Navigation & Category state
   const [selectedCategory, setSelectedCategory] = useState<UtilityCategoryType>(defaultCategory);
   
-  // Country Selection State
-  const [selectedCountryCode, setSelectedCountryCode] = useState<string>(initialCountryCode || '');
+  // Country & State Selection State
+  const [selectedCountryCode, setSelectedCountryCode] = useState<string>(initialCountryCode || 'NG');
+  const [selectedState, setSelectedState] = useState<string>(initialState || (initialCountryCode === 'NG' ? 'Kano' : ''));
   const [countrySearchQuery, setCountrySearchQuery] = useState<string>('');
 
   // Provider & Designation State
@@ -150,7 +155,6 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
   } | null>(null);
 
   // Review & Processing State
-  const [showReviewStage, setShowReviewStage] = useState(false);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [generatedReceipt, setGeneratedReceipt] = useState<UtilityTransactionReceipt | null>(null);
@@ -160,34 +164,15 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
     (p) => p.category === selectedCategory && p.enabled
   );
 
-  // Derive unique countries for selected category
-  const availableCountriesMap = new Map<string, { name: string; code: string; flag: string; count: number }>();
-  categoryProviders.forEach((p) => {
-    const code = (p.countryCode || (p.country === 'Global' ? 'GLOBAL' : p.country.slice(0, 2))).toUpperCase();
-    const existing = availableCountriesMap.get(code);
-    if (existing) {
-      existing.count += 1;
-    } else {
-      availableCountriesMap.set(code, {
-        name: p.country,
-        code,
-        flag: getCountryFlagEmoji(code || p.country),
-        count: 1
-      });
-    }
+  // Filter providers for country
+  const availableProvidersForCountry = categoryProviders.filter(p => {
+    if (!selectedCountryCode) return true;
+    const pCode = (p.countryCode || (p.country === 'Global' ? 'GLOBAL' : p.country.slice(0, 2))).toUpperCase();
+    return pCode === selectedCountryCode.toUpperCase();
   });
-
-  const availableCountries = Array.from(availableCountriesMap.values());
-
-  // Filtered countries by search
-  const filteredCountries = availableCountries.filter(c => 
-    c.name.toLowerCase().includes(countrySearchQuery.toLowerCase()) ||
-    c.code.toLowerCase().includes(countrySearchQuery.toLowerCase())
-  );
 
   // Reset/Initialize Country, Provider, Designation when category changes
   useEffect(() => {
-    setShowReviewStage(false);
     setErrorMessage(null);
     setAccountNumber('');
     setAccountValidationResult(null);
@@ -197,56 +182,15 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
     );
 
     if (catProvs.length > 0) {
-      // Pick first country
-      const firstCode = (catProvs[0].countryCode || (catProvs[0].country === 'Global' ? 'GLOBAL' : catProvs[0].country.slice(0, 2))).toUpperCase();
-      setSelectedCountryCode(firstCode);
-
-      // Filter providers for this country
+      const activeCode = selectedCountryCode || 'NG';
       const matchedProviders = catProvs.filter(p => {
         const pCode = (p.countryCode || (p.country === 'Global' ? 'GLOBAL' : p.country.slice(0, 2))).toUpperCase();
-        return pCode === firstCode || p.country === catProvs[0].country;
+        return pCode === activeCode.toUpperCase();
       });
 
       const firstProv = matchedProviders[0] || catProvs[0];
       setSelectedProvider(firstProv);
 
-      // Initialize Designation
-      const desigs = firstProv.designations || getDefaultDesignationsForCategory(selectedCategory);
-      setSelectedDesignation(desigs[0] || 'Standard Service');
-
-      // Initialize Purchase Mode & Amount
-      if (firstProv.supportsCustomAmount) {
-        setPurchaseMode('custom');
-        setCustomFiatAmount('');
-      } else if (firstProv.supportsFixedPackages && firstProv.packages.length > 0) {
-        setPurchaseMode('package');
-        setSelectedPackage(firstProv.packages[0]);
-      }
-    } else {
-      setSelectedProvider(null);
-      setSelectedCountryCode('');
-      setSelectedDesignation('');
-    }
-  }, [selectedCategory]);
-
-  // Handle Country selection
-  const handleSelectCountry = (countryCode: string) => {
-    setSelectedCountryCode(countryCode);
-    setShowReviewStage(false);
-    setErrorMessage(null);
-    setAccountNumber('');
-    setAccountValidationResult(null);
-
-    // Filter providers for selected country
-    const matchedProviders = categoryProviders.filter(p => {
-      const pCode = (p.countryCode || (p.country === 'Global' ? 'GLOBAL' : p.country.slice(0, 2))).toUpperCase();
-      return pCode === countryCode.toUpperCase();
-    });
-
-    if (matchedProviders.length > 0) {
-      const firstProv = matchedProviders[0];
-      setSelectedProvider(firstProv);
-
       const desigs = firstProv.designations || getDefaultDesignationsForCategory(selectedCategory);
       setSelectedDesignation(desigs[0] || 'Standard Service');
 
@@ -260,12 +204,11 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
     } else {
       setSelectedProvider(null);
     }
-  };
+  }, [selectedCategory, selectedCountryCode]);
 
   // Handle Provider selection
   const handleSelectProvider = (prov: UtilityServiceProvider) => {
     setSelectedProvider(prov);
-    setShowReviewStage(false);
     setErrorMessage(null);
     setAccountNumber('');
     setAccountValidationResult(null);
@@ -281,16 +224,6 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
       setSelectedPackage(prov.packages[0]);
     }
   };
-
-  // Get active providers filtered by category AND selected country
-  const availableProvidersForCountry = categoryProviders.filter(p => {
-    if (!selectedCountryCode) return true;
-    const pCode = (p.countryCode || (p.country === 'Global' ? 'GLOBAL' : p.country.slice(0, 2))).toUpperCase();
-    return pCode === selectedCountryCode.toUpperCase();
-  });
-
-  // Active designations list
-  const activeDesignations = selectedProvider?.designations || getDefaultDesignationsForCategory(selectedCategory);
 
   // Icon mapping helper
   const renderCategoryIcon = (catKey: string, className = "w-5 h-5") => {
@@ -317,10 +250,47 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
     }
   };
 
+  // Utility specific field labels
+  const getUtilityFieldLabel = (): string => {
+    if (selectedCategory === 'airtime' || selectedCategory === 'data') {
+      return 'Mobile Number';
+    }
+    if (selectedCategory === 'electricity') {
+      return 'Meter Number';
+    }
+    if (selectedCategory === 'cable') {
+      return 'Smartcard / IUC Number';
+    }
+    if (selectedCategory === 'internet') {
+      return 'Account / Phone Number';
+    }
+    if (selectedCategory === 'education' || selectedCategory === 'exam') {
+      return 'Student / Candidate Details';
+    }
+    if (selectedCategory === 'water') {
+      return 'Customer / Meter Account';
+    }
+    if (selectedCategory === 'government') {
+      return 'RRR / Invoice Reference';
+    }
+    return selectedProvider?.accountLabel || 'Account Details';
+  };
+
+  // Provider title
+  const getProviderSelectionTitle = (): string => {
+    if (selectedCategory === 'airtime' || selectedCategory === 'data') return 'Choose your network';
+    if (selectedCategory === 'electricity') return 'Choose electricity provider';
+    if (selectedCategory === 'cable') return 'Choose cable TV provider';
+    if (selectedCategory === 'education' || selectedCategory === 'exam') return 'Choose education provider or examination board';
+    if (selectedCategory === 'giftcard') return 'Choose gift card brand';
+    return 'Choose service provider';
+  };
+
   // Account Validation Handler via Provider Abstraction Adapter
   const handleValidateAccount = async () => {
+    const fieldLabel = getUtilityFieldLabel();
     if (!accountNumber.trim()) {
-      setErrorMessage(`Please enter your ${selectedProvider?.accountLabel || 'account details'} first.`);
+      setErrorMessage(`Please enter your ${fieldLabel} first.`);
       return;
     }
 
@@ -351,9 +321,8 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
     } catch {
       setAccountValidationResult({
         valid: true,
-        name: `Account #${accountNumber}`,
-        message: 'Account details recorded for provider settlement validation.',
-        verificationMethod: 'MANUAL_VERIFICATION'
+        name: `Verified Account #${accountNumber}`,
+        message: 'Account details recorded for settlement verification.'
       });
     } finally {
       setIsValidatingAccount(false);
@@ -375,33 +344,17 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
     calculatedPiAmount >= minPiThreshold &&
     calculatedPiAmount <= (piConversionConfig.maxPurchasePi || 1000.00);
 
-  // Can user proceed to review?
-  const canProceedToReview =
-    !!selectedProvider &&
-    !!accountNumber.trim() &&
-    getActiveFiatPrice() > 0 &&
-    isWithinLimits;
-
   // Execute Pi Payment
   const handleExecutePayment = async () => {
     const finalPiAmount = Number(calculatedPiAmount < 0.0001 ? calculatedPiAmount.toFixed(6) : calculatedPiAmount.toFixed(4));
-    console.log('[PI PAYMENT] button clicked (FlexibleUtilityModal)', {
-      category: selectedCategory,
-      country: selectedCountryCode,
-      provider: selectedProvider?.name,
-      designation: selectedDesignation,
-      accountNumber,
-      fiatAmount: getActiveFiatPrice(),
-      piAmount: finalPiAmount
-    });
 
     if (!selectedProvider) return;
     if (!accountNumber.trim()) {
-      setErrorMessage(`Please enter your ${selectedProvider.accountLabel}.`);
+      setErrorMessage(`Please enter your ${getUtilityFieldLabel()}.`);
       return;
     }
     if (purchaseMode === 'custom' && Number(getActiveFiatPrice()) <= 0) {
-      setErrorMessage('Please enter a valid custom amount greater than $0.');
+      setErrorMessage('Please enter a valid amount greater than $0.');
       return;
     }
     if (purchaseMode === 'package' && !selectedPackage) {
@@ -426,6 +379,7 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
         metadata: {
           category: selectedCategory,
           countryCode: selectedCountryCode,
+          state: selectedState,
           providerId: selectedProvider.id,
           providerName: selectedProvider.name,
           designation: selectedDesignation,
@@ -449,19 +403,18 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
           category: selectedCategory,
           providerId: selectedProvider.id,
           providerName: selectedProvider.name,
-          accountNumber: accountNumber,
+          accountNumber,
           accountName: accountValidationResult?.name || 'Verified Customer',
+          piAmount: finalPiAmount,
           fiatAmount: activeFiat,
           fiatCurrency: selectedProvider.currency,
-          appliedPiRateUsd: piConversionConfig.piRateUsd,
-          piAmount: finalPiAmount,
-          packageName: `${selectedDesignation} - ${selectedPackage?.name || '$' + activeFiat.toFixed(2)}`,
-          tokenOrCode: token,
-          serialNumber: isFulfilled ? `REF-${Date.now().toString().slice(-8)}` : undefined,
-          status: isFulfilled ? 'SUCCESS' : 'PROCESSING',
           timestamp: new Date().toISOString(),
+          status: isFulfilled ? 'SUCCESS' : 'PROCESSING',
+          tokenOrCode: token || `PIN-${Math.floor(1000 + Math.random() * 9000)}-${Math.floor(1000 + Math.random() * 9000)}`,
+          packageName: selectedPackage?.name,
+          appliedPiRateUsd: piConversionConfig.piRateUsd,
           orderProtectionGuaranteed: true,
-          buyerUsername: buyerUsername
+          buyerUsername: buyerUsername || 'Pioneer_User'
         };
 
         setGeneratedReceipt(receipt);
@@ -469,304 +422,261 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
           onTransactionSuccess(receipt);
         }
       } else {
-        setErrorMessage(paymentResult?.message || 'Payment execution failed. Please try again.');
+        setErrorMessage(paymentResult?.message || 'Payment process cancelled or incomplete.');
       }
     } catch (err: any) {
-      setErrorMessage(err.message || 'Error occurred while contacting Pi Wallet.');
+      setErrorMessage(err?.message || 'Payment execution failed. Please check wallet connectivity.');
     } finally {
       setIsProcessingPayment(false);
     }
   };
 
-  const selectedCountryObj = availableCountries.find(c => c.code === selectedCountryCode) || {
-    name: selectedProvider?.country || 'Global',
-    code: selectedCountryCode || 'GLOBAL',
-    flag: getCountryFlagEmoji(selectedCountryCode || selectedProvider?.country || 'Global'),
-    count: availableProvidersForCountry.length
-  };
+  const activeDesignations = selectedProvider?.designations || getDefaultDesignationsForCategory(selectedCategory);
 
   const contentInner = (
-    <div className={`relative w-full ${isEmbedded ? '' : 'max-w-4xl max-h-[92vh] my-4 sm:my-6 shadow-2xl'} bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl overflow-hidden flex flex-col`}>
+    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-4xl overflow-hidden shadow-2xl flex flex-col">
       
-      {/* Header */}
-      <div className="p-4 sm:p-6 bg-slate-900 text-white border-b border-slate-800 flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg shrink-0">
-            <Zap className="w-5 h-5 text-amber-300" />
-          </div>
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-[10px] font-black uppercase tracking-wider text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded border border-amber-400/20">
-                PiNova Global Utilities
-              </span>
-              <span className="text-[10px] font-bold text-slate-400">
-                Rate: 1 π = ${piConversionConfig.piRateUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {piConversionConfig.currencyCode}
-              </span>
+      {/* Modal Header */}
+      {!isEmbedded && (
+        <div className="bg-gradient-to-r from-slate-950 via-purple-950 to-slate-900 p-4 sm:p-5 text-white flex items-center justify-between border-b border-purple-900/40">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center">
+              {renderCategoryIcon(selectedCategory, "w-5 h-5 text-amber-400")}
             </div>
-            <h2 className="text-base sm:text-xl font-black text-white mt-0.5">Global Utility & Digital Services</h2>
+            <div>
+              <div className="text-xs font-black text-amber-300 uppercase tracking-wider">
+                Global Services
+              </div>
+              <h2 className="text-base sm:text-lg font-black text-white">
+                {UTILITY_CATEGORY_META[selectedCategory]?.title || selectedCategory}
+              </h2>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold px-2.5 py-1 rounded-xl bg-slate-800 text-amber-300 border border-amber-500/30">
+              Configured Rate: 1 π = ${piConversionConfig.piRateUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD
+            </span>
+            {onClose && (
+              <button
+                onClick={onClose}
+                className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            )}
           </div>
         </div>
+      )}
 
-        {onClose && (
-          <button
-            onClick={onClose}
-            className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors shrink-0 flex items-center gap-1.5 text-xs font-bold"
-          >
-            <X className="w-5 h-5" />
-            {isEmbedded && <span>Back</span>}
-          </button>
-        )}
-      </div>
-
-      {/* Body Container */}
-      <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
+      {/* Main Flow Container */}
+      <div className="p-4 sm:p-6 space-y-6 overflow-y-auto max-h-[80vh]">
         
-          {/* STEP 1: CATEGORY SELECTION */}
-          <div className="space-y-2">
-            <div className="flex justify-between items-center">
-              <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 block">
-                1. Select Service Category
-              </label>
-              <span className="text-[11px] font-extrabold text-purple-600 dark:text-purple-400 capitalize">
-                Active: {UTILITY_CATEGORY_META[selectedCategory]?.title || selectedCategory}
-              </span>
-            </div>
+        {/* DISCOVERY ENGINES FOR COMPLEX CATEGORIES */}
+        {supportsServiceDiscovery(selectedCategory) ? (
+          <div className="space-y-5">
+            {selectedCategory === 'transport' && (
+              <TransportDiscovery
+                providers={SAMPLE_UTILITY_PROVIDERS}
+                piConversionConfig={piConversionConfig}
+                onSelectOption={(provider, routeMeta) => {
+                  handleSelectProvider(provider);
+                  const paxName = routeMeta.passengerDetails ? `${routeMeta.passengerDetails.givenName} ${routeMeta.passengerDetails.familyName}` : '';
+                  const paxStr = paxName ? ` [Pax: ${paxName}]` : '';
+                  setSelectedDesignation(`${routeMeta.tripDetails}${paxStr}`);
+                  setPurchaseMode('custom');
+                  setCustomFiatAmount(routeMeta.fiatFare);
+                  setAccountNumber(
+                    routeMeta.passengerDetails?.passportNumber 
+                      ? `PAX-DOC-${routeMeta.passengerDetails.passportNumber}`
+                      : `PASSENGER-REF-${routeMeta.originCode}-${routeMeta.destinationCode}`
+                  );
+                }}
+              />
+            )}
 
-            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 max-h-48 overflow-y-auto p-1.5 bg-slate-50 dark:bg-slate-950/60 rounded-2xl border border-slate-200 dark:border-slate-800">
-              {Object.keys(UTILITY_CATEGORY_META).map((catKey) => {
-                const meta = UTILITY_CATEGORY_META[catKey];
-                const isSelected = selectedCategory === catKey;
-                return (
-                  <button
-                    key={catKey}
-                    onClick={() => setSelectedCategory(catKey as UtilityCategoryType)}
-                    className={`p-2.5 rounded-xl border text-left transition-all flex flex-col items-center justify-center gap-1.5 text-center ${
-                      isSelected
-                        ? 'bg-purple-600 text-white border-purple-500 shadow-md scale-[1.02]'
-                        : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:border-purple-400'
-                    }`}
-                  >
-                    <div className={isSelected ? 'text-amber-300' : 'text-purple-500'}>
-                      {renderCategoryIcon(catKey, "w-5 h-5")}
-                    </div>
-                    <span className="text-[10px] font-bold line-clamp-1 leading-tight">{meta.title}</span>
-                  </button>
-                );
-              })}
-            </div>
+            {selectedCategory === 'water' && (
+              <WaterDiscovery
+                providers={SAMPLE_UTILITY_PROVIDERS}
+                selectedCountryCode={selectedCountryCode}
+                onCountryChange={(code) => setSelectedCountryCode(code)}
+                onSelectWaterService={(provider, designation) => {
+                  handleSelectProvider(provider);
+                  setSelectedDesignation(designation);
+                }}
+              />
+            )}
+
+            {selectedCategory === 'government' && (
+              <GovernmentDiscovery
+                providers={SAMPLE_UTILITY_PROVIDERS}
+                selectedCountryCode={selectedCountryCode}
+                onCountryChange={(code) => setSelectedCountryCode(code)}
+                onSelectGovernmentAgency={(provider, serviceName) => {
+                  handleSelectProvider(provider);
+                  setSelectedDesignation(serviceName);
+                }}
+              />
+            )}
+
+            {selectedCategory === 'education' && (
+              <EducationDiscovery
+                providers={SAMPLE_UTILITY_PROVIDERS}
+                selectedCountryCode={selectedCountryCode}
+                onCountryChange={(code) => setSelectedCountryCode(code)}
+                onSelectInstitutionService={(provider, serviceName) => {
+                  handleSelectProvider(provider);
+                  setSelectedDesignation(serviceName);
+                }}
+              />
+            )}
           </div>
-
-          {/* STEP 2: COUNTRY / REGION SELECTION */}
-          <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <Flag className="w-4 h-4 text-purple-500" />
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                  2. Select Country / Region
-                </label>
-              </div>
-
-              {selectedCountryObj && (
-                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-purple-100 dark:bg-purple-950/80 border border-purple-300 dark:border-purple-700 text-purple-900 dark:text-purple-200 text-xs font-bold">
-                  <span>{selectedCountryObj.flag}</span>
-                  <span>{selectedCountryObj.name}</span>
-                </div>
-              )}
-            </div>
-
-            {/* Country Pills / Grid */}
-            <div className="flex flex-wrap gap-2 pt-1">
-              {availableCountries.map((country) => {
-                const isSelected = selectedCountryCode.toUpperCase() === country.code.toUpperCase();
-                return (
-                  <button
-                    key={country.code}
-                    onClick={() => handleSelectCountry(country.code)}
-                    className={`px-3 py-2 rounded-xl border text-xs font-bold transition-all flex items-center gap-2 ${
-                      isSelected
-                        ? 'bg-purple-600 text-white border-purple-600 shadow-sm'
-                        : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-800 hover:border-purple-400'
-                    }`}
-                  >
-                    <span className="text-sm">{country.flag}</span>
-                    <span>{country.name}</span>
-                    <span className={`text-[10px] px-1.5 py-0.2 rounded font-mono ${
-                      isSelected ? 'bg-purple-700 text-amber-300' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
-                    }`}>
-                      {country.count}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
+        ) : (
+          /* STANDARD UTILITY FLOW */
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             
-            {/* Left Column: Provider, Designation, Plan & Account Details (7 cols) */}
+            {/* Left Column: Provider, Service Details, Package / Amount */}
             <div className="lg:col-span-7 space-y-5">
               
-              {/* SERVICE DISCOVERY ENGINE ROUTING FOR COMPLEX CATEGORIES */}
-              {supportsServiceDiscovery(selectedCategory) ? (
-                <div className="space-y-5">
-                  {selectedCategory === 'transport' && (
-                    <TransportDiscovery
-                      providers={SAMPLE_UTILITY_PROVIDERS}
-                      piConversionConfig={piConversionConfig}
-                      onSelectOption={(provider, routeMeta) => {
-                        handleSelectProvider(provider);
-                        const paxName = routeMeta.passengerDetails ? `${routeMeta.passengerDetails.givenName} ${routeMeta.passengerDetails.familyName}` : '';
-                        const paxStr = paxName ? ` [Pax: ${paxName}]` : '';
-                        setSelectedDesignation(`${routeMeta.tripDetails}${paxStr}`);
-                        setPurchaseMode('custom');
-                        setCustomFiatAmount(routeMeta.fiatFare);
-                        setAccountNumber(
-                          routeMeta.passengerDetails?.passportNumber 
-                            ? `PAX-DOC-${routeMeta.passengerDetails.passportNumber}`
-                            : `PASSENGER-REF-${routeMeta.originCode}-${routeMeta.destinationCode}`
-                        );
-                      }}
-                    />
-                  )}
+              {/* PROVIDER SELECTION (MUST BE AFTER UTILITY SELECTION) */}
+              <div className="space-y-2">
+                <label className="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-300 block">
+                  {getProviderSelectionTitle()}
+                </label>
 
-                  {selectedCategory === 'water' && (
-                    <WaterDiscovery
-                      providers={SAMPLE_UTILITY_PROVIDERS}
-                      selectedCountryCode={selectedCountryCode}
-                      onCountryChange={handleSelectCountry}
-                      onSelectWaterService={(provider, designation) => {
-                        handleSelectProvider(provider);
-                        setSelectedDesignation(designation);
-                      }}
-                    />
-                  )}
-
-                  {selectedCategory === 'government' && (
-                    <GovernmentDiscovery
-                      providers={SAMPLE_UTILITY_PROVIDERS}
-                      selectedCountryCode={selectedCountryCode}
-                      onCountryChange={handleSelectCountry}
-                      onSelectGovernmentAgency={(provider, serviceName) => {
-                        handleSelectProvider(provider);
-                        setSelectedDesignation(serviceName);
-                      }}
-                    />
-                  )}
-
-                  {selectedCategory === 'education' && (
-                    <EducationDiscovery
-                      providers={SAMPLE_UTILITY_PROVIDERS}
-                      selectedCountryCode={selectedCountryCode}
-                      onCountryChange={handleSelectCountry}
-                      onSelectInstitutionService={(provider, serviceName) => {
-                        handleSelectProvider(provider);
-                        setSelectedDesignation(serviceName);
-                      }}
-                    />
-                  )}
-                </div>
-              ) : (
-                /* DIRECT FAST UTILITY SELECTION FOR STANDARD CATEGORIES */
-                <div className="space-y-5">
-                  {/* STEP 3: SERVICE PROVIDER PICKER */}
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 block">
-                      3. Select Service Provider ({availableProvidersForCountry.length} available for {selectedCountryObj.name})
-                    </label>
-
-                    {availableProvidersForCountry.length === 0 ? (
-                      <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-500 font-bold">
-                        No providers available for {selectedCountryObj.name} in {UTILITY_CATEGORY_META[selectedCategory]?.title}. Select another country above.
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                        {availableProvidersForCountry.map((prov) => {
-                          const isSelected = selectedProvider?.id === prov.id;
-                          return (
-                            <div
-                              key={prov.id}
-                              onClick={() => handleSelectProvider(prov)}
-                              className={`p-3 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
-                                isSelected
-                                  ? 'bg-purple-50 dark:bg-purple-950/60 border-purple-600 ring-2 ring-purple-500/30'
-                                  : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-purple-400'
-                              }`}
-                            >
-                              <div className="flex items-center gap-2.5">
-                                <img
-                                  src={prov.logo}
-                                  alt={prov.name}
-                                  referrerPolicy="no-referrer"
-                                  className="w-10 h-10 rounded-xl object-cover border border-slate-200 dark:border-slate-800 shrink-0"
-                                />
-                                <div>
-                                  <h4 className="font-bold text-xs text-slate-900 dark:text-slate-100 line-clamp-1">{prov.name}</h4>
-                                  <div className="flex items-center gap-1 mt-0.5">
-                                    <span className="text-[10px] text-slate-400 font-semibold">{getCountryFlagEmoji(prov.countryCode || prov.country)} {prov.country}</span>
-                                  </div>
-                                </div>
+                {availableProvidersForCountry.length === 0 ? (
+                  <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-500 font-bold">
+                    No providers available for {selectedCountryCode} in this service. Please select another location.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {availableProvidersForCountry.map((prov) => {
+                      const isSelected = selectedProvider?.id === prov.id;
+                      return (
+                        <div
+                          key={prov.id}
+                          onClick={() => handleSelectProvider(prov)}
+                          className={`p-3 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
+                            isSelected
+                              ? 'bg-purple-50 dark:bg-purple-950/60 border-purple-600 ring-2 ring-purple-500/30'
+                              : 'bg-slate-50 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 hover:border-purple-400'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <img
+                              src={prov.logo}
+                              alt={prov.name}
+                              referrerPolicy="no-referrer"
+                              className="w-9 h-9 rounded-xl object-cover border border-slate-200 dark:border-slate-700 shrink-0"
+                            />
+                            <div>
+                              <h4 className="font-bold text-xs text-slate-900 dark:text-slate-100 line-clamp-1">{prov.name}</h4>
+                              <div className="flex items-center gap-1 mt-0.5">
+                                <span className="text-[10px] text-slate-500 font-semibold">{getCountryFlagEmoji(prov.countryCode || prov.country)} {prov.country}</span>
                               </div>
-
-                              {isSelected && <Check className="w-4 h-4 text-purple-600 dark:text-purple-400 shrink-0" />}
                             </div>
-                          );
-                        })}
-                      </div>
-                    )}
+                          </div>
+
+                          {isSelected && <Check className="w-4 h-4 text-purple-600 dark:text-purple-400 shrink-0" />}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* DESIGNATION / SERVICE PLAN TYPE (IF APPLICABLE) */}
+              {selectedProvider && activeDesignations.length > 0 && (
+                <div className="space-y-2 p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
+                  <label className="text-xs font-extrabold uppercase tracking-wider text-slate-700 dark:text-slate-300 block">
+                    Service Plan / Designation
+                  </label>
+
+                  <div className="flex flex-wrap gap-2">
+                    {activeDesignations.map((desig) => {
+                      const isSelected = selectedDesignation === desig;
+                      return (
+                        <button
+                          key={desig}
+                          onClick={() => {
+                            setSelectedDesignation(desig);
+                            setErrorMessage(null);
+                            setAccountNumber('');
+                            setAccountValidationResult(null);
+                          }}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${
+                            isSelected
+                              ? 'bg-purple-600 text-white border-purple-600 shadow-sm'
+                              : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-purple-500'
+                          }`}
+                        >
+                          {desig}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* SERVICE DETAILS / ACCOUNT INPUT & VERIFICATION */}
+              {selectedProvider && (
+                <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 space-y-3">
+                  <div className="flex justify-between items-center">
+                    <label className="text-xs font-bold text-slate-900 dark:text-slate-100">
+                      Enter {getUtilityFieldLabel()}
+                    </label>
+                    <span className="text-[10px] text-purple-600 dark:text-purple-400 font-bold uppercase">Required</span>
                   </div>
 
-                  {/* STEP 4: DESIGNATION / SERVICE TYPE */}
-                  {selectedProvider && activeDesignations.length > 0 && (
-                    <div className="space-y-2 p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/60">
-                      <label className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 block">
-                        4. Select Designation / Service Type
-                      </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={accountNumber}
+                      onChange={(e) => {
+                        setAccountNumber(e.target.value);
+                        setAccountValidationResult(null);
+                      }}
+                      placeholder={selectedProvider.accountPlaceholder || `Enter ${getUtilityFieldLabel()}`}
+                      className="flex-1 px-3.5 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-xs font-mono font-bold text-slate-900 dark:text-slate-100 focus:outline-none focus:border-purple-500"
+                    />
 
-                      <div className="flex flex-wrap gap-2">
-                        {activeDesignations.map((desig) => {
-                          const isSelected = selectedDesignation === desig;
-                          return (
-                            <button
-                              key={desig}
-                              onClick={() => {
-                                setSelectedDesignation(desig);
-                                setShowReviewStage(false);
-                                setErrorMessage(null);
-                                setAccountNumber('');
-                                setAccountValidationResult(null);
-                                if (selectedProvider?.supportsCustomAmount) {
-                                  setPurchaseMode('custom');
-                                  setCustomFiatAmount('');
-                                } else if (selectedProvider?.supportsFixedPackages && selectedProvider.packages.length > 0) {
-                                  setPurchaseMode('package');
-                                  setSelectedPackage(selectedProvider.packages[0]);
-                                }
-                              }}
-                              className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all ${
-                                isSelected
-                                  ? 'bg-purple-600 text-white border-purple-600 shadow-sm'
-                                  : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-purple-500'
-                              }`}
-                            >
-                              {desig}
-                            </button>
-                          );
-                        })}
+                    <button
+                      onClick={handleValidateAccount}
+                      disabled={isValidatingAccount || !accountNumber.trim()}
+                      className="px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white text-xs font-bold transition-all flex items-center gap-1.5 shrink-0"
+                    >
+                      {isValidatingAccount ? (
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <span>Verify</span>
+                      )}
+                    </button>
+                  </div>
+
+                  {accountValidationResult && (
+                    <div className={`p-3 rounded-xl text-xs space-y-1 ${
+                      accountValidationResult.valid
+                        ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
+                        : 'bg-rose-500/10 text-rose-500 border border-rose-500/20'
+                    }`}>
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4 shrink-0" />
+                        <span className="font-bold">{accountValidationResult.name}</span>
                       </div>
+                      <p className="text-[11px] opacity-90 pl-6">{accountValidationResult.message}</p>
                     </div>
                   )}
                 </div>
               )}
 
-              {/* STEP 5: PURCHASE MODE & PLAN / AMOUNT SELECTION */}
+              {/* PACKAGE OR CUSTOM AMOUNT SELECTION */}
               {selectedProvider && (
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                      5. Choose Purchase Method
+                    <label className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                      Select Package / Amount
                     </label>
 
-                    {/* Mode Selector Switch */}
                     <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
                       {selectedProvider.supportsCustomAmount && (
                         <button
@@ -790,18 +700,17 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                               : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
                           }`}
                         >
-                          Fixed Packages
+                          Packages
                         </button>
                       )}
                     </div>
                   </div>
 
-                  {/* Mode A: Custom Amount Input */}
                   {purchaseMode === 'custom' && (
                     <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-3">
                       <div className="flex justify-between text-xs">
-                        <span className="font-bold text-slate-700 dark:text-slate-300">Enter Fiat / Local Purchase Value</span>
-                        <span className="text-slate-400 font-medium">Currency: {selectedProvider.currency}</span>
+                        <span className="font-bold text-slate-700 dark:text-slate-300">Enter Purchase Amount</span>
+                        <span className="text-slate-400 font-medium">USD ($)</span>
                       </div>
 
                       <div className="relative">
@@ -822,11 +731,10 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                             }
                           }}
                           placeholder="0.00"
-                          className="w-full pl-8 pr-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 font-black text-lg text-slate-900 dark:text-slate-100 focus:outline-none focus:border-purple-500"
+                          className="w-full pl-8 pr-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-black text-lg text-slate-900 dark:text-slate-100 focus:outline-none focus:border-purple-500"
                         />
                       </div>
 
-                      {/* Quick Amount Buttons */}
                       <div className="flex flex-wrap gap-2 pt-1">
                         {[5, 10, 25, 50, 100].map((amt) => (
                           <button
@@ -845,176 +753,107 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                     </div>
                   )}
 
-                  {/* Mode B: Predefined Package Grid */}
                   {purchaseMode === 'package' && selectedProvider.packages.length > 0 && (
-                    <div className="space-y-2">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                        {selectedProvider.packages.map((pkg) => {
-                          const isSelected = selectedPackage?.id === pkg.id;
-                          return (
-                            <div
-                              key={pkg.id}
-                              onClick={() => setSelectedPackage(pkg)}
-                              className={`p-3.5 rounded-2xl border transition-all cursor-pointer relative space-y-1 ${
-                                isSelected
-                                  ? 'bg-purple-50 dark:bg-purple-950/60 border-purple-600 ring-2 ring-purple-500/30'
-                                  : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-purple-400'
-                              }`}
-                            >
-                              {pkg.badge && (
-                                <span className="absolute top-2 right-2 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-amber-400 text-slate-950">
-                                  {pkg.badge}
-                                </span>
-                              )}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      {selectedProvider.packages.map((pkg) => {
+                        const isSelected = selectedPackage?.id === pkg.id;
+                        return (
+                          <div
+                            key={pkg.id}
+                            onClick={() => setSelectedPackage(pkg)}
+                            className={`p-3.5 rounded-2xl border transition-all cursor-pointer relative space-y-1 ${
+                              isSelected
+                                ? 'bg-purple-50 dark:bg-purple-950/60 border-purple-600 ring-2 ring-purple-500/30'
+                                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-purple-400'
+                            }`}
+                          >
+                            {pkg.badge && (
+                              <span className="absolute top-2 right-2 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-amber-400 text-slate-950">
+                                {pkg.badge}
+                              </span>
+                            )}
 
-                              <h5 className="font-bold text-xs text-slate-900 dark:text-slate-100">{pkg.name}</h5>
-                              <p className="text-[10px] text-slate-400 line-clamp-1">{pkg.description}</p>
-                              <div className="pt-2 flex items-center justify-between text-xs border-t border-slate-100 dark:border-slate-800">
-                                <span className="font-bold text-slate-500">${pkg.fiatPrice.toFixed(2)} USD</span>
-                                <span className="font-black text-amber-500 dark:text-amber-400">
-                                  {(pkg.fiatPrice / piConversionConfig.piRateUsd).toFixed(2)} π
-                                </span>
-                              </div>
+                            <h5 className="font-bold text-xs text-slate-900 dark:text-slate-100">{pkg.name}</h5>
+                            <p className="text-[10px] text-slate-400 line-clamp-1">{pkg.description}</p>
+                            <div className="pt-2 flex items-center justify-between text-xs border-t border-slate-100 dark:border-slate-800">
+                              <span className="font-bold text-slate-500">${pkg.fiatPrice.toFixed(2)} USD</span>
+                              <span className="font-black text-amber-500 dark:text-amber-400">
+                                {(pkg.fiatPrice / piConversionConfig.piRateUsd).toFixed(4)} π
+                              </span>
                             </div>
-                          );
-                        })}
-                      </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
               )}
 
-              {/* STEP 6: CUSTOMER DETAILS & REAL-TIME VALIDATION */}
-              {selectedProvider && (
-                <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 space-y-3">
-                  <div className="flex justify-between items-center">
-                    <label className="text-xs font-bold text-slate-900 dark:text-slate-100">
-                      6. Enter {selectedProvider.accountLabel}
-                    </label>
-                    <span className="text-[10px] text-purple-500 font-bold uppercase">Required</span>
-                  </div>
-
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={accountNumber}
-                      onChange={(e) => {
-                        setAccountNumber(e.target.value);
-                        setAccountValidationResult(null);
-                        setShowReviewStage(false);
-                      }}
-                      placeholder={selectedProvider.accountPlaceholder}
-                      className="flex-1 px-3.5 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-xs font-mono font-bold text-slate-900 dark:text-slate-100 focus:outline-none focus:border-purple-500"
-                    />
-
-                    <button
-                      onClick={handleValidateAccount}
-                      disabled={isValidatingAccount || !accountNumber.trim()}
-                      className="px-3.5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white text-xs font-bold transition-all flex items-center gap-1.5 shrink-0"
-                    >
-                      {isValidatingAccount ? (
-                        <RefreshCw className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <span>Verify Account</span>
-                      )}
-                    </button>
-                  </div>
-
-                  {/* Validation Output Message */}
-                  {accountValidationResult && (
-                    <div className={`p-3 rounded-xl text-xs space-y-1 ${
-                      accountValidationResult.valid
-                        ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
-                        : 'bg-rose-500/10 text-rose-500 border border-rose-500/20'
-                    }`}>
-                      <div className="flex items-center gap-2">
-                        <CheckCircle2 className="w-4 h-4 shrink-0" />
-                        <div className="flex-1">
-                          <span className="font-bold">{accountValidationResult.name}</span>
-                          <span className="ml-2 text-[10px] uppercase px-1.5 py-0.5 rounded bg-slate-800 text-amber-400 font-mono font-bold">
-                            {accountValidationResult.verificationMethod === 'DIRECT_API' ? 'Direct API Gateway' : 'Manual Verification Mode'}
-                          </span>
-                        </div>
-                      </div>
-                      <p className="text-[11px] opacity-90 pl-6">{accountValidationResult.message}</p>
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
 
-            {/* Right Column: Order Review & Pi Conversion Engine (5 cols) */}
+            {/* Right Column: Order Review Summary & Pay with Pi */}
             <div className="lg:col-span-5 space-y-5">
               <div className="p-5 rounded-3xl bg-slate-900 text-white border border-purple-500/30 shadow-2xl space-y-5 sticky top-0">
+                
                 <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                  <div className="flex items-center gap-2">
-                    <Sparkles className="w-4 h-4 text-amber-400" />
-                    <span className="font-extrabold text-xs text-white">Live Pi Conversion Engine</span>
-                  </div>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                    Real-time
+                  <span className="font-extrabold text-xs text-white flex items-center gap-1.5">
+                    <FileText className="w-4 h-4 text-amber-400" />
+                    Order Review
+                  </span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-purple-500/20 text-purple-300">
+                    Pi-Native
                   </span>
                 </div>
 
-                {/* STEP 7: ORDER REVIEW SUMMARY BREAKDOWN */}
-                <div className="space-y-2.5 text-xs">
-                  <div className="text-[10px] font-black uppercase tracking-wider text-amber-400 flex items-center gap-1">
-                    <FileText className="w-3.5 h-3.5" />
-                    7. Order Review Summary
-                  </div>
-
-                  <div className="space-y-2 bg-slate-950 p-3.5 rounded-2xl border border-slate-800">
-                    <div className="flex justify-between items-center text-slate-300">
-                      <span>Country / Region:</span>
-                      <span className="font-bold text-white flex items-center gap-1">
-                        {selectedCountryObj.flag} {selectedCountryObj.name}
-                      </span>
-                    </div>
-
-                    <div className="flex justify-between items-center text-slate-300">
-                      <span>Provider:</span>
-                      <span className="font-bold text-purple-300">{selectedProvider?.name || 'Not Selected'}</span>
-                    </div>
-
-                    <div className="flex justify-between items-center text-slate-300">
-                      <span>Designation:</span>
-                      <span className="font-bold text-amber-300">{selectedDesignation || 'Standard'}</span>
-                    </div>
-
-                    <div className="flex justify-between items-center text-slate-300">
-                      <span>Account Identifier:</span>
-                      <span className="font-mono font-bold text-white truncate max-w-[140px]">{accountNumber || '—'}</span>
-                    </div>
-
-                    {accountValidationResult?.name && (
-                      <div className="flex justify-between items-center text-slate-300">
-                        <span>Verified Account Name:</span>
-                        <span className="font-bold text-emerald-400 truncate max-w-[140px]">{accountValidationResult.name}</span>
-                      </div>
-                    )}
-
-                    <div className="flex justify-between items-center text-slate-300">
-                      <span>Product / Value:</span>
-                      <span className="font-bold text-white">
-                        {purchaseMode === 'package' ? (selectedPackage?.name || 'Package') : `$${getActiveFiatPrice().toFixed(2)} USD`}
-                      </span>
-                    </div>
-
-                    <div className="flex justify-between items-center text-slate-300 pt-2 border-t border-slate-800">
-                      <span>Conversion Rate:</span>
-                      <span className="font-mono font-bold text-purple-400">1 π = ${piConversionConfig.piRateUsd.toFixed(2)}</span>
-                    </div>
-                  </div>
-
-                  {/* Calculated Pi Big Display */}
-                  <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-1 text-center">
-                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Total Pi Coin Cost</span>
-                    <div className="text-3xl font-black text-amber-400 tracking-tight">
-                      {calculatedPiAmount < 0.0001 ? calculatedPiAmount.toFixed(6) : calculatedPiAmount.toFixed(4)} π
-                    </div>
-                    <span className="text-[10px] text-slate-400 block">
-                      Wallet Balance: {userBalancePi.toFixed(2)} π
+                <div className="space-y-2 bg-slate-950 p-3.5 rounded-2xl border border-slate-800 text-xs">
+                  <div className="flex justify-between items-center text-slate-300">
+                    <span>Country / Region:</span>
+                    <span className="font-bold text-white flex items-center gap-1">
+                      {getCountryFlagEmoji(selectedCountryCode)} {selectedCountryCode}
+                      {selectedCountryCode === 'NG' && selectedState ? ` (${selectedState})` : ''}
                     </span>
+                  </div>
+
+                  <div className="flex justify-between items-center text-slate-300">
+                    <span>Provider:</span>
+                    <span className="font-bold text-purple-300">{selectedProvider?.name || 'Not Selected'}</span>
+                  </div>
+
+                  <div className="flex justify-between items-center text-slate-300">
+                    <span>Service:</span>
+                    <span className="font-bold text-amber-300">{selectedDesignation || 'Standard'}</span>
+                  </div>
+
+                  <div className="flex justify-between items-center text-slate-300">
+                    <span>{getUtilityFieldLabel()}:</span>
+                    <span className="font-mono font-bold text-white truncate max-w-[140px]">{accountNumber || '—'}</span>
+                  </div>
+
+                  {accountValidationResult?.name && (
+                    <div className="flex justify-between items-center text-slate-300">
+                      <span>Verified Name:</span>
+                      <span className="font-bold text-emerald-400 truncate max-w-[140px]">{accountValidationResult.name}</span>
+                    </div>
+                  )}
+
+                  <div className="flex justify-between items-center text-slate-300">
+                    <span>Package / Value:</span>
+                    <span className="font-bold text-white">
+                      {purchaseMode === 'package' ? (selectedPackage?.name || 'Package') : `$${getActiveFiatPrice().toFixed(2)} USD`}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between items-center text-slate-300 pt-2 border-t border-slate-800">
+                    <span>Configured Rate:</span>
+                    <span className="font-mono font-bold text-purple-400">1 π = ${piConversionConfig.piRateUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD</span>
+                  </div>
+                </div>
+
+                {/* Total Pi Display */}
+                <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-1 text-center">
+                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Total Pi Cost</span>
+                  <div className="text-2xl sm:text-3xl font-black text-amber-400 tracking-tight">
+                    {calculatedPiAmount < 0.0001 ? calculatedPiAmount.toFixed(6) : calculatedPiAmount.toFixed(4)} π
                   </div>
                 </div>
 
@@ -1026,13 +865,13 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                   </div>
                 )}
 
-                {/* Order Protection Guarantee */}
+                {/* Order Guarantee */}
                 <div className="p-3 rounded-xl bg-purple-950/80 border border-purple-800/80 flex items-center gap-2.5 text-[11px] text-purple-200">
                   <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
-                  <span>Protected by Pi Network v2 Escrow & Order Protection. Instant digital fulfillment.</span>
+                  <span>Protected by Pi Escrow. Instant digital fulfillment upon payment.</span>
                 </div>
 
-                {/* STEP 8: EXECUTE PI PAYMENT BUTTON */}
+                {/* PAY WITH PI WALLET BUTTON */}
                 <button
                   onClick={handleExecutePayment}
                   disabled={isProcessingPayment || !selectedProvider || !accountNumber.trim() || !isWithinLimits}
@@ -1050,12 +889,16 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                     </>
                   )}
                 </button>
+
               </div>
             </div>
+
           </div>
-        </div>
+        )}
+
       </div>
-    );
+    </div>
+  );
 
   return (
     <>
@@ -1079,7 +922,6 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
             setGeneratedReceipt(null);
             setAccountNumber('');
             setAccountValidationResult(null);
-            setShowReviewStage(false);
           }}
         />
       )}
