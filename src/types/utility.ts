@@ -48,6 +48,194 @@ export interface UtilityServiceProvider {
   hasDirectValidationApi?: boolean;
   designations?: string[];
   packages: UtilityProviderPackage[];
+
+  // --- Phase 2 Service Discovery Schema Extensions (Optional) ---
+  state?: string;
+  region?: string;
+  city?: string;
+  lga?: string; // Local Government Area
+  jurisdictionLevel?: 'national' | 'state' | 'municipal' | 'regional' | 'global';
+
+  // Agency / Government Metadata
+  agencyType?: 'federal' | 'state' | 'municipal' | 'statutory_board' | 'private';
+  serviceType?: string;
+  serviceCode?: string;
+  referenceType?: string; // e.g. "RRR", "Taxpayer ID", "License Ref", "Meter No"
+
+  // Education / Institution Metadata
+  institutionType?: 'university' | 'polytechnic' | 'college' | 'exam_board' | 'e_learning' | 'secondary';
+  institutionCode?: string;
+  institutionName?: string;
+  institutionAliases?: string[];
+  serviceTypes?: string[];
+
+  // Transport & Travel Metadata
+  transportType?: 'air' | 'rail' | 'bus' | 'ferry' | 'transit_card';
+  origin?: string;
+  destination?: string;
+  originCode?: string; // IATA (e.g. "KAN", "JED", "LOS") or Terminal Code
+  destinationCode?: string; // IATA or Terminal Code
+  route?: TransportRouteDetails;
+  supportsLiveSearch?: boolean;
+}
+
+// ==========================================
+// Phase 2 Service Discovery Data Models
+// ==========================================
+
+export interface TransportRouteDetails {
+  originName: string;
+  originCode: string;
+  originCity: string;
+  originCountry: string;
+  destinationName: string;
+  destinationCode: string;
+  destinationCity: string;
+  destinationCountry: string;
+  frequency?: string; // e.g. "Daily", "Mon, Wed, Fri"
+  operatingCarriers?: string[];
+}
+
+export interface TransportSearchCriteria {
+  transportType?: 'air' | 'rail' | 'bus' | 'ferry' | 'transit_card' | 'all';
+  originCode: string; // e.g. "KAN"
+  destinationCode: string; // e.g. "JED"
+  departureDate: string; // YYYY-MM-DD
+  returnDate?: string; // YYYY-MM-DD
+  tripType: 'one_way' | 'round_trip';
+  passengers: {
+    adults: number;
+    children?: number;
+    infants?: number;
+  };
+  cabinClass?: 'economy' | 'premium_economy' | 'business' | 'first';
+  countryCode?: string;
+}
+
+export interface TransportSearchResultItem {
+  id: string;
+  providerId: string;
+  providerName: string;
+  providerLogo?: string;
+  transportType: 'air' | 'rail' | 'bus' | 'ferry' | 'transit_card';
+  originCode: string;
+  originCity: string;
+  destinationCode: string;
+  destinationCity: string;
+  departureTime?: string;
+  arrivalTime?: string;
+  flightOrTripNumber?: string;
+  fiatFare: number;
+  currency: string;
+  badge?: string;
+  isAvailable: boolean;
+  notes?: string;
+}
+
+export interface TransportSearchResult {
+  criteria: TransportSearchCriteria;
+  results: TransportSearchResultItem[];
+  matchingProviders: UtilityServiceProvider[];
+  totalFound: number;
+  message?: string;
+}
+
+export interface LocationDiscoveryCriteria {
+  category: UtilityCategoryType;
+  countryCode: string; // e.g. "NG", "SA", "US", "GLOBAL"
+  state?: string;
+  region?: string;
+  city?: string;
+  lga?: string;
+}
+
+export interface LocationDiscoveryResult {
+  countryCode: string;
+  countryName: string;
+  state?: string;
+  city?: string;
+  availableProviders: UtilityServiceProvider[];
+  hasVerifiedService: boolean;
+  statusMessage: string;
+}
+
+export interface InstitutionSearchCriteria {
+  countryCode?: string;
+  state?: string;
+  searchQuery?: string; // e.g. "Bayero"
+  institutionType?: 'university' | 'polytechnic' | 'college' | 'exam_board' | 'e_learning' | 'secondary' | 'all';
+}
+
+export interface InstitutionSearchResultItem {
+  providerId: string;
+  institutionName: string;
+  institutionCode?: string;
+  institutionType: string;
+  country: string;
+  countryCode: string;
+  state?: string;
+  availableServices: string[];
+  matchedAliases?: string[];
+  packages: UtilityProviderPackage[];
+}
+
+export interface InstitutionSearchResult {
+  criteria: InstitutionSearchCriteria;
+  institutions: InstitutionSearchResultItem[];
+  totalMatches: number;
+}
+
+export interface GovernmentSearchCriteria {
+  countryCode: string;
+  jurisdictionLevel?: 'national' | 'state' | 'municipal' | 'all';
+  state?: string;
+  agencyType?: 'federal' | 'state' | 'municipal' | 'statutory_board' | 'private' | 'all';
+  searchQuery?: string;
+}
+
+export interface GovernmentSearchResultItem {
+  providerId: string;
+  agencyName: string;
+  agencyType: string;
+  country: string;
+  countryCode: string;
+  state?: string;
+  referenceLabel: string;
+  availableServices: string[];
+  packages: UtilityProviderPackage[];
+  hasDirectValidationApi: boolean;
+}
+
+export interface GovernmentSearchResult {
+  criteria: GovernmentSearchCriteria;
+  agencies: GovernmentSearchResultItem[];
+  totalFound: number;
+}
+
+export interface GenericServiceDiscoveryRequest {
+  category: UtilityCategoryType;
+  countryCode: string;
+  state?: string;
+  region?: string;
+  city?: string;
+  lga?: string;
+  searchQuery?: string;
+  serviceType?: string;
+  providerId?: string;
+  transportParams?: TransportSearchCriteria;
+  institutionParams?: InstitutionSearchCriteria;
+  governmentParams?: GovernmentSearchCriteria;
+}
+
+export interface GenericServiceDiscoveryResult {
+  request: GenericServiceDiscoveryRequest;
+  matchingProviders: UtilityServiceProvider[];
+  locationResult?: LocationDiscoveryResult;
+  transportResult?: TransportSearchResult;
+  institutionResult?: InstitutionSearchResult;
+  governmentResult?: GovernmentSearchResult;
+  isSupported: boolean;
+  statusMessage: string;
 }
 
 export interface PiConversionConfig {

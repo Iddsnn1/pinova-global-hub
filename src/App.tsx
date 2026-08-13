@@ -116,7 +116,7 @@ function MainAppContent() {
   const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS);
   const [orders, setOrders] = useState<Order[]>(() => {
     try {
-      const saved = localStorage.getItem('pinova_orders_cache');
+      const saved = localStorage.getItem('pinova_user_orders') || localStorage.getItem('pinova_orders_cache');
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) return parsed;
@@ -161,6 +161,7 @@ function MainAppContent() {
   // Persistence Sync Side Effects
   useEffect(() => {
     try {
+      localStorage.setItem('pinova_user_orders', JSON.stringify(orders));
       localStorage.setItem('pinova_orders_cache', JSON.stringify(orders));
     } catch (e) {
       console.warn('Failed to cache orders:', e);
@@ -658,9 +659,27 @@ function MainAppContent() {
                 ]
               };
 
-              setOrders((prev) => {
-                if (prev.some((o) => o.id === orderId)) return prev;
-                return [newUtilityOrder, ...prev];
+              setOrders((previousOrders) => {
+                if (
+                  previousOrders.some(
+                    (order) =>
+                      (receipt.piPaymentId && order.piPaymentId === receipt.piPaymentId) ||
+                      order.id === orderId ||
+                      (receipt.transactionId && order.id === receipt.transactionId)
+                  )
+                ) {
+                  return previousOrders;
+                }
+
+                const updatedOrders = [newUtilityOrder, ...previousOrders];
+
+                try {
+                  localStorage.setItem('pinova_user_orders', JSON.stringify(updatedOrders));
+                } catch (e) {
+                  console.warn('Failed to persist orders:', e);
+                }
+
+                return updatedOrders;
               });
 
               setUserBalancePi((prev) => Math.max(0, prev - receipt.piAmount));

@@ -44,6 +44,11 @@ import { UTILITY_CATEGORY_META, SAMPLE_UTILITY_PROVIDERS } from '../../data/util
 import { createPiPayment } from '../../lib/piSdk';
 import { DigitalReceiptModal } from './DigitalReceiptModal';
 import { ProviderValidationFactory } from '../../modules/utility/providerValidation';
+import { supportsServiceDiscovery } from '../../lib/utility/serviceDiscovery';
+import { TransportDiscovery } from './discovery/TransportDiscovery';
+import { WaterDiscovery } from './discovery/WaterDiscovery';
+import { GovernmentDiscovery } from './discovery/GovernmentDiscovery';
+import { EducationDiscovery } from './discovery/EducationDiscovery';
 
 interface FlexibleUtilityModalProps {
   onClose?: () => void;
@@ -613,91 +618,155 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
             {/* Left Column: Provider, Designation, Plan & Account Details (7 cols) */}
             <div className="lg:col-span-7 space-y-5">
               
-              {/* STEP 3: SERVICE PROVIDER PICKER */}
-              <div className="space-y-2">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 block">
-                  3. Select Service Provider ({availableProvidersForCountry.length} available for {selectedCountryObj.name})
-                </label>
+              {/* SERVICE DISCOVERY ENGINE ROUTING FOR COMPLEX CATEGORIES */}
+              {supportsServiceDiscovery(selectedCategory) ? (
+                <div className="space-y-5">
+                  {selectedCategory === 'transport' && (
+                    <TransportDiscovery
+                      providers={SAMPLE_UTILITY_PROVIDERS}
+                      piConversionConfig={piConversionConfig}
+                      onSelectOption={(provider, routeMeta) => {
+                        handleSelectProvider(provider);
+                        const paxName = routeMeta.passengerDetails ? `${routeMeta.passengerDetails.givenName} ${routeMeta.passengerDetails.familyName}` : '';
+                        const paxStr = paxName ? ` [Pax: ${paxName}]` : '';
+                        setSelectedDesignation(`${routeMeta.tripDetails}${paxStr}`);
+                        setPurchaseMode('custom');
+                        setCustomFiatAmount(routeMeta.fiatFare);
+                        setAccountNumber(
+                          routeMeta.passengerDetails?.passportNumber 
+                            ? `PAX-DOC-${routeMeta.passengerDetails.passportNumber}`
+                            : `PASSENGER-REF-${routeMeta.originCode}-${routeMeta.destinationCode}`
+                        );
+                      }}
+                    />
+                  )}
 
-                {availableProvidersForCountry.length === 0 ? (
-                  <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-500 font-bold">
-                    No providers available for {selectedCountryObj.name} in {UTILITY_CATEGORY_META[selectedCategory]?.title}. Select another country above.
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                    {availableProvidersForCountry.map((prov) => {
-                      const isSelected = selectedProvider?.id === prov.id;
-                      return (
-                        <div
-                          key={prov.id}
-                          onClick={() => handleSelectProvider(prov)}
-                          className={`p-3 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
-                            isSelected
-                              ? 'bg-purple-50 dark:bg-purple-950/60 border-purple-600 ring-2 ring-purple-500/30'
-                              : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-purple-400'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2.5">
-                            <img
-                              src={prov.logo}
-                              alt={prov.name}
-                              referrerPolicy="no-referrer"
-                              className="w-10 h-10 rounded-xl object-cover border border-slate-200 dark:border-slate-800 shrink-0"
-                            />
-                            <div>
-                              <h4 className="font-bold text-xs text-slate-900 dark:text-slate-100 line-clamp-1">{prov.name}</h4>
-                              <div className="flex items-center gap-1 mt-0.5">
-                                <span className="text-[10px] text-slate-400 font-semibold">{getCountryFlagEmoji(prov.countryCode || prov.country)} {prov.country}</span>
+                  {selectedCategory === 'water' && (
+                    <WaterDiscovery
+                      providers={SAMPLE_UTILITY_PROVIDERS}
+                      selectedCountryCode={selectedCountryCode}
+                      onCountryChange={handleSelectCountry}
+                      onSelectWaterService={(provider, designation) => {
+                        handleSelectProvider(provider);
+                        setSelectedDesignation(designation);
+                      }}
+                    />
+                  )}
+
+                  {selectedCategory === 'government' && (
+                    <GovernmentDiscovery
+                      providers={SAMPLE_UTILITY_PROVIDERS}
+                      selectedCountryCode={selectedCountryCode}
+                      onCountryChange={handleSelectCountry}
+                      onSelectGovernmentAgency={(provider, serviceName) => {
+                        handleSelectProvider(provider);
+                        setSelectedDesignation(serviceName);
+                      }}
+                    />
+                  )}
+
+                  {selectedCategory === 'education' && (
+                    <EducationDiscovery
+                      providers={SAMPLE_UTILITY_PROVIDERS}
+                      selectedCountryCode={selectedCountryCode}
+                      onCountryChange={handleSelectCountry}
+                      onSelectInstitutionService={(provider, serviceName) => {
+                        handleSelectProvider(provider);
+                        setSelectedDesignation(serviceName);
+                      }}
+                    />
+                  )}
+                </div>
+              ) : (
+                /* DIRECT FAST UTILITY SELECTION FOR STANDARD CATEGORIES */
+                <div className="space-y-5">
+                  {/* STEP 3: SERVICE PROVIDER PICKER */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 block">
+                      3. Select Service Provider ({availableProvidersForCountry.length} available for {selectedCountryObj.name})
+                    </label>
+
+                    {availableProvidersForCountry.length === 0 ? (
+                      <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-500 font-bold">
+                        No providers available for {selectedCountryObj.name} in {UTILITY_CATEGORY_META[selectedCategory]?.title}. Select another country above.
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        {availableProvidersForCountry.map((prov) => {
+                          const isSelected = selectedProvider?.id === prov.id;
+                          return (
+                            <div
+                              key={prov.id}
+                              onClick={() => handleSelectProvider(prov)}
+                              className={`p-3 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
+                                isSelected
+                                  ? 'bg-purple-50 dark:bg-purple-950/60 border-purple-600 ring-2 ring-purple-500/30'
+                                  : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-purple-400'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2.5">
+                                <img
+                                  src={prov.logo}
+                                  alt={prov.name}
+                                  referrerPolicy="no-referrer"
+                                  className="w-10 h-10 rounded-xl object-cover border border-slate-200 dark:border-slate-800 shrink-0"
+                                />
+                                <div>
+                                  <h4 className="font-bold text-xs text-slate-900 dark:text-slate-100 line-clamp-1">{prov.name}</h4>
+                                  <div className="flex items-center gap-1 mt-0.5">
+                                    <span className="text-[10px] text-slate-400 font-semibold">{getCountryFlagEmoji(prov.countryCode || prov.country)} {prov.country}</span>
+                                  </div>
+                                </div>
                               </div>
+
+                              {isSelected && <Check className="w-4 h-4 text-purple-600 dark:text-purple-400 shrink-0" />}
                             </div>
-                          </div>
-
-                          {isSelected && <Check className="w-4 h-4 text-purple-600 dark:text-purple-400 shrink-0" />}
-                        </div>
-                      );
-                    })}
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
 
-              {/* STEP 4: DESIGNATION / SERVICE TYPE */}
-              {selectedProvider && activeDesignations.length > 0 && (
-                <div className="space-y-2 p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/60">
-                  <label className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 block">
-                    4. Select Designation / Service Type
-                  </label>
+                  {/* STEP 4: DESIGNATION / SERVICE TYPE */}
+                  {selectedProvider && activeDesignations.length > 0 && (
+                    <div className="space-y-2 p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/60">
+                      <label className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 block">
+                        4. Select Designation / Service Type
+                      </label>
 
-                  <div className="flex flex-wrap gap-2">
-                    {activeDesignations.map((desig) => {
-                      const isSelected = selectedDesignation === desig;
-                      return (
-                        <button
-                          key={desig}
-                          onClick={() => {
-                            setSelectedDesignation(desig);
-                            setShowReviewStage(false);
-                            setErrorMessage(null);
-                            setAccountNumber('');
-                            setAccountValidationResult(null);
-                            if (selectedProvider?.supportsCustomAmount) {
-                              setPurchaseMode('custom');
-                              setCustomFiatAmount('');
-                            } else if (selectedProvider?.supportsFixedPackages && selectedProvider.packages.length > 0) {
-                              setPurchaseMode('package');
-                              setSelectedPackage(selectedProvider.packages[0]);
-                            }
-                          }}
-                          className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all ${
-                            isSelected
-                              ? 'bg-purple-600 text-white border-purple-600 shadow-sm'
-                              : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-purple-500'
-                          }`}
-                        >
-                          {desig}
-                        </button>
-                      );
-                    })}
-                  </div>
+                      <div className="flex flex-wrap gap-2">
+                        {activeDesignations.map((desig) => {
+                          const isSelected = selectedDesignation === desig;
+                          return (
+                            <button
+                              key={desig}
+                              onClick={() => {
+                                setSelectedDesignation(desig);
+                                setShowReviewStage(false);
+                                setErrorMessage(null);
+                                setAccountNumber('');
+                                setAccountValidationResult(null);
+                                if (selectedProvider?.supportsCustomAmount) {
+                                  setPurchaseMode('custom');
+                                  setCustomFiatAmount('');
+                                } else if (selectedProvider?.supportsFixedPackages && selectedProvider.packages.length > 0) {
+                                  setPurchaseMode('package');
+                                  setSelectedPackage(selectedProvider.packages[0]);
+                                }
+                              }}
+                              className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all ${
+                                isSelected
+                                  ? 'bg-purple-600 text-white border-purple-600 shadow-sm'
+                                  : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-purple-500'
+                              }`}
+                            >
+                              {desig}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
