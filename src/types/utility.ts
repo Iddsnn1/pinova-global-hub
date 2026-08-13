@@ -239,7 +239,7 @@ export interface GenericServiceDiscoveryResult {
 }
 
 export interface PiConversionConfig {
-  piRateUsd: number; // e.g. 10.00 ($10.00 USD per 1 Pi)
+  piRateUsd: number; // e.g. 314159.00 ($314,159.00 USD per 1 Pi)
   minPurchasePi: number; // e.g. 0.05 Pi
   maxPurchasePi: number; // e.g. 1000.00 Pi
   currencyCode: string; // "USD"

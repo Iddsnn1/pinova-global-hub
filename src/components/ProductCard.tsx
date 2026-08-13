@@ -40,7 +40,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
     ? product.pricePi * (1 - product.discountPercent / 100)
     : product.pricePi;
 
-  const priceFormatted = formatCurrency(discountedPrice, 10.0, true);
+  const priceFormatted = formatCurrency(discountedPrice, 314159.00, true);
 
   return (
     <div

@@ -17,7 +17,7 @@ export const AirtimeUtilitySection: React.FC<AirtimeUtilitySectionProps> = ({
   onSelectProduct,
   onInstantBuy,
   onOpenFlexibleUtilityModal,
-  piRateUsd = 10.00
+  piRateUsd = 314159.00
 }) => {
   const [activeTab, setActiveTab] = useState<UtilityCategoryType>('airtime');
 

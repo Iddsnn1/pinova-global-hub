@@ -169,7 +169,7 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   // Regional Currency & Pi Formatting
-  const formatCurrency = (piAmount: number, piRateUsd = 10.0, showEstimatedFiat = true) => {
+  const formatCurrency = (piAmount: number, piRateUsd = 314159.00, showEstimatedFiat = true) => {
     const piFormatted = `${piAmount.toFixed(2)} π`;
     
     // Calculate local fiat estimation

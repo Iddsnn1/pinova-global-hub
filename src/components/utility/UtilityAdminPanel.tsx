@@ -245,7 +245,7 @@ export const UtilityAdminPanel: React.FC<UtilityAdminPanelProps> = ({
                     required
                   />
                 </div>
-                <p className="text-[11px] text-slate-400">Example: Setting to $10.00 means 1 Pi Coin converts to $10.00 USD worth of utility value.</p>
+                <p className="text-[11px] text-slate-400">Example: Setting to $314,159.00 means 1 Pi Coin converts to $314,159.00 USD worth of utility value.</p>
               </div>
 
               <div className="grid grid-cols-2 gap-4">

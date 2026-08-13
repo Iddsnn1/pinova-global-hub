@@ -43,7 +43,7 @@ export const LanguageSelectorModal: React.FC<LanguageSelectorModalProps> = ({ is
   };
 
   // Sample Price format test
-  const samplePrice = formatCurrency(10.0, 10.0, true);
+  const samplePrice = formatCurrency(10.0, 314159.00, true);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">

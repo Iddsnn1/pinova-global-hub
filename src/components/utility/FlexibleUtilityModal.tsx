@@ -497,10 +497,10 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-[10px] font-black uppercase tracking-wider text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded border border-amber-400/20">
-                Universal Utility Flow Engine
+                PiNova Global Utilities
               </span>
               <span className="text-[10px] font-bold text-slate-400">
-                Rate: 1 π = ${piConversionConfig.piRateUsd.toFixed(2)} {piConversionConfig.currencyCode}
+                Rate: 1 π = ${piConversionConfig.piRateUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {piConversionConfig.currencyCode}
               </span>
             </div>
             <h2 className="text-base sm:text-xl font-black text-white mt-0.5">Global Utility & Digital Services</h2>
@@ -521,30 +521,11 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
       {/* Body Container */}
       <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
         
-        {/* SAFE DIAGNOSTIC DEBUG BAR (Dev Mode & Runtime Verification) */}
-        <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 text-xs font-mono text-slate-300 space-y-1.5 shadow-inner">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-1.5 font-sans font-extrabold text-[11px]">
-            <span className="text-amber-400 flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-              UNIVERSAL UTILITY DIAGNOSTICS & VERIFICATION
-            </span>
-            <span className="text-[10px] bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded border border-purple-500/30 font-mono">
-              Flow State: {selectedProvider ? (accountNumber ? 'Step 6-8 Active' : 'Step 3-5 Active') : 'Step 1-2 Active'}
-            </span>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-[11px] pt-0.5">
-            <div><span className="text-slate-500 font-bold">Category:</span> <span className="text-purple-400 font-extrabold uppercase">{selectedCategory}</span></div>
-            <div><span className="text-slate-500 font-bold">Selected Country:</span> <span className="text-emerald-400 font-extrabold">{selectedCountryObj ? `${selectedCountryObj.flag} ${selectedCountryObj.name} (${selectedCountryCode})` : 'None'}</span></div>
-            <div className="col-span-1 sm:col-span-2"><span className="text-slate-500 font-bold">Available Countries ({availableCountries.length}):</span> <span className="text-indigo-300 font-bold">{availableCountries.map(c => `${c.flag} ${c.name} (${c.code})`).join(', ') || 'None'}</span></div>
-            <div><span className="text-slate-500 font-bold">Filtered Providers ({availableProvidersForCountry.length}):</span> <span className="text-teal-300 font-bold">{selectedProvider ? selectedProvider.name : 'None selected'}</span></div>
-          </div>
-        </div>
-          
-          {/* STEP 1: CATEGORY SELECTION (All 18 categories) */}
+          {/* STEP 1: CATEGORY SELECTION */}
           <div className="space-y-2">
             <div className="flex justify-between items-center">
               <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 block">
-                1. Select Service Category (18 Categories Available)
+                1. Select Service Category
               </label>
               <span className="text-[11px] font-extrabold text-purple-600 dark:text-purple-400 capitalize">
                 Active: {UTILITY_CATEGORY_META[selectedCategory]?.title || selectedCategory}

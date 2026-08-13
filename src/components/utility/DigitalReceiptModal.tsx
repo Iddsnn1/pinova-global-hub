@@ -142,8 +142,8 @@ export const DigitalReceiptModal: React.FC<DigitalReceiptModalProps> = ({
             </div>
 
             <div className="flex justify-between items-center pb-2 border-b border-slate-200 dark:border-slate-700">
-              <span className="text-slate-500 dark:text-slate-400 font-medium">Conversion Rate Applied</span>
-              <span className="font-bold text-purple-600 dark:text-purple-400">1 π = ${receipt.appliedPiRateUsd.toFixed(2)} USD</span>
+              <span className="text-slate-500 dark:text-slate-400 font-medium">Configured Pi Rate</span>
+              <span className="font-bold text-purple-600 dark:text-purple-400">1 π = ${receipt.appliedPiRateUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD</span>
             </div>
 
             <div className="flex justify-between items-center pt-1 text-sm">

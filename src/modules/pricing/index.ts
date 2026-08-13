@@ -13,7 +13,7 @@ export class PricingRuleEngine implements IPricingRuleEngine {
   }
 
   calculateFiatFromPi(piAmount: number, config: PiConversionConfig): number {
-    return piAmount * (config.piRateUsd || 10.0);
+    return piAmount * (config.piRateUsd || 314159.00);
   }
 
   getPricingDisclaimer(): string {

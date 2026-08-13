@@ -47793,24 +47793,24 @@ export const UTILITY_CATEGORY_META: Record<string, { title: string; description:
 export const INITIAL_UTILITY_TRANSACTIONS = [];
 
 export const INITIAL_PI_CONVERSION_CONFIG = {
-  piRateUsd: 10.00,
-  minPurchasePi: 0.01,
+  piRateUsd: 314159.00,
+  minPurchasePi: 0.000001,
   maxPurchasePi: 10000,
   currencyCode: "USD",
   currencySymbol: "$",
   autoRateUpdateEnabled: true,
   autoUpdateSource: "Pi Oracle Index API",
   lastUpdated: new Date().toISOString(),
-  updatedBy: "System Automated Oracle"
+  updatedBy: "Configured Application Index"
 };
 
 export const INITIAL_CONVERSION_RATE_LOGS = [
   {
     id: "log-001",
-    previousRateUsd: 9.80,
-    newRateUsd: 10.00,
-    reason: "Automated Oracle Consensus Update",
-    updatedBy: "Pi Oracle Index API",
+    previousRateUsd: 314150.00,
+    newRateUsd: 314159.00,
+    reason: "Configured Application Consensus Update",
+    updatedBy: "Configured Application Index",
     timestamp: new Date().toISOString()
   }
 ];

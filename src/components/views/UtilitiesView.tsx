@@ -275,7 +275,7 @@ export const UtilitiesView: React.FC<UtilitiesViewProps> = ({
                 {/* Conversion Badges */}
                 <div className="flex flex-wrap sm:flex-col items-start sm:items-end gap-1.5 text-[11px] shrink-0">
                   <span className="px-2.5 py-1 rounded-xl bg-slate-900/80 border border-amber-500/30 text-amber-300 font-bold">
-                    Pi conversion rate: Configured rate (${utilityConfig.piRateUsd.toFixed(2)} USD)
+                    Pi conversion rate: Configured rate (${utilityConfig.piRateUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD)
                   </span>
                   <span className="px-2.5 py-1 rounded-xl bg-slate-900/80 border border-purple-500/30 text-purple-300 font-bold">
                     Wallet: {userBalancePi.toFixed(2)} π
