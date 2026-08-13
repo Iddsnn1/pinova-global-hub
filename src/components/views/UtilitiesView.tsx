@@ -542,7 +542,7 @@ export const UtilitiesView: React.FC<UtilitiesViewProps> = ({
                 isEmbedded={true}
                 defaultCategory={getMappedCategoryType(selectedUtility)}
                 initialCountryCode={selectedCountryCode}
-                initialState={selectedCountryCode === 'NG' ? selectedState : undefined}
+                initialState={selectedState || undefined}
                 piConversionConfig={utilityConfig}
                 userBalancePi={userBalancePi}
                 buyerUsername={buyerUsername}

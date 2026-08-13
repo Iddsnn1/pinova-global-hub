@@ -130,8 +130,18 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
   
   // Country & State Selection State
   const [selectedCountryCode, setSelectedCountryCode] = useState<string>(initialCountryCode || 'NG');
-  const [selectedState, setSelectedState] = useState<string>(initialState || (initialCountryCode === 'NG' ? 'Kano' : ''));
+  const [selectedState, setSelectedState] = useState<string>(initialState || '');
   const [countrySearchQuery, setCountrySearchQuery] = useState<string>('');
+
+  // Synchronize state when initialCountryCode or initialState props change
+  useEffect(() => {
+    if (initialCountryCode) {
+      setSelectedCountryCode(initialCountryCode);
+    }
+    if (initialState !== undefined) {
+      setSelectedState(initialState);
+    }
+  }, [initialCountryCode, initialState]);
 
   // Provider & Designation State
   const [selectedProvider, setSelectedProvider] = useState<UtilityServiceProvider | null>(null);
@@ -571,8 +581,13 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                             />
                             <div>
                               <h4 className="font-bold text-xs text-slate-900 dark:text-slate-100 line-clamp-1">{prov.name}</h4>
-                              <div className="flex items-center gap-1 mt-0.5">
+                              <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                                 <span className="text-[10px] text-slate-500 font-semibold">{getCountryFlagEmoji(prov.countryCode || prov.country)} {prov.country}</span>
+                                {prov.state && (
+                                  <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700/50">
+                                    {prov.state}
+                                  </span>
+                                )}
                               </div>
                             </div>
                           </div>

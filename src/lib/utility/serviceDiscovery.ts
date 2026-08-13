@@ -48,14 +48,20 @@ export function filterProvidersByState(
 
   const targetState = state.trim().toLowerCase();
   return providers.filter((p) => {
-    if (p.state && p.state.toLowerCase() === targetState) {
+    // 1. Direct state attribute match
+    if (p.state && (p.state.toLowerCase() === targetState || targetState.includes(p.state.toLowerCase()))) {
       return true;
     }
-    // Also check if provider name or designations explicitly contain the state name
+    // 2. Multi-state coverage array
+    if (p.supportedStates && p.supportedStates.some((s) => s.toLowerCase() === targetState || targetState.includes(s.toLowerCase()))) {
+      return true;
+    }
+    // 3. Provider name contains state keyword
     const pName = p.name.toLowerCase();
     if (pName.includes(targetState)) {
       return true;
     }
+    // 4. Provider designations contain state
     if (p.designations && p.designations.some((d) => d.toLowerCase().includes(targetState))) {
       return true;
     }
