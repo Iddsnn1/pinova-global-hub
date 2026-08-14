@@ -209,6 +209,93 @@ export function resolveWaterProviders(
 }
 
 /**
+ * Resolve the normalized institution type for any provider (with deterministic fallbacks).
+ */
+export function resolveInstitutionType(
+  provider: UtilityServiceProvider
+): 'university' | 'polytechnic' | 'college' | 'exam_board' | 'e_learning' {
+  if (provider.institutionType) {
+    return provider.institutionType;
+  }
+  if (provider.category === 'exam' || provider.id.startsWith('prov-exam-')) {
+    return 'exam_board';
+  }
+  const nameLower = (provider.name || '').toLowerCase();
+  const idLower = (provider.id || '').toLowerCase();
+  if (
+    idLower.includes('global') ||
+    idLower.includes('coursera') ||
+    idLower.includes('edx') ||
+    idLower.includes('udemy') ||
+    nameLower.includes('coursera') ||
+    nameLower.includes('edx') ||
+    nameLower.includes('udemy') ||
+    nameLower.includes('e-learning') ||
+    nameLower.includes('learning')
+  ) {
+    return 'e_learning';
+  }
+  if (nameLower.includes('polytechnic') || nameLower.includes('poly')) {
+    return 'polytechnic';
+  }
+  if (nameLower.includes('college') || nameLower.includes('fce') || nameLower.includes('coe')) {
+    return 'college';
+  }
+  return 'university';
+}
+
+/**
+ * Get dynamic institution counts by type for a given country and optional state filter.
+ */
+export function getInstitutionCountsByType(
+  providers: UtilityServiceProvider[],
+  countryCode: string,
+  state?: string
+): {
+  all: number;
+  university: number;
+  polytechnic: number;
+  college: number;
+  exam_board: number;
+  e_learning: number;
+} {
+  const eduProviders = providers.filter(
+    (p) => p.category === 'education' || p.category === 'exam'
+  );
+
+  let filtered = eduProviders;
+  if (countryCode && countryCode !== 'GLOBAL' && countryCode !== 'ALL') {
+    filtered = filterProvidersByCountry(filtered, countryCode);
+  }
+
+  if (state && state.trim() !== '' && state.toUpperCase() !== 'ALL') {
+    filtered = filtered.filter((p) => {
+      const type = resolveInstitutionType(p);
+      if (type === 'exam_board') return true;
+      return filterProvidersByState([p], state).length > 0;
+    });
+  }
+
+  const counts = {
+    all: filtered.length,
+    university: 0,
+    polytechnic: 0,
+    college: 0,
+    exam_board: 0,
+    e_learning: 0
+  };
+
+  filtered.forEach((p) => {
+    const t = resolveInstitutionType(p);
+    if (counts[t] !== undefined) {
+      counts[t]++;
+    }
+  });
+
+  return counts;
+}
+
+/**
  * Search and resolve educational institutions (universities, colleges, exam boards, e-learning platforms).
  */
 export function searchInstitutions(
@@ -230,7 +317,7 @@ export function searchInstitutions(
   if (criteria.state && criteria.state.trim() !== '' && criteria.state.toUpperCase() !== 'ALL') {
     if (criteria.institutionType === 'exam_board') {
       filtered = filtered.filter((p) => {
-        if (p.category === 'exam' || p.institutionType === 'exam_board') {
+        if (p.category === 'exam' || resolveInstitutionType(p) === 'exam_board') {
           return true;
         }
         return filterProvidersByState([p], criteria.state).length > 0;
@@ -242,11 +329,10 @@ export function searchInstitutions(
 
   // 3. Institution Type Filter
   if (criteria.institutionType && criteria.institutionType !== 'all') {
-    filtered = filtered.filter(
-      (p) =>
-        p.institutionType === criteria.institutionType ||
-        (criteria.institutionType === 'exam_board' && p.category === 'exam')
-    );
+    filtered = filtered.filter((p) => {
+      const resolvedType = resolveInstitutionType(p);
+      return resolvedType === criteria.institutionType;
+    });
   }
 
   // 4. Text Search Query Filter
@@ -258,7 +344,7 @@ export function searchInstitutions(
     providerId: p.id,
     institutionName: p.institutionName || p.name,
     institutionCode: p.institutionCode,
-    institutionType: p.institutionType || (p.category === 'exam' ? 'exam_board' : 'university'),
+    institutionType: resolveInstitutionType(p),
     country: p.country,
     countryCode: p.countryCode || 'GLOBAL',
     state: p.state,

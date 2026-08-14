@@ -53,6 +53,7 @@ import { WaterDiscovery } from './discovery/WaterDiscovery';
 import { GovernmentDiscovery } from './discovery/GovernmentDiscovery';
 import { EducationDiscovery } from './discovery/EducationDiscovery';
 import { NIGERIAN_STATES } from './discovery/LocationSelector';
+import { getSubdivisionInfo } from '../../data/countrySubdivisions';
 
 interface FlexibleUtilityModalProps {
   onClose?: () => void;
@@ -170,6 +171,71 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [generatedReceipt, setGeneratedReceipt] = useState<UtilityTransactionReceipt | null>(null);
+
+  // Popular quick-select countries
+  const POPULAR_QUICK_COUNTRIES = useMemo(() => [
+    { code: 'NG', name: 'Nigeria', flag: '🇳🇬', dialCode: '+234' },
+    { code: 'GH', name: 'Ghana', flag: '🇬🇭', dialCode: '+233' },
+    { code: 'KE', name: 'Kenya', flag: '🇰🇪', dialCode: '+254' },
+    { code: 'ZA', name: 'South Africa', flag: '🇿🇦', dialCode: '+27' },
+    { code: 'GB', name: 'United Kingdom', flag: '🇬🇧', dialCode: '+44' },
+    { code: 'US', name: 'United States', flag: '🇺🇸', dialCode: '+1' },
+    { code: 'AE', name: 'United Arab Emirates', flag: '🇦🇪', dialCode: '+971' },
+    { code: 'TR', name: 'Türkiye', flag: '🇹🇷', dialCode: '+90' },
+    { code: 'VN', name: 'Vietnam', flag: '🇻🇳', dialCode: '+84' },
+    { code: 'ID', name: 'Indonesia', flag: '🇮🇩', dialCode: '+62' },
+    { code: 'GLOBAL', name: 'Global Services', flag: '🌐', dialCode: '' }
+  ], []);
+
+  // Canonical full global country catalog derived from AIRTIME_COUNTRIES and SAMPLE_UTILITY_PROVIDERS
+  const allGlobalCountries = useMemo(() => {
+    const map = new Map<string, { code: string; name: string; flag: string; dialCode?: string }>();
+
+    // Popular defaults first
+    POPULAR_QUICK_COUNTRIES.forEach((c) => {
+      map.set(c.code, { code: c.code, name: c.name, flag: c.flag, dialCode: c.dialCode });
+    });
+
+    // Populate with 192 global countries from canonical AIRTIME_COUNTRIES
+    AIRTIME_COUNTRIES.forEach((c) => {
+      if (!map.has(c.code)) {
+        map.set(c.code, { code: c.code, name: c.name, flag: c.flag, dialCode: c.dialCode });
+      }
+    });
+
+    // Populate any remaining provider countries
+    SAMPLE_UTILITY_PROVIDERS.forEach((p) => {
+      if (!p.enabled) return;
+      const code = (p.countryCode || (p.country === 'Global' ? 'GLOBAL' : p.country.slice(0, 2))).toUpperCase();
+      if (!map.has(code)) {
+        map.set(code, {
+          code,
+          name: p.country,
+          flag: getCountryFlagEmoji(code || p.country)
+        });
+      }
+    });
+
+    return Array.from(map.values());
+  }, [POPULAR_QUICK_COUNTRIES]);
+
+  const selectedCountryObj = useMemo(() => {
+    return allGlobalCountries.find((c) => c.code === selectedCountryCode) || {
+      code: selectedCountryCode,
+      name: selectedCountryCode === 'GLOBAL' ? 'Global Services' : selectedCountryCode,
+      flag: getCountryFlagEmoji(selectedCountryCode)
+    };
+  }, [allGlobalCountries, selectedCountryCode]);
+
+  const filteredGlobalCountries = useMemo(() => {
+    if (!countrySearchQuery.trim()) return allGlobalCountries;
+    const q = countrySearchQuery.toLowerCase().trim();
+    return allGlobalCountries.filter((c) =>
+      c.name.toLowerCase().includes(q) ||
+      c.code.toLowerCase().includes(q) ||
+      (c.dialCode && c.dialCode.includes(q))
+    );
+  }, [allGlobalCountries, countrySearchQuery]);
 
   // Derive all available providers for selected category (memoized)
   const categoryProviders = useMemo(() => {
@@ -632,12 +698,119 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                     <Globe className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
                     Country / Region
                   </label>
-                  <span className="text-[11px] font-bold text-slate-500 flex items-center gap-1">
-                    <span>{getCountryFlagEmoji(selectedCountryCode)}</span>
-                    <span>{selectedCountryCode}</span>
+                  <span className="text-[11px] font-bold text-slate-500 flex items-center gap-1.5">
+                    <span className="text-base leading-none">{selectedCountryObj.flag}</span>
+                    <span className="text-slate-800 dark:text-slate-200">{selectedCountryObj.name}</span>
+                    <span className="font-mono text-purple-600 dark:text-purple-400">({selectedCountryCode})</span>
                   </span>
                 </div>
 
+                {/* Popular Quick-Select Country Chips */}
+                <div className="space-y-1">
+                  <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                    Popular Destinations
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {POPULAR_QUICK_COUNTRIES.map((c) => {
+                      const isSelected = selectedCountryCode === c.code;
+                      return (
+                        <button
+                          key={c.code}
+                          type="button"
+                          onClick={() => {
+                            setSelectedCountryCode(c.code);
+                            setSelectedState('');
+                            setCountrySearchQuery('');
+                            setErrorMessage(null);
+                            setAccountNumber('');
+                            setAccountValidationResult(null);
+                          }}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 border ${
+                            isSelected
+                              ? 'bg-purple-600 text-white border-purple-600 shadow-sm'
+                              : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-purple-400'
+                          }`}
+                        >
+                          <span className="text-sm leading-none">{c.flag}</span>
+                          <span>{c.name}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Search Bar for All Global Countries */}
+                <div className="relative">
+                  <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Search all 190+ global countries (e.g. Canada, Germany, Japan, France, Brazil, +49)..."
+                    value={countrySearchQuery}
+                    onChange={(e) => setCountrySearchQuery(e.target.value)}
+                    className="w-full pl-9 pr-8 py-2 rounded-xl text-xs bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/30 transition-all"
+                  />
+                  {countrySearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setCountrySearchQuery('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-0.5"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Search Results Filter (if searching) */}
+                {countrySearchQuery.trim() !== '' && (
+                  <div className="p-2.5 bg-white dark:bg-slate-900 rounded-xl border border-purple-200 dark:border-purple-900/50 space-y-1.5">
+                    <div className="flex items-center justify-between text-[11px] font-bold text-slate-500">
+                      <span>Search Results ({filteredGlobalCountries.length} countries found)</span>
+                      <button
+                        type="button"
+                        onClick={() => setCountrySearchQuery('')}
+                        className="text-purple-600 dark:text-purple-400 hover:underline text-[10px]"
+                      >
+                        Clear Search
+                      </button>
+                    </div>
+                    {filteredGlobalCountries.length === 0 ? (
+                      <div className="text-xs text-amber-500 py-2 text-center">
+                        No countries found matching "{countrySearchQuery}".
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-36 overflow-y-auto pr-1">
+                        {filteredGlobalCountries.slice(0, 24).map((c) => {
+                          const isSelected = selectedCountryCode === c.code;
+                          return (
+                            <button
+                              key={c.code}
+                              type="button"
+                              onClick={() => {
+                                setSelectedCountryCode(c.code);
+                                setSelectedState('');
+                                setCountrySearchQuery('');
+                                setErrorMessage(null);
+                                setAccountNumber('');
+                                setAccountValidationResult(null);
+                              }}
+                              className={`p-1.5 rounded-lg text-left text-xs font-bold transition-all flex items-center gap-1.5 border truncate ${
+                                isSelected
+                                  ? 'bg-purple-600 text-white border-purple-600'
+                                  : 'bg-slate-50 dark:bg-slate-800/80 text-slate-800 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:border-purple-400'
+                              }`}
+                            >
+                              <span className="text-sm leading-none shrink-0">{c.flag}</span>
+                              <span className="truncate">{c.name}</span>
+                              <span className="text-[10px] opacity-70 ml-auto font-mono shrink-0">{c.code}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Country Dropdown & Region Subdivisions */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   <div>
                     <select
@@ -651,38 +824,47 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                       }}
                       className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-xs font-bold text-slate-900 dark:text-slate-100 focus:outline-none focus:border-purple-500"
                     >
-                      <option value="NG">🇳🇬 Nigeria (NG)</option>
-                      <option value="GH">🇬🇭 Ghana (GH)</option>
-                      <option value="KE">🇰🇪 Kenya (KE)</option>
-                      <option value="ZA">🇿🇦 South Africa (ZA)</option>
-                      <option value="US">🇺🇸 United States (US)</option>
-                      <option value="GB">🇬🇧 United Kingdom (GB)</option>
-                      <option value="AE">🇦🇪 United Arab Emirates (AE)</option>
-                      <option value="TR">🇹🇷 Turkey (TR)</option>
-                      <option value="VN">🇻🇳 Vietnam (VN)</option>
-                      <option value="ID">🇮🇩 Indonesia (ID)</option>
-                      <option value="GLOBAL">🌐 Global Services</option>
+                      <optgroup label="Popular Countries">
+                        {POPULAR_QUICK_COUNTRIES.map((c) => (
+                          <option key={`pop-${c.code}`} value={c.code}>
+                            {c.flag} {c.name} ({c.code})
+                          </option>
+                        ))}
+                      </optgroup>
+                      <optgroup label="All Global Countries">
+                        {allGlobalCountries.map((c) => (
+                          <option key={`all-${c.code}`} value={c.code}>
+                            {c.flag} {c.name} ({c.code}){c.dialCode ? ` [${c.dialCode}]` : ''}
+                          </option>
+                        ))}
+                      </optgroup>
                     </select>
                   </div>
 
-                  {selectedCountryCode === 'NG' ? (
-                    <div>
-                      <select
-                        value={selectedState}
-                        onChange={(e) => setSelectedState(e.target.value)}
-                        className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-xs font-bold text-slate-900 dark:text-slate-100 focus:outline-none focus:border-purple-500"
-                      >
-                        <option value="">All States / Nationwide</option>
-                        {NIGERIAN_STATES.map((st) => (
-                          <option key={st} value={st}>{st}</option>
-                        ))}
-                      </select>
-                    </div>
-                  ) : (
-                    <div className="flex items-center px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 text-[11px] font-semibold text-slate-500">
-                      <span>Nationwide Coverage</span>
-                    </div>
-                  )}
+                  {(() => {
+                    const subInfo = getSubdivisionInfo(selectedCountryCode);
+                    if (subInfo.subdivisions && subInfo.subdivisions.length > 0) {
+                      return (
+                        <div>
+                          <select
+                            value={selectedState}
+                            onChange={(e) => setSelectedState(e.target.value)}
+                            className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-xs font-bold text-slate-900 dark:text-slate-100 focus:outline-none focus:border-purple-500"
+                          >
+                            <option value="">All {subInfo.subdivisionName ? `${subInfo.subdivisionName}s` : 'States'} / Nationwide</option>
+                            {subInfo.subdivisions.map((st) => (
+                              <option key={st} value={st}>{st}</option>
+                            ))}
+                          </select>
+                        </div>
+                      );
+                    }
+                    return (
+                      <div className="flex items-center px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 text-[11px] font-semibold text-slate-500">
+                        <span>Nationwide Coverage</span>
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
 
@@ -693,8 +875,33 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                 </label>
 
                 {availableProvidersForCountry.length === 0 ? (
-                  <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-500 font-bold">
-                    No providers available for {selectedCountryCode} in this service. Please select another location.
+                  <div className="p-5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-center space-y-3">
+                    <AlertCircle className="w-7 h-7 text-amber-500 mx-auto" />
+                    <div>
+                      <h4 className="font-bold text-xs text-amber-600 dark:text-amber-400">
+                        {selectedCategory === 'airtime'
+                          ? `Mobile Airtime is not currently available for ${selectedCountryObj.name}.`
+                          : selectedCategory === 'data'
+                          ? `Mobile Data is not currently available for ${selectedCountryObj.name}.`
+                          : `No ${UTILITY_CATEGORY_META[selectedCategory]?.title || selectedCategory} providers are currently configured for ${selectedCountryObj.name}.`}
+                      </h4>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                        Telecom carrier integrations and local gateways are expanding continuously across global regions.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedCountryCode('NG');
+                        setSelectedState('');
+                        setCountrySearchQuery('');
+                        setErrorMessage(null);
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-purple-600 text-white text-xs font-bold shadow-md hover:bg-purple-700 transition-colors"
+                    >
+                      <Globe className="w-3.5 h-3.5" />
+                      <span>Explore Supported Countries</span>
+                    </button>
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">

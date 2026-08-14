@@ -259,14 +259,27 @@ export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
           </div>
         ) : availableNetworks.length === 0 ? (
           /* EMPTY STATE FOR COUNTRY */
-          <div className="p-5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-center space-y-2">
-            <AlertCircle className="w-8 h-8 text-amber-500 mx-auto" />
-            <h4 className="font-bold text-xs text-amber-600 dark:text-amber-400">
-              No supported mobile networks available for {activeCountry?.name} currently.
-            </h4>
-            <p className="text-[11px] text-slate-500 dark:text-slate-400 max-w-sm mx-auto">
-              Please select another supported country (such as Nigeria, Kenya, Ghana, or India).
-            </p>
+          <div className="p-5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-center space-y-3">
+            <AlertCircle className="w-7 h-7 text-amber-500 mx-auto" />
+            <div>
+              <h4 className="font-bold text-xs text-amber-600 dark:text-amber-400">
+                Mobile Airtime is not currently available for {activeCountry?.name || selectedCountryCode}.
+              </h4>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                Telecom carrier integrations and direct operator top-up gateways are expanding continuously across global networks.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                handleSelectCountry('NG');
+                setCountrySearchQuery('');
+              }}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-purple-600 text-white text-xs font-bold shadow-md hover:bg-purple-700 transition-colors"
+            >
+              <Globe className="w-3.5 h-3.5" />
+              <span>Explore Supported Countries</span>
+            </button>
           </div>
         ) : (
           /* NETWORK OPERATOR GRID */

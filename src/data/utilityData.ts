@@ -11993,6 +11993,110 @@ export const SAMPLE_UTILITY_PROVIDERS: UtilityServiceProvider[] =
     ]
   },
   {
+    "id": "prov-data-ng-glo-nigeria-data-bundles",
+    "name": "Glo Nigeria Data Bundles",
+    "category": "data",
+    "logo": "https://images.unsplash.com/photo-1556742049-0a67daf28d2a?auto=format&fit=crop&w=200&q=80",
+    "country": "Nigeria",
+    "countryCode": "NG",
+    "dialCode": "+234",
+    "supportsCustomAmount": true,
+    "supportsFixedPackages": true,
+    "accountLabel": "Mobile Phone Number",
+    "accountPlaceholder": "Enter Nigeria phone number",
+    "minCustomFiat": 1,
+    "maxCustomFiat": 500,
+    "currency": "USD",
+    "enabled": true,
+    "hasDirectValidationApi": true,
+    "designations": [
+      "Daily Data Bundle",
+      "Weekly Data Pass",
+      "Monthly Glo Grandmaster Plan",
+      "SME Data Share"
+    ],
+    "packages": [
+      {
+        "id": "pkg-dt-ng-glo-1",
+        "name": "Glo 3GB Weekly Data Pass",
+        "description": "High-speed Glo 4G/5G data",
+        "fiatPrice": 3,
+        "currency": "USD",
+        "validity": "7 Days"
+      },
+      {
+        "id": "pkg-dt-ng-glo-2",
+        "name": "Glo 12GB Monthly Mega Bundle",
+        "description": "Full 30-day high-speed internet bundle",
+        "fiatPrice": 8,
+        "currency": "USD",
+        "validity": "30 Days",
+        "badge": "Popular"
+      },
+      {
+        "id": "pkg-dt-ng-glo-3",
+        "name": "Glo 60GB Heavy User Plan",
+        "description": "Unlimited night streaming & heavy data",
+        "fiatPrice": 25,
+        "currency": "USD",
+        "validity": "30 Days",
+        "badge": "Best Value"
+      }
+    ]
+  },
+  {
+    "id": "prov-data-ng-9mobile-nigeria-data-bundles",
+    "name": "9mobile Nigeria Data Bundles",
+    "category": "data",
+    "logo": "https://images.unsplash.com/photo-1556742049-0a67daf28d2a?auto=format&fit=crop&w=200&q=80",
+    "country": "Nigeria",
+    "countryCode": "NG",
+    "dialCode": "+234",
+    "supportsCustomAmount": true,
+    "supportsFixedPackages": true,
+    "accountLabel": "Mobile Phone Number",
+    "accountPlaceholder": "Enter Nigeria phone number",
+    "minCustomFiat": 1,
+    "maxCustomFiat": 500,
+    "currency": "USD",
+    "enabled": true,
+    "hasDirectValidationApi": true,
+    "designations": [
+      "Daily Data Bundle",
+      "Weekly Data Pass",
+      "Monthly 9mobile 4G Plan",
+      "SME Corporate Data"
+    ],
+    "packages": [
+      {
+        "id": "pkg-dt-ng-9mob-1",
+        "name": "9mobile 2.5GB Weekly Data Pass",
+        "description": "Super-fast 4G browsing bundle",
+        "fiatPrice": 3,
+        "currency": "USD",
+        "validity": "7 Days"
+      },
+      {
+        "id": "pkg-dt-ng-9mob-2",
+        "name": "9mobile 11GB Monthly Bundle",
+        "description": "Full 30-day high-speed data",
+        "fiatPrice": 8,
+        "currency": "USD",
+        "validity": "30 Days",
+        "badge": "Popular"
+      },
+      {
+        "id": "pkg-dt-ng-9mob-3",
+        "name": "9mobile 50GB Heavy User Plan",
+        "description": "Ultra-fast corporate & streaming package",
+        "fiatPrice": 25,
+        "currency": "USD",
+        "validity": "30 Days",
+        "badge": "Best Value"
+      }
+    ]
+  },
+  {
     "id": "prov-data-gh-mtn-ghana-4g-5g-data",
     "name": "MTN Ghana 4G/5G Data",
     "category": "data",
