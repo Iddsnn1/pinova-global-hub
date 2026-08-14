@@ -174,31 +174,39 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
     (p) => p.category === selectedCategory && p.enabled
   );
 
-  // Filter providers for country
-  const availableProvidersForCountry = categoryProviders.filter(p => {
-    if (!selectedCountryCode) return true;
-    const pCode = (p.countryCode || (p.country === 'Global' ? 'GLOBAL' : p.country.slice(0, 2))).toUpperCase();
-    return pCode === selectedCountryCode.toUpperCase();
-  });
+  // Filter providers for country and state
+  const availableProvidersForCountry = React.useMemo(() => {
+    const activeCode = (selectedCountryCode || 'NG').toUpperCase();
+    const countryMatches = categoryProviders.filter(p => {
+      const pCode = (p.countryCode || (p.country === 'Global' ? 'GLOBAL' : p.country.slice(0, 2))).toUpperCase();
+      return pCode === activeCode || pCode === 'GLOBAL';
+    });
 
-  // Reset/Initialize Country, Provider, Designation when category changes
+    if (selectedState && selectedState.trim()) {
+      const stateMatches = countryMatches.filter(p => 
+        p.state && (
+          p.state.toLowerCase() === selectedState.toLowerCase() ||
+          p.state.toLowerCase().includes(selectedState.toLowerCase())
+        )
+      );
+      if (stateMatches.length > 0) {
+        // Return state-specific providers followed by general/national providers
+        const otherMatches = countryMatches.filter(p => !p.state || p.state === 'National' || p.state === 'Nationwide');
+        return [...stateMatches, ...otherMatches];
+      }
+    }
+
+    return countryMatches;
+  }, [categoryProviders, selectedCountryCode, selectedState]);
+
+  // Reset/Initialize Provider, Designation when category or location changes
   useEffect(() => {
     setErrorMessage(null);
     setAccountNumber('');
     setAccountValidationResult(null);
 
-    const catProvs = SAMPLE_UTILITY_PROVIDERS.filter(
-      (p) => p.category === selectedCategory && p.enabled
-    );
-
-    if (catProvs.length > 0) {
-      const activeCode = selectedCountryCode || 'NG';
-      const matchedProviders = catProvs.filter(p => {
-        const pCode = (p.countryCode || (p.country === 'Global' ? 'GLOBAL' : p.country.slice(0, 2))).toUpperCase();
-        return pCode === activeCode.toUpperCase();
-      });
-
-      const firstProv = matchedProviders[0] || catProvs[0];
+    if (availableProvidersForCountry.length > 0) {
+      const firstProv = availableProvidersForCountry[0];
       setSelectedProvider(firstProv);
 
       const desigs = firstProv.designations || getDefaultDesignationsForCategory(selectedCategory);
@@ -214,7 +222,7 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
     } else {
       setSelectedProvider(null);
     }
-  }, [selectedCategory, selectedCountryCode]);
+  }, [selectedCategory, selectedCountryCode, selectedState, availableProvidersForCountry]);
 
   // Handle Provider selection
   const handleSelectProvider = (prov: UtilityServiceProvider) => {

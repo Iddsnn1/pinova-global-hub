@@ -495,7 +495,7 @@ export const UtilitiesView: React.FC<UtilitiesViewProps> = ({
               <div className="flex items-center gap-2 text-xs font-bold px-3 py-1.5 rounded-2xl bg-purple-50 dark:bg-purple-950/80 border border-purple-200 dark:border-purple-800 text-purple-900 dark:text-purple-200">
                 <span>{selectedCountryObj.flag}</span>
                 <span>{selectedCountryObj.name}</span>
-                {selectedCountryCode === 'NG' && selectedState && (
+                {selectedState && (
                   <span className="text-amber-500 font-extrabold">• {selectedState}</span>
                 )}
               </div>
