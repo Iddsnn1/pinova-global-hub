@@ -267,7 +267,7 @@ export const EnterpriseSecurityView: React.FC<EnterpriseSecurityViewProps> = () 
                 </span>
               </div>
               <p className="text-xs text-slate-400 max-w-2xl">
-                Centralized security, risk analysis, fraud prevention, trust & safety, privacy governance, and operational resilience engine for PiNova Global Marketplace.
+                Centralized security, risk analysis, fraud prevention, trust & safety, privacy governance, and operational resilience engine for PiNova Global Hub.
               </p>
             </div>
           </div>
@@ -933,7 +933,7 @@ export const EnterpriseSecurityView: React.FC<EnterpriseSecurityViewProps> = () 
               <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 flex items-center justify-between">
                 <div>
                   <span className="font-bold text-white block">Third-Party Data Sharing</span>
-                  <span className="text-[10px] text-slate-400">Strictly disabled across all PiNova marketplace services.</span>
+                  <span className="text-[10px] text-slate-400">Strictly disabled across all PiNova Global Hub services.</span>
                 </div>
                 <button
                   onClick={() => handleToggleConsent('thirdPartyDataSharing')}

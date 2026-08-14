@@ -374,7 +374,7 @@ export const AiSearchView: React.FC<AiSearchViewProps> = ({
   const [supportQuery, setSupportQuery] = useState('');
   const [supportCategory, setSupportCategory] = useState<'order_status' | 'returns' | 'disputes' | 'general'>('order_status');
   const [supportStream, setSupportStream] = useState<Array<{ sender: 'user' | 'ai' | 'human'; text: string }>>([
-    { sender: 'ai', text: 'PiNova AI Customer Support ready. How may I assist you with orders, returns, disputes, or marketplace navigation?' }
+    { sender: 'ai', text: 'PiNova Global Hub AI Support ready. How may I assist you with orders, returns, utilities, services, or platform navigation?' }
   ]);
   const [isEscalatedToHuman, setIsEscalatedToHuman] = useState(false);
 
@@ -395,7 +395,7 @@ export const AiSearchView: React.FC<AiSearchViewProps> = ({
   const handleGenerateMarketingDraft = () => {
     let draft = '';
     if (marketingType === 'social') {
-      draft = `🚀 Pioneer Alert! Upgrade your everyday tech with the ${merchantTitleInput} on PiNova Global Marketplace! ⚡ Authentic deals, instant settlement, and Order Protection Status verification. #PiNova #PiNetwork #PiPioneers #PiMerchant`;
+      draft = `🚀 Pioneer Alert! Upgrade your everyday tech with the ${merchantTitleInput} on PiNova Global Hub! ⚡ Authentic deals, instant settlement, and Order Protection Status verification. #PiNova #PiNetwork #PiPioneers #PiMerchant`;
     } else if (marketingType === 'email') {
       draft = `Subject: Exclusive Pioneer Offer: Save up to 15% Pi on ${merchantTitleInput}!\n\nDear Pioneer,\n\nWe are excited to announce a special campaign for ${merchantTitleInput}. Engineered for high performance and seamless Pi payments. Visit our merchant storefront today to claim your discount before inventory runs out!\n\nWarm regards,\nPiNova Merchant Team`;
     } else if (marketingType === 'banner') {
@@ -681,7 +681,7 @@ export const AiSearchView: React.FC<AiSearchViewProps> = ({
       id: 'prompt-1',
       title: 'Shopping Concierge Persona',
       category: 'Shopping',
-      systemPrompt: 'You are an enterprise shopping concierge for PiNova Global Marketplace. Assist users in finding items, comparing prices in Pi, and giving buying advice. Never provide legal, medical, or financial investment advice.',
+      systemPrompt: 'You are an enterprise shopping concierge for PiNova Global Hub. Assist users in finding items, comparing prices in Pi, and giving buying advice. Never provide legal, medical, or financial investment advice.',
       userPromptTemplate: 'User query: {{query}}. User budget: {{budget}}. Catalog count: {{count}}.',
       parameters: ['query', 'budget', 'count']
     },
@@ -966,7 +966,7 @@ export const AiSearchView: React.FC<AiSearchViewProps> = ({
         <div className="pt-3 border-t border-slate-800/80 text-[11px] text-amber-300/90 leading-relaxed flex items-start gap-2">
           <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
           <span>
-            <strong>Policy & Transparency Notice:</strong> AI-generated content within PiNova Global Marketplace provides automated recommendations and operational assistance only. Verified marketplace information is displayed separately. AI recommendations should not be interpreted as official Pi Network information or as marketplace guarantees.
+            <strong>Policy & Transparency Notice:</strong> AI-generated content within PiNova Global Hub provides automated recommendations and operational assistance only. Verified catalog and platform information is displayed separately. AI recommendations should not be interpreted as official Pi Network information or as platform guarantees.
           </span>
         </div>
       </div>
@@ -2175,7 +2175,7 @@ export const AiSearchView: React.FC<AiSearchViewProps> = ({
               <Info className="w-5 h-5" /> Marketplace Privacy & Governance Notice
             </div>
             <p className="text-slate-300 leading-relaxed text-[11px]">
-              PiNova Global Marketplace processes AI interactions according to marketplace privacy policies. Users remain in control of their AI preferences, privacy settings, and conversation history. AI features operate independently of the Pi Network and do not represent official Pi Network services.
+              PiNova Global Hub processes AI interactions according to platform privacy policies. Users remain in control of their AI preferences, privacy settings, and conversation history. AI features operate independently of the Pi Network and do not represent official Pi Network services.
             </p>
           </div>
         </div>

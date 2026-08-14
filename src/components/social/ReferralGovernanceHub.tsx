@@ -710,7 +710,7 @@ export const ReferralGovernanceHub: React.FC<ReferralGovernanceHubProps> = ({ us
         <div className="mt-2 pt-2 border-t border-slate-800/80 text-[11px] text-amber-300/95 leading-relaxed flex items-start gap-2">
           <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
           <span>
-            <strong>Transparency Notice:</strong> Community recognition titles, badges, and leaderboards are awarded solely by PiNova Global Marketplace based on marketplace participation and community contributions. They may be reviewed, updated, suspended, or revoked according to published community policies, and do not represent any official role, endorsement, certification, or affiliation with the Pi Network.
+            <strong>Transparency Notice:</strong> Community recognition titles, badges, and leaderboards are awarded solely by PiNova Global Hub based on platform participation and community contributions. They may be reviewed, updated, suspended, or revoked according to published community policies, and do not represent any official role, endorsement, certification, or affiliation with the Pi Network.
           </span>
         </div>
       </div>
@@ -919,7 +919,7 @@ export const ReferralGovernanceHub: React.FC<ReferralGovernanceHubProps> = ({ us
                   <Award className="w-4 h-4 text-purple-600" /> Active Marketplace Campaigns
                 </h3>
                 <p className="text-xs text-slate-500">
-                  Promotional incentives currently configured by PiNova Global Marketplace.
+                  Promotional incentives currently configured by PiNova Global Hub.
                 </p>
 
                 <div className="space-y-3">
@@ -963,7 +963,7 @@ export const ReferralGovernanceHub: React.FC<ReferralGovernanceHubProps> = ({ us
               <Info className="w-4 h-4 flex-shrink-0" /> Marketplace Scope & Recognition Lifecycle Rules
             </div>
             <p className="leading-relaxed text-[11px] text-indigo-800/90 dark:text-indigo-300/90">
-              Community recognition titles, badges, and leaderboards are awarded solely by PiNova Global Marketplace based on marketplace participation and community contributions. Recognitions transition through active lifecycle states (Active, Under Review, Suspended, Revoked, Expired, Reinstated) and do not represent any official role or affiliation with the Pi Network.
+              Community recognition titles, badges, and leaderboards are awarded solely by PiNova Global Hub based on platform participation and community contributions. Recognitions transition through active lifecycle states (Active, Under Review, Suspended, Revoked, Expired, Reinstated) and do not represent any official role or affiliation with the Pi Network.
             </p>
           </div>
 
@@ -1570,7 +1570,7 @@ export const ReferralGovernanceHub: React.FC<ReferralGovernanceHubProps> = ({ us
               <h3 className="font-black text-sm text-slate-900 dark:text-white flex items-center gap-2">
                 <FileText className="w-5 h-5 text-purple-600" /> Enterprise Referral & Recognition Policy Center
               </h3>
-              <p className="text-xs text-slate-500">Official guidelines, compliance mandates, and terms of participation for PiNova Global Marketplace.</p>
+              <p className="text-xs text-slate-500">Official guidelines, compliance mandates, and terms of participation for PiNova Global Hub.</p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1582,7 +1582,7 @@ export const ReferralGovernanceHub: React.FC<ReferralGovernanceHubProps> = ({ us
                     <Info className="w-4 h-4 text-purple-600" /> 1. Program Overview & Ownership
                   </h4>
                   <p className="text-[11px] text-slate-500 leading-relaxed">
-                    The Referral & Community Recognition Program is an independent marketplace feature owned, operated, and managed solely by PiNova Global Marketplace. It is designed to reward Pioneers for introducing verified merchants and shoppers to our ecosystem.
+                    The Referral & Community Recognition Program is an independent platform feature owned, operated, and managed solely by PiNova Global Hub. It is designed to reward Pioneers for introducing verified merchants and shoppers to our ecosystem.
                   </p>
                 </div>
 
@@ -1600,7 +1600,7 @@ export const ReferralGovernanceHub: React.FC<ReferralGovernanceHubProps> = ({ us
                     <Award className="w-4 h-4 text-purple-600" /> 3. Community Recognition Titles, Badges & Governance
                   </h4>
                   <p className="text-[11px] text-slate-500 leading-relaxed">
-                    Community recognition titles, badges, and leaderboards are awarded solely by PiNova Global Marketplace based on marketplace participation and community contributions. They may be reviewed, updated, suspended, or revoked according to published community policies, and do not represent any official role, endorsement, certification, or affiliation with the Pi Network.
+                    Community recognition titles, badges, and leaderboards are awarded solely by PiNova Global Hub based on platform participation and community contributions. They may be reviewed, updated, suspended, or revoked according to published community policies, and do not represent any official role, endorsement, certification, or affiliation with the Pi Network.
                   </p>
                 </div>
               </div>

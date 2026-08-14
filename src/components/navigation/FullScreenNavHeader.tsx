@@ -123,7 +123,7 @@ export const FullScreenNavHeader: React.FC<FullScreenNavHeaderProps> = ({
 
           <div 
             onClick={() => onNavigateSection('home')}
-            className="flex items-center gap-1.5 cursor-pointer group"
+            className="flex items-center gap-2 cursor-pointer group"
           >
             <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-purple-600 via-indigo-600 to-amber-500 p-0.5 shadow-lg shadow-purple-500/20 group-hover:scale-105 transition-transform">
               <div className="w-full h-full bg-slate-950 rounded-[10px] flex items-center justify-center font-bold text-amber-400 text-base tracking-tighter">
@@ -131,9 +131,12 @@ export const FullScreenNavHeader: React.FC<FullScreenNavHeaderProps> = ({
               </div>
             </div>
             <div>
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1.5">
                 <span className="font-black text-base tracking-tight bg-gradient-to-r from-purple-400 via-indigo-300 to-amber-400 bg-clip-text text-transparent">
                   PiNova
+                </span>
+                <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-purple-950/80 text-purple-300 border border-purple-800 uppercase tracking-wider">
+                  Global Hub
                 </span>
               </div>
             </div>
@@ -547,16 +550,19 @@ export const FullScreenNavHeader: React.FC<FullScreenNavHeaderProps> = ({
         
         {/* Breadcrumb Navigation */}
         <div className="flex items-center gap-1.5 text-slate-400 overflow-x-auto no-scrollbar py-0.5">
-          <span className="font-bold text-amber-400 flex items-center gap-1">
+          <button
+            onClick={() => onNavigateSection('home')}
+            className="font-bold text-amber-400 hover:text-amber-300 flex items-center gap-1 shrink-0 transition-colors"
+          >
             <Layers className="w-3.5 h-3.5" />
-            <span>PiNova</span>
-          </span>
+            <span>PiNova Global Hub</span>
+          </button>
           {breadcrumbs.map((b, idx) => (
             <React.Fragment key={idx}>
               <ChevronRight className="w-3 h-3 text-slate-600 shrink-0" />
               <button
-                onClick={() => onNavigateSection(b.section)}
-                className="hover:text-purple-300 font-medium whitespace-nowrap capitalize text-slate-300"
+                onClick={() => onNavigateSection(b.section, (b as any).category)}
+                className="hover:text-purple-300 font-medium whitespace-nowrap capitalize text-slate-300 transition-colors"
               >
                 {b.label}
               </button>
@@ -582,6 +588,28 @@ export const FullScreenNavHeader: React.FC<FullScreenNavHeaderProps> = ({
           ))}
 
           {/* Secondary Quick Jump Triggers */}
+          <button
+            onClick={() => onNavigateSection('services')}
+            className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+              activeSection === 'services'
+                ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
+                : 'text-blue-400 hover:bg-slate-800/60'
+            }`}
+          >
+            <Briefcase className="w-3.5 h-3.5 text-blue-400" />
+            <span>Services</span>
+          </button>
+          <button
+            onClick={() => onNavigateSection('ai_search')}
+            className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+              activeSection === 'ai_search'
+                ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
+                : 'text-amber-300 hover:bg-slate-800/60'
+            }`}
+          >
+            <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+            <span>AI Concierge</span>
+          </button>
           <button
             onClick={() => onNavigateSection('developer_platform')}
             className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
@@ -636,20 +664,6 @@ export const FullScreenNavHeader: React.FC<FullScreenNavHeaderProps> = ({
           >
             <Users className="w-3.5 h-3.5 text-blue-400" />
             <span>Community</span>
-          </button>
-          <button
-            onClick={() => onNavigateSection('services')}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-slate-400 hover:text-blue-400 hover:bg-slate-800/60"
-          >
-            <Briefcase className="w-3.5 h-3.5 text-blue-400" />
-            <span>Services</span>
-          </button>
-          <button
-            onClick={() => onNavigateSection('ai_search')}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-amber-300 hover:bg-slate-800/60"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-amber-300 animate-pulse" />
-            <span>AI Concierge</span>
           </button>
         </div>
 

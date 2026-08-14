@@ -300,7 +300,7 @@ export const AiPrivacyGovernanceTab: React.FC<AiPrivacyGovernanceTabProps> = ({
     if (!deletionCertificate) return;
 
     const certData = {
-      title: 'PiNova Global Marketplace — AI Data Deletion Compliance Certificate',
+      title: 'PiNova Global Hub — AI Data Deletion Compliance Certificate',
       certificateId: deletionCertificate.certId,
       timestamp: deletionCertificate.timestamp,
       verificationHash: deletionCertificate.hash,

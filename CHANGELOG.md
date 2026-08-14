@@ -1,8 +1,8 @@
-# PiNova Global Marketplace — Change Log
+# PiNova Global Hub — Change Log
 
 ## [v2.8.0] - 2026-08-06
 ### Added
-- **Module 12: Finance Analytics & Revenue Intelligence (Production Grade)**: Implemented full analytical financial engine for PiNova Global Marketplace.
+- **Module 12: Finance Analytics & Revenue Intelligence (Production Grade)**: Implemented full analytical financial engine for PiNova Global Hub.
 - **Executive Financial Dashboard**: Real-time Gross Marketplace Sales (GMS), Net Marketplace Revenue, Total/Completed/Pending Orders, Escrow Releases, Refunds, Platform Commission, Merchant Earnings, Average Order Value (AOV), and Revenue Velocity Trends.
 - **Analytics Capabilities**: Revenue Analytics, Marketplace Growth Analytics, Category Performance, Merchant Performance, Product Performance, Utility Service Performance, Digital Service Performance, and Geographic Distribution.
 - **Commission & Fee Analytics**: Platform Commission breakdown, Category performance, Merchant Fee distribution, Fee history, and Revenue projections.

@@ -988,7 +988,7 @@ const handleAiSearch = async (req: express.Request, res: express.Response) => {
     }
 
     const promptText = `
-You are the AI Concierge for PiNova Global Marketplace, an enterprise platform where products (Physical, Digital, Airtime, Utility Bills, Gift Cards) are bought with Pi Coin.
+You are the AI Concierge for PiNova Global Hub, an enterprise platform where products (Physical, Digital, Airtime, Utility Bills, Gift Cards) are bought with Pi Coin.
 
 User Query: "${query}"
 

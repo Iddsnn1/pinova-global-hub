@@ -1,6 +1,6 @@
 {
-  "name": "PiNova Global Marketplace Hub",
-  "description": "Enterprise-grade global marketplace for the Pi Network ecosystem featuring Pi Coin payments, multi-vendor support, escrow system, digital & physical items, airtime & utility payments, AI search, and comprehensive dashboards.",
+  "name": "PiNova Global Hub",
+  "description": "Enterprise-grade global platform for the Pi Network ecosystem featuring Pi Coin payments, marketplace, multi-vendor support, escrow system, digital & physical items, airtime & utility payments, AI search, and comprehensive dashboards.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

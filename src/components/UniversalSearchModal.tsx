@@ -177,7 +177,7 @@ export const UniversalSearchModal: React.FC<UniversalSearchModalProps> = ({
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-2 text-amber-400 font-extrabold text-sm">
               <Sparkles className="w-5 h-5 text-purple-400 animate-pulse" />
-              <span>Universal PiNova Search Engine</span>
+              <span>PiNova Global Hub — Universal Search</span>
             </div>
             <button
               onClick={onClose}

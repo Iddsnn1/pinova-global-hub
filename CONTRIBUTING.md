@@ -1,4 +1,4 @@
-# Contributing to PiNova Global Marketplace
+# Contributing to PiNova Global Hub
 
 We welcome contributions from the Pi Network ecosystem developer community!
 

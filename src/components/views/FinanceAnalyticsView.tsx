@@ -728,7 +728,7 @@ export const FinanceAnalyticsView: React.FC<FinanceAnalyticsViewProps> = ({
         <HelpCircle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
         <div className="space-y-1">
           <span className="font-bold text-amber-300 block mb-0.5">Revenue & Operational Transparency Notice</span>
-          <p>Revenue reports and financial dashboards represent marketplace operational reporting only. PiNova Global Marketplace does not provide Pi wallet custody, settlement services, blockchain verification, or official Pi Network financial reporting.</p>
+          <p>Revenue reports and financial dashboards represent platform operational reporting only. PiNova Global Hub does not provide Pi wallet custody, settlement services, blockchain verification, or official Pi Network financial reporting.</p>
           <p className="text-[11px] text-amber-300/80 italic">Certain marketplace capabilities rely on external service providers and official Pi Platform services. Feature availability, response times, and service outcomes may vary depending on provider availability, network connectivity, and Official Pi Platform service status.</p>
         </div>
       </div>

@@ -1862,7 +1862,7 @@ export const PlatformAdminView: React.FC<PlatformAdminViewProps> = ({
             </div>
 
             <div className="p-3 rounded-2xl bg-amber-950/40 border border-amber-800/40 text-[11px] text-amber-300/90 font-medium">
-              Notice: All identity and business verification processes are performed solely by PiNova Global Marketplace for marketplace compliance and safety, and do not represent official Pi Network identity verification.
+              Notice: All identity and business verification processes are performed solely by PiNova Global Hub for platform compliance and safety, and do not represent official Pi Network identity verification.
             </div>
 
             <div className="space-y-4 max-h-[380px] overflow-y-auto pr-1">

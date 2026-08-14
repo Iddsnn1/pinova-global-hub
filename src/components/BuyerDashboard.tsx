@@ -144,7 +144,7 @@ export const BuyerDashboard: React.FC<BuyerDashboardProps> = ({
             <div className="py-16 text-center space-y-3 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800">
               <Package className="w-12 h-12 text-slate-400 mx-auto" />
               <p className="font-bold text-slate-800 dark:text-slate-200">No purchase orders found</p>
-              <p className="text-xs text-slate-400">Explore PiNova Global Marketplace to start your first Pi order!</p>
+              <p className="text-xs text-slate-400">Explore the PiNova Global Hub marketplace to start your first Pi order!</p>
             </div>
           ) : (
             orders.map((order) => (

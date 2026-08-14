@@ -583,7 +583,7 @@ export class EnterpriseSecurityEngine {
 
   public generatePersonalDataJson(username: string): string {
     const exportData = {
-      platform: 'PiNova Global Marketplace',
+      platform: 'PiNova Global Hub',
       exportedAt: new Date().toISOString(),
       user: {
         username,
@@ -637,7 +637,7 @@ export class EnterpriseSecurityEngine {
   // --- Transparency & Compliance Notices ---
 
   public getComplianceNotice(): string {
-    return "PiNova Global Marketplace Enterprise Security Engine provides internal platform fraud prevention, session protection, and privacy governance. PiNova never requests, receives, or stores Pi wallet private keys, seed phrases, or passphrases. All security monitoring applies exclusively to PiNova marketplace operations and fully complies with Official Pi SDK v2, Official Pi Platform API, and Pi Browser standards. Risk scores provide operational guidance only and support human review.";
+    return "PiNova Global Hub Enterprise Security Engine provides internal platform fraud prevention, session protection, and privacy governance. PiNova never requests, receives, or stores Pi wallet private keys, seed phrases, or passphrases. All security monitoring applies exclusively to PiNova platform operations and fully complies with Official Pi SDK v2, Official Pi Platform API, and Pi Browser standards. Risk scores provide operational guidance only and support human review.";
   }
 
   public getPerformanceNotice(): string {

@@ -1,6 +1,6 @@
 /**
  * Module 11 — Enterprise Developer Platform, Integration & Extensibility Engine
- * Core Engine & State Orchestration for PiNova Global Marketplace
+ * Core Engine & State Orchestration for PiNova Global Hub
  */
 
 import {
@@ -694,7 +694,7 @@ export class EnterpriseDeveloperPlatformEngine {
       payloadSnippet: JSON.stringify({
         event: 'webhook.test_ping',
         timestamp: new Date().toISOString(),
-        source: 'PiNova Global Marketplace Enterprise Webhook Engine'
+        source: 'PiNova Global Hub Enterprise Webhook Engine'
       }),
       statusCode: 200,
       deliveryDurationMs: Math.floor(Math.random() * 80) + 20,

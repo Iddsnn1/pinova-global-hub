@@ -1,6 +1,6 @@
 /**
  * Module 11 — Enterprise Developer Platform, Integration & Extensibility Engine
- * Full-Featured Production-Grade UI View for PiNova Global Marketplace
+ * Full-Featured Production-Grade UI View for PiNova Global Hub
  */
 
 import React, { useState, useEffect } from 'react';
@@ -272,7 +272,7 @@ export const DeveloperPlatformView: React.FC<DeveloperPlatformViewProps> = ({
           </span>
         </div>
         <p className="text-[11px] text-slate-300 leading-relaxed">
-          <strong>Official Compliance Notice:</strong> PiNova Global Marketplace is built on a non-custodial marketplace architecture. Payment processing relies on the Official Pi SDK v2 and Pi Platform API. PiNova never stores or manages Pi wallet private keys, recovery phrases, passphrases, blockchain infrastructure, or official Pi Network services. Payment approval and completion are processed through the Official Pi SDK v2 payment workflow and Pi Platform API according to their documented integration flow, and PiNova never performs wallet custody, settlement, blockchain validation, or transaction finality. Certain marketplace capabilities rely on external service providers and official Pi Platform services; feature availability, response times, and service outcomes may vary depending on provider availability, network connectivity, and Official Pi Platform service status. All developer integrations, API routing gateways, and extensions operate strictly within the application sandbox for testing and validation.
+          <strong>Official Compliance Notice:</strong> PiNova Global Hub is built on a non-custodial architecture. Payment processing relies on the Official Pi SDK v2 and Pi Platform API. PiNova never stores or manages Pi wallet private keys, recovery phrases, passphrases, blockchain infrastructure, or official Pi Network services. Payment approval and completion are processed through the Official Pi SDK v2 payment workflow and Pi Platform API according to their documented integration flow, and PiNova never performs wallet custody, settlement, blockchain validation, or transaction finality. Certain capabilities rely on external service providers and official Pi Platform services; feature availability, response times, and service outcomes may vary depending on provider availability, network connectivity, and Official Pi Platform service status. All developer integrations, API routing gateways, and extensions operate strictly within the application sandbox for testing and validation.
         </p>
       </div>
 

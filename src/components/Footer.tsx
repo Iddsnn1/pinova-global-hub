@@ -25,20 +25,20 @@ export const Footer: React.FC<FooterProps> = ({ onSelectCategory, onOpenLanguage
               <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-purple-600 to-amber-500 flex items-center justify-center font-bold text-slate-950 text-lg">
                 π
               </div>
-              <span className="font-black text-lg text-white">{t('common.appName', undefined, 'PiNova Marketplace')}</span>
+              <span className="font-black text-lg text-white">{t('common.appName', undefined, 'PiNova Global Hub')}</span>
             </div>
             <p className="text-xs text-slate-400 leading-relaxed">
-              {t('common.tagline', undefined, 'Enterprise global multi-vendor marketplace built for the Pi Network ecosystem.')}
+              {t('common.tagline', undefined, 'Enterprise global ecosystem & multi-vendor marketplace built for the Pi Network.')}
             </p>
             <div className="flex items-center gap-2 text-xs font-semibold text-emerald-400">
               <ShieldCheck className="w-4 h-4" />
-              <span>Marketplace Order Protection Standard</span>
+              <span>Platform Order Protection Standard</span>
             </div>
 
             {/* Permanent Transparency & Operational Notice */}
             <div className="pt-2 text-[11px] text-slate-400 leading-relaxed border-t border-slate-900 mt-2 space-y-1.5">
               <p>
-                <strong>Transparency Notice:</strong> PiNova Global Marketplace is built on a non-custodial marketplace architecture. Payment processing relies on the Official Pi SDK v2 and Pi Platform API. PiNova never stores or manages Pi wallet private keys, recovery phrases, passphrases, blockchain infrastructure, or official Pi Network services.
+                <strong>Transparency Notice:</strong> PiNova Global Hub is built on a non-custodial architecture. Payment processing relies on the Official Pi SDK v2 and Pi Platform API. PiNova never stores or manages Pi wallet private keys, recovery phrases, passphrases, blockchain infrastructure, or official Pi Network services.
               </p>
               <p>
                 <strong>Operational Notice:</strong> Certain marketplace capabilities rely on external service providers and official Pi Platform services. Feature availability, response times, and service outcomes may vary depending on provider availability, network connectivity, and Official Pi Platform service status.
@@ -131,7 +131,7 @@ export const Footer: React.FC<FooterProps> = ({ onSelectCategory, onOpenLanguage
 
         {/* Bottom Line */}
         <div className="pt-8 border-t border-slate-900 flex flex-wrap items-center justify-between gap-4 text-xs text-slate-500">
-          <p>© 2026 PiNova Global Marketplace. Built for the Pi Network Ecosystem.</p>
+          <p>© 2026 PiNova Global Hub. Built for the Pi Network Ecosystem.</p>
           <div className="flex items-center gap-4">
             <span>Privacy Policy</span>
             <span>Escrow Terms</span>

@@ -2,7 +2,7 @@ import { TranslationDictionary } from '../../types/i18n';
 
 export const enDictionary: TranslationDictionary = {
   // Common
-  'common.appName': 'PiNova Global Marketplace',
+  'common.appName': 'PiNova Global Hub',
   'common.tagline': 'Enterprise Pi Network Commerce & Utility Platform',
   'common.search': 'Search products, utilities, vendors...',
   'common.save': 'Save Changes',

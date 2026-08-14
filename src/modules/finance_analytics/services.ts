@@ -628,7 +628,7 @@ export class FinanceAnalyticsEngine {
     const generatedTime = new Date().toISOString();
     const marketplaceVersion = 'PiNova Enterprise v2.4.0';
     const dataSource = 'PiNova Verified On-Chain SDK v2 Ledger & Internal Marketplace Database';
-    const complianceNotice = 'Revenue reports and financial dashboards represent marketplace operational reporting only. PiNova Global Marketplace does not provide Pi wallet custody, settlement services, blockchain verification, or official Pi Network financial reporting.';
+    const complianceNotice = 'Revenue reports and financial dashboards represent platform operational reporting only. PiNova Global Hub does not provide Pi wallet custody, settlement services, blockchain verification, or official Pi Network financial reporting.';
 
     // Log immutable audit record
     this.logAuditRecord(
@@ -643,7 +643,7 @@ export class FinanceAnalyticsEngine {
 
     const lines = [
       '====================================================================================================',
-      'PINOVA GLOBAL MARKETPLACE - FINANCIAL AUDIT REPORT',
+      'PINOVA GLOBAL HUB - FINANCIAL & COMMERCE AUDIT REPORT',
       '====================================================================================================',
       `Report Generated Time: ${generatedTime}`,
       `Reporting Period: ${periodLabel}`,

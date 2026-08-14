@@ -232,7 +232,7 @@ export const MerchantEcosystemHub: React.FC<MerchantEcosystemHubProps> = ({
     const prod: Product = {
       id: `prod-${Date.now()}`,
       title: newProdTitle,
-      description: newProdDesc || 'Official quality product available on PiNova Global Marketplace.',
+      description: newProdDesc || 'Official quality product available on PiNova Global Hub.',
       pricePi: Number(newProdPrice),
       category: newProdCat,
       subcategory: newProdSubcat,

@@ -25,7 +25,8 @@ import {
   PhoneCall,
   Tv,
   Droplet,
-  Lightbulb
+  Lightbulb,
+  Compass
 } from 'lucide-react';
 import { Product, Order, Vendor, PiUser } from '../../types';
 import { MainSection, MarketplaceCategory } from '../../types/navigation';
@@ -187,72 +188,117 @@ export const HomeView: React.FC<HomeViewProps> = ({
         </div>
       </div>
 
-      {/* 2. QUICK ACTIONS COMMAND GRID */}
+      {/* 2. CORE HUB MODULES & QUICK COMMAND GRID */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <h2 className="text-base sm:text-lg font-black text-slate-900 dark:text-slate-100 flex items-center gap-2">
-            <Zap className="w-5 h-5 text-amber-500" />
-            <span>Quick Actions & Services</span>
-          </h2>
-          <span className="text-xs text-slate-500 font-medium">Instant One-Tap Access</span>
+          <div>
+            <h2 className="text-base sm:text-lg font-black text-slate-900 dark:text-slate-100 flex items-center gap-2">
+              <Zap className="w-5 h-5 text-amber-500" />
+              <span>PiNova Global Hub Modules</span>
+            </h2>
+            <p className="text-xs text-slate-500 font-medium">Enterprise ecosystem for commerce, utilities, services & digital identity</p>
+          </div>
+          <span className="hidden sm:inline-block text-xs text-purple-400 font-bold bg-purple-500/10 px-2.5 py-1 rounded-full border border-purple-500/20">
+            6 Integrated Portals
+          </span>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           
-          {/* Action 1: Airtime & Utilities */}
-          <div
-            onClick={() => onNavigateSection('utilities')}
-            className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-emerald-500 transition-all cursor-pointer group shadow-sm flex flex-col items-center text-center space-y-2"
-          >
-            <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
-              <PhoneCall className="w-6 h-6" />
-            </div>
-            <h3 className="text-xs font-bold text-slate-900 dark:text-slate-100 group-hover:text-emerald-500">
-              Airtime & Utilities
-            </h3>
-            <p className="text-[10px] text-slate-500">Topup, Bills & Data</p>
-          </div>
-
-          {/* Action 2: Marketplace Catalog */}
+          {/* Module 1: Marketplace */}
           <div
             onClick={() => onNavigateSection('marketplace', 'all')}
-            className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-purple-500 transition-all cursor-pointer group shadow-sm flex flex-col items-center text-center space-y-2"
+            className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-purple-500 transition-all cursor-pointer group shadow-sm flex flex-col items-center text-center space-y-2 hover:-translate-y-0.5"
           >
-            <div className="w-12 h-12 rounded-2xl bg-purple-500/10 text-purple-500 flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
-              <ShoppingBag className="w-6 h-6" />
+            <div className="w-11 h-11 rounded-2xl bg-purple-500/10 text-purple-500 flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
+              <ShoppingBag className="w-5 h-5" />
             </div>
-            <h3 className="text-xs font-bold text-slate-900 dark:text-slate-100 group-hover:text-purple-500">
-              Explore Goods
-            </h3>
-            <p className="text-[10px] text-slate-500">Physical & Digital</p>
+            <div>
+              <h3 className="text-xs font-black text-slate-900 dark:text-slate-100 group-hover:text-purple-500">
+                Marketplace
+              </h3>
+              <p className="text-[10px] text-slate-500 mt-0.5">Goods & Catalog</p>
+            </div>
           </div>
 
-          {/* Action 3: AI Shopping Concierge */}
+          {/* Module 2: Utilities & Bills */}
+          <div
+            onClick={() => onNavigateSection('utilities')}
+            className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-emerald-500 transition-all cursor-pointer group shadow-sm flex flex-col items-center text-center space-y-2 hover:-translate-y-0.5"
+          >
+            <div className="w-11 h-11 rounded-2xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
+              <Zap className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-xs font-black text-slate-900 dark:text-slate-100 group-hover:text-emerald-500">
+                Utilities
+              </h3>
+              <p className="text-[10px] text-slate-500 mt-0.5">Airtime, Power & TV</p>
+            </div>
+          </div>
+
+          {/* Module 3: Services */}
+          <div
+            onClick={() => onNavigateSection('services')}
+            className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-blue-500 transition-all cursor-pointer group shadow-sm flex flex-col items-center text-center space-y-2 hover:-translate-y-0.5"
+          >
+            <div className="w-11 h-11 rounded-2xl bg-blue-500/10 text-blue-500 flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
+              <Briefcase className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-xs font-black text-slate-900 dark:text-slate-100 group-hover:text-blue-500">
+                Services
+              </h3>
+              <p className="text-[10px] text-slate-500 mt-0.5">Freelance & Tech</p>
+            </div>
+          </div>
+
+          {/* Module 4: Transport & Travel */}
+          <div
+            onClick={() => onNavigateSection('utilities', 'transport' as any)}
+            className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-cyan-500 transition-all cursor-pointer group shadow-sm flex flex-col items-center text-center space-y-2 hover:-translate-y-0.5"
+          >
+            <div className="w-11 h-11 rounded-2xl bg-cyan-500/10 text-cyan-500 flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
+              <Compass className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-xs font-black text-slate-900 dark:text-slate-100 group-hover:text-cyan-500">
+                Transport & Travel
+              </h3>
+              <p className="text-[10px] text-slate-500 mt-0.5">Flights & Mobility</p>
+            </div>
+          </div>
+
+          {/* Module 5: AI Shopping Concierge */}
           <div
             onClick={() => onNavigateSection('ai_search')}
-            className="p-4 rounded-2xl bg-gradient-to-br from-purple-900 via-indigo-900 to-slate-900 border border-purple-700/60 text-white transition-all cursor-pointer group shadow-md flex flex-col items-center text-center space-y-2"
+            className="p-3.5 rounded-2xl bg-gradient-to-br from-purple-950 via-indigo-950 to-slate-900 border border-purple-700/60 text-white transition-all cursor-pointer group shadow-md flex flex-col items-center text-center space-y-2 hover:-translate-y-0.5"
           >
-            <div className="w-12 h-12 rounded-2xl bg-amber-400/20 text-amber-300 flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
-              <Sparkles className="w-6 h-6 animate-pulse" />
+            <div className="w-11 h-11 rounded-2xl bg-amber-400/20 text-amber-300 flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
+              <Sparkles className="w-5 h-5 animate-pulse" />
             </div>
-            <h3 className="text-xs font-bold text-white group-hover:text-amber-300">
-              AI Concierge
-            </h3>
-            <p className="text-[10px] text-slate-300">Smart Shopping AI</p>
+            <div>
+              <h3 className="text-xs font-black text-white group-hover:text-amber-300">
+                AI Concierge
+              </h3>
+              <p className="text-[10px] text-slate-300 mt-0.5">Smart Assistant</p>
+            </div>
           </div>
 
-          {/* Action 4: PSTP Shield Protection */}
+          {/* Module 6: PSTP Escrow & Security */}
           <div
             onClick={onOpenPstpShield}
-            className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-emerald-500 transition-all cursor-pointer group shadow-sm flex flex-col items-center text-center space-y-2"
+            className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-emerald-500 transition-all cursor-pointer group shadow-sm flex flex-col items-center text-center space-y-2 hover:-translate-y-0.5"
           >
-            <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
-              <ShieldCheck className="w-6 h-6" />
+            <div className="w-11 h-11 rounded-2xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
+              <ShieldCheck className="w-5 h-5" />
             </div>
-            <h3 className="text-xs font-bold text-slate-900 dark:text-slate-100 group-hover:text-emerald-500">
-              Order Protection
-            </h3>
-            <p className="text-[10px] text-slate-500">Escrow & Security</p>
+            <div>
+              <h3 className="text-xs font-black text-slate-900 dark:text-slate-100 group-hover:text-emerald-500">
+                PSTP Security
+              </h3>
+              <p className="text-[10px] text-slate-500 mt-0.5">Escrow Protection</p>
+            </div>
           </div>
 
         </div>

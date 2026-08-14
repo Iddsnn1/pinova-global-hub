@@ -348,7 +348,7 @@ export class GeminiAIAdapter implements IAIProviderAdapter {
 
   async generateMerchantCopy(request: AIMerchantCopyRequest): Promise<AIMerchantCopyResponse> {
     return {
-      generatedDescription: `Elevate your lifestyle with our premium ${request.productTitle}. Engineered specifically for discerning Pi Pioneers, combining durability, sleek modern aesthetics, and instant crypto settlement compatibility on PiNova Global Marketplace.`,
+      generatedDescription: `Elevate your lifestyle with our premium ${request.productTitle}. Engineered specifically for discerning Pi Pioneers, combining durability, sleek modern aesthetics, and instant crypto settlement compatibility on PiNova Global Hub.`,
       suggestedTitles: [
         `Premium Enterprise ${request.productTitle} — Authentic Pi Nova Deal`,
         `Official PiNova Edition: ${request.productTitle}`,
@@ -381,7 +381,7 @@ export class GeminiAIAdapter implements IAIProviderAdapter {
       isApproved: true,
       flaggedCategories: [],
       riskScore: 5,
-      reasoning: 'Content verified compliant with PiNova Marketplace Governance policies.'
+      reasoning: 'Content verified compliant with PiNova Global Hub Governance policies.'
     };
   }
 
@@ -555,7 +555,7 @@ export class GenericAIAdapter implements IAIProviderAdapter {
 
   async generateMerchantCopy(request: AIMerchantCopyRequest): Promise<AIMerchantCopyResponse> {
     return {
-      generatedDescription: `${this.providerName} generated description for ${request.productTitle}. Tailored for PiNova Global Marketplace buyers.`,
+      generatedDescription: `${this.providerName} generated description for ${request.productTitle}. Tailored for PiNova Global Hub buyers.`,
       suggestedTitles: [`${request.productTitle} (${this.providerName})`],
       suggestedTags: [request.category, 'AI_Generated'],
       suggestedCategory: request.category,

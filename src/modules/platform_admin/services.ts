@@ -1144,7 +1144,7 @@ export class PlatformAdminEngine {
   }
 
   public getComplianceNotice(): string {
-    return "PiNova Global Marketplace Enterprise Administration Engine provides internal marketplace operational governance and system monitoring. PiNova does not perform official Pi Network KYC, wallet custody, blockchain validation, settlement services, or official Pi Network administration. All identity verification, business reviews, and rate controls operate exclusively within the PiNova marketplace ecosystem.";
+    return "PiNova Global Hub Enterprise Administration Engine provides internal platform operational governance and system monitoring. PiNova does not perform official Pi Network KYC, wallet custody, blockchain validation, settlement services, or official Pi Network administration. All identity verification, business reviews, and rate controls operate exclusively within the PiNova ecosystem.";
   }
 
   public getPerformanceNotice(): string {

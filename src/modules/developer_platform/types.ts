@@ -1,6 +1,6 @@
 /**
  * Module 11 — Enterprise Developer Platform, Integration & Extensibility Engine
- * Type Definitions for PiNova Global Marketplace
+ * Type Definitions for PiNova Global Hub
  */
 
 export type ApiVersion = 'v1' | 'v2' | 'v3-beta';

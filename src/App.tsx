@@ -478,22 +478,61 @@ function MainAppContent() {
     setMessages((prev) => [...prev, newMsg]);
   };
 
-  // Build breadcrumbs for header
+  // Build breadcrumbs for header following Hub -> Module -> Category hierarchy
   const getBreadcrumbs = (): BreadcrumbItem[] => {
-    const breadcrumbs: BreadcrumbItem[] = [
-      { label: activeSection.toUpperCase(), section: activeSection }
-    ];
-
-    if (activeSection === 'marketplace' && selectedMarketplaceCategory !== 'all') {
-      const catDef = MARKETPLACE_CATEGORIES.find((c) => c.id === selectedMarketplaceCategory);
-      breadcrumbs.push({
-        label: catDef?.name || selectedMarketplaceCategory,
-        section: 'marketplace',
-        category: selectedMarketplaceCategory
-      });
+    switch (activeSection) {
+      case 'home':
+        return [{ label: 'Home', section: 'home' }];
+      case 'marketplace': {
+        const items: BreadcrumbItem[] = [{ label: 'Marketplace', section: 'marketplace' }];
+        if (selectedMarketplaceCategory !== 'all') {
+          const catDef = MARKETPLACE_CATEGORIES.find((c) => c.id === selectedMarketplaceCategory);
+          items.push({
+            label: catDef?.name || selectedMarketplaceCategory,
+            section: 'marketplace',
+            category: selectedMarketplaceCategory
+          });
+        }
+        return items;
+      }
+      case 'utilities': {
+        const items: BreadcrumbItem[] = [{ label: 'Utilities', section: 'utilities' }];
+        if (selectedUtilityCategory) {
+          const utilDef = UTILITY_CATEGORIES.find((u) => u.id === selectedUtilityCategory);
+          items.push({
+            label: utilDef?.name || selectedUtilityCategory,
+            section: 'utilities',
+            category: selectedUtilityCategory as any
+          });
+        }
+        return items;
+      }
+      case 'services':
+        return [{ label: 'Services', section: 'services' }];
+      case 'ai_search':
+        return [{ label: 'AI Concierge', section: 'ai_search' }];
+      case 'cart':
+        return [
+          { label: 'Marketplace', section: 'marketplace' },
+          { label: 'Cart & Checkout', section: 'cart' }
+        ];
+      case 'orders':
+        return [{ label: 'Orders & Escrow Hub', section: 'orders' }];
+      case 'community':
+        return [{ label: 'Community Hub', section: 'community' }];
+      case 'profile':
+        return [{ label: 'Pioneer Profile', section: 'profile' }];
+      case 'finance_analytics':
+        return [{ label: 'Finance & Analytics', section: 'finance_analytics' }];
+      case 'admin_governance':
+        return [{ label: 'Platform Administration', section: 'admin_governance' }];
+      case 'security_trust':
+        return [{ label: 'Enterprise Security & Trust', section: 'security_trust' }];
+      case 'developer_platform':
+        return [{ label: 'Developer Platform', section: 'developer_platform' }];
+      default:
+        return [{ label: String(activeSection), section: activeSection }];
     }
-
-    return breadcrumbs;
   };
 
   const unreadNotifsCount = notifications.filter((n) => !n.read).length;
