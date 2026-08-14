@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   X, 
   Smartphone, 
@@ -32,7 +32,8 @@ import {
   UserCheck,
   CreditCard,
   FileText,
-  MapPin
+  MapPin,
+  ChevronDown
 } from 'lucide-react';
 import { 
   UtilityCategoryType, 
@@ -42,6 +43,7 @@ import {
   UtilityTransactionReceipt
 } from '../../types/utility';
 import { UTILITY_CATEGORY_META, SAMPLE_UTILITY_PROVIDERS } from '../../data/utilityData';
+import { AIRTIME_COUNTRIES } from '../../data/airtimeData';
 import { createPiPayment } from '../../lib/piSdk';
 import { DigitalReceiptModal } from './DigitalReceiptModal';
 import { ProviderValidationFactory } from '../../modules/utility/providerValidation';
@@ -149,7 +151,7 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
 
   // Purchase Mode & Plan State
   const [purchaseMode, setPurchaseMode] = useState<'custom' | 'package'>('custom');
-  const [customFiatAmount, setCustomFiatAmount] = useState<number | ''>('');
+  const [customAmountInput, setCustomAmountInput] = useState<string>('');
   const [selectedPackage, setSelectedPackage] = useState<UtilityProviderPackage | null>(null);
 
   // Customer Account & Validation State
@@ -169,13 +171,15 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [generatedReceipt, setGeneratedReceipt] = useState<UtilityTransactionReceipt | null>(null);
 
-  // Derive all available providers for selected category
-  const categoryProviders = SAMPLE_UTILITY_PROVIDERS.filter(
-    (p) => p.category === selectedCategory && p.enabled
-  );
+  // Derive all available providers for selected category (memoized)
+  const categoryProviders = useMemo(() => {
+    return SAMPLE_UTILITY_PROVIDERS.filter(
+      (p) => p.category === selectedCategory && p.enabled
+    );
+  }, [selectedCategory]);
 
-  // Filter providers for country and state
-  const availableProvidersForCountry = React.useMemo(() => {
+  // Filter providers for country and state (memoized)
+  const availableProvidersForCountry = useMemo(() => {
     const activeCode = (selectedCountryCode || 'NG').toUpperCase();
     const countryMatches = categoryProviders.filter(p => {
       const pCode = (p.countryCode || (p.country === 'Global' ? 'GLOBAL' : p.country.slice(0, 2))).toUpperCase();
@@ -190,7 +194,6 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
         )
       );
       if (stateMatches.length > 0) {
-        // Return state-specific providers followed by general/national providers
         const otherMatches = countryMatches.filter(p => !p.state || p.state === 'National' || p.state === 'Nationwide');
         return [...stateMatches, ...otherMatches];
       }
@@ -199,48 +202,84 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
     return countryMatches;
   }, [categoryProviders, selectedCountryCode, selectedState]);
 
-  // Reset/Initialize Provider, Designation when category or location changes
+  // Initialise or gracefully adapt Provider / Designation when category or location changes
   useEffect(() => {
-    setErrorMessage(null);
-    setAccountNumber('');
-    setAccountValidationResult(null);
-
     if (availableProvidersForCountry.length > 0) {
-      const firstProv = availableProvidersForCountry[0];
-      setSelectedProvider(firstProv);
+      const isCurrentStillValid = selectedProvider && availableProvidersForCountry.some(p => p.id === selectedProvider.id);
+      if (!isCurrentStillValid) {
+        const firstProv = availableProvidersForCountry[0];
+        setSelectedProvider(firstProv);
 
-      const desigs = firstProv.designations || getDefaultDesignationsForCategory(selectedCategory);
-      setSelectedDesignation(desigs[0] || 'Standard Service');
+        const desigs = firstProv.designations || getDefaultDesignationsForCategory(selectedCategory);
+        setSelectedDesignation(desigs[0] || 'Standard Service');
 
-      if (firstProv.supportsCustomAmount) {
-        setPurchaseMode('custom');
-        setCustomFiatAmount('');
-      } else if (firstProv.supportsFixedPackages && firstProv.packages.length > 0) {
-        setPurchaseMode('package');
-        setSelectedPackage(firstProv.packages[0]);
+        if (firstProv.supportsCustomAmount) {
+          setPurchaseMode('custom');
+        } else if (firstProv.supportsFixedPackages && firstProv.packages.length > 0) {
+          setPurchaseMode('package');
+          setSelectedPackage(firstProv.packages[0]);
+        }
+        setAccountValidationResult(null);
       }
     } else {
       setSelectedProvider(null);
     }
-  }, [selectedCategory, selectedCountryCode, selectedState, availableProvidersForCountry]);
+  }, [availableProvidersForCountry, selectedCategory]);
 
   // Handle Provider selection
   const handleSelectProvider = (prov: UtilityServiceProvider) => {
     setSelectedProvider(prov);
     setErrorMessage(null);
-    setAccountNumber('');
     setAccountValidationResult(null);
 
     const desigs = prov.designations || getDefaultDesignationsForCategory(selectedCategory);
-    setSelectedDesignation(desigs[0] || 'Standard Service');
-
-    if (prov.supportsCustomAmount) {
-      setPurchaseMode('custom');
-      setCustomFiatAmount('');
-    } else if (prov.supportsFixedPackages && prov.packages.length > 0) {
-      setPurchaseMode('package');
-      setSelectedPackage(prov.packages[0]);
+    if (!selectedDesignation || !desigs.includes(selectedDesignation)) {
+      setSelectedDesignation(desigs[0] || 'Standard Service');
     }
+
+    if (purchaseMode === 'package') {
+      if (prov.supportsFixedPackages && prov.packages.length > 0) {
+        setSelectedPackage(prov.packages[0]);
+      } else if (prov.supportsCustomAmount) {
+        setPurchaseMode('custom');
+      }
+    } else if (purchaseMode === 'custom') {
+      if (!prov.supportsCustomAmount && prov.supportsFixedPackages && prov.packages.length > 0) {
+        setPurchaseMode('package');
+        setSelectedPackage(prov.packages[0]);
+      }
+    }
+  };
+
+  // Handle Custom Amount changes preserving raw user strings (e.g. "0", "0.", "0.1", "1", "1.5", "10.25")
+  const handleCustomAmountChange = (raw: string) => {
+    if (raw === '') {
+      setCustomAmountInput('');
+      return;
+    }
+    // Allow only numeric digits and at most one decimal point
+    const sanitized = raw.replace(/[^0-9.]/g, '');
+    const parts = sanitized.split('.');
+    let cleaned = sanitized;
+    if (parts.length > 2) {
+      cleaned = parts[0] + '.' + parts.slice(1).join('');
+    }
+    setCustomAmountInput(cleaned);
+    if (purchaseMode !== 'custom') {
+      setPurchaseMode('custom');
+    }
+  };
+
+  // Handle preset dollar clicks
+  const handleSelectPresetAmount = (amt: number) => {
+    setPurchaseMode('custom');
+    setCustomAmountInput(amt.toString());
+  };
+
+  // Handle Package Selection
+  const handleSelectPackage = (pkg: UtilityProviderPackage) => {
+    setPurchaseMode('package');
+    setSelectedPackage(pkg);
   };
 
   // Icon mapping helper
@@ -352,8 +391,11 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
     if (purchaseMode === 'package' && selectedPackage) {
       return selectedPackage.fiatPrice;
     }
-    const num = Number(customFiatAmount);
-    return typeof num === 'number' && !isNaN(num) && isFinite(num) && num > 0 ? num : 0;
+    if (!customAmountInput || customAmountInput.trim() === '') {
+      return 0;
+    }
+    const parsed = parseFloat(customAmountInput);
+    return !isNaN(parsed) && isFinite(parsed) && parsed > 0 ? parsed : 0;
   };
 
   const calculatedPiAmount = getActiveFiatPrice() / piConversionConfig.piRateUsd;
@@ -503,7 +545,7 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                   const paxStr = paxName ? ` [Pax: ${paxName}]` : '';
                   setSelectedDesignation(`${routeMeta.tripDetails}${paxStr}`);
                   setPurchaseMode('custom');
-                  setCustomFiatAmount(routeMeta.fiatFare);
+                  setCustomAmountInput(routeMeta.fiatFare.toString());
                   setAccountNumber(
                     routeMeta.passengerDetails?.passportNumber 
                       ? `PAX-DOC-${routeMeta.passengerDetails.passportNumber}`
@@ -580,9 +622,70 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
           /* STANDARD UTILITY FLOW */
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             
-            {/* Left Column: Provider, Service Details, Package / Amount */}
+            {/* Left Column: Location, Provider, Service Details, Package / Amount */}
             <div className="lg:col-span-7 space-y-5">
               
+              {/* COUNTRY & REGION SELECTION */}
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                    <Globe className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+                    Country / Region
+                  </label>
+                  <span className="text-[11px] font-bold text-slate-500 flex items-center gap-1">
+                    <span>{getCountryFlagEmoji(selectedCountryCode)}</span>
+                    <span>{selectedCountryCode}</span>
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div>
+                    <select
+                      value={selectedCountryCode}
+                      onChange={(e) => {
+                        setSelectedCountryCode(e.target.value);
+                        setSelectedState('');
+                        setErrorMessage(null);
+                        setAccountNumber('');
+                        setAccountValidationResult(null);
+                      }}
+                      className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-xs font-bold text-slate-900 dark:text-slate-100 focus:outline-none focus:border-purple-500"
+                    >
+                      <option value="NG">🇳🇬 Nigeria (NG)</option>
+                      <option value="GH">🇬🇭 Ghana (GH)</option>
+                      <option value="KE">🇰🇪 Kenya (KE)</option>
+                      <option value="ZA">🇿🇦 South Africa (ZA)</option>
+                      <option value="US">🇺🇸 United States (US)</option>
+                      <option value="GB">🇬🇧 United Kingdom (GB)</option>
+                      <option value="AE">🇦🇪 United Arab Emirates (AE)</option>
+                      <option value="TR">🇹🇷 Turkey (TR)</option>
+                      <option value="VN">🇻🇳 Vietnam (VN)</option>
+                      <option value="ID">🇮🇩 Indonesia (ID)</option>
+                      <option value="GLOBAL">🌐 Global Services</option>
+                    </select>
+                  </div>
+
+                  {selectedCountryCode === 'NG' ? (
+                    <div>
+                      <select
+                        value={selectedState}
+                        onChange={(e) => setSelectedState(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-xs font-bold text-slate-900 dark:text-slate-100 focus:outline-none focus:border-purple-500"
+                      >
+                        <option value="">All States / Nationwide</option>
+                        {NIGERIAN_STATES.map((st) => (
+                          <option key={st} value={st}>{st}</option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : (
+                    <div className="flex items-center px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 text-[11px] font-semibold text-slate-500">
+                      <span>Nationwide Coverage</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
               {/* PROVIDER SELECTION (MUST BE AFTER UTILITY SELECTION) */}
               <div className="space-y-2">
                 <label className="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-300 block">
@@ -648,10 +751,10 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                       return (
                         <button
                           key={desig}
+                          type="button"
                           onClick={() => {
                             setSelectedDesignation(desig);
                             setErrorMessage(null);
-                            setAccountNumber('');
                             setAccountValidationResult(null);
                           }}
                           className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${
@@ -691,9 +794,10 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                     />
 
                     <button
+                      type="button"
                       onClick={handleValidateAccount}
                       disabled={isValidatingAccount || !accountNumber.trim()}
-                      className="px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white text-xs font-bold transition-all flex items-center gap-1.5 shrink-0"
+                      className="px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 shadow-sm"
                     >
                       {isValidatingAccount ? (
                         <RefreshCw className="w-4 h-4 animate-spin" />
@@ -730,6 +834,7 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                     <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
                       {selectedProvider.supportsCustomAmount && (
                         <button
+                          type="button"
                           onClick={() => setPurchaseMode('custom')}
                           className={`px-3 py-1 rounded-lg text-[11px] font-bold transition-all ${
                             purchaseMode === 'custom'
@@ -743,7 +848,13 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
 
                       {selectedProvider.supportsFixedPackages && selectedProvider.packages.length > 0 && (
                         <button
-                          onClick={() => setPurchaseMode('package')}
+                          type="button"
+                          onClick={() => {
+                            setPurchaseMode('package');
+                            if (!selectedPackage && selectedProvider.packages.length > 0) {
+                              setSelectedPackage(selectedProvider.packages[0]);
+                            }
+                          }}
                           className={`px-3 py-1 rounded-lg text-[11px] font-bold transition-all ${
                             purchaseMode === 'package'
                               ? 'bg-purple-600 text-white shadow-sm'
@@ -766,20 +877,10 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                       <div className="relative">
                         <span className="absolute left-3.5 top-2.5 text-base font-black text-slate-400">$</span>
                         <input
-                          type="number"
-                          step="any"
-                          min="0.0001"
-                          max={selectedProvider.maxCustomFiat || 1000}
-                          value={customFiatAmount}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            if (val === '') {
-                              setCustomFiatAmount('');
-                            } else {
-                              const parsed = parseFloat(val);
-                              setCustomFiatAmount(isNaN(parsed) ? '' : parsed);
-                            }
-                          }}
+                          type="text"
+                          inputMode="decimal"
+                          value={customAmountInput}
+                          onChange={(e) => handleCustomAmountChange(e.target.value)}
                           placeholder="0.00"
                           className="w-full pl-8 pr-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-black text-lg text-slate-900 dark:text-slate-100 focus:outline-none focus:border-purple-500"
                         />
@@ -789,10 +890,11 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                         {[5, 10, 25, 50, 100].map((amt) => (
                           <button
                             key={amt}
-                            onClick={() => setCustomFiatAmount(amt)}
+                            type="button"
+                            onClick={() => handleSelectPresetAmount(amt)}
                             className={`px-3 py-1 rounded-lg text-xs font-bold border transition-colors ${
-                              customFiatAmount === amt
-                                ? 'bg-purple-600 text-white border-purple-600'
+                              customAmountInput === amt.toString()
+                                ? 'bg-purple-600 text-white border-purple-600 shadow-sm'
                                 : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-purple-500'
                             }`}
                           >
@@ -810,10 +912,10 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                         return (
                           <div
                             key={pkg.id}
-                            onClick={() => setSelectedPackage(pkg)}
+                            onClick={() => handleSelectPackage(pkg)}
                             className={`p-3.5 rounded-2xl border transition-all cursor-pointer relative space-y-1 ${
                               isSelected
-                                ? 'bg-purple-50 dark:bg-purple-950/60 border-purple-600 ring-2 ring-purple-500/30'
+                                ? 'bg-purple-50 dark:bg-purple-950/60 border-purple-600 ring-2 ring-purple-500/30 shadow-sm'
                                 : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-purple-400'
                             }`}
                           >
@@ -889,7 +991,9 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                   <div className="flex justify-between items-center text-slate-300">
                     <span>Package / Value:</span>
                     <span className="font-bold text-white">
-                      {purchaseMode === 'package' ? (selectedPackage?.name || 'Package') : `$${getActiveFiatPrice().toFixed(2)} USD`}
+                      {purchaseMode === 'package' 
+                        ? (selectedPackage ? `${selectedPackage.name} ($${selectedPackage.fiatPrice.toFixed(2)} USD)` : 'Package') 
+                        : (getActiveFiatPrice() > 0 ? `$${getActiveFiatPrice().toFixed(2)} USD` : '$0.00 USD')}
                     </span>
                   </div>
 
@@ -923,8 +1027,9 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
 
                 {/* PAY WITH PI WALLET BUTTON */}
                 <button
+                  type="button"
                   onClick={handleExecutePayment}
-                  disabled={isProcessingPayment || !selectedProvider || !accountNumber.trim() || !isWithinLimits}
+                  disabled={isProcessingPayment || !selectedProvider || !accountNumber.trim() || !isWithinLimits || getActiveFiatPrice() <= 0}
                   className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-purple-600 via-indigo-600 to-amber-500 hover:opacity-95 disabled:opacity-50 text-white font-extrabold text-xs sm:text-sm shadow-xl shadow-purple-600/30 transition-all flex items-center justify-center gap-2"
                 >
                   {isProcessingPayment ? (

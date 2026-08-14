@@ -52,7 +52,7 @@ export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
 
   // Step 4: Amount & Package Selection State
   const [purchaseMode, setPurchaseMode] = useState<'custom' | 'package'>('custom');
-  const [customFiatAmount, setCustomFiatAmount] = useState<number | ''>('');
+  const [customAmountInput, setCustomAmountInput] = useState<string>('');
   const [selectedPackage, setSelectedPackage] = useState<UtilityProviderPackage | null>(null);
 
   // Active Country details
@@ -81,7 +81,6 @@ export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
     setSelectedProvider(prov);
     if (prov.supportsCustomAmount) {
       setPurchaseMode('custom');
-      setCustomFiatAmount('');
     } else if (prov.supportsFixedPackages && prov.packages.length > 0) {
       setPurchaseMode('package');
       setSelectedPackage(prov.packages[0]);
@@ -99,12 +98,34 @@ export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
     }
   };
 
+  // Handle custom amount input preserving user keystrokes
+  const handleCustomAmountChange = (raw: string) => {
+    if (raw === '') {
+      setCustomAmountInput('');
+      return;
+    }
+    const sanitized = raw.replace(/[^0-9.]/g, '');
+    const parts = sanitized.split('.');
+    let cleaned = sanitized;
+    if (parts.length > 2) {
+      cleaned = parts[0] + '.' + parts.slice(1).join('');
+    }
+    setCustomAmountInput(cleaned);
+    if (purchaseMode !== 'custom') {
+      setPurchaseMode('custom');
+    }
+  };
+
   // Amount Math
   const getActiveFiatPrice = (): number => {
     if (purchaseMode === 'package' && selectedPackage) {
       return selectedPackage.fiatPrice;
     }
-    return typeof customFiatAmount === 'number' && !isNaN(customFiatAmount) && isFinite(customFiatAmount) && customFiatAmount > 0 ? customFiatAmount : 0;
+    if (!customAmountInput || customAmountInput.trim() === '') {
+      return 0;
+    }
+    const parsed = parseFloat(customAmountInput);
+    return !isNaN(parsed) && isFinite(parsed) && parsed > 0 ? parsed : 0;
   };
 
   const activeFiatPrice = getActiveFiatPrice();
@@ -402,9 +423,12 @@ export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
                   <button
                     key={amt}
                     type="button"
-                    onClick={() => setCustomFiatAmount(amt)}
+                    onClick={() => {
+                      setPurchaseMode('custom');
+                      setCustomAmountInput(amt.toString());
+                    }}
                     className={`py-2 rounded-xl text-xs font-bold border transition-all ${
-                      customFiatAmount === amt
+                      customAmountInput === amt.toString()
                         ? 'bg-purple-600 text-white border-purple-500 shadow-md'
                         : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300'
                     }`}
@@ -417,20 +441,10 @@ export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
               <div className="relative">
                 <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">$</span>
                 <input
-                  type="number"
-                  step="any"
-                  min="0.0001"
-                  max={selectedProvider?.maxCustomFiat || 1000}
-                  value={customFiatAmount}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    if (val === '') {
-                      setCustomFiatAmount('');
-                    } else {
-                      const parsed = parseFloat(val);
-                      setCustomFiatAmount(isNaN(parsed) ? '' : parsed);
-                    }
-                  }}
+                  type="text"
+                  inputMode="decimal"
+                  value={customAmountInput}
+                  onChange={(e) => handleCustomAmountChange(e.target.value)}
                   placeholder="Enter custom USD value (e.g. 5.00)"
                   className="w-full pl-8 pr-3 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-xs font-bold text-slate-900 dark:text-slate-100"
                 />
