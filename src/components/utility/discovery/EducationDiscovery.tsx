@@ -502,10 +502,10 @@ export const EducationDiscovery: React.FC<EducationDiscoveryProps> = ({
           <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 text-center space-y-2">
             <GraduationCap className="w-8 h-8 text-slate-500 mx-auto" />
             <p className="text-sm font-semibold text-slate-300">
-              {searchQuery ? `No institutions match "${searchQuery}"` : 'No institutions found for selected location & filter'}
+              {searchQuery ? `No institutions match "${searchQuery}"` : 'No supported institutions found for this type in this location.'}
             </p>
             <p className="text-xs text-slate-400">
-              Try selecting "All States / Regions" or picking another country in the location bar above.
+              Try selecting another Institution Type tab or "All States / Regions" in the location bar above.
             </p>
           </div>
         )}

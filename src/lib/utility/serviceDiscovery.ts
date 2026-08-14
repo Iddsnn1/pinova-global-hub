@@ -15,6 +15,7 @@ import {
   GenericServiceDiscoveryRequest,
   GenericServiceDiscoveryResult
 } from '../../types/utility';
+import { resolveSubdivisionCode } from '../../data/countrySubdivisions';
 
 /**
  * Filter utility providers by country name or 2-letter / ISO country code.
@@ -46,31 +47,64 @@ export function filterProvidersByState(
     return providers;
   }
 
-  const target = stateOrSubdivision.trim().toLowerCase();
+  const rawTarget = stateOrSubdivision.trim();
+  const target = rawTarget.toLowerCase();
 
   return providers.filter((p) => {
-    // 1. Direct subdivisionCode match
-    if (p.subdivisionCode && p.subdivisionCode.toLowerCase() === target) {
-      return true;
+    // 1. Direct subdivisionCode match or resolved match
+    if (p.subdivisionCode) {
+      if (p.subdivisionCode.toLowerCase() === target) {
+        return true;
+      }
+      if (p.countryCode) {
+        const resolvedCode = resolveSubdivisionCode(p.countryCode, p.subdivisionCode).toLowerCase();
+        const targetResolvedCode = resolveSubdivisionCode(p.countryCode, rawTarget).toLowerCase();
+        if (resolvedCode && targetResolvedCode && resolvedCode === targetResolvedCode) {
+          return true;
+        }
+      }
     }
 
     // 2. Direct state attribute match
-    if (p.state && (p.state.toLowerCase() === target || target.includes(p.state.toLowerCase()) || p.state.toLowerCase().includes(target))) {
-      return true;
+    if (p.state) {
+      const pState = p.state.toLowerCase();
+      if (pState === target) {
+        return true;
+      }
+      if (
+        (pState.includes('abuja') && target.includes('abuja')) ||
+        (p.countryCode && resolveSubdivisionCode(p.countryCode, p.state).toLowerCase() === resolveSubdivisionCode(p.countryCode, rawTarget).toLowerCase())
+      ) {
+        return true;
+      }
     }
 
     // 3. Multi-subdivision coverage array
-    if (p.supportedSubdivisions && p.supportedSubdivisions.some((sub) => sub.toLowerCase() === target || target.includes(sub.toLowerCase()))) {
+    if (p.supportedSubdivisions && p.supportedSubdivisions.some((sub) => {
+      const subLower = sub.toLowerCase();
+      if (subLower === target) return true;
+      if (p.countryCode) {
+        const subResolved = resolveSubdivisionCode(p.countryCode, sub).toLowerCase();
+        const targetResolved = resolveSubdivisionCode(p.countryCode, rawTarget).toLowerCase();
+        if (subResolved && targetResolved && subResolved === targetResolved) return true;
+      }
+      return false;
+    })) {
       return true;
     }
 
     // 4. Multi-state coverage array
-    if (p.supportedStates && p.supportedStates.some((s) => s.toLowerCase() === target || target.includes(s.toLowerCase()) || s.toLowerCase().includes(target))) {
-      return true;
-    }
-
-    // 5. National or Global providers without state restriction (e.g., National Exam boards or Global platforms)
-    if (!p.state && !p.subdivisionCode && (p.category === 'exam' || p.countryCode === 'GLOBAL')) {
+    if (p.supportedStates && p.supportedStates.some((s) => {
+      const sLower = s.toLowerCase();
+      if (sLower === target) return true;
+      if (sLower.includes('abuja') && target.includes('abuja')) return true;
+      if (p.countryCode) {
+        const sResolved = resolveSubdivisionCode(p.countryCode, s).toLowerCase();
+        const targetResolved = resolveSubdivisionCode(p.countryCode, rawTarget).toLowerCase();
+        if (sResolved && targetResolved && sResolved === targetResolved) return true;
+      }
+      return false;
+    })) {
       return true;
     }
 
@@ -194,7 +228,16 @@ export function searchInstitutions(
 
   // 2. Region / State Filter
   if (criteria.state && criteria.state.trim() !== '' && criteria.state.toUpperCase() !== 'ALL') {
-    filtered = filterProvidersByState(filtered, criteria.state);
+    if (criteria.institutionType === 'exam_board') {
+      filtered = filtered.filter((p) => {
+        if (p.category === 'exam' || p.institutionType === 'exam_board') {
+          return true;
+        }
+        return filterProvidersByState([p], criteria.state).length > 0;
+      });
+    } else {
+      filtered = filterProvidersByState(filtered, criteria.state);
+    }
   }
 
   // 3. Institution Type Filter
