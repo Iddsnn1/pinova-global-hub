@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, ShieldCheck, Lock, CheckCircle2, Loader2, AlertCircle, ArrowRight, Smartphone, MapPin } from 'lucide-react';
+import { X, ShieldCheck, Lock, CheckCircle2, Loader2, AlertCircle, ArrowRight, Smartphone, MapPin, Truck } from 'lucide-react';
 import { OrderItem, Coupon } from '../types';
 import { executePiPayment, authenticatePiUser } from '../lib/piSdk';
 
@@ -10,6 +10,7 @@ interface EscrowCheckoutModalProps {
   onClose: () => void;
   onPaymentSuccess: (newOrderData: any) => void;
   userUsername: string;
+  onTrackOrder?: (orderId: string) => void;
 }
 
 export const EscrowCheckoutModal: React.FC<EscrowCheckoutModalProps> = ({
@@ -18,7 +19,8 @@ export const EscrowCheckoutModal: React.FC<EscrowCheckoutModalProps> = ({
   shippingCountry,
   onClose,
   onPaymentSuccess,
-  userUsername
+  userUsername,
+  onTrackOrder
 }) => {
   const [shippingAddress, setShippingAddress] = useState({
     fullName: userUsername || 'Pioneer User',
@@ -33,6 +35,7 @@ export const EscrowCheckoutModal: React.FC<EscrowCheckoutModalProps> = ({
   const [statusLogs, setStatusLogs] = useState<string[]>([]);
   const [completedPaymentId, setCompletedPaymentId] = useState<string>('');
   const [completedTxid, setCompletedTxid] = useState<string>('');
+  const [createdOrderId, setCreatedOrderId] = useState<string>('');
   const [errorMessage, setErrorMessage] = useState<string>('');
 
   const subtotal = cartItems.reduce((acc, item) => {
@@ -42,10 +45,10 @@ export const EscrowCheckoutModal: React.FC<EscrowCheckoutModalProps> = ({
     return acc + price * item.quantity;
   }, 0);
 
-  const discount = appliedCoupon ? (subtotal * appliedCoupon.discountPercent) / 100 : 0;
-  const totalAmountPi = Math.max(0.01, subtotal - discount);
-
+  const discountAmount = appliedCoupon ? (subtotal * appliedCoupon.discountPercent) / 100 : 0;
   const isPhysicalOrder = cartItems.some((i) => i.product.category === 'physical');
+  const shippingCost = isPhysicalOrder ? 2.50 : 0;
+  const totalAmountPi = subtotal - discountAmount + shippingCost;
 
   const addLog = (msg: string) => {
     setStatusLogs((prev) => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`]);
@@ -54,8 +57,7 @@ export const EscrowCheckoutModal: React.FC<EscrowCheckoutModalProps> = ({
   const handleStartPayment = async () => {
     setPaymentStep('processing');
     setStatusLogs([]);
-    addLog('Connecting wallets...');
-    addLog('Initializing Pi SDK...');
+    setErrorMessage('');
 
     try {
       addLog('Authenticating user with Pi Network...');
@@ -70,8 +72,11 @@ export const EscrowCheckoutModal: React.FC<EscrowCheckoutModalProps> = ({
     }
 
     const memo = `PiNova Purchase (${cartItems.length} items) - Order by ${userUsername}`;
+    const generatedOrderId = `ORD-PI-${Date.now().toString().slice(-6)}`;
+    setCreatedOrderId(generatedOrderId);
+
     const metadata = {
-      orderId: `ORD-PI-${Date.now().toString().slice(-6)}`,
+      orderId: generatedOrderId,
       buyerUsername: userUsername,
       itemCount: cartItems.length,
       shippingCountry
@@ -109,84 +114,110 @@ export const EscrowCheckoutModal: React.FC<EscrowCheckoutModalProps> = ({
             escrowStatus: isPhysicalOrder ? 'in_escrow' : 'released',
             piPaymentId: paymentId,
             piTxid: txid,
+            pstpStatus: isPhysicalOrder ? 'Payment Verified' : 'Completed',
+            serverVerified: true,
             shippingAddress: isPhysicalOrder ? shippingAddress : undefined,
+            digitalDeliveries: digitalDeliveries.length > 0 ? digitalDeliveries : undefined,
+            carrier: isPhysicalOrder ? 'Safaricom Express Logistics' : 'Digital Direct Gateway',
+            trackingNumber: isPhysicalOrder ? `PNV-SAF-${Math.floor(100000 + Math.random() * 900000)}` : undefined,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
-            digitalDeliveries
+            timeline: [
+              {
+                status: 'Pending Payment',
+                timestamp: new Date(Date.now() - 3000).toISOString(),
+                actor: userUsername,
+                actorRole: 'buyer',
+                note: 'Order initiated and payment created in Pi Browser SDK.'
+              },
+              {
+                status: 'Payment Verified',
+                timestamp: new Date().toISOString(),
+                actor: 'PSTP_Protection_Server',
+                actorRole: 'system',
+                note: 'Payment authorized and verified server-side via Pi Platform API.'
+              },
+              ...(isPhysicalOrder ? [] : [
+                {
+                  status: 'Completed',
+                  timestamp: new Date().toISOString(),
+                  actor: cartItems[0]?.product.sellerName || 'Merchant',
+                  actorRole: 'seller',
+                  note: 'Digital key & assets released immediately to buyer.'
+                }
+              ])
+            ]
           };
 
           onPaymentSuccess(newOrder);
         },
-        onCancel: (paymentId) => {
-          setPaymentStep('failed');
-          setErrorMessage(`Payment ${paymentId} was cancelled by user.`);
-          addLog(`Payment cancelled.`);
-        },
         onError: (err) => {
           setPaymentStep('failed');
-          setErrorMessage(err.message || 'Payment processing failed');
+          setErrorMessage(err.message || 'Payment execution failed in Pi SDK.');
           addLog(`Error: ${err.message}`);
+        },
+        onCancel: (paymentId) => {
+          setPaymentStep('failed');
+          setErrorMessage('Payment cancelled by user in Pi Browser.');
+          addLog(`Cancelled payment ID: ${paymentId}`);
         }
       }
     );
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
-      <div className="relative w-full max-w-xl bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden my-6">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
+      <div className="relative w-full max-w-lg bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden animate-fade-in">
         
-        {/* Header Bar */}
-        <div className="p-6 bg-gradient-to-r from-purple-950 via-indigo-950 to-slate-900 text-white flex items-center justify-between border-b border-purple-800/40">
+        {/* Header */}
+        <div className="p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-950">
           <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-purple-500/20 border border-purple-400/30">
-              <ShieldCheck className="w-5 h-5 text-emerald-400" />
+            <div className="p-2 rounded-xl bg-purple-600/10 text-purple-600 dark:text-purple-400">
+              <ShieldCheck className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-bold text-lg leading-none">Protected Checkout Experience</h3>
-              <p className="text-xs text-purple-300 mt-1 font-medium">Official Pi SDK v2 Payment Workflow & Pi Platform API Integration</p>
+              <h3 className="font-black text-sm text-slate-900 dark:text-slate-100">PSTP Order Protection & Checkout</h3>
+              <p className="text-[11px] text-slate-500">Non-Custodial Pi Escrow Protocol</p>
             </div>
           </div>
-
-          {paymentStep === 'review' && (
-            <button onClick={onClose} className="p-1 rounded-lg bg-white/10 hover:bg-white/20 text-white">
-              <X className="w-5 h-5" />
-            </button>
-          )}
+          <button 
+            onClick={onClose} 
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+          >
+            <X className="w-5 h-5" />
+          </button>
         </div>
 
-        {/* Modal Body */}
-        <div className="p-6 space-y-6">
+        {/* Content */}
+        <div className="p-6 space-y-5">
           
-          {/* STEP 1: REVIEW ORDER & SHIPPING */}
+          {/* STEP 1: REVIEW */}
           {paymentStep === 'review' && (
             <>
-              {/* Order Items Preview */}
+              {/* Order Items Summary */}
               <div className="space-y-2">
-                <h4 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                  Order Summary ({cartItems.length} items)
-                </h4>
-                <div className="max-h-36 overflow-y-auto space-y-2 pr-1">
-                  {cartItems.map((item) => (
-                    <div key={item.product.id} className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs">
-                      <div className="flex items-center gap-2 truncate">
-                        <img src={item.product.images[0]} alt="thumb" referrerPolicy="no-referrer" className="w-8 h-8 rounded-lg object-cover" />
-                        <span className="font-bold text-slate-900 dark:text-slate-100 truncate max-w-[200px]">{item.product.title}</span>
-                        <span className="text-slate-400">x{item.quantity}</span>
+                <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">Order Summary ({cartItems.length} items)</div>
+                <div className="max-h-36 overflow-y-auto space-y-2 pr-1 divide-y divide-slate-100 dark:divide-slate-800">
+                  {cartItems.map((item, idx) => (
+                    <div key={idx} className="flex justify-between items-center text-xs pt-1.5 first:pt-0">
+                      <div className="truncate max-w-[240px]">
+                        <span className="font-bold text-slate-900 dark:text-slate-100">{item.product.title}</span>
+                        <span className="text-slate-500 ml-1">x{item.quantity}</span>
                       </div>
-                      <span className="font-extrabold text-amber-500">
-                        {(item.product.pricePi * item.quantity).toFixed(2)} π
+                      <span className="font-mono font-bold text-purple-600 dark:text-purple-400">
+                        {((item.product.pricePi || 0) * item.quantity).toFixed(2)} π
                       </span>
                     </div>
                   ))}
                 </div>
               </div>
 
-              {/* Physical Shipping Address Form if physical */}
+              {/* Physical Shipping Address Input */}
               {isPhysicalOrder && (
-                <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-3">
-                  <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800 dark:text-slate-200">
-                    <MapPin className="w-4 h-4 text-purple-500" />
-                    <span>Shipping Address Details ({shippingCountry})</span>
+                <div className="space-y-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-300">
+                    <MapPin className="w-3.5 h-3.5 text-purple-600" />
+                    <span>Shipping Destination Address</span>
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     <input
@@ -194,14 +225,7 @@ export const EscrowCheckoutModal: React.FC<EscrowCheckoutModalProps> = ({
                       placeholder="Full Name"
                       value={shippingAddress.fullName}
                       onChange={(e) => setShippingAddress({ ...shippingAddress, fullName: e.target.value })}
-                      className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 outline-none"
-                    />
-                    <input
-                      type="text"
-                      placeholder="Phone Number"
-                      value={shippingAddress.phone}
-                      onChange={(e) => setShippingAddress({ ...shippingAddress, phone: e.target.value })}
-                      className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 outline-none"
+                      className="col-span-2 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 outline-none"
                     />
                     <input
                       type="text"
@@ -239,16 +263,6 @@ export const EscrowCheckoutModal: React.FC<EscrowCheckoutModalProps> = ({
                   <span className="text-[11px] text-emerald-400 font-bold block">100% Order Protection</span>
                   <span className="text-[10px] text-purple-300">Protected by PiNova Order Protection</span>
                 </div>
-              </div>
-
-              {/* Transparency & Operational Compliance Notice */}
-              <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 text-[10px] text-slate-400 leading-relaxed space-y-1.5">
-                <p>
-                  <strong>Transparency Notice:</strong> PiNova Global Hub is built on a non-custodial architecture. Payment processing relies on the Official Pi SDK v2 and Pi Platform API. PiNova never stores or manages Pi wallet private keys, recovery phrases, passphrases, blockchain infrastructure, or official Pi Network services. Payment approval and completion are processed through the Official Pi SDK v2 payment workflow and Pi Platform API according to their documented integration flow; PiNova never performs wallet custody, settlement, blockchain validation, or transaction finality.
-                </p>
-                <p>
-                  <strong>Operational Notice:</strong> Certain marketplace capabilities rely on external service providers and official Pi Platform services. Feature availability, response times, and service outcomes may vary depending on provider availability, network connectivity, and Official Pi Platform service status.
-                </p>
               </div>
 
               {/* Action Button */}
@@ -293,10 +307,16 @@ export const EscrowCheckoutModal: React.FC<EscrowCheckoutModalProps> = ({
 
               <div>
                 <h4 className="font-black text-xl text-slate-900 dark:text-slate-100">Payment Verified & Order Confirmed!</h4>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Payment authorized and verified via official Pi Network platform. Your order is protected by PiNova Order Protection.</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  Payment authorized and verified via official Pi Network platform. Your order is protected by PiNova Order Protection.
+                </p>
               </div>
 
               <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-left space-y-2 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-slate-400 font-medium">Order ID:</span>
+                  <span className="font-mono font-bold text-purple-600 dark:text-purple-400">{createdOrderId}</span>
+                </div>
                 <div className="flex justify-between">
                   <span className="text-slate-400 font-medium">Payment ID:</span>
                   <span className="font-mono font-bold text-purple-600 dark:text-purple-400 truncate max-w-[200px]">{completedPaymentId}</span>
@@ -312,10 +332,17 @@ export const EscrowCheckoutModal: React.FC<EscrowCheckoutModalProps> = ({
               </div>
 
               <button
-                onClick={onClose}
-                className="w-full py-3 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold text-sm shadow-md"
+                onClick={() => {
+                  onClose();
+                  if (onTrackOrder && createdOrderId) {
+                    onTrackOrder(createdOrderId);
+                  }
+                }}
+                className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-black text-xs shadow-lg shadow-purple-600/30 transition-all flex items-center justify-center gap-2"
               >
-                View Order in Buyer Dashboard
+                <Truck className="w-4 h-4" />
+                <span>Track This Order in Hub</span>
+                <ArrowRight className="w-4 h-4" />
               </button>
             </div>
           )}

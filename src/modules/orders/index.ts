@@ -102,6 +102,43 @@ export class OrderLifecycleManager {
 
     return { updatedOrder, auditLog, notificationSent };
   }
+
+  recordAdminCorrection(
+    order: Order,
+    actor: string,
+    reason: string,
+    correctionDetails: string,
+    relatedEventRef?: string
+  ): { updatedOrder: Order; auditLog: AuditLogEntry } {
+    const logEntry: StatusTransitionLog = {
+      status: order.pstpStatus,
+      timestamp: new Date().toISOString(),
+      actor,
+      actorRole: 'admin',
+      note: `ADMIN_CORRECTION [Ref: ${relatedEventRef || 'N/A'}]: ${reason} - ${correctionDetails}`
+    };
+
+    const auditLog: AuditLogEntry = {
+      id: `audit-corr-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      orderId: order.id,
+      paymentId: order.piPaymentId,
+      actor,
+      actorRole: 'admin',
+      action: 'ADMIN_CORRECTION',
+      details: `Admin correction recorded for order #${order.id}. Reason: ${reason}. Related Ref: ${relatedEventRef || 'N/A'}. Details: ${correctionDetails}`,
+      ipAddress: '127.0.0.1 (Sandbox Gateway)',
+      deviceInfo: 'Pi Nova Admin Console',
+      timestamp: new Date().toISOString()
+    };
+
+    const updatedOrder: Order = {
+      ...order,
+      updatedAt: new Date().toISOString(),
+      timeline: [...(order.timeline || []), logEntry]
+    };
+
+    return { updatedOrder, auditLog };
+  }
 }
 
 export class OrderFulfillmentEngine {

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   ShieldCheck, 
   Truck, 
@@ -18,39 +18,55 @@ import {
   Store, 
   ShieldAlert,
   History,
-  Barcode
+  Barcode,
+  Package
 } from 'lucide-react';
 import { Order, UserRole } from '../../types';
 import { BuyerOrderHub } from '../orders/BuyerOrderHub';
 import { SellerFulfillmentCenter } from '../orders/SellerFulfillmentCenter';
+import { AdminOrderCenter } from '../orders/AdminOrderCenter';
 
 interface OrdersViewProps {
   orders: Order[];
   currentUserRole: UserRole;
   currentUsername: string;
+  initialOrderId?: string;
+  initialSubTab?: 'details' | 'tracking' | 'digital' | 'receipt' | 'return' | 'dispute';
   onUpdateOrderStatus: (orderId: string, newStatus: any, note?: string) => void;
   onConfirmReceipt: (orderId: string) => void;
   onRequestReturn: (orderId: string, reason: string) => void;
   onOpenDispute: (orderId: string, statement: string) => void;
   onResolveDispute: (orderId: string, resolution: 'buyer_refund' | 'seller_payout', note: string) => void;
+  onExploreMarketplace?: () => void;
+  onOrderUpdated?: (updatedOrder: Order) => void;
 }
 
 export const OrdersView: React.FC<OrdersViewProps> = ({
   orders,
   currentUserRole,
   currentUsername,
+  initialOrderId,
+  initialSubTab = 'tracking',
   onUpdateOrderStatus,
   onConfirmReceipt,
   onRequestReturn,
   onOpenDispute,
-  onResolveDispute
+  onResolveDispute,
+  onExploreMarketplace,
+  onOrderUpdated
 }) => {
   const [activeTab, setActiveTab] = useState<'buyer' | 'seller' | 'admin' | 'audit'>('buyer');
-  const [searchFilter, setSearchFilter] = useState('');
+
+  // Switch to buyer tracking if initialOrderId is provided
+  useEffect(() => {
+    if (initialOrderId) {
+      setActiveTab('buyer');
+    }
+  }, [initialOrderId]);
 
   // Sample Audit Logs generated from order lifecycle events
   const auditLogs = orders.flatMap((ord) => 
-    ord.timeline.map((tl, idx) => ({
+    (ord.timeline || []).map((tl, idx) => ({
       id: `AUDIT-${ord.id}-${idx}`,
       orderId: ord.id,
       status: tl.status,
@@ -62,20 +78,20 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
   );
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 space-y-6 pb-20">
+    <div className="max-w-7xl mx-auto px-3 sm:px-6 space-y-6 pb-20">
       
       {/* Header Banner */}
-      <div className="bg-gradient-to-r from-slate-900 via-purple-950 to-slate-900 text-white p-6 sm:p-8 rounded-2xl border border-purple-800/50 shadow-xl relative overflow-hidden">
+      <div className="bg-gradient-to-r from-slate-900 via-purple-950 to-slate-900 text-white p-6 sm:p-8 rounded-3xl border border-purple-800/50 shadow-xl relative overflow-hidden">
         <div className="relative z-10 space-y-3">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-950 border border-purple-800 text-purple-300 text-xs font-bold">
             <ShieldCheck className="w-4 h-4 text-emerald-400" />
-            <span>Module 4 — Unified Order Management & Fulfillment Engine</span>
+            <span>PiNova Global Hub — Track Order & Order Lifecycle Engine</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
-            Order Fulfillment & Compliance Center
+            Order Tracking & Lifecycle Management
           </h1>
-          <p className="text-xs sm:text-sm text-slate-300">
-            Track live carrier logistics, reveal digital keys, print digital receipts, manage returns, and review immutable PSTP audit trail records.
+          <p className="text-xs sm:text-sm text-slate-300 max-w-2xl">
+            Live carrier tracking, cryptographic Pi blockchain verification, instant digital license reveals, official printable receipts, returns, and dispute arbitration.
           </p>
         </div>
       </div>
@@ -87,11 +103,11 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
           className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
             activeTab === 'buyer'
               ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30'
-              : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-800'
+              : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-800 hover:border-purple-300'
           }`}
         >
-          <User className="w-4 h-4" />
-          <span>Buyer Order Hub</span>
+          <Package className="w-4 h-4" />
+          <span>Track Order & Buyer Hub ({orders.length})</span>
         </button>
 
         <button
@@ -99,7 +115,7 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
           className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
             activeTab === 'seller'
               ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30'
-              : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-800'
+              : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-800 hover:border-purple-300'
           }`}
         >
           <Store className="w-4 h-4" />
@@ -111,7 +127,7 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
           className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
             activeTab === 'admin'
               ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30'
-              : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-800'
+              : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-800 hover:border-purple-300'
           }`}
         >
           <ShieldAlert className="w-4 h-4 text-amber-400" />
@@ -123,11 +139,11 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
           className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
             activeTab === 'audit'
               ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30'
-              : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-800'
+              : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-800 hover:border-purple-300'
           }`}
         >
           <History className="w-4 h-4 text-emerald-400" />
-          <span>Immutable Audit Logs</span>
+          <span>Append-only Audit Logs ({auditLogs.length})</span>
         </button>
       </div>
 
@@ -135,72 +151,46 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
       {activeTab === 'buyer' && (
         <BuyerOrderHub
           orders={orders}
+          buyerUsername={currentUsername}
+          initialOrderId={initialOrderId}
+          initialTab={initialSubTab}
           onConfirmReceipt={onConfirmReceipt}
           onRequestReturn={onRequestReturn}
           onOpenDispute={onOpenDispute}
+          onExploreMarketplace={onExploreMarketplace}
+          onOrderUpdated={onOrderUpdated}
         />
       )}
 
       {activeTab === 'seller' && (
         <SellerFulfillmentCenter
           orders={orders}
-          onUpdateOrderStatus={onUpdateOrderStatus}
+          sellerUsername={currentUsername || 'PiNova Store'}
+          onOrderUpdated={onOrderUpdated}
         />
       )}
 
       {activeTab === 'admin' && (
-        <div className="space-y-6">
-          <div className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl space-y-4">
-            <h2 className="text-lg font-black text-slate-900 dark:text-slate-100 flex items-center gap-2">
-              <ShieldAlert className="w-5 h-5 text-amber-500" />
-              <span>Platform Order Audit & Dispute Arbitration Panel</span>
-            </h2>
-
-            <div className="space-y-4">
-              {orders.map((ord) => (
-                <div
-                  key={ord.id}
-                  className="p-4 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-4 text-xs"
-                >
-                  <div>
-                    <div className="font-bold text-slate-900 dark:text-slate-100">
-                      Order ID: {ord.id}
-                    </div>
-                    <div className="text-slate-500">
-                      Buyer: {ord.buyerUsername} | Status: <span className="font-extrabold text-purple-400">{ord.pstpStatus}</span>
-                    </div>
-                    <div className="text-amber-500 font-black mt-0.5">
-                      Total: {ord.totalPi.toFixed(2)} π
-                    </div>
-                  </div>
-
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => onResolveDispute(ord.id, 'buyer_refund', 'Approved buyer refund after dispute review.')}
-                      className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-lg"
-                    >
-                      Approve Buyer Refund
-                    </button>
-                    <button
-                      onClick={() => onResolveDispute(ord.id, 'seller_payout', 'Approved seller payout after fulfillment verification.')}
-                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg"
-                    >
-                      Release Seller Funds
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+        <AdminOrderCenter
+          orders={orders}
+          onOrderUpdated={onOrderUpdated}
+        />
       )}
 
       {activeTab === 'audit' && (
-        <div className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl space-y-4">
-          <h2 className="text-lg font-black text-slate-900 dark:text-slate-100 flex items-center gap-2">
-            <History className="w-5 h-5 text-emerald-500" />
-            <span>Immutable Lifecycle Audit Trail Records</span>
-          </h2>
+        <div className="p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <h2 className="text-lg font-black text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                <History className="w-5 h-5 text-emerald-500" />
+                <span>Append-only Lifecycle Audit Trail</span>
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                A server-side chronological record of order lifecycle events. Historical events are not edited or removed through normal application workflows.
+              </p>
+            </div>
+            <span className="text-xs font-mono text-slate-500 shrink-0">{auditLogs.length} Recorded Events</span>
+          </div>
 
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">

@@ -49,6 +49,7 @@ interface HomeViewProps {
   onOpenQrScanner?: () => void;
   onOpenStorefrontByName: (sellerName: string) => void;
   onConfirmReceipt: (orderId: string) => void;
+  onTrackOrder?: (orderId?: string) => void;
 }
 
 export const HomeView: React.FC<HomeViewProps> = ({
@@ -68,7 +69,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
   onOpenPstpShield,
   onOpenQrScanner,
   onOpenStorefrontByName,
-  onConfirmReceipt
+  onConfirmReceipt,
+  onTrackOrder
 }) => {
   const featuredProducts = products.filter(p => p.featured || p.rating >= 4.8).slice(0, 6);
 
@@ -312,7 +314,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             <span>Active Orders & Logistics Track</span>
           </h2>
           <button
-            onClick={() => onNavigateSection('orders')}
+            onClick={() => onTrackOrder ? onTrackOrder() : onNavigateSection('orders')}
             className="text-xs font-bold text-purple-600 dark:text-purple-400 hover:underline flex items-center gap-1"
           >
             <span>{activeOrders.length > 0 ? `View All Orders (${activeOrders.length})` : 'Order History'}</span>
@@ -325,7 +327,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             {activeOrders.slice(0, 2).map((ord) => (
               <div
                 key={ord.id}
-                className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-3"
+                className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-3 hover:border-purple-500/50 transition-colors"
               >
                 <div className="flex items-center justify-between text-xs">
                   <span className="font-extrabold text-purple-400">{ord.id}</span>
@@ -344,17 +346,26 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 </div>
 
                 <div className="flex items-center justify-between pt-2 border-t border-slate-200 dark:border-slate-800">
-                  <span className="text-[10px] text-slate-400">
-                    Carrier Tracking: <span className="font-mono text-purple-400">{ord.trackingNumber || 'TRK-LOG-8823'}</span>
+                  <span className="text-[10px] text-slate-400 truncate max-w-[140px]">
+                    Tracking: <span className="font-mono text-purple-400">{ord.trackingNumber || 'TRK-LOG-8823'}</span>
                   </span>
-                  {ord.pstpStatus === 'Shipped' && (
+                  <div className="flex items-center gap-2">
                     <button
-                      onClick={() => onConfirmReceipt(ord.id)}
-                      className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] rounded-xl shadow"
+                      onClick={() => onTrackOrder ? onTrackOrder(ord.id) : onNavigateSection('orders')}
+                      className="px-2.5 py-1 bg-purple-600 hover:bg-purple-500 text-white font-bold text-[11px] rounded-xl shadow transition-colors flex items-center gap-1"
                     >
-                      Confirm Delivery
+                      <Package className="w-3 h-3" />
+                      <span>Track Order</span>
                     </button>
-                  )}
+                    {ord.pstpStatus === 'Shipped' && (
+                      <button
+                        onClick={() => onConfirmReceipt(ord.id)}
+                        className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] rounded-xl shadow"
+                      >
+                        Confirm Delivery
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}

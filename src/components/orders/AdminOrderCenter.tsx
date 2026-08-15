@@ -90,7 +90,7 @@ export const AdminOrderCenter: React.FC<AdminOrderCenterProps> = ({
       setSelectedOrder(updatedOrder);
       if (onOrderUpdated) onOrderUpdated(updatedOrder);
     }
-    setArbitrationSuccessMsg(`Dispute ${selectedDisputeId} resolved successfully. Ruling recorded in immutable audit log.`);
+    setArbitrationSuccessMsg(`Dispute ${selectedDisputeId} resolved successfully. Ruling recorded in append-only audit log.`);
     setArbitrationNote('');
   };
 
@@ -362,8 +362,13 @@ export const AdminOrderCenter: React.FC<AdminOrderCenterProps> = ({
       {/* TAB 3: AUDIT TIMELINE */}
       {activeTab === 'audit_timeline' && activeOrder && (
         <div className="p-5 space-y-4 text-xs">
-          <div className="font-bold text-slate-800 dark:text-slate-200">
-            Immutable Status Transition Logs for Order #{activeOrder.id}
+          <div>
+            <div className="font-bold text-slate-800 dark:text-slate-200">
+              Append-only Status Transition Logs for Order #{activeOrder.id}
+            </div>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+              A server-side chronological record of order lifecycle events. Historical events are not edited or removed through normal application workflows.
+            </p>
           </div>
           <div className="space-y-3 border-l-2 border-purple-500/40 pl-4 py-1">
             {(activeOrder.timeline || []).map((tl, idx) => (

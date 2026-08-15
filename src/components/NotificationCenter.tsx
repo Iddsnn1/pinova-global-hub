@@ -1,17 +1,19 @@
 import React from 'react';
-import { X, Bell, CheckCircle2, ShieldCheck, MessageSquare, Info, FileText, Lock, ArrowUpRight, Zap } from 'lucide-react';
+import { X, Bell, CheckCircle2, ShieldCheck, MessageSquare, Info, FileText, Lock, ArrowUpRight, Zap, Truck } from 'lucide-react';
 import { Notification } from '../types';
 
 interface NotificationCenterProps {
   notifications: Notification[];
   onClose: () => void;
   onMarkAllRead: () => void;
+  onTrackOrder?: (orderId?: string) => void;
 }
 
 export const NotificationCenter: React.FC<NotificationCenterProps> = ({
   notifications,
   onClose,
-  onMarkAllRead
+  onMarkAllRead,
+  onTrackOrder
 }) => {
   const getNotificationIconAndStyle = (type: string) => {
     switch (type) {
@@ -97,7 +99,7 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
               notifications.map((n) => {
                 const style = getNotificationIconAndStyle(n.type);
                 // Extract order ID if present in title or message
-                const orderIdMatch = n.message.match(/ORD-PI-[A-Z0-9_-]+/i) || n.title.match(/ORD-PI-[A-Z0-9_-]+/i);
+                const orderIdMatch = n.message.match(/ORD-[A-Z0-9_-]+/i) || n.title.match(/ORD-[A-Z0-9_-]+/i);
                 const orderId = orderIdMatch ? orderIdMatch[0] : null;
 
                 return (
@@ -133,7 +135,21 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
 
                     <div className="pt-2 border-t border-slate-800 flex items-center justify-between text-[10px] font-mono text-slate-400">
                       {orderId ? (
-                        <span className="text-purple-300 font-bold">Order: {orderId}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-purple-300 font-bold">Order: {orderId}</span>
+                          {onTrackOrder && (
+                            <button
+                              onClick={() => {
+                                onClose();
+                                onTrackOrder(orderId);
+                              }}
+                              className="px-2 py-0.5 rounded bg-purple-600 hover:bg-purple-500 text-white font-sans font-bold text-[10px] transition-colors flex items-center gap-1"
+                            >
+                              <Truck className="w-3 h-3" />
+                              <span>Track</span>
+                            </button>
+                          )}
+                        </div>
                       ) : (
                         <span>Ref: TX-PINOVA-VERIFIED</span>
                       )}
@@ -148,9 +164,23 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
           </div>
 
           {/* Footer status bar */}
-          <div className="p-3 bg-slate-950 border-t border-slate-800 text-center text-[10px] text-slate-500 font-mono flex items-center justify-center gap-1.5">
-            <Zap className="w-3 h-3 text-amber-400" />
-            <span>Pi Network Platform API Live Syncing Active</span>
+          <div className="p-4 border-t border-slate-800 bg-slate-950/80 text-[11px] text-slate-400 flex items-center justify-between">
+            <span className="flex items-center gap-1.5 text-emerald-400 font-medium">
+              <ShieldCheck className="w-3.5 h-3.5" />
+              PSTP Security Shield Active
+            </span>
+            {onTrackOrder && (
+              <button
+                onClick={() => {
+                  onClose();
+                  onTrackOrder();
+                }}
+                className="text-purple-400 hover:text-purple-300 font-bold flex items-center gap-1"
+              >
+                <span>Track All Orders</span>
+                <ArrowUpRight className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
 
         </div>
@@ -158,4 +188,3 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
     </div>
   );
 };
-

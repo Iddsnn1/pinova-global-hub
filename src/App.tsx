@@ -157,6 +157,8 @@ function MainAppContent() {
   const [checkoutShippingCountry, setCheckoutShippingCountry] = useState<string>('United States');
   const [activeChatUser, setActiveChatUser] = useState<string | null>(null);
   const [activeChatOrderId, setActiveChatOrderId] = useState<string | undefined>();
+  const [selectedTrackingOrderId, setSelectedTrackingOrderId] = useState<string | undefined>();
+  const [selectedTrackingSubTab, setSelectedTrackingSubTab] = useState<'details' | 'tracking' | 'digital' | 'receipt' | 'return' | 'dispute'>('tracking');
 
   // Persistence Sync Side Effects
   useEffect(() => {
@@ -167,6 +169,36 @@ function MainAppContent() {
       console.warn('Failed to cache orders:', e);
     }
   }, [orders]);
+
+  // Handle Track Order navigation
+  const handleTrackOrder = (orderId?: string, subTab: 'details' | 'tracking' | 'digital' | 'receipt' | 'return' | 'dispute' = 'tracking') => {
+    if (orderId) {
+      setSelectedTrackingOrderId(orderId);
+    }
+    setSelectedTrackingSubTab(subTab);
+    handleNavigateSection('orders');
+  };
+
+  // Canonical order update synchronizer
+  const handleOrderUpdated = (updatedOrder: Order) => {
+    setOrders((prev) => {
+      const idx = prev.findIndex((o) => o.id === updatedOrder.id);
+      let next: Order[];
+      if (idx > -1) {
+        next = [...prev];
+        next[idx] = updatedOrder;
+      } else {
+        next = [updatedOrder, ...prev];
+      }
+      try {
+        localStorage.setItem('pinova_user_orders', JSON.stringify(next));
+        localStorage.setItem('pinova_orders_cache', JSON.stringify(next));
+      } catch (e) {
+        console.warn('Failed to persist orders:', e);
+      }
+      return next;
+    });
+  };
 
   useEffect(() => {
     try {
@@ -588,6 +620,7 @@ function MainAppContent() {
             onOpenQrScanner={() => setIsQrScannerOpen(true)}
             onOpenStorefrontByName={handleOpenStorefrontByName}
             onConfirmReceipt={handleConfirmReceipt}
+            onTrackOrder={handleTrackOrder}
           />
         )}
 
@@ -775,11 +808,15 @@ function MainAppContent() {
             orders={orders}
             currentUserRole={user.role}
             currentUsername={user.username}
+            initialOrderId={selectedTrackingOrderId}
+            initialSubTab={selectedTrackingSubTab}
             onUpdateOrderStatus={handleUpdateOrderStatus}
             onConfirmReceipt={handleConfirmReceipt}
             onRequestReturn={handleRequestReturn}
             onOpenDispute={handleOpenDispute}
             onResolveDispute={handleResolveDispute}
+            onExploreMarketplace={() => handleNavigateSection('marketplace')}
+            onOrderUpdated={handleOrderUpdated}
           />
         )}
 
@@ -863,6 +900,7 @@ function MainAppContent() {
         onNavigateSection={handleNavigateSection}
         onAddToCart={(p) => handleAddToCart(p, 1)}
         onInstantBuy={(p) => handleInstantBuy(p, 1)}
+        onSelectOrder={handleTrackOrder}
       />
 
       {/* Modals & Overlays */}
@@ -918,6 +956,7 @@ function MainAppContent() {
           onClose={() => setIsCheckoutOpen(false)}
           onPaymentSuccess={handlePaymentSuccess}
           userUsername={user.username}
+          onTrackOrder={handleTrackOrder}
         />
       )}
 
@@ -928,6 +967,7 @@ function MainAppContent() {
           onMarkAllRead={() =>
             setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
           }
+          onTrackOrder={handleTrackOrder}
         />
       )}
 

@@ -33,6 +33,7 @@ interface UniversalSearchModalProps {
   onNavigateSection: (section: MainSection, cat?: any) => void;
   onAddToCart: (product: Product) => void;
   onInstantBuy: (product: Product) => void;
+  onSelectOrder?: (orderId: string) => void;
 }
 
 type SearchTab = 'all' | 'products' | 'utilities' | 'services' | 'sellers' | 'categories' | 'orders';
@@ -48,7 +49,8 @@ export const UniversalSearchModal: React.FC<UniversalSearchModalProps> = ({
   onSelectVendorByName,
   onNavigateSection,
   onAddToCart,
-  onInstantBuy
+  onInstantBuy,
+  onSelectOrder
 }) => {
   const [query, setQuery] = useState(initialQuery);
   const [activeTab, setActiveTab] = useState<SearchTab>('all');
@@ -438,7 +440,11 @@ export const UniversalSearchModal: React.FC<UniversalSearchModalProps> = ({
                     key={ord.id}
                     onClick={() => {
                       onClose();
-                      onNavigateSection('orders');
+                      if (onSelectOrder) {
+                        onSelectOrder(ord.id);
+                      } else {
+                        onNavigateSection('orders');
+                      }
                     }}
                     className="p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-purple-500 transition-all cursor-pointer flex flex-wrap items-center justify-between gap-3 text-xs shadow-sm"
                   >
