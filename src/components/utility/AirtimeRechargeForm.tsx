@@ -181,12 +181,12 @@ export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       
-      {/* STEP 1: COUNTRY SELECTION */}
+      {/* STEP 1: SERVICE COUNTRY SELECTION */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <label className="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
             <span className="w-5 h-5 rounded-full bg-purple-600 text-white flex items-center justify-center text-[10px]">1</span>
-            <span>Select Destination Country</span>
+            <span>Select Service Country</span>
           </label>
           {activeCountry ? (
             <span className="text-[11px] font-bold text-emerald-500 flex items-center gap-1">

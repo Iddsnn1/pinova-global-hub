@@ -307,6 +307,38 @@ export const COUNTRY_SUBDIVISIONS_MAP: Record<string, CountrySubdivisionInfo> = 
       { name: 'Zanzibar', code: 'TZ-30' },
       { name: 'Kilimanjaro', code: 'TZ-09' }
     ]
+  },
+  VN: {
+    countryCode: 'VN',
+    countryName: 'Vietnam',
+    subdivisionName: 'Province / Municipality',
+    subdivisions: ['Hanoi', 'Ho Chi Minh City', 'Da Nang', 'Hai Phong', 'Can Tho', 'Binh Duong', 'Dong Nai', 'Khanh Hoa'],
+    subdivisionItems: [
+      { name: 'Hanoi', code: 'VN-HN' },
+      { name: 'Ho Chi Minh City', code: 'VN-SG' },
+      { name: 'Da Nang', code: 'VN-DN' },
+      { name: 'Hai Phong', code: 'VN-HP' },
+      { name: 'Can Tho', code: 'VN-CT' },
+      { name: 'Binh Duong', code: 'VN-BD' },
+      { name: 'Dong Nai', code: 'VN-75' },
+      { name: 'Khanh Hoa', code: 'VN-34' }
+    ]
+  },
+  ID: {
+    countryCode: 'ID',
+    countryName: 'Indonesia',
+    subdivisionName: 'Province',
+    subdivisions: ['Jakarta', 'West Java', 'East Java', 'Central Java', 'Bali', 'North Sumatra', 'Banten', 'Yogyakarta'],
+    subdivisionItems: [
+      { name: 'Jakarta', code: 'ID-JK' },
+      { name: 'West Java', code: 'ID-JB' },
+      { name: 'East Java', code: 'ID-JI' },
+      { name: 'Central Java', code: 'ID-JT' },
+      { name: 'Bali', code: 'ID-BA' },
+      { name: 'North Sumatra', code: 'ID-SU' },
+      { name: 'Banten', code: 'ID-BT' },
+      { name: 'Yogyakarta', code: 'ID-YO' }
+    ]
   }
 };
 

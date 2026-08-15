@@ -213,7 +213,7 @@ export function resolveWaterProviders(
  */
 export function resolveInstitutionType(
   provider: UtilityServiceProvider
-): 'university' | 'polytechnic' | 'college' | 'exam_board' | 'e_learning' {
+): 'university' | 'polytechnic' | 'college' | 'exam_board' | 'e_learning' | 'secondary' {
   if (provider.institutionType) {
     return provider.institutionType;
   }

@@ -605,6 +605,8 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
               <TransportDiscovery
                 providers={SAMPLE_UTILITY_PROVIDERS}
                 piConversionConfig={piConversionConfig}
+                userBalancePi={userBalancePi}
+                buyerUsername={buyerUsername}
                 onSelectOption={(provider, routeMeta) => {
                   handleSelectProvider(provider);
                   const paxName = routeMeta.passengerDetails ? `${routeMeta.passengerDetails.givenName} ${routeMeta.passengerDetails.familyName}` : '';
@@ -691,22 +693,35 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
             {/* Left Column: Location, Provider, Service Details, Package / Amount */}
             <div className="lg:col-span-7 space-y-5">
               
-              {/* COUNTRY & REGION SELECTION */}
+              {/* SERVICE AVAILABILITY & REGION SELECTION */}
               <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 space-y-3">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                    <Globe className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
-                    Country / Region
-                  </label>
-                  <span className="text-[11px] font-bold text-slate-500 flex items-center gap-1.5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="space-y-0.5">
+                    <label className="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                      <Globe className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+                      Service availability
+                    </label>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                      Select a country and region to see available utility providers and local services.
+                    </p>
+                  </div>
+                  <span className="text-xs font-extrabold px-3 py-1.5 rounded-xl bg-purple-50 dark:bg-purple-950/80 border border-purple-200 dark:border-purple-800 text-purple-900 dark:text-purple-200 flex items-center gap-1.5 self-start sm:self-auto shadow-sm">
                     <span className="text-base leading-none">{selectedCountryObj.flag}</span>
-                    <span className="text-slate-800 dark:text-slate-200">{selectedCountryObj.name}</span>
-                    <span className="font-mono text-purple-600 dark:text-purple-400">({selectedCountryCode})</span>
+                    <span>{selectedCountryObj.name}</span>
+                    {selectedState ? (
+                      <span className="text-amber-600 dark:text-amber-400 font-bold border-l border-purple-300 dark:border-purple-700 pl-1.5">
+                        · {selectedState}
+                      </span>
+                    ) : (
+                      <span className="text-slate-400 border-l border-purple-300 dark:border-purple-700 pl-1.5">
+                        · All Regions
+                      </span>
+                    )}
                   </span>
                 </div>
 
                 {/* Popular Quick-Select Country Chips */}
-                <div className="space-y-1">
+                <div className="space-y-1 pt-1 border-t border-slate-200/60 dark:border-slate-700/60">
                   <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
                     Popular Destinations
                   </span>
@@ -719,7 +734,8 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                           type="button"
                           onClick={() => {
                             setSelectedCountryCode(c.code);
-                            setSelectedState('');
+                            const subInfo = getSubdivisionInfo(c.code);
+                            setSelectedState(subInfo.subdivisions && subInfo.subdivisions.length > 0 ? subInfo.subdivisions[0] : '');
                             setCountrySearchQuery('');
                             setErrorMessage(null);
                             setAccountNumber('');
@@ -787,7 +803,8 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                               type="button"
                               onClick={() => {
                                 setSelectedCountryCode(c.code);
-                                setSelectedState('');
+                                const subInfo = getSubdivisionInfo(c.code);
+                                setSelectedState(subInfo.subdivisions && subInfo.subdivisions.length > 0 ? subInfo.subdivisions[0] : '');
                                 setCountrySearchQuery('');
                                 setErrorMessage(null);
                                 setAccountNumber('');
@@ -816,8 +833,10 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                     <select
                       value={selectedCountryCode}
                       onChange={(e) => {
-                        setSelectedCountryCode(e.target.value);
-                        setSelectedState('');
+                        const newCode = e.target.value;
+                        setSelectedCountryCode(newCode);
+                        const subInfo = getSubdivisionInfo(newCode);
+                        setSelectedState(subInfo.subdivisions && subInfo.subdivisions.length > 0 ? subInfo.subdivisions[0] : '');
                         setErrorMessage(null);
                         setAccountNumber('');
                         setAccountValidationResult(null);
@@ -851,7 +870,7 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                             onChange={(e) => setSelectedState(e.target.value)}
                             className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-xs font-bold text-slate-900 dark:text-slate-100 focus:outline-none focus:border-purple-500"
                           >
-                            <option value="">All {subInfo.subdivisionName ? `${subInfo.subdivisionName}s` : 'States'} / Nationwide</option>
+                            <option value="">All {subInfo.subdivisionName ? `${subInfo.subdivisionName}s` : 'Regions'} / Nationwide</option>
                             {subInfo.subdivisions.map((st) => (
                               <option key={st} value={st}>{st}</option>
                             ))}
@@ -1166,10 +1185,10 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
 
                 <div className="space-y-2 bg-slate-950 p-3.5 rounded-2xl border border-slate-800 text-xs">
                   <div className="flex justify-between items-center text-slate-300">
-                    <span>Country / Region:</span>
+                    <span>Service Area:</span>
                     <span className="font-bold text-white flex items-center gap-1">
-                      {getCountryFlagEmoji(selectedCountryCode)} {selectedCountryCode}
-                      {selectedCountryCode === 'NG' && selectedState ? ` (${selectedState})` : ''}
+                      {selectedCountryObj.flag} {selectedCountryObj.name}
+                      {selectedState ? ` · ${selectedState}` : ''}
                     </span>
                   </div>
 
