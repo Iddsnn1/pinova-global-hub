@@ -467,6 +467,102 @@ const handleUtilityValidate = (req: express.Request, res: express.Response) => {
   }
 };
 
+// Electricity Real Meter / Provider Verification API Endpoint
+const handleElectricityVerify = async (req: express.Request, res: express.Response) => {
+  try {
+    const { meterNumber, meterType = 'prepaid', providerId, countryCode = 'NG', serviceAreaId } = req.body || {};
+    if (!meterNumber || typeof meterNumber !== 'string' || meterNumber.trim().length < 5) {
+      res.status(400).json({
+        success: false,
+        valid: false,
+        status: 'INVALID',
+        statusTitle: 'Invalid Meter Number',
+        message: 'Meter/account number could not be verified. Please check the digits and try again.'
+      });
+      return;
+    }
+
+    const cleanMeter = meterNumber.replace(/[^a-zA-Z0-9]/g, '').trim();
+
+    // Check if real Electricity VTU / DisCo Gateway API is configured in environment
+    const electricityApiUrl = process.env.ELECTRICITY_API_URL || process.env.UTILITY_GATEWAY_API_URL;
+    const electricityApiKey = process.env.ELECTRICITY_API_KEY || process.env.UTILITY_GATEWAY_API_KEY;
+    const isLiveApiConfigured = Boolean(electricityApiUrl && electricityApiKey);
+
+    if (isLiveApiConfigured) {
+      try {
+        const response = await fetch(`${electricityApiUrl}/electricity/verify`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${electricityApiKey}`
+          },
+          body: JSON.stringify({
+            meterNumber: cleanMeter,
+            meterType,
+            providerId,
+            countryCode,
+            serviceAreaId
+          })
+        });
+
+        if (response.ok) {
+          const providerData = (await response.json()) as any;
+          res.json({
+            success: true,
+            valid: true,
+            apiConfigured: true,
+            status: 'VERIFIED',
+            isCustomerVerified: true,
+            customerName: providerData.customerName || undefined,
+            customerAddress: providerData.customerAddress || undefined,
+            accountStatus: providerData.accountStatus || 'ACTIVE',
+            tariffBand: providerData.tariffBand || undefined,
+            tariffRatePerKwh: providerData.tariffRatePerKwh ? Number(providerData.tariffRatePerKwh) : undefined,
+            outstandingDebtFiat: providerData.outstandingDebtFiat ? Number(providerData.outstandingDebtFiat) : undefined,
+            minVendFiat: providerData.minVendFiat ? Number(providerData.minVendFiat) : undefined,
+            unitsPurchasable: providerData.unitsPurchasable ? Number(providerData.unitsPurchasable) : undefined,
+            resolvedProviderId: providerData.resolvedProviderId || providerId,
+            resolvedProviderName: providerData.resolvedProviderName || 'Electricity Distribution Provider',
+            verificationMethod: 'LIVE_PROVIDER_API',
+            statusTitle: 'Meter verified ✓',
+            message: 'Customer details confirmed by electricity distribution provider.'
+          });
+          return;
+        }
+      } catch (liveErr: any) {
+        console.warn('[Electricity Verification] Live provider gateway call failed, falling back to unconfigured state:', liveErr.message);
+      }
+    }
+
+    // Default / Unconfigured Provider API Mode:
+    // Strictly do NOT fabricate or generate customer names, tariff bands, or energy units!
+    res.json({
+      success: true,
+      valid: true,
+      apiConfigured: false,
+      status: 'UNAVAILABLE',
+      isCustomerVerified: false,
+      meterNumber: cleanMeter,
+      meterType,
+      providerIdentified: true,
+      resolvedProviderId: providerId || 'unknown',
+      verificationMethod: 'UNCONFIGURED',
+      statusTitle: 'Meter number captured',
+      statusSubtitle: 'Provider verification required',
+      message: 'We need to verify this meter with the electricity provider before displaying customer details or processing the transaction.'
+    });
+  } catch (err: any) {
+    res.status(500).json({
+      success: false,
+      valid: false,
+      status: 'INVALID',
+      statusTitle: 'Verification Service Error',
+      message: 'Failed to communicate with meter verification service.'
+    });
+  }
+};
+
 // In-memory server ledgers for verified payments and utility fulfillment
 const SERVER_PAYMENT_LEDGER: Record<string, {
   paymentId: string;
@@ -493,6 +589,8 @@ const FULFILLED_UTILITY_TRANSACTIONS: Record<string, {
 
 app.post('/api/utility/validate', handleUtilityValidate);
 app.post('/api/v1/utility/validate', handleUtilityValidate);
+app.post('/api/utility/electricity/verify', handleElectricityVerify);
+app.post('/api/v1/utility/electricity/verify', handleElectricityVerify);
 
 // Official Pi Platform API Proxy: Payment Handlers
 

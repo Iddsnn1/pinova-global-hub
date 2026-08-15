@@ -13,9 +13,11 @@ import {
   GovernmentSearchResult,
   GovernmentSearchResultItem,
   GenericServiceDiscoveryRequest,
-  GenericServiceDiscoveryResult
+  GenericServiceDiscoveryResult,
+  ElectricityResolutionResult
 } from '../../types/utility';
 import { resolveSubdivisionCode } from '../../data/countrySubdivisions';
+import { resolveElectricityProviders } from './electricityDiscovery';
 
 /**
  * Filter utility providers by country name or 2-letter / ISO country code.
@@ -493,6 +495,7 @@ export function supportsServiceDiscovery(
 ): boolean {
   if (typeof providerOrCategory === 'string') {
     const discoveryCategories: UtilityCategoryType[] = [
+      'electricity',
       'transport',
       'water',
       'government',
@@ -505,7 +508,7 @@ export function supportsServiceDiscovery(
   if (!providerOrCategory) return false;
 
   const category = providerOrCategory.category;
-  if (['transport', 'water', 'government', 'education', 'events'].includes(category)) {
+  if (['electricity', 'transport', 'water', 'government', 'education', 'events'].includes(category)) {
     return true;
   }
 
@@ -541,9 +544,21 @@ export function executeServiceDiscovery(
   let transportResult: TransportSearchResult | undefined;
   let institutionResult: InstitutionSearchResult | undefined;
   let governmentResult: GovernmentSearchResult | undefined;
+  let electricityResult: ElectricityResolutionResult | undefined;
   let matchingProviders: UtilityServiceProvider[] = [];
 
   switch (request.category) {
+    case 'electricity': {
+      electricityResult = resolveElectricityProviders(
+        {
+          countryCode: request.countryCode,
+          state: request.state
+        },
+        providers
+      );
+      matchingProviders = electricityResult.availableProviders;
+      break;
+    }
     case 'water': {
       locationResult = resolveWaterProviders(providers, request.countryCode, request.state);
       matchingProviders = locationResult.availableProviders;
@@ -598,6 +613,7 @@ export function executeServiceDiscovery(
     transportResult,
     institutionResult,
     governmentResult,
+    electricityResult,
     isSupported: true,
     statusMessage: `Discovery completed for category '${request.category}'.`
   };

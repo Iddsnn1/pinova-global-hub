@@ -48,10 +48,12 @@ import { createPiPayment } from '../../lib/piSdk';
 import { DigitalReceiptModal } from './DigitalReceiptModal';
 import { ProviderValidationFactory } from '../../modules/utility/providerValidation';
 import { supportsServiceDiscovery } from '../../lib/utility/serviceDiscovery';
+import { resolveElectricityProviders } from '../../lib/utility/electricityDiscovery';
 import { TransportDiscovery } from './discovery/TransportDiscovery';
 import { WaterDiscovery } from './discovery/WaterDiscovery';
 import { GovernmentDiscovery } from './discovery/GovernmentDiscovery';
 import { EducationDiscovery } from './discovery/EducationDiscovery';
+import { ElectricityDiscovery } from './discovery/ElectricityDiscovery';
 import { NIGERIAN_STATES } from './discovery/LocationSelector';
 import { getSubdivisionInfo } from '../../data/countrySubdivisions';
 
@@ -247,6 +249,15 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
   // Filter providers for country and state (memoized)
   const availableProvidersForCountry = useMemo(() => {
     const activeCode = (selectedCountryCode || 'NG').toUpperCase();
+
+    if (selectedCategory === 'electricity') {
+      const elecRes = resolveElectricityProviders(
+        { countryCode: activeCode, state: selectedState },
+        categoryProviders
+      );
+      return elecRes.availableProviders;
+    }
+
     const countryMatches = categoryProviders.filter(p => {
       const pCode = (p.countryCode || (p.country === 'Global' ? 'GLOBAL' : p.country.slice(0, 2))).toUpperCase();
       return pCode === activeCode || pCode === 'GLOBAL';
@@ -266,7 +277,7 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
     }
 
     return countryMatches;
-  }, [categoryProviders, selectedCountryCode, selectedState]);
+  }, [categoryProviders, selectedCategory, selectedCountryCode, selectedState]);
 
   // Initialise or gracefully adapt Provider / Designation when category or location changes
   useEffect(() => {
@@ -620,6 +631,26 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                       : `PASSENGER-REF-${routeMeta.originCode}-${routeMeta.destinationCode}`
                   );
                 }}
+              />
+            )}
+
+            {selectedCategory === 'electricity' && (
+              <ElectricityDiscovery
+                providers={SAMPLE_UTILITY_PROVIDERS}
+                selectedCountryCode={selectedCountryCode}
+                initialState={selectedState}
+                piConversionConfig={piConversionConfig}
+                userBalancePi={userBalancePi}
+                buyerUsername={buyerUsername}
+                onCountryChange={(code) => {
+                  setSelectedCountryCode(code);
+                  setSelectedState('');
+                }}
+                onStateChange={(st) => setSelectedState(st)}
+                onSelectElectricityService={(provider) => {
+                  handleSelectProvider(provider);
+                }}
+                onTransactionSuccess={onTransactionSuccess}
               />
             )}
 

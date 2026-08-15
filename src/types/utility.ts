@@ -242,6 +242,83 @@ export interface GenericServiceDiscoveryRequest {
   governmentParams?: GovernmentSearchCriteria;
 }
 
+export interface ElectricityServiceArea {
+  id: string;
+  name: string; // e.g. "Minna Central / Niger District", "Suleja & Madalla District", "Lekki & Island Peninsula"
+  providerId: string;
+  providerName: string;
+  countryCode: string;
+  state: string; // e.g. "Niger", "Lagos", "Abia", "Kano"
+  lgasOrCities?: string[];
+  coverageDescription?: string;
+  isPrimary?: boolean;
+}
+
+export type ElectricityVerificationStatus =
+  | 'INITIAL'
+  | 'RESOLVING'
+  | 'PROVIDER_IDENTIFIED'
+  | 'VERIFIED'
+  | 'MISMATCH'
+  | 'INVALID'
+  | 'UNAVAILABLE';
+
+export interface ElectricityMeterVerificationResult {
+  valid: boolean;
+  status: ElectricityVerificationStatus;
+  meterNumber: string;
+  meterType: 'prepaid' | 'postpaid';
+  providerIdentified: boolean;
+  resolvedProviderId: string;
+  resolvedProviderName: string;
+  resolvedServiceArea?: string;
+  isCustomerVerified: boolean; // TRUE ONLY if returned by real provider verification endpoint
+  verificationMethod?: 'LIVE_PROVIDER_API' | 'LOCAL_PREFIX_INFERENCE' | 'UNCONFIGURED';
+  
+  // Real Provider-Returned Customer Information (ONLY populated if real provider returns them)
+  customerName?: string;
+  customerAddress?: string;
+  accountStatus?: string; // e.g. "ACTIVE", "ENABLED"
+  tariffBand?: string; // e.g. "Band A (Non-MD)", only if provider-confirmed
+  tariffRatePerKwh?: number;
+  outstandingDebtFiat?: number;
+  minVendFiat?: number;
+  unitsPurchasable?: number;
+  unitsDelivered?: number;
+
+  // Provider Mismatch Details
+  providerMismatchDetected?: boolean;
+  preliminaryProviderId?: string;
+  preliminaryProviderName?: string;
+  correctionNotice?: string;
+
+  // Status & Guidance Headers
+  statusTitle: string; // e.g. "Provider identified", "Meter verified ✓", "Provider mismatch", "Meter number captured"
+  statusSubtitle?: string; // e.g. "Provider verification required", "Confirmed customer account"
+  statusMessage: string; // Detailed guidance string
+}
+
+export interface ElectricityResolutionCriteria {
+  countryCode: string;
+  state?: string;
+  serviceAreaId?: string;
+  meterNumber?: string;
+  meterType?: 'prepaid' | 'postpaid';
+}
+
+export interface ElectricityResolutionResult {
+  countryCode: string;
+  countryName: string;
+  state?: string;
+  selectedServiceArea?: ElectricityServiceArea;
+  availableServiceAreas: ElectricityServiceArea[];
+  availableProviders: UtilityServiceProvider[];
+  requiresServiceAreaSelection: boolean;
+  statusMessage: string;
+  isProviderResolved: boolean;
+  resolvedProvider?: UtilityServiceProvider;
+}
+
 export interface GenericServiceDiscoveryResult {
   request: GenericServiceDiscoveryRequest;
   matchingProviders: UtilityServiceProvider[];
@@ -249,6 +326,7 @@ export interface GenericServiceDiscoveryResult {
   transportResult?: TransportSearchResult;
   institutionResult?: InstitutionSearchResult;
   governmentResult?: GovernmentSearchResult;
+  electricityResult?: ElectricityResolutionResult;
   isSupported: boolean;
   statusMessage: string;
 }
