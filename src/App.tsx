@@ -912,6 +912,14 @@ function MainAppContent() {
           onInstantBuy={handleInstantBuy}
           reviews={reviews}
           onAddReview={handleAddReview}
+          onOpenStorefront={(sellerName) => {
+            setSelectedProduct(null);
+            handleOpenStorefrontByName(sellerName);
+          }}
+          onContactSeller={(sellerUsername) => {
+            setSelectedProduct(null);
+            setActiveChatUser(sellerUsername);
+          }}
         />
       )}
 

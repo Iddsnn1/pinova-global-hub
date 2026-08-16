@@ -1226,7 +1226,7 @@ export const ReferralGovernanceHub: React.FC<ReferralGovernanceHubProps> = ({ us
                   <h3 className="font-black text-sm text-slate-900 dark:text-white flex items-center gap-2">
                     <History className="w-5 h-5 text-purple-600" /> Recognition Governance Audit Log
                   </h3>
-                  <p className="text-xs text-slate-500">Immutable record of badge awards, status changes, suspensions, reinstatements, and appeal decisions.</p>
+                  <p className="text-xs text-slate-500">Append-only record of badge awards, status changes, suspensions, reinstatements, and appeal decisions.</p>
                 </div>
 
                 <button
@@ -1628,7 +1628,7 @@ export const ReferralGovernanceHub: React.FC<ReferralGovernanceHubProps> = ({ us
                     <ShieldCheck className="w-4 h-4 text-purple-600" /> 4. Privacy Notice & Data Governance
                   </h4>
                   <p className="text-[11px] text-slate-500 leading-relaxed">
-                    Invitation tracking uses privacy-preserving cryptographic hashes. Personal contact details are never stored or shared with external third parties.
+                    Invitation tracking uses privacy-preserving obfuscated identifiers. Personal contact details are never stored or shared with external third parties.
                   </p>
                 </div>
               </div>

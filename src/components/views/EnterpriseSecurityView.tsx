@@ -1063,7 +1063,7 @@ export const EnterpriseSecurityView: React.FC<EnterpriseSecurityViewProps> = () 
             <div>
               <h3 className="font-bold text-white text-base flex items-center gap-2">
                 <FileText className="w-5 h-5 text-amber-400" />
-                <span>Immutable Enterprise Audit & Compliance Logs</span>
+                <span>Append-only Enterprise Audit & Compliance Logs</span>
               </h3>
               <p className="text-xs text-slate-400 max-w-xl">
                 Complete audit trail of system events, authentication attempts, risk evaluations, and governance decisions using privacy-protected client IDs.

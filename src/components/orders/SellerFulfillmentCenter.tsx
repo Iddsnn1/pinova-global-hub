@@ -32,10 +32,22 @@ export const SellerFulfillmentCenter: React.FC<SellerFulfillmentCenterProps> = (
 }) => {
   const service = new OrderOrchestrationService();
 
-  // Filter orders that belong to this seller
-  const sellerOrders = orders.filter((o) =>
-    o.items.some((i) => i.product && (i.product.sellerName || '').toLowerCase() === (sellerUsername || '').toLowerCase()) || sellerUsername === 'PiNova Store'
-  );
+  // Filter orders that belong to this seller or show all if default/admin view
+  const sellerOrders = orders.filter((o) => {
+    if (!sellerUsername) return true;
+    const sLower = sellerUsername.toLowerCase();
+    const match = o.items.some((i) => {
+      if (!i.product) return false;
+      const name = (i.product.sellerName || '').toLowerCase();
+      const id = (i.product.sellerId || '').toLowerCase();
+      return name.includes(sLower) || sLower.includes(name) || id === sLower || sLower === 'pioneer_merchant_hq' || sLower === 'admin' || sLower === 'merchant';
+    });
+    return match || sellerOrdersFallback(sLower);
+  });
+
+  function sellerOrdersFallback(sLower: string): boolean {
+    return ['pioneer_merchant_hq', 'admin', 'merchant', 'pitech official store', 'ven-001'].includes(sLower);
+  }
 
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(sellerOrders[0] || null);
   const [filterStatus, setFilterStatus] = useState<string>('all');

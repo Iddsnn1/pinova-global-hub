@@ -2,6 +2,16 @@ import express from 'express';
 import path from 'path';
 import dotenv from 'dotenv';
 import { GoogleGenAI } from '@google/genai';
+import {
+  paymentLedgerRepo,
+  pstpAuditRepo,
+  pstpDisputeRepo,
+  flightFulfillmentRepo,
+  utilityFulfillmentRepo,
+  securityEventRepo,
+  platformConfigRepo,
+  idempotencyRepo
+} from './src/server/db';
 
 dotenv.config();
 
@@ -89,110 +99,16 @@ function getGeminiClient(): GoogleGenAI | null {
   });
 }
 
-// In-memory PSTP Ledger & Security Repositories
-const PSTP_AUDIT_LOGS: any[] = [
-  {
-    id: 'LOG-UUID-9001',
-    orderId: 'ORD-PI-778210',
-    paymentId: 'PAY-PI-449102',
-    actor: 'system',
-    actorRole: 'system',
-    action: 'PAYMENT_SERVER_APPROVED',
-    details: 'Pi Platform API v2 payment verification completed with 256-bit signature validation.',
-    ipAddress: '127.0.0.1',
-    deviceInfo: 'Pi Nova Core Escrow Engine',
-    timestamp: new Date(Date.now() - 3600000 * 2).toISOString()
-  },
-  {
-    id: 'LOG-UUID-9002',
-    orderId: 'ORD-PI-778210',
-    paymentId: 'PAY-PI-449102',
-    actor: 'TechPulse_Official',
-    actorRole: 'seller',
-    action: 'ORDER_STATUS_CHANGED',
-    details: 'Order status updated from "Payment Verified" to "Shipped". Carrier: FedEx Express, Tracking: FX-9921-PI.',
-    ipAddress: '198.51.100.44',
-    deviceInfo: 'Merchant Workstation / Chrome 124',
-    timestamp: new Date(Date.now() - 3600000).toISOString()
-  }
-];
-
-const PSTP_DISPUTES: any[] = [
-  {
-    id: 'DSP-UUID-1001',
-    orderId: 'ORD-PI-334110',
-    buyerUsername: 'Pioneer_Explorer',
-    sellerUsername: 'Nexus_Gadgets',
-    reason: 'Damaged package upon delivery',
-    description: 'The sealed parcel arrived with visible physical impact damage to the box outer shell. Screen cracked.',
-    amountPi: 145.0,
-    status: 'open',
-    evidenceFiles: [
-      {
-        id: 'EVI-1',
-        fileName: 'damaged_box_front.jpg',
-        fileUrl: 'https://images.unsplash.com/photo-1578575437130-527eed3abbec?auto=format&fit=crop&w=400&q=80',
-        fileType: 'image',
-        uploadedBy: 'Pioneer_Explorer',
-        uploadedAt: new Date(Date.now() - 86400000).toISOString()
-      }
-    ],
-    comments: [
-      {
-        id: 'CMT-1',
-        sender: 'Pioneer_Explorer',
-        role: 'buyer',
-        text: 'I received the package today at 2 PM. Photos attached show severe transit damage.',
-        timestamp: new Date(Date.now() - 86400000).toISOString()
-      },
-      {
-        id: 'CMT-2',
-        sender: 'Nexus_Gadgets',
-        role: 'seller',
-        text: 'We inspect all outgoing shipments with video logs. We have requested transit insurance claim from carrier.',
-        timestamp: new Date(Date.now() - 43200000).toISOString()
-      }
-    ],
-    createdAt: new Date(Date.now() - 86400000).toISOString(),
-    updatedAt: new Date(Date.now() - 43200000).toISOString()
-  }
-];
-
-const PSTP_SECURITY_EVENTS: any[] = [
-  {
-    id: 'SEC-EVT-501',
-    eventType: 'suspicious_login',
-    severity: 'medium',
-    username: 'Pioneer_Guest',
-    ip: '192.0.2.14',
-    device: 'Safari 17 / iPhone 15 Pro',
-    location: 'London, UK',
-    details: 'New device login detected. Verified via Pi SDK session token.',
-    resolved: true,
-    createdAt: new Date(Date.now() - 7200000).toISOString(),
-    updatedAt: new Date(Date.now() - 7200000).toISOString()
-  },
-  {
-    id: 'SEC-EVT-502',
-    eventType: 'large_transaction',
-    severity: 'high',
-    username: 'Enterprise_Buyer_01',
-    ip: '203.0.113.88',
-    device: 'Pi Browser 1.8 / Android 14',
-    location: 'Singapore',
-    details: 'Transaction of 4,500.00 π passed server verification & anti-fraud rate limit check.',
-    resolved: true,
-    createdAt: new Date(Date.now() - 3600000 * 4).toISOString(),
-    updatedAt: new Date(Date.now() - 3600000 * 4).toISOString()
-  }
-];
-
 // System health check - minimal, zero dependencies
 app.get(['/api/health', '/health'], (req, res) => {
   res.setHeader('Content-Type', 'application/json');
   res.status(200).json({
     status: 'ok',
-    runtime: 'vercel'
+    runtime: 'vercel',
+    durablePersistence: true,
+    ledgerCount: paymentLedgerRepo.count(),
+    auditLogsCount: pstpAuditRepo.count(),
+    disputesCount: pstpDisputeRepo.count()
   });
 });
 
@@ -209,7 +125,8 @@ app.get(['/api/debug/runtime', '/debug/runtime'], (req, res) => {
     ok: true,
     runtime: 'vercel',
     nodeVersion: process.version,
-    requestUrl: req.url
+    requestUrl: req.url,
+    persistenceStatus: 'DURABLE_STORAGE_ACTIVE'
   });
 });
 
@@ -217,14 +134,14 @@ app.get(['/api/debug/runtime', '/debug/runtime'], (req, res) => {
 
 // 1. Audit Logs Retrieval
 app.get(['/api/pstp/audit-logs', '/api/v1/pstp/audit-logs'], (req, res) => {
-  res.json({ success: true, count: PSTP_AUDIT_LOGS.length, logs: PSTP_AUDIT_LOGS });
+  const logs = pstpAuditRepo.getAll();
+  res.json({ success: true, count: logs.length, logs });
 });
 
 // Create Audit Log Entry
 app.post(['/api/pstp/audit-logs', '/api/v1/pstp/audit-logs'], (req, res) => {
   const { orderId, paymentId, actor, actorRole, action, details, ipAddress, deviceInfo } = req.body;
-  const newLog = {
-    id: `LOG-UUID-${Date.now()}`,
+  const newLog = pstpAuditRepo.appendLog({
     orderId,
     paymentId,
     actor: actor || 'system',
@@ -232,22 +149,20 @@ app.post(['/api/pstp/audit-logs', '/api/v1/pstp/audit-logs'], (req, res) => {
     action: action || 'AUDIT_EVENT',
     details: details || 'PSTP Security Audit Log Entry',
     ipAddress: ipAddress || req.ip || '127.0.0.1',
-    deviceInfo: deviceInfo || req.headers['user-agent'] || 'Pi Browser Web',
-    timestamp: new Date().toISOString()
-  };
-  PSTP_AUDIT_LOGS.unshift(newLog);
+    deviceInfo: deviceInfo || req.headers['user-agent'] || 'Pi Browser Web'
+  });
   res.json({ success: true, log: newLog });
 });
 
 // 2. Disputes API
 app.get(['/api/pstp/disputes', '/api/v1/pstp/disputes'], (req, res) => {
-  res.json({ success: true, disputes: PSTP_DISPUTES });
+  const disputes = pstpDisputeRepo.getAll();
+  res.json({ success: true, disputes });
 });
 
 app.post(['/api/pstp/disputes', '/api/v1/pstp/disputes'], (req, res) => {
   const { orderId, buyerUsername, sellerUsername, reason, description, amountPi, evidenceFiles } = req.body;
-  const newDispute = {
-    id: `DSP-UUID-${Date.now()}`,
+  const newDispute = pstpDisputeRepo.createDispute({
     orderId: orderId || `ORD-${Date.now()}`,
     buyerUsername: buyerUsername || 'Pioneer_User',
     sellerUsername: sellerUsername || 'Seller_Merchant',
@@ -264,23 +179,18 @@ app.post(['/api/pstp/disputes', '/api/v1/pstp/disputes'], (req, res) => {
         text: description || 'Opened dispute ticket.',
         timestamp: new Date().toISOString()
       }
-    ],
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  };
-  PSTP_DISPUTES.unshift(newDispute);
+    ]
+  });
 
   // Add audit log entry
-  PSTP_AUDIT_LOGS.unshift({
-    id: `LOG-UUID-${Date.now()}`,
+  pstpAuditRepo.appendLog({
     orderId: newDispute.orderId,
     actor: buyerUsername || 'Pioneer_User',
     actorRole: 'buyer',
     action: 'DISPUTE_FILED',
     details: `Dispute filed for order ${newDispute.orderId}. Reason: ${reason}`,
     ipAddress: req.ip || '127.0.0.1',
-    deviceInfo: req.headers['user-agent'] || 'Pi Browser',
-    timestamp: new Date().toISOString()
+    deviceInfo: (req.headers['user-agent'] as string) || 'Pi Browser'
   });
 
   res.json({ success: true, dispute: newDispute });
@@ -289,107 +199,74 @@ app.post(['/api/pstp/disputes', '/api/v1/pstp/disputes'], (req, res) => {
 app.post(['/api/pstp/disputes/:id/comment', '/api/v1/pstp/disputes/:id/comment'], (req, res) => {
   const { id } = req.params;
   const { sender, role, text } = req.body;
-  const dispute = PSTP_DISPUTES.find((d) => d.id === id);
-  if (!dispute) {
+  const updatedDispute = pstpDisputeRepo.addComment(id, {
+    sender: sender || 'User',
+    role: role || 'buyer',
+    text: text || ''
+  });
+
+  if (!updatedDispute) {
     res.status(404).json({ error: 'Dispute not found' });
     return;
   }
-  const comment = {
-    id: `CMT-${Date.now()}`,
-    sender: sender || 'User',
-    role: role || 'buyer',
-    text: text || '',
-    timestamp: new Date().toISOString()
-  };
-  dispute.comments.push(comment);
-  dispute.updatedAt = new Date().toISOString();
-  if (role === 'seller' && dispute.status === 'open') {
-    dispute.status = 'seller_responded';
-  }
-  res.json({ success: true, dispute });
+  res.json({ success: true, dispute: updatedDispute });
 });
 
 app.post(['/api/pstp/disputes/:id/resolve', '/api/v1/pstp/disputes/:id/resolve'], (req, res) => {
   const { id } = req.params;
   const { decision, note, refundAmountPi, resolvedBy } = req.body;
-  const dispute = PSTP_DISPUTES.find((d) => d.id === id);
+  const dispute = pstpDisputeRepo.findById(id);
   if (!dispute) {
     res.status(404).json({ error: 'Dispute not found' });
     return;
   }
 
-  dispute.adminResolution = {
+  const updatedDispute = pstpDisputeRepo.resolveDispute(id, {
     decision,
     note: note || 'Admin resolved dispute according to PSTP guidelines',
     refundAmountPi: refundAmountPi ? Number(refundAmountPi) : (decision === 'full_refund' ? dispute.amountPi : 0),
     resolvedBy: resolvedBy || 'Admin_Escrow_Desk',
     resolvedAt: new Date().toISOString()
-  };
-
-  dispute.status = decision.includes('refund') ? 'resolved_refunded' : 'resolved_rejected';
-  dispute.updatedAt = new Date().toISOString();
+  });
 
   // Record audit log
-  PSTP_AUDIT_LOGS.unshift({
-    id: `LOG-UUID-${Date.now()}`,
+  pstpAuditRepo.appendLog({
     orderId: dispute.orderId,
     actor: resolvedBy || 'Admin_Escrow_Desk',
     actorRole: 'admin',
     action: 'DISPUTE_RESOLVED',
     details: `Admin decision: ${decision}. Note: ${note}`,
     ipAddress: req.ip || '127.0.0.1',
-    deviceInfo: 'Admin Console / Chrome',
-    timestamp: new Date().toISOString()
+    deviceInfo: 'Admin Console / Chrome'
   });
 
-  res.json({ success: true, dispute });
+  res.json({ success: true, dispute: updatedDispute });
 });
 
 // 3. Security Events API
 app.get(['/api/pstp/security-events', '/api/v1/pstp/security-events'], (req, res) => {
-  res.json({ success: true, events: PSTP_SECURITY_EVENTS });
+  const events = securityEventRepo.getAll();
+  res.json({ success: true, events });
 });
 
 app.post(['/api/pstp/security-events', '/api/v1/pstp/security-events'], (req, res) => {
   const { eventType, severity, description } = req.body;
-  const newEvent = {
-    id: `SEC-EVENT-${Date.now()}`,
+  const newEvent = securityEventRepo.recordEvent({
     eventType: eventType || 'SECURITY_AUDIT',
     severity: severity || 'info',
-    description: description || 'PSTP Security Event Recorded',
-    timestamp: new Date().toISOString()
-  };
-  PSTP_SECURITY_EVENTS.unshift(newEvent);
+    ip: req.ip || '127.0.0.1',
+    device: (req.headers['user-agent'] as string) || 'Pi Browser Web',
+    details: description || 'PSTP Security Event Recorded',
+    resolved: false
+  });
   res.json({ success: true, event: newEvent });
 });
 
 // 4. Platform Pricing Configuration & Utility Config APIs
-let ACTIVE_PI_PRICING_CONFIG = {
-  piRateUsd: 10.00,
-  minPurchasePi: 0.000001,
-  maxPurchasePi: 1000.00,
-  currencyCode: 'USD',
-  currencySymbol: '$',
-  autoRateUpdateEnabled: true,
-  autoUpdateSource: 'Platform Pricing Administration Rule',
-  lastUpdated: new Date().toISOString(),
-  updatedBy: 'Platform Governance Engine',
-  disclaimer: 'Pricing configuration established by marketplace administration. Pi Network does not establish or guarantee exchange rates.'
-};
-
-const PRICING_AUDIT_LOGS: any[] = [
-  {
-    id: 'RATE-LOG-101',
-    previousRateUsd: 8.50,
-    newRateUsd: 10.00,
-    reason: 'Platform Pricing Configuration Adjustment',
-    updatedBy: 'Platform_Admin',
-    timestamp: new Date(Date.now() - 86400000 * 2).toISOString()
-  }
-];
-
 const handleGetUtilityConfig = (req: express.Request, res: express.Response) => {
-  res.json({ success: true, config: ACTIVE_PI_PRICING_CONFIG, logs: PRICING_AUDIT_LOGS });
+  const config = platformConfigRepo.getConfig();
+  const logs = platformConfigRepo.getAuditLogs();
+  res.json({ success: true, config, logs });
 };
 
 const handlePostUtilityConfig = (req: express.Request, res: express.Response) => {
@@ -399,28 +276,24 @@ const handlePostUtilityConfig = (req: express.Request, res: express.Response) =>
     return;
   }
 
-  const previousRate = ACTIVE_PI_PRICING_CONFIG.piRateUsd;
-  ACTIVE_PI_PRICING_CONFIG = {
-    ...ACTIVE_PI_PRICING_CONFIG,
+  const previousConfig = platformConfigRepo.getConfig();
+  const updatedConfig = platformConfigRepo.updateConfig({
     piRateUsd: Number(piRateUsd),
-    minPurchasePi: minPurchasePi ? Number(minPurchasePi) : ACTIVE_PI_PRICING_CONFIG.minPurchasePi,
-    maxPurchasePi: maxPurchasePi ? Number(maxPurchasePi) : ACTIVE_PI_PRICING_CONFIG.maxPurchasePi,
-    lastUpdated: new Date().toISOString(),
+    minPurchasePi: minPurchasePi ? Number(minPurchasePi) : previousConfig.minPurchasePi,
+    maxPurchasePi: maxPurchasePi ? Number(maxPurchasePi) : previousConfig.maxPurchasePi,
     updatedBy: updatedBy || 'Platform_Admin'
-  };
+  });
 
-  const newLog = {
-    id: `RATE-LOG-${Date.now()}`,
-    previousRateUsd: previousRate,
-    newRateUsd: ACTIVE_PI_PRICING_CONFIG.piRateUsd,
-    reason: reason || 'Pricing updated via Admin Console',
+  const newLog = platformConfigRepo.addAuditLog({
+    previousRate: previousConfig.piRateUsd,
+    newRate: updatedConfig.piRateUsd,
+    currency: 'USD',
+    source: reason || 'Pricing updated via Admin Console',
     updatedBy: updatedBy || 'Platform_Admin',
-    timestamp: new Date().toISOString()
-  };
+    ipAddress: req.ip || '127.0.0.1'
+  });
 
-  PRICING_AUDIT_LOGS.unshift(newLog);
-
-  res.json({ success: true, config: ACTIVE_PI_PRICING_CONFIG, log: newLog });
+  res.json({ success: true, config: updatedConfig, log: newLog });
 };
 
 app.get('/api/utility/config', handleGetUtilityConfig);
@@ -563,30 +436,6 @@ const handleElectricityVerify = async (req: express.Request, res: express.Respon
   }
 };
 
-// In-memory server ledgers for verified payments and utility fulfillment
-const SERVER_PAYMENT_LEDGER: Record<string, {
-  paymentId: string;
-  txid?: string;
-  status: 'APPROVED' | 'COMPLETED';
-  timestamp: number;
-}> = {};
-
-const FULFILLED_UTILITY_TRANSACTIONS: Record<string, {
-  transactionId: string;
-  paymentId: string;
-  txid: string;
-  status: 'FULFILLED' | 'FULFILLMENT_PENDING' | 'FAILED';
-  message: string;
-  category: string;
-  providerId: string;
-  accountNumber: string;
-  fiatAmount: number;
-  piAmount: number;
-  packageName?: string;
-  timestamp: string;
-  providerReference?: string;
-}> = {};
-
 app.post('/api/utility/validate', handleUtilityValidate);
 app.post('/api/v1/utility/validate', handleUtilityValidate);
 app.post('/api/utility/electricity/verify', handleElectricityVerify);
@@ -622,11 +471,7 @@ const handleApprovePayment = async (req: express.Request, res: express.Response)
       return;
     }
 
-    SERVER_PAYMENT_LEDGER[paymentId] = {
-      paymentId,
-      status: 'APPROVED',
-      timestamp: Date.now()
-    };
+    paymentLedgerRepo.recordApproval(paymentId);
 
     if (hasKey && !isDevPayment) {
       // Real Pi Platform API call with bounded 10s timeout
@@ -720,12 +565,7 @@ const handleCompletePayment = async (req: express.Request, res: express.Response
       return;
     }
 
-    SERVER_PAYMENT_LEDGER[paymentId] = {
-      paymentId,
-      txid,
-      status: 'COMPLETED',
-      timestamp: Date.now()
-    };
+    paymentLedgerRepo.recordCompletion(paymentId, txid);
 
     if (hasKey && !isDevPayment) {
       const controller = new AbortController();
@@ -811,8 +651,8 @@ const handleCancelPayment = async (req: express.Request, res: express.Response) 
   try {
     const { paymentId } = req.body;
     console.log(`[Pi Server API] Payment cancellation request for ID: ${paymentId}`);
-    if (paymentId && SERVER_PAYMENT_LEDGER[paymentId]) {
-      SERVER_PAYMENT_LEDGER[paymentId].status = 'APPROVED';
+    if (paymentId) {
+      paymentLedgerRepo.recordCancellation(paymentId);
     }
     res.json({
       success: true,
@@ -835,7 +675,7 @@ const handleVerifyPayment = async (req: express.Request, res: express.Response) 
 
     console.log(`[Pi Server API] Verification query for Payment ID: ${paymentId}`);
     const piApiKey = process.env.PI_API_KEY || process.env.PI_SERVER_KEY;
-    const recorded = SERVER_PAYMENT_LEDGER[paymentId];
+    const recorded = paymentLedgerRepo.findByPaymentId(paymentId);
 
     if (piApiKey && piApiKey !== 'YOUR_PI_PLATFORM_API_KEY' && !paymentId.startsWith('dev_pay_') && !paymentId.startsWith('pi_pay_')) {
       try {
@@ -951,12 +791,13 @@ app.post('/api/v2/utility/fulfill', async (req, res) => {
 
   // Idempotency check: If this paymentId or idempotencyKey was already fulfilled, return cached record
   const existingKey = idempotencyKey || paymentId;
-  if (FULFILLED_UTILITY_TRANSACTIONS[existingKey]) {
+  const existingTransaction = utilityFulfillmentRepo.findByKey(existingKey);
+  if (existingTransaction) {
     console.log(`[Utility Fulfillment] Idempotent replay for Payment ID: ${existingKey}`);
     res.json({
       success: true,
       idempotent: true,
-      data: FULFILLED_UTILITY_TRANSACTIONS[existingKey]
+      data: existingTransaction
     });
     return;
   }
@@ -965,7 +806,7 @@ app.post('/api/v2/utility/fulfill', async (req, res) => {
   let isPaymentVerified = false;
 
   // Verify payment on Pi Server Ledger or Pi Platform API
-  const recordedPayment = SERVER_PAYMENT_LEDGER[paymentId];
+  const recordedPayment = paymentLedgerRepo.findByPaymentId(paymentId);
   if (recordedPayment && recordedPayment.status === 'COMPLETED') {
     isPaymentVerified = true;
   } else if (piApiKey && piApiKey !== 'YOUR_PI_PLATFORM_API_KEY' && !paymentId.startsWith('dev_pay_')) {
@@ -1048,7 +889,7 @@ app.post('/api/v2/utility/fulfill', async (req, res) => {
     providerReference: providerRef
   };
 
-  FULFILLED_UTILITY_TRANSACTIONS[existingKey] = resultRecord;
+  utilityFulfillmentRepo.recordTransaction(existingKey, resultRecord);
 
   res.json({
     success: true,
@@ -1140,8 +981,6 @@ app.post('/api/v1/ai/search', handleAiSearch);
 // ===================================================
 // Real-Time Flight & Transport Booking API Layer
 // ===================================================
-
-const FULFILLED_FLIGHT_BOOKINGS: Record<string, any> = {};
 
 // Rate Limiter Store & Correlation ID Middleware
 const FLIGHT_RATE_LIMIT_STORE: Record<string, { count: number; resetTime: number }> = {};
@@ -1484,19 +1323,20 @@ const handleFlightBook = async (req: express.Request, res: express.Response) => 
     const cleanPaymentId = paymentId.trim();
     const key = (typeof idempotencyKey === 'string' && idempotencyKey.trim()) ? idempotencyKey.trim() : cleanPaymentId;
 
-    if (FULFILLED_FLIGHT_BOOKINGS[key]) {
+    const existingBooking = flightFulfillmentRepo.findByKey(key);
+    if (existingBooking) {
       console.log(`[Flight Lifecycle] flight.booking.idempotent_replay reqId=${reqId} key=${key}`);
       res.json({
         success: true,
         idempotent: true,
-        booking: FULFILLED_FLIGHT_BOOKINGS[key],
+        booking: existingBooking,
         reqId
       });
       return;
     }
 
     // Verify payment on server ledger
-    const recordedPayment = SERVER_PAYMENT_LEDGER[cleanPaymentId];
+    const recordedPayment = paymentLedgerRepo.findByPaymentId(cleanPaymentId);
     const isPaymentVerified = Boolean(
       (recordedPayment && (recordedPayment.status === 'COMPLETED' || recordedPayment.status === 'APPROVED')) ||
       cleanPaymentId.startsWith('dev_pay_') ||
@@ -1559,16 +1399,17 @@ const handleFlightBook = async (req: express.Request, res: express.Response) => 
           console.log(`[Flight Lifecycle] flight.booking.succeeded reqId=${reqId} duffelOrderId=${duffelOrderId} pnr=${pnr || 'N/A'}`);
 
           const bookingRecord = {
+            paymentId: cleanPaymentId,
             pnr,
             bookingReference: duffelOrderId,
             ticketNumber,
-            bookingStatus: 'TICKET_ISSUED',
+            bookingStatus: 'TICKET_ISSUED' as const,
             provider: 'duffel',
             passengerName: `${passengerDetails?.givenName || 'Pioneer'} ${passengerDetails?.familyName || 'Traveler'}`,
             timestamp: new Date().toISOString()
           };
 
-          FULFILLED_FLIGHT_BOOKINGS[key] = bookingRecord;
+          flightFulfillmentRepo.recordBooking(key, bookingRecord);
           res.json({ success: true, booking: bookingRecord, reqId });
           return;
         } else {
@@ -1606,16 +1447,17 @@ const handleFlightBook = async (req: express.Request, res: express.Response) => 
       const safeFamily = typeof passengerDetails?.familyName === 'string' ? passengerDetails.familyName.slice(0, 50) : '';
 
       const bookingRecord = {
+        paymentId: cleanPaymentId,
         pnr,
         bookingReference,
         ticketNumber,
-        bookingStatus: 'VERIFIED_CARRIER_VOUCHER_ISSUED',
+        bookingStatus: 'VERIFIED_CARRIER_VOUCHER_ISSUED' as const,
         provider: 'Verified Transport Carrier Gateway',
         passengerName: safeGiven ? `${safeGiven} ${safeFamily}` : 'Verified Pioneer Passenger',
         timestamp: new Date().toISOString()
       };
 
-      FULFILLED_FLIGHT_BOOKINGS[key] = bookingRecord;
+      flightFulfillmentRepo.recordBooking(key, bookingRecord);
 
       res.json({
         success: true,

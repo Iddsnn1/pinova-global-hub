@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { X, ShieldCheck, Lock, CheckCircle2, Loader2, AlertCircle, ArrowRight, Smartphone, MapPin, Truck } from 'lucide-react';
-import { OrderItem, Coupon } from '../types';
+import { OrderItem, CartItem, Coupon } from '../types';
 import { executePiPayment, authenticatePiUser } from '../lib/piSdk';
 
 interface EscrowCheckoutModalProps {
@@ -38,11 +38,16 @@ export const EscrowCheckoutModal: React.FC<EscrowCheckoutModalProps> = ({
   const [createdOrderId, setCreatedOrderId] = useState<string>('');
   const [errorMessage, setErrorMessage] = useState<string>('');
 
-  const subtotal = cartItems.reduce((acc, item) => {
-    const price = item.product.discountPercent
+  const getItemUnitPrice = (item: CartItem): number => {
+    const basePrice = item.product.discountPercent
       ? item.product.pricePi * (1 - item.product.discountPercent / 100)
       : item.product.pricePi;
-    return acc + price * item.quantity;
+    const delta = item.customDetails?.variant?.priceDeltaPi || 0;
+    return basePrice + delta;
+  };
+
+  const subtotal = cartItems.reduce((acc, item) => {
+    return acc + getItemUnitPrice(item) * item.quantity;
   }, 0);
 
   const discountAmount = appliedCoupon ? (subtotal * appliedCoupon.discountPercent) / 100 : 0;
@@ -106,20 +111,22 @@ export const EscrowCheckoutModal: React.FC<EscrowCheckoutModalProps> = ({
               title: i.product.title
             }));
 
+          const hasServiceOrder = cartItems.some((i) => i.product.category === 'service');
+
           const newOrder = {
             id: metadata.orderId,
             buyerUsername: userUsername,
             items: cartItems,
             totalPi: Number(totalAmountPi.toFixed(2)),
-            escrowStatus: isPhysicalOrder ? 'in_escrow' : 'released',
+            escrowStatus: isPhysicalOrder ? 'in_escrow' : (hasServiceOrder ? 'in_escrow' : 'released'),
             piPaymentId: paymentId,
             piTxid: txid,
-            pstpStatus: isPhysicalOrder ? 'Payment Verified' : 'Completed',
+            pstpStatus: isPhysicalOrder ? 'Payment Verified' : (hasServiceOrder ? 'Payment Verified' : 'Completed'),
             serverVerified: true,
             shippingAddress: isPhysicalOrder ? shippingAddress : undefined,
             digitalDeliveries: digitalDeliveries.length > 0 ? digitalDeliveries : undefined,
-            carrier: isPhysicalOrder ? 'Safaricom Express Logistics' : 'Digital Direct Gateway',
-            trackingNumber: isPhysicalOrder ? `PNV-SAF-${Math.floor(100000 + Math.random() * 900000)}` : undefined,
+            carrier: isPhysicalOrder ? 'Global Tracked Express Carrier' : (hasServiceOrder ? 'PSTP Remote Service Gateway' : 'Digital Direct Gateway'),
+            trackingNumber: isPhysicalOrder ? `PNV-TRK-${Math.floor(100000 + Math.random() * 900000)}` : (hasServiceOrder ? `SRV-${Math.floor(10000 + Math.random() * 90000)}` : undefined),
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
             timeline: [
@@ -137,13 +144,13 @@ export const EscrowCheckoutModal: React.FC<EscrowCheckoutModalProps> = ({
                 actorRole: 'system',
                 note: 'Payment authorized and verified server-side via Pi Platform API.'
               },
-              ...(isPhysicalOrder ? [] : [
+              ...(isPhysicalOrder || hasServiceOrder ? [] : [
                 {
                   status: 'Completed',
                   timestamp: new Date().toISOString(),
                   actor: cartItems[0]?.product.sellerName || 'Merchant',
                   actorRole: 'seller',
-                  note: 'Digital key & assets released immediately to buyer.'
+                  note: 'Digital assets and license tokens released to buyer vault.'
                 }
               ])
             ]
@@ -202,10 +209,15 @@ export const EscrowCheckoutModal: React.FC<EscrowCheckoutModalProps> = ({
                     <div key={idx} className="flex justify-between items-center text-xs pt-1.5 first:pt-0">
                       <div className="truncate max-w-[240px]">
                         <span className="font-bold text-slate-900 dark:text-slate-100">{item.product.title}</span>
+                        {item.customDetails?.variant && (
+                          <span className="text-[10px] text-purple-500 font-semibold block truncate">
+                            ({item.customDetails.variant.title})
+                          </span>
+                        )}
                         <span className="text-slate-500 ml-1">x{item.quantity}</span>
                       </div>
                       <span className="font-mono font-bold text-purple-600 dark:text-purple-400">
-                        {((item.product.pricePi || 0) * item.quantity).toFixed(2)} π
+                        {(getItemUnitPrice(item) * item.quantity).toFixed(2)} π
                       </span>
                     </div>
                   ))}

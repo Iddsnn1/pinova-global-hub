@@ -1155,7 +1155,7 @@ response = client.payments.verify(
                 <span>API Keys, OAuth Clients & Audit Governance</span>
               </h3>
               <p className="text-xs text-slate-400">
-                Manage developer credentials with granular scopes, secret revocation, and export immutable audit records.
+                Manage developer credentials with granular scopes, secret revocation, and export append-only audit records.
               </p>
             </div>
             <div className="flex items-center gap-2">

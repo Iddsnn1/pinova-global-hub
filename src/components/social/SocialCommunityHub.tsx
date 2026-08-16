@@ -158,7 +158,7 @@ export const SocialCommunityHub: React.FC<SocialCommunityHubProps> = ({
       storeAvatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=100&auto=format&fit=crop&q=80',
       verified: true,
       timeAgo: '5 hours ago',
-      content: '✨ Handcrafted Pi Network Leather Wallets & Accessories! Every item is authenticated with a tamper-proof QR warranty tag. Check out our store for 15% flash deals.',
+      content: '✨ Handcrafted Pi Network Leather Wallets & Accessories! Every item is authenticated with a verified QR warranty tag. Check out our store for 15% flash deals.',
       image: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=800&auto=format&fit=crop&q=80',
       likes: 189,
       isLiked: true,

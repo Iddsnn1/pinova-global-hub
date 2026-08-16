@@ -19,8 +19,13 @@ export const INITIAL_PRODUCTS: Product[] = [
     sellerId: 'ven-001',
     sellerName: 'PiTech Official Store',
     sellerVerified: true,
+    variants: [
+      { id: 'var-sp-256', sku: 'PINOVA-SP-256GB', title: '12GB RAM + 256GB Storage (Titanium Black)', priceDeltaPi: 0, stock: 30, attributes: { ram: '12GB', storage: '256GB', color: 'Titanium Black' } },
+      { id: 'var-sp-512', sku: 'PINOVA-SP-512GB', title: '16GB RAM + 512GB Storage (Celestial Silver)', priceDeltaPi: 25.00, stock: 15, attributes: { ram: '16GB', storage: '512GB', color: 'Celestial Silver' } },
+      { id: 'var-sp-1tb', sku: 'PINOVA-SP-1TB', title: '16GB RAM + 1TB Storage (Pioneer Gold)', priceDeltaPi: 50.00, stock: 5, attributes: { ram: '16GB', storage: '1TB', color: 'Pioneer Gold' } }
+    ],
     features: ['Pi OS Hardware Security Enclave', '108MP AI Quad Camera', '5000mAh Battery with 67W Fast Charge', 'Dual SIM 5G'],
-    specs: { 'RAM': '12GB', 'Storage': '256GB', 'Processor': 'Snapdragon 8 Gen 2', 'Screen': '6.7 inch AMOLED 120Hz' },
+    specs: { 'RAM': '12GB / 16GB', 'Storage': '256GB / 512GB / 1TB', 'Processor': 'Snapdragon 8 Gen 2', 'Screen': '6.7 inch AMOLED 120Hz' },
     shippingWeightKg: 0.22,
     tags: ['smartphones', '5g', 'flagship', 'android', 'pi phone'],
     featured: true,
@@ -45,7 +50,12 @@ export const INITIAL_PRODUCTS: Product[] = [
     sellerId: 'ven-001',
     sellerName: 'PiTech Official Store',
     sellerVerified: true,
-    features: ['Apple M3 Max Chip', '48GB Unified RAM', '1TB High-speed NVMe', '22-Hour Battery Life'],
+    variants: [
+      { id: 'var-pc-48gb', sku: 'MBP-M3-48-1TB', title: '48GB Unified RAM + 1TB NVMe (Space Black)', priceDeltaPi: 0, stock: 8, attributes: { memory: '48GB', storage: '1TB', color: 'Space Black' } },
+      { id: 'var-pc-64gb', sku: 'MBP-M3-64-2TB', title: '64GB Unified RAM + 2TB NVMe (Space Black)', priceDeltaPi: 65.00, stock: 5, attributes: { memory: '64GB', storage: '2TB', color: 'Space Black' } },
+      { id: 'var-pc-128gb', sku: 'MBP-M3-128-4TB', title: '128GB Unified RAM + 4TB NVMe (Silver)', priceDeltaPi: 140.00, stock: 2, attributes: { memory: '128GB', storage: '4TB', color: 'Silver' } }
+    ],
+    features: ['Apple M3 Max Chip', '48GB-128GB Unified RAM', '1TB-4TB High-speed NVMe', '22-Hour Battery Life'],
     specs: { 'Display': '16.2-inch Liquid Retina XDR', 'Resolution': '3456 x 2234', 'Weight': '2.16 kg' },
     shippingWeightKg: 2.16,
     tags: ['computers', 'laptops', 'macbook', 'apple', 'workstation'],
@@ -69,6 +79,11 @@ export const INITIAL_PRODUCTS: Product[] = [
     sellerId: 'ven-003',
     sellerName: 'Kyoto Artisan Collective',
     sellerVerified: true,
+    variants: [
+      { id: 'var-fas-sm', sku: 'KYOTO-ROBE-SM-CRANE', title: 'Size S/M - Midnight Crane', priceDeltaPi: 0, stock: 10, attributes: { size: 'S/M', pattern: 'Midnight Crane' } },
+      { id: 'var-fas-lxl', sku: 'KYOTO-ROBE-LXL-CRANE', title: 'Size L/XL - Midnight Crane', priceDeltaPi: 0, stock: 12, attributes: { size: 'L/XL', pattern: 'Midnight Crane' } },
+      { id: 'var-fas-xxl', sku: 'KYOTO-ROBE-XXL-GOLD', title: 'Size XXL - Imperial Gold Embroidered', priceDeltaPi: 6.00, stock: 3, attributes: { size: 'XXL', pattern: 'Imperial Gold' } }
+    ],
     features: ['100% Mulberry Silk', 'Hand-embroidered details', 'Includes matching sash', 'Hypoallergenic'],
     shippingWeightKg: 0.4,
     tags: ['fashion', 'silk', 'kimono', 'luxury', 'apparel']
@@ -115,6 +130,10 @@ export const INITIAL_PRODUCTS: Product[] = [
     sellerId: 'ven-001',
     sellerName: 'PiTech Official Store',
     sellerVerified: true,
+    variants: [
+      { id: 'var-hw-std', sku: 'PINOVA-HW-STD', title: 'Standard Edition (OLED Hardware Key)', priceDeltaPi: 0, stock: 80, attributes: { edition: 'Standard', color: 'Matte Onyx' } },
+      { id: 'var-hw-dlx', sku: 'PINOVA-HW-DLX-STEEL', title: 'Deluxe Vault Edition (+ Titanium Seed Backup Plate)', priceDeltaPi: 18.00, stock: 40, attributes: { edition: 'Deluxe Vault', color: 'Brushed Titanium' } }
+    ],
     features: ['CC EAL6+ Security Chip', 'OLED Full-Color Touchscreen', 'Custom Pi Key Vault', 'USB-C & Bluetooth 5.2'],
     specs: { 'Battery': '500 mAh', 'Screen': '2.4 inch OLED', 'Dimensions': '85 x 54 x 6 mm' },
     shippingWeightKg: 0.15,
@@ -227,6 +246,10 @@ export const INITIAL_PRODUCTS: Product[] = [
     sellerId: 'ven-004',
     sellerName: 'CodeNova Labs',
     sellerVerified: true,
+    variants: [
+      { id: 'var-book-std', sku: 'BOOK-PI-ECO-STD', title: 'Standard Edition (PDF & ePub)', priceDeltaPi: 0, stock: 9999, attributes: { format: 'PDF + ePub', tier: 'Standard' } },
+      { id: 'var-book-dlx', sku: 'BOOK-PI-ECO-DLX', title: 'Deluxe Masterclass (+ Jupyter Notebooks & Video Lectures)', priceDeltaPi: 3.50, stock: 9999, attributes: { format: 'PDF + Video + Code', tier: 'Deluxe Masterclass' } }
+    ],
     features: ['PDF, ePub & Kindle Formats', '320 Pages of Analytical Insights', 'Instant Automated Download'],
     digitalDownloadUrl: 'https://example.com/downloads/pi-network-masterclass.pdf',
     tags: ['books', 'ebook', 'pi network', 'crypto guide', 'digital book'],
@@ -339,6 +362,11 @@ export const INITIAL_PRODUCTS: Product[] = [
     sellerId: 'ven-004',
     sellerName: 'CodeNova Labs',
     sellerVerified: true,
+    variants: [
+      { id: 'var-soft-dev', sku: 'PINOVA-SRC-DEV', title: 'Single Developer License', priceDeltaPi: 0, stock: 9999, attributes: { license: 'Single Developer', updates: '1 Year' } },
+      { id: 'var-soft-team', sku: 'PINOVA-SRC-TEAM', title: 'Commercial Team License (+ Extended Support)', priceDeltaPi: 45.00, stock: 9999, attributes: { license: 'Team Commercial', updates: 'Lifetime' } },
+      { id: 'var-soft-ent', sku: 'PINOVA-SRC-ENT', title: 'Enterprise Unlimited White-Label License', priceDeltaPi: 120.00, stock: 9999, attributes: { license: 'Enterprise White-Label', updates: 'Dedicated Support' } }
+    ],
     features: ['Full Source Code Access', 'Express & React 19 Backend', 'Pi SDK v2 Included'],
     digitalDownloadUrl: 'https://example.com/downloads/pinova-marketplace-v2.zip',
     digitalKey: 'PINOVA-LICENSE-KEY-98234-PI-ECO',
@@ -361,6 +389,11 @@ export const INITIAL_PRODUCTS: Product[] = [
     sellerId: 'ven-005',
     sellerName: 'Global GameVault',
     sellerVerified: true,
+    variants: [
+      { id: 'var-gc-25', sku: 'AMZN-GC-25USD', title: '$25 USD Value Code', priceDeltaPi: -7.00, stock: 100, attributes: { denomination: '$25 USD' } },
+      { id: 'var-gc-50', sku: 'AMZN-GC-50USD', title: '$50 USD Value Code', priceDeltaPi: 0, stock: 150, attributes: { denomination: '$50 USD' } },
+      { id: 'var-gc-100', sku: 'AMZN-GC-100USD', title: '$100 USD Value Code', priceDeltaPi: 14.00, stock: 50, attributes: { denomination: '$100 USD' } }
+    ],
     features: ['Instant Digital Code', 'No Expiration Date', 'Usable on Amazon.com'],
     digitalKey: 'AMZN-50USD-8923-4412-PIX',
     tags: ['giftcard', 'amazon', 'shopping', '50 usd'],
@@ -398,18 +431,83 @@ export const INITIAL_PRODUCTS: Product[] = [
     pricePi: 6.00,
     category: 'utility',
     subcategory: 'Utility Bills',
+    productType: 'digital',
+    fulfillmentType: 'utility_token',
+    availabilityStatus: 'in_stock',
     images: [
       'https://images.unsplash.com/photo-1473341304170-971dccb5ac1e?auto=format&fit=crop&w=800&q=80'
     ],
     stock: 9999,
     rating: 4.9,
     reviewsCount: 189,
-    sellerId: 'ven-007',
+    sellerId: 'ven-008',
     sellerName: 'Global UtilityPay Network',
     sellerVerified: true,
     features: ['Instant Meter Token Generation', 'Valid for All Meter Types', 'Automated Verification'],
     utilityProvider: 'Ikeja Electric (IE)',
     tags: ['utility', 'electricity', 'meter token', 'power'],
+    featured: true
+  },
+
+  // Professional Services & Blockchain Consulting
+  {
+    id: 'prod-srv-01',
+    title: 'Pi Network DApp Architecture & Security Audit',
+    description: 'Comprehensive smart contract, backend enclave, and Pi SDK payment verification vulnerability audit conducted by certified enterprise blockchain security researchers.',
+    pricePi: 120.00,
+    category: 'service',
+    subcategory: 'Professional Services',
+    productType: 'service',
+    fulfillmentType: 'service_delivery',
+    availabilityStatus: 'in_stock',
+    serviceLocation: 'Global Remote',
+    serviceDuration: '3-5 Business Days',
+    images: [
+      'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=800&q=80'
+    ],
+    stock: 10,
+    rating: 4.98,
+    reviewsCount: 44,
+    sellerId: 'ven-007',
+    sellerName: 'PiNova Enterprise Services',
+    sellerVerified: true,
+    variants: [
+      { id: 'var-srv-std', sku: 'AUDIT-SMART-CONTRACT-STD', title: 'Standard Smart Contract Security Audit', priceDeltaPi: 0, stock: 10, attributes: { tier: 'Standard', turnaround: '72 Hours' } },
+      { id: 'var-srv-full', sku: 'AUDIT-FULL-ENCLAVE', title: 'Full Stack Architecture & Cryptographic Enclave Audit', priceDeltaPi: 60.00, stock: 5, attributes: { tier: 'Comprehensive', turnaround: '5 Days' } }
+    ],
+    features: ['Static & Dynamic Code Analysis', 'Pi Platform API v2 Payment Flow Verification', 'Cryptographic Enclave Review', 'Official Certified PDF Audit Report'],
+    specs: { 'Deliverable': 'Full Technical PDF & Remediation Matrix', 'Turnaround': '72-120 Hours', 'Methodology': 'OWASP & NIST Blockchain Guidelines' },
+    tags: ['service', 'security', 'audit', 'smart contract', 'enterprise', 'consulting'],
+    featured: true
+  },
+  {
+    id: 'prod-srv-02',
+    title: 'Pi Node Dedicated Cloud Deployment & Monitoring',
+    description: 'Turnkey high-availability cloud server deployment for running official Pi Network consensus nodes with 99.99% uptime SLA, automated backups, and 24/7 telemetry.',
+    pricePi: 45.00,
+    category: 'service',
+    subcategory: 'Professional Services',
+    productType: 'service',
+    fulfillmentType: 'service_delivery',
+    availabilityStatus: 'in_stock',
+    serviceLocation: 'Global Cloud (Frankfurt / US-East / Tokyo)',
+    serviceDuration: 'Monthly Managed SLA',
+    images: [
+      'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=800&q=80'
+    ],
+    stock: 25,
+    rating: 4.94,
+    reviewsCount: 31,
+    sellerId: 'ven-007',
+    sellerName: 'PiNova Enterprise Services',
+    sellerVerified: true,
+    variants: [
+      { id: 'var-node-4vcpu', sku: 'NODE-CLOUD-4VCPU', title: 'Standard Node (4 vCPU / 16GB RAM / 500GB NVMe)', priceDeltaPi: 0, stock: 20, attributes: { vcpu: '4 Core', memory: '16GB' } },
+      { id: 'var-node-8vcpu', sku: 'NODE-CLOUD-8VCPU', title: 'High-Performance Node (8 vCPU / 32GB RAM / 1TB NVMe)', priceDeltaPi: 25.00, stock: 10, attributes: { vcpu: '8 Core', memory: '32GB' } }
+    ],
+    features: ['High-Performance NVMe Cloud VM', 'Pre-configured Docker & Pi Consensus Daemon', 'Automated Health Recovery', 'Dedicated Grafana Dashboard'],
+    tags: ['service', 'node', 'cloud', 'hosting', 'infrastructure'],
     featured: true
   }
 ];
@@ -423,11 +521,78 @@ export const MOCK_VENDORS: Vendor[] = [
     rating: 4.9,
     reviewsCount: 380,
     verified: true,
+    verificationStatus: 'Verified',
+    sellerStatus: 'Active',
     totalSalesPi: 14200.50,
     bannerImage: 'https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1200&q=80',
     logoImage: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=200&q=80',
     joinedDate: '2024-01-15',
-    shippingCountries: ['Worldwide', 'United States', 'United Kingdom', 'Nigeria', 'India', 'Japan', 'Germany', 'Brazil']
+    country: 'United States',
+    shippingCountries: ['Worldwide', 'United States', 'United Kingdom', 'Nigeria', 'India', 'Japan', 'Germany', 'Brazil'],
+    productCount: 18,
+    followersCount: 14200,
+    policies: {
+      shippingPolicy: 'Dispatches within 24-48 business hours via insured express carrier with tracking.',
+      refundPolicy: '30-day PSTP Escrow return window for sealed hardware and unopened accessories.',
+      averageDispatchTime: '1-2 business days',
+      supportTerms: '24/7 dedicated support via direct messaging and compliance ticketing.'
+    },
+    contactEmail: 'support@pitech.store',
+    contactPhone: '+1 (555) 438-9201',
+    websiteUrl: 'https://pitech.store'
+  },
+  {
+    id: 'ven-002',
+    sellerUsername: 'audio_masters',
+    storeName: 'Global Audio Masters',
+    bio: 'Acoustic engineering and high-fidelity smart home equipment designed with studio precision and built for the decentralized era.',
+    rating: 4.85,
+    reviewsCount: 210,
+    verified: true,
+    verificationStatus: 'Verified',
+    sellerStatus: 'Active',
+    totalSalesPi: 7420.00,
+    bannerImage: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=1200&q=80',
+    logoImage: 'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?auto=format&fit=crop&w=200&q=80',
+    joinedDate: '2024-04-10',
+    country: 'Germany',
+    shippingCountries: ['Worldwide', 'European Union', 'United States', 'Canada', 'Australia', 'United Kingdom'],
+    productCount: 12,
+    followersCount: 8900,
+    policies: {
+      shippingPolicy: 'Global DHL Express delivery with tamper-proof seal and serial tracking.',
+      refundPolicy: '14-day replacement warranty on acoustic components.',
+      averageDispatchTime: '24 hours',
+      supportTerms: 'Standard CET business hours technical audio support.'
+    },
+    contactEmail: 'orders@audiomasters.eu',
+    websiteUrl: 'https://audiomasters.eu'
+  },
+  {
+    id: 'ven-003',
+    sellerUsername: 'kyoto_artisan',
+    storeName: 'Kyoto Artisan Collective',
+    bio: 'Traditional handcrafted silk apparel, bespoke ceramics, and artisanal home goods created by heritage Japanese guild masters.',
+    rating: 4.92,
+    reviewsCount: 145,
+    verified: true,
+    verificationStatus: 'Verified',
+    sellerStatus: 'Active',
+    totalSalesPi: 5120.00,
+    bannerImage: 'https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?auto=format&fit=crop&w=1200&q=80',
+    logoImage: 'https://images.unsplash.com/photo-1579783902614-a3fb3927b675?auto=format&fit=crop&w=200&q=80',
+    joinedDate: '2024-05-20',
+    country: 'Japan',
+    shippingCountries: ['Worldwide', 'Japan', 'United States', 'Singapore', 'South Korea', 'United Kingdom'],
+    productCount: 9,
+    followersCount: 6300,
+    policies: {
+      shippingPolicy: 'Japan Post EMS express international air freight with custom insured packaging.',
+      refundPolicy: 'Authenticity guaranteed with certificate of origin; 14-day exchange policy.',
+      averageDispatchTime: '2-3 business days',
+      supportTerms: 'Bilingual support in Japanese and English.'
+    },
+    contactEmail: 'contact@kyotoartisan.jp'
   },
   {
     id: 'ven-004',
@@ -437,11 +602,50 @@ export const MOCK_VENDORS: Vendor[] = [
     rating: 4.95,
     reviewsCount: 262,
     verified: true,
+    verificationStatus: 'Verified',
+    sellerStatus: 'Active',
     totalSalesPi: 8900.00,
     bannerImage: 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=1200&q=80',
     logoImage: 'https://images.unsplash.com/photo-1534972195531-d756b9bfa9f2?auto=format&fit=crop&w=200&q=80',
     joinedDate: '2024-03-10',
-    shippingCountries: ['Digital Delivery (Global)']
+    country: 'Canada',
+    shippingCountries: ['Digital Delivery (Global)'],
+    productCount: 14,
+    followersCount: 11200,
+    policies: {
+      shippingPolicy: 'Instant automated digital asset delivery directly into your PiNova Digital Vault.',
+      digitalDeliveryTerms: 'Single or multi-seat license key with permanent version update access.',
+      refundPolicy: 'Digital download terms apply with PSTP key validation support.',
+      averageDispatchTime: 'Instant (0 seconds)',
+      supportTerms: 'GitHub repository issue tracker access and Discord developer channel.'
+    },
+    contactEmail: 'dev@codenova.io',
+    websiteUrl: 'https://codenova.io'
+  },
+  {
+    id: 'ven-005',
+    sellerUsername: 'game_vault',
+    storeName: 'Global GameVault',
+    bio: 'Authorized global eGift card aggregator, digital entertainment distributor, and gaming balance exchange.',
+    rating: 4.9,
+    reviewsCount: 420,
+    verified: true,
+    verificationStatus: 'Verified',
+    sellerStatus: 'Active',
+    totalSalesPi: 19800.00,
+    bannerImage: 'https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=1200&q=80',
+    logoImage: 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=200&q=80',
+    joinedDate: '2024-02-18',
+    country: 'United Kingdom',
+    shippingCountries: ['Worldwide Instant Digital'],
+    productCount: 22,
+    followersCount: 9400,
+    policies: {
+      shippingPolicy: 'Encrypted voucher redemption code delivered immediately upon server payment verification.',
+      digitalDeliveryTerms: 'Original publisher keys redeemable on regional and global platforms.',
+      averageDispatchTime: 'Instant'
+    },
+    contactEmail: 'support@gamevault.global'
   },
   {
     id: 'ven-006',
@@ -451,11 +655,73 @@ export const MOCK_VENDORS: Vendor[] = [
     rating: 4.88,
     reviewsCount: 860,
     verified: true,
+    verificationStatus: 'Verified',
+    sellerStatus: 'Active',
     totalSalesPi: 32100.00,
     bannerImage: 'https://images.unsplash.com/photo-1544717305-2782549b5136?auto=format&fit=crop&w=1200&q=80',
     logoImage: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=200&q=80',
     joinedDate: '2024-02-01',
-    shippingCountries: ['Global Automated Digital']
+    country: 'Global',
+    shippingCountries: ['Global Automated Digital (140+ Countries)'],
+    productCount: 30,
+    followersCount: 18500,
+    policies: {
+      shippingPolicy: 'Direct carrier API automated topup with real-time network reference receipt.',
+      averageDispatchTime: 'Under 10 seconds'
+    },
+    contactEmail: 'gateway@pipaytelecom.com'
+  },
+  {
+    id: 'ven-007',
+    sellerUsername: 'enterprise_services',
+    storeName: 'PiNova Enterprise Services',
+    bio: 'Certified blockchain architects and cloud engineers providing smart contract security audits, node hosting, and DApp deployment.',
+    rating: 4.96,
+    reviewsCount: 78,
+    verified: true,
+    verificationStatus: 'Verified',
+    sellerStatus: 'Active',
+    totalSalesPi: 24500.00,
+    bannerImage: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=1200&q=80',
+    logoImage: 'https://images.unsplash.com/photo-1563986768609-322da13575f3?auto=format&fit=crop&w=200&q=80',
+    joinedDate: '2024-01-05',
+    country: 'United States',
+    shippingCountries: ['Global Remote Services'],
+    productCount: 6,
+    followersCount: 7200,
+    policies: {
+      shippingPolicy: 'Dedicated service delivery via milestone review, Git collaboration, and encrypted reports.',
+      refundPolicy: 'PSTP Escrow milestone-based release upon agreed deliverables acceptance.',
+      averageDispatchTime: '2-5 business days'
+    },
+    contactEmail: 'enterprise@pinovahub.com',
+    websiteUrl: 'https://pinovahub.com/enterprise'
+  },
+  {
+    id: 'ven-008',
+    sellerUsername: 'utilitypay_network',
+    storeName: 'Global UtilityPay Network',
+    bio: 'Automated global utility clearinghouse supporting instant prepaid electricity, water, solar, and cable TV tokens with automated cryptographic invoice receipts.',
+    rating: 4.95,
+    reviewsCount: 195,
+    verified: true,
+    verificationStatus: 'Verified',
+    sellerStatus: 'Active',
+    totalSalesPi: 18900.00,
+    bannerImage: 'https://images.unsplash.com/photo-1473341304170-971dccb5ac1e?auto=format&fit=crop&w=1200&q=80',
+    logoImage: 'https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&fit=crop&w=200&q=80',
+    joinedDate: '2024-02-14',
+    country: 'International / Multi-Regional',
+    shippingCountries: ['Worldwide Digital Delivery'],
+    productCount: 15,
+    followersCount: 14200,
+    policies: {
+      shippingPolicy: 'Instant automated generation and direct cryptographic meter token dispatch.',
+      refundPolicy: 'Instant automated reverse credit if meter verification returns unconfirmed status.',
+      averageDispatchTime: 'Instant (Under 5 seconds)'
+    },
+    contactEmail: 'support@utilitypay.network',
+    websiteUrl: 'https://utilitypay.network'
   }
 ];
 

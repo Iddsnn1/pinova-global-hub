@@ -396,10 +396,10 @@ export const PstpShieldCenter: React.FC<PstpShieldCenterProps> = ({
                 <div className="p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-3">
                   <div className="flex items-center gap-2 text-purple-600 dark:text-purple-400 font-bold text-sm">
                     <FileText className="w-4 h-4 text-emerald-400" />
-                    <span>3. Immutable Audit Trail</span>
+                    <span>3. Append-only Audit Trail</span>
                   </div>
                   <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-                    Every status transition, dispute comment, refund approval, and payment verification is recorded with cryptographic timestamps, IP data, and actor roles.
+                    Every status transition, dispute comment, refund approval, and payment verification is recorded server-side with verified timestamps, IP data, and actor roles.
                   </p>
                 </div>
 
@@ -433,7 +433,7 @@ export const PstpShieldCenter: React.FC<PstpShieldCenterProps> = ({
                   </div>
                   <div className="p-3 rounded-xl bg-slate-800/80 border border-slate-700">
                     <span className="text-slate-400 block text-[10px] uppercase font-bold">Audit Log Ledger</span>
-                    <span className="font-mono font-bold text-emerald-400 text-sm">Immutable</span>
+                    <span className="font-mono font-bold text-emerald-400 text-sm">Append-only</span>
                   </div>
                 </div>
               </div>
@@ -985,9 +985,9 @@ export const PstpShieldCenter: React.FC<PstpShieldCenterProps> = ({
                 ))}
               </div>
 
-              {/* Immutable Audit Log Table */}
+              {/* Append-only Audit Log Table */}
               <div className="space-y-3">
-                <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Immutable PSTP System Audit Trail</h4>
+                <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Append-only PSTP System Audit Trail</h4>
                 
                 <div className="rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden bg-slate-950 text-emerald-400 font-mono text-[11px] p-4 max-h-64 overflow-y-auto space-y-2 shadow-inner">
                   {auditLogs.map((log) => (

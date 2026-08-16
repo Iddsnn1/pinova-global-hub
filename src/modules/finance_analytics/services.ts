@@ -271,7 +271,7 @@ export class FinanceAnalyticsEngine {
 
 
   /**
-   * Logs an immutable audit record for financial and analytics governance
+   * Logs an append-only audit record for financial and analytics governance
    */
   public logAuditRecord(
     actor: string,
@@ -630,7 +630,7 @@ export class FinanceAnalyticsEngine {
     const dataSource = 'PiNova Verified On-Chain SDK v2 Ledger & Internal Marketplace Database';
     const complianceNotice = 'Revenue reports and financial dashboards represent platform operational reporting only. PiNova Global Hub does not provide Pi wallet custody, settlement services, blockchain verification, or official Pi Network financial reporting.';
 
-    // Log immutable audit record
+    // Log append-only audit record
     this.logAuditRecord(
       actorName,
       userRole,

@@ -957,7 +957,7 @@ export const MerchantEcosystemHub: React.FC<MerchantEcosystemHubProps> = ({
               <h3 className="font-bold text-sm text-slate-900 dark:text-white flex items-center gap-2">
                 <Lock className="w-4 h-4 text-purple-600" /> Security Audit Log
               </h3>
-              <span className="text-xs text-slate-400 font-mono">Immutable Log Stream</span>
+              <span className="text-xs text-slate-400 font-mono">Append-only Log Stream</span>
             </div>
 
             <div className="overflow-x-auto">

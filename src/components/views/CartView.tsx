@@ -27,7 +27,15 @@ export const CartView: React.FC<CartViewProps> = ({
 }) => {
   const [couponInput, setCouponInput] = useState('');
 
-  const subtotalPi = cart.reduce((acc, item) => acc + item.product.pricePi * item.quantity, 0);
+  const getItemUnitPrice = (item: CartItem): number => {
+    const basePrice = item.product.discountPercent
+      ? item.product.pricePi * (1 - item.product.discountPercent / 100)
+      : item.product.pricePi;
+    const delta = item.customDetails?.variant?.priceDeltaPi || 0;
+    return basePrice + delta;
+  };
+
+  const subtotalPi = cart.reduce((acc, item) => acc + getItemUnitPrice(item) * item.quantity, 0);
   const discountAmountPi = appliedCoupon
     ? (subtotalPi * appliedCoupon.discountPercent) / 100
     : 0;
@@ -110,8 +118,36 @@ export const CartView: React.FC<CartViewProps> = ({
                   <div className="text-xs text-slate-500 dark:text-slate-400">
                     Seller: <span className="text-purple-400 font-semibold">{item.product.sellerName}</span>
                   </div>
+
+                  {item.customDetails?.variant && (
+                    <div className="inline-block mt-1 px-2 py-0.5 rounded-md bg-purple-500/10 text-purple-600 dark:text-purple-300 font-bold text-[11px] border border-purple-500/20">
+                      Option: {item.customDetails.variant.title}
+                    </div>
+                  )}
+
+                  {item.customDetails?.phoneNumber && (
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                      Recipient: <span className="font-mono font-semibold">{item.customDetails.phoneNumber}</span>
+                    </div>
+                  )}
+                  {item.customDetails?.accountNumber && (
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                      Meter / Acct: <span className="font-mono font-semibold">{item.customDetails.accountNumber}</span>
+                    </div>
+                  )}
+                  {item.customDetails?.recipientEmail && (
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                      Delivery Email: <span className="font-mono font-semibold">{item.customDetails.recipientEmail}</span>
+                    </div>
+                  )}
+                  {item.customDetails?.serviceBrief && (
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-1">
+                      Scope: <span className="italic">{item.customDetails.serviceBrief}</span>
+                    </div>
+                  )}
+
                   <div className="text-xs font-black text-amber-500 mt-1">
-                    {item.product.pricePi.toFixed(2)} π / unit
+                    {getItemUnitPrice(item).toFixed(2)} π / unit
                   </div>
                 </div>
               </div>

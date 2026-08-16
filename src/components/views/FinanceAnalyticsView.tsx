@@ -1638,9 +1638,9 @@ export const FinanceAnalyticsView: React.FC<FinanceAnalyticsViewProps> = ({
               <div>
                 <h3 className="font-extrabold text-base text-slate-900 dark:text-white flex items-center gap-2">
                   <ShieldCheck className="w-5 h-5 text-emerald-500" />
-                  <span>Immutable Financial & Analytics Audit Governance Ledger</span>
+                  <span>Append-only Financial & Analytics Audit Governance Ledger</span>
                 </h3>
-                <p className="text-xs text-slate-500">Every report export, calculation, and RBAC policy edit creates an unalterable log record.</p>
+                <p className="text-xs text-slate-500">Every report export, calculation, and RBAC policy edit creates an append-only log record.</p>
               </div>
 
               <div className="flex items-center gap-2">

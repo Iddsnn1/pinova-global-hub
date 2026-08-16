@@ -1943,7 +1943,7 @@ export const AiSearchView: React.FC<AiSearchViewProps> = ({
                   <History className="w-5 h-5 text-indigo-500" /> AI Model Version Governance & Lifecycle Management
                 </h3>
                 <p className="text-xs text-slate-500">
-                  Track model versions, compare performance metrics, schedule upgrades, and execute instant rollbacks with immutable audit logs.
+                  Track model versions, compare performance metrics, schedule upgrades, and execute instant rollbacks with append-only audit logs.
                 </p>
               </div>
 

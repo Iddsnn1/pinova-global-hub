@@ -1795,7 +1795,7 @@ export const PlatformAdminView: React.FC<PlatformAdminViewProps> = ({
           <div className="flex items-center justify-between">
             <h3 className="font-bold text-white text-sm flex items-center gap-2">
               <FileText className="w-4 h-4 text-purple-400" />
-              <span>Platform Immutable Governance Audit Log</span>
+              <span>Platform Append-only Governance Audit Log</span>
             </h3>
             <span className="text-xs font-bold text-amber-400">
               {auditLogsList.length} Total System Actions Logged
@@ -1982,7 +1982,7 @@ export const PlatformAdminView: React.FC<PlatformAdminViewProps> = ({
         <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-md w-full p-6 space-y-4">
             <h3 className="font-bold text-white text-sm text-red-400">Suspend Account: {selectedUserForSuspend.username}</h3>
-            <p className="text-xs text-slate-400">Specify the official compliance reason for account suspension. This action will be logged in the immutable audit trail.</p>
+            <p className="text-xs text-slate-400">Specify the official compliance reason for account suspension. This action will be logged in the append-only audit trail.</p>
 
             <textarea
               placeholder="e.g. Counterfeit product listings flagged by content moderation."

@@ -91,7 +91,7 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
             Order Tracking & Lifecycle Management
           </h1>
           <p className="text-xs sm:text-sm text-slate-300 max-w-2xl">
-            Live carrier tracking, cryptographic Pi blockchain verification, instant digital license reveals, official printable receipts, returns, and dispute arbitration.
+            Live carrier tracking, server-verified Pi payments, instant digital delivery, official printable receipts, returns, and dispute arbitration.
           </p>
         </div>
       </div>

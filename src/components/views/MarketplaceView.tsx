@@ -315,7 +315,7 @@ export const MarketplaceView: React.FC<MarketplaceViewProps> = ({
                 <div className="flex items-center gap-2">
                   <Flame className="w-5 h-5 text-rose-500 animate-pulse" />
                   <h2 className="text-lg font-black text-slate-900 dark:text-slate-100">
-                    Flash Deals & Discouted Products
+                    Flash Deals & Discounted Products
                   </h2>
                 </div>
               </div>
@@ -340,6 +340,96 @@ export const MarketplaceView: React.FC<MarketplaceViewProps> = ({
                     onQuickView={onQuickView}
                   />
                 ))}
+              </div>
+            </div>
+          )}
+
+          {/* Featured Verified Merchants Showcase */}
+          {vendors.length > 0 && (
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                    <h2 className="text-xl font-black text-slate-900 dark:text-slate-100">
+                      Verified Pi Merchants & Global Storefronts
+                    </h2>
+                  </div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    Explore standalone merchant stores backed by Pi Payment Server-Verified & PSTP Escrow Protection
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {vendors.map((vendor) => {
+                  const vendorProductsCount = products.filter(
+                    (p) => (p.sellerName || '').toLowerCase() === (vendor.storeName || vendor.sellerUsername || '').toLowerCase()
+                  ).length;
+
+                  return (
+                    <div
+                      key={vendor.id}
+                      onClick={() => onOpenStorefront(vendor.storeName || vendor.sellerUsername)}
+                      className="group relative rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-purple-500 overflow-hidden cursor-pointer transition-all duration-300 hover:shadow-xl hover:-translate-y-1 flex flex-col justify-between"
+                    >
+                      {/* Banner Header */}
+                      <div className="h-20 w-full overflow-hidden relative bg-slate-950">
+                        <img
+                          src={vendor.bannerImage || 'https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&w=800&q=80'}
+                          alt={vendor.storeName}
+                          referrerPolicy="no-referrer"
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 opacity-80"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
+                      </div>
+
+                      {/* Logo & Basic Info */}
+                      <div className="p-4 pt-0 -mt-6 relative z-10 flex-1 flex flex-col justify-between">
+                        <div>
+                          <div className="flex items-end justify-between mb-2">
+                            <div className="w-12 h-12 rounded-xl border-2 border-white dark:border-slate-900 overflow-hidden bg-white shadow-md">
+                              <img
+                                src={vendor.logoImage || 'https://images.unsplash.com/photo-1560179707-f14e90ef3623?auto=format&fit=crop&w=150&q=80'}
+                                alt={vendor.storeName}
+                                referrerPolicy="no-referrer"
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-50 dark:bg-purple-950/80 text-purple-600 dark:text-purple-400 border border-purple-200 dark:border-purple-800">
+                              {vendorProductsCount} Active Listings
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 font-black text-sm text-slate-900 dark:text-slate-100 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
+                            <span>{vendor.storeName}</span>
+                            {vendor.verified && (
+                              <CheckCircle2 className="w-4 h-4 text-purple-600 dark:text-purple-400 fill-purple-100 dark:fill-purple-950 flex-shrink-0" />
+                            )}
+                          </div>
+
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2 mt-1 leading-relaxed">
+                            {vendor.bio}
+                          </p>
+                        </div>
+
+                        {/* Rating & Action */}
+                        <div className="pt-3 mt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
+                          <div className="flex items-center gap-1 text-amber-400 font-bold">
+                            <Star className="w-3.5 h-3.5 fill-current" />
+                            <span className="text-slate-800 dark:text-slate-200">{vendor.rating.toFixed(1)}</span>
+                            <span className="text-[10px] text-slate-400 font-normal">({vendor.reviewsCount})</span>
+                          </div>
+
+                          <span className="text-xs font-bold text-purple-600 dark:text-purple-400 flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
+                            Visit Store
+                            <ChevronRight className="w-3.5 h-3.5" />
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}

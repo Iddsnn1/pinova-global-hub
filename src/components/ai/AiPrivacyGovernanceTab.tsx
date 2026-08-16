@@ -306,7 +306,7 @@ export const AiPrivacyGovernanceTab: React.FC<AiPrivacyGovernanceTabProps> = ({
       verificationHash: deletionCertificate.hash,
       purgedScope: deletionCertificate.purgedScope,
       regulatoryCompliance: 'GDPR Article 17 / Pi Network User Privacy Charter',
-      cryptographicSignature: 'VERIFIED_BY_PINOVA_GOVERNANCE_PROTOCOL'
+      governanceSignature: 'VERIFIED_BY_PINOVA_GOVERNANCE_PROTOCOL'
     };
 
     const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(certData, null, 2));
@@ -757,7 +757,7 @@ export const AiPrivacyGovernanceTab: React.FC<AiPrivacyGovernanceTabProps> = ({
             <Clock className="w-5 h-5 text-indigo-500" /> Timestamped Consent History Audit Trail
           </h3>
           <p className="text-xs text-slate-500">
-            Immutable log of all user opt-ins, opt-outs, terms updates, and privacy policy acknowledgments.
+            Append-only log of all user opt-ins, opt-outs, terms updates, and privacy policy acknowledgments.
           </p>
         </div>
 

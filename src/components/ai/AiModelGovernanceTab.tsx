@@ -470,7 +470,7 @@ export const AiModelGovernanceTab: React.FC<AiModelGovernanceTabProps> = ({
             Emergency AI Model Rollback Center
           </h2>
           <p className="text-xs text-slate-300 max-w-2xl leading-relaxed">
-            Instantly revert active production routing to last stable build (<strong className="text-amber-300">Google Gemini 3.5 Pro v3.5.8</strong>) with zero downtime, instant system alerts, and immutable audit logs.
+            Instantly revert active production routing to last stable build (<strong className="text-amber-300">Google Gemini 3.5 Pro v3.5.8</strong>) with zero downtime, instant system alerts, and append-only audit logs.
           </p>
         </div>
 
@@ -491,7 +491,7 @@ export const AiModelGovernanceTab: React.FC<AiModelGovernanceTabProps> = ({
               <FileCheck className="w-5 h-5 text-purple-600" /> AI Model Approval Workflow & Governance Sign-Off
             </h3>
             <p className="text-xs text-slate-500">
-              Submit, review, approve, or reject candidate AI models with reviewer justification notes and cryptographic verification signature hashes.
+              Submit, review, approve, or reject candidate AI models with reviewer justification notes and governance verification sign-offs.
             </p>
           </div>
 
@@ -965,7 +965,7 @@ export const AiModelGovernanceTab: React.FC<AiModelGovernanceTabProps> = ({
               </div>
 
               <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 text-[10px] text-purple-300 font-mono">
-                Cryptographic signature verification hash will be auto-generated upon sign-off.
+                Governance verification sign-off hash will be auto-generated upon submission.
               </div>
 
               <div className="flex gap-2 pt-2">

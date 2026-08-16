@@ -118,7 +118,7 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
     } else if (trimmed.startsWith('PI_ITEM_') || trimmed.startsWith('PRD_')) {
       return { type: 'Product QR Code', details: 'Marketplace Inventory Item Reference' };
     } else if (trimmed.startsWith('ESCROW_') || trimmed.startsWith('PSTP_')) {
-      return { type: 'PSTP Escrow Reference', details: 'Smart Contract Payment Security Reference' };
+      return { type: 'PSTP Escrow Reference', details: 'PSTP Escrow Payment Protection Reference' };
     } else if (trimmed.startsWith('ORD_')) {
       return { type: 'Order Tracking Reference', details: 'Pioneer Order Tracking & Delivery Verification' };
     } else if (trimmed.startsWith('PAY_') || trimmed.startsWith('TX_')) {

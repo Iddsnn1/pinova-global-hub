@@ -301,12 +301,12 @@ export const BuyerOrderHub: React.FC<BuyerOrderHubProps> = ({
           location: 'Pi Network Platform Gateway'
         },
         {
-          title: 'Payment Cryptographically Verified',
+          title: 'Pi Payment Server-Verified',
           status: 'Payment Verified',
           completed: ['Payment Verified', 'Completed', 'Delivered'].includes(activeOrder.pstpStatus),
           active: activeOrder.pstpStatus === 'Payment Verified',
           timestamp: activeOrder.updatedAt,
-          location: 'PiNova PSTP Smart Contract'
+          location: 'PiNova PSTP Protection Server'
         },
         {
           title: 'Instant Electronic Key / Token Dispatch',
@@ -314,7 +314,7 @@ export const BuyerOrderHub: React.FC<BuyerOrderHubProps> = ({
           completed: ['Delivered', 'Completed'].includes(activeOrder.pstpStatus),
           active: ['Delivered', 'Completed'].includes(activeOrder.pstpStatus),
           timestamp: activeOrder.updatedAt,
-          location: 'Encrypted Digital Delivery Server'
+          location: 'Secure Digital Delivery Server'
         }
       ];
     }
@@ -405,7 +405,7 @@ export const BuyerOrderHub: React.FC<BuyerOrderHubProps> = ({
                 </span>
               </div>
               <p className="text-xs text-slate-400">
-                Real-time carrier logistics, blockchain payment auditing, digital key access, and escrow fulfillment.
+                Real-time carrier logistics, server-verified Pi payments, digital key access, and escrow fulfillment.
               </p>
             </div>
           </div>
@@ -672,7 +672,7 @@ export const BuyerOrderHub: React.FC<BuyerOrderHubProps> = ({
                         {activeOrder.pstpStatus === 'Delivered' || activeOrder.pstpStatus === 'Completed' ? 'Delivered' : '1 - 3 Business Days'}
                       </div>
                       <div className="text-[10px] text-emerald-500 font-bold flex items-center sm:justify-end gap-1">
-                        <CheckCircle2 className="w-3 h-3" /> Security Tamper Seal Verified
+                        <CheckCircle2 className="w-3 h-3" /> Security Seal Verified
                       </div>
                     </div>
                   </div>
@@ -682,7 +682,7 @@ export const BuyerOrderHub: React.FC<BuyerOrderHubProps> = ({
                       <Zap className="w-6 h-6 text-amber-500" />
                       <div>
                         <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100">Instant Electronic Fulfillment</h4>
-                        <p className="text-[11px] text-slate-500">Digital license key or utility airtime dispatched instantly on blockchain settlement.</p>
+                        <p className="text-[11px] text-slate-500">Digital license key or utility airtime dispatched instantly on server payment settlement.</p>
                       </div>
                     </div>
                     <span className="px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-bold border border-emerald-500/30">
@@ -792,15 +792,20 @@ export const BuyerOrderHub: React.FC<BuyerOrderHubProps> = ({
                             <div className="text-[11px] text-slate-500">
                               Qty: {item.quantity} • Merchant: <span className="font-semibold text-purple-600 dark:text-purple-400">{item.product?.sellerName || 'Verified Store'}</span>
                             </div>
+                            {item.customDetails?.variant && (
+                              <div className="text-[11px] text-purple-600 dark:text-purple-300 font-semibold mt-0.5">
+                                Option: {item.customDetails.variant.title}
+                              </div>
+                            )}
                             {item.customDetails && (
                               <div className="text-[10px] text-slate-400 font-mono mt-0.5">
-                                Ref: {item.customDetails.phoneNumber || item.customDetails.accountNumber || item.customDetails.recipientEmail}
+                                Ref: {item.customDetails.phoneNumber || item.customDetails.accountNumber || item.customDetails.recipientEmail || item.customDetails.serviceBrief}
                               </div>
                             )}
                           </div>
                         </div>
                         <div className="text-xs font-black text-purple-600 dark:text-purple-400 shrink-0">
-                          {((item.product?.pricePi || 0) * item.quantity).toFixed(2)} π
+                          {(((item.product?.discountPercent ? item.product.pricePi * (1 - item.product.discountPercent / 100) : item.product?.pricePi || 0) + (item.customDetails?.variant?.priceDeltaPi || 0)) * item.quantity).toFixed(2)} π
                         </div>
                       </div>
                     ))}
@@ -870,7 +875,7 @@ export const BuyerOrderHub: React.FC<BuyerOrderHubProps> = ({
                 <div className="p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 space-y-4">
                   <div className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
                     <Key className="w-4 h-4 text-amber-500" />
-                    <span>Cryptographic Digital Keys, Codes & Download Assets</span>
+                    <span>Digital License Keys, Codes & Download Assets</span>
                   </div>
 
                   {activeOrder.digitalDeliveries && activeOrder.digitalDeliveries.length > 0 ? (
@@ -989,8 +994,8 @@ export const BuyerOrderHub: React.FC<BuyerOrderHubProps> = ({
                     <div className="flex items-center gap-2 text-[11px] text-slate-500">
                       <QrCode className="w-7 h-7 text-purple-600" />
                       <div>
-                        <div className="font-bold text-slate-800 dark:text-slate-200">Cryptographically Verified</div>
-                        <div className="text-[10px] text-slate-400">Pi Network Consensus Validated</div>
+                        <div className="font-bold text-slate-800 dark:text-slate-200">Pi Payment Server-Verified</div>
+                        <div className="text-[10px] text-slate-400">QR Order Verification</div>
                       </div>
                     </div>
                     <div className="text-right">

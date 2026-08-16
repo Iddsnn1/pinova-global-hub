@@ -1,9 +1,11 @@
 export * from './types/utility';
 
 export type UserRole = 'buyer' | 'seller' | 'admin';
-export type CartItem = OrderItem;
 
-export type ProductCategory = 'physical' | 'digital' | 'airtime' | 'utility' | 'giftcard';
+export type ProductCategory = 'physical' | 'digital' | 'service' | 'airtime' | 'utility' | 'giftcard';
+export type ProductType = 'physical' | 'digital' | 'service';
+export type FulfillmentType = 'shipping' | 'digital_download' | 'instant_key' | 'service_delivery' | 'airtime_topup' | 'utility_token';
+export type AvailabilityStatus = 'in_stock' | 'low_stock' | 'out_of_stock' | 'pre_order' | 'digital_unlimited';
 
 export interface ProductVariant {
   id: string;
@@ -31,14 +33,24 @@ export interface Product {
   sellerVerified: boolean;
   features: string[];
   specs?: Record<string, string>;
+  productType?: ProductType;
+  fulfillmentType?: FulfillmentType;
+  availabilityStatus?: AvailabilityStatus;
+  fiatReferencePrice?: { amount: number; currency: string };
+  serviceLocation?: string;
+  serviceDuration?: string;
+  digitalDeliveryType?: 'instant_download' | 'license_key' | 'account_access' | 'custom_file';
   digitalDownloadUrl?: string;
   digitalKey?: string;
   airtimeNetwork?: string;
   utilityProvider?: string;
   shippingWeightKg?: number;
+  shippingOrigin?: string;
+  estimatedDeliveryDays?: string;
   tags: string[];
   discountPercent?: number;
   featured?: boolean;
+  isActive?: boolean;
   createdAt?: string;
   updatedAt?: string;
   isDeleted?: boolean;
@@ -164,11 +176,15 @@ export interface OrderItem {
   quantity: number;
   selectedVariant?: string;
   customDetails?: {
+    variant?: ProductVariant;
     phoneNumber?: string;
     accountNumber?: string;
     recipientEmail?: string;
+    serviceBrief?: string;
   };
 }
+
+export type CartItem = OrderItem;
 
 export interface StatusTransitionLog {
   status: PstpOrderStatus;
@@ -323,6 +339,17 @@ export interface UserReputation {
   badgeLevel: 'Bronze' | 'Silver' | 'Gold' | 'Enterprise Platinum';
 }
 
+export type MerchantVerificationStatus = 'Verified' | 'Pending Verification' | 'Unverified' | 'Suspended';
+export type MerchantSellerStatus = 'Active' | 'Inactive' | 'Probation' | 'Suspended';
+
+export interface MerchantPolicy {
+  shippingPolicy?: string;
+  refundPolicy?: string;
+  digitalDeliveryTerms?: string;
+  supportTerms?: string;
+  averageDispatchTime?: string;
+}
+
 export interface Vendor {
   id: string;
   sellerUsername: string;
@@ -331,16 +358,27 @@ export interface Vendor {
   rating: number;
   reviewsCount: number;
   verified: boolean;
+  verificationStatus?: MerchantVerificationStatus;
+  sellerStatus?: MerchantSellerStatus;
   totalSalesPi: number;
   bannerImage: string;
   logoImage: string;
   joinedDate: string;
+  country?: string;
   shippingCountries: string[];
+  productCount?: number;
+  followersCount?: number;
+  policies?: MerchantPolicy;
+  contactEmail?: string;
+  contactPhone?: string;
+  websiteUrl?: string;
   reputationScore?: number;
   createdAt?: string;
   updatedAt?: string;
   isDeleted?: boolean;
 }
+
+export type Merchant = Vendor;
 
 export interface Review {
   id: string;

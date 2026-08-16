@@ -45,7 +45,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         <div>
           <span className="text-xs font-bold uppercase tracking-wider text-purple-300">PiNova Platform Governance</span>
           <h1 className="text-2xl font-black text-white mt-1">Admin Control Desk & Security Audit</h1>
-          <p className="text-xs text-slate-300 mt-1">Order protection dispute resolution, merchant verification, and Pi Blockchain transaction audit logs.</p>
+          <p className="text-xs text-slate-300 mt-1">Order protection dispute resolution, merchant verification, and server-verified Pi transaction audit logs.</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">

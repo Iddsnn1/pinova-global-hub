@@ -292,7 +292,7 @@ export const BuyerDashboard: React.FC<BuyerDashboardProps> = ({
         <div className="p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-4">
           <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100 flex items-center gap-2">
             <ShieldCheck className="w-4 h-4 text-emerald-500" />
-            <span>Official Pi Blockchain Order Protection Verification Logs</span>
+            <span>Server-Verified Pi Order Protection Logs</span>
           </h3>
 
           <div className="overflow-x-auto">
