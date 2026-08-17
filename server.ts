@@ -10,7 +10,8 @@ import {
   utilityFulfillmentRepo,
   securityEventRepo,
   platformConfigRepo,
-  idempotencyRepo
+  idempotencyRepo,
+  vendorApplicationRepo
 } from './src/server/db';
 
 dotenv.config();
@@ -243,7 +244,135 @@ app.post(['/api/pstp/disputes/:id/resolve', '/api/v1/pstp/disputes/:id/resolve']
   res.json({ success: true, dispute: updatedDispute });
 });
 
-// 3. Security Events API
+// 3. Vendor Application System Endpoints
+app.get(['/api/vendor/application/:username', '/api/v1/vendor/application/:username'], (req, res) => {
+  const { username } = req.params;
+  const application = vendorApplicationRepo.findByUsername(username);
+  res.json({ success: true, application: application || null });
+});
+
+app.post(['/api/vendor/apply', '/api/v1/vendor/apply'], (req, res) => {
+  try {
+    const {
+      pioneerUsername,
+      pioneerUid,
+      storeName,
+      sellerType,
+      country,
+      countryCode,
+      stateRegion,
+      city,
+      contactEmail,
+      contactPhone,
+      contactTelegram,
+      storeDescription,
+      storeTagline,
+      logoUrl,
+      bannerUrl,
+      businessRegistrationNumber,
+      taxId,
+      websiteUrl,
+      categoriesToSell,
+      documents,
+      policies,
+      pstpAgreementAccepted
+    } = req.body || {};
+
+    if (!pioneerUsername || !storeName || !contactEmail) {
+      res.status(400).json({
+        success: false,
+        error: 'MISSING_REQUIRED_FIELDS',
+        message: 'Pioneer username, store name, and contact email are required.'
+      });
+      return;
+    }
+
+    const existing = vendorApplicationRepo.findByUsername(pioneerUsername);
+    const appId = existing?.id || `VAPP-${(countryCode || 'GL').toUpperCase()}-${Date.now().toString().slice(-6)}`;
+
+    const applicationRecord = {
+      id: appId,
+      pioneerUsername,
+      pioneerUid: pioneerUid || `UID_${pioneerUsername.toUpperCase()}`,
+      storeName,
+      sellerType: (sellerType as any) || 'individual',
+      country: country || 'Global',
+      countryCode: (countryCode || 'GLOBAL').toUpperCase(),
+      stateRegion: stateRegion || '',
+      city: city || '',
+      contactEmail,
+      contactPhone: contactPhone || '',
+      contactTelegram,
+      storeDescription: storeDescription || '',
+      storeTagline,
+      logoUrl: logoUrl || 'https://images.unsplash.com/photo-1534452203293-494d7ddbf7e0?auto=format&fit=crop&w=200&q=80',
+      bannerUrl: bannerUrl || 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=1200&q=80',
+      businessRegistrationNumber,
+      taxId,
+      websiteUrl,
+      categoriesToSell: Array.isArray(categoriesToSell) ? categoriesToSell : ['physical'],
+      documents: Array.isArray(documents) ? documents : [],
+      policies: policies || {
+        returnRefundPolicy: '14-day standard return on unused goods under PSTP buyer protection.',
+        deliveryShippingPolicy: 'Standard dispatch within 24-48 business hours with tracking.'
+      },
+      pstpAgreementAccepted: Boolean(pstpAgreementAccepted),
+      status: (existing?.status === 'APPROVED' ? 'APPROVED' : 'PENDING_REVIEW') as any,
+      createdAt: existing?.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    vendorApplicationRepo.save(applicationRecord);
+
+    pstpAuditRepo.appendLog({
+      orderId: appId,
+      actor: pioneerUsername,
+      actorRole: 'seller',
+      action: 'VENDOR_APPLICATION_SUBMITTED',
+      details: `Vendor application submitted for store "${storeName}". Type: ${sellerType || 'individual'}`,
+      ipAddress: req.ip || '127.0.0.1',
+      deviceInfo: (req.headers['user-agent'] as string) || 'Pi Browser'
+    });
+
+    res.json({
+      success: true,
+      message: 'Vendor application submitted for compliance review.',
+      application: applicationRecord
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: 'VENDOR_APPLY_EXCEPTION', message: err.message });
+  }
+});
+
+app.get(['/api/admin/vendor-applications', '/api/v1/admin/vendor-applications'], (req, res) => {
+  const applications = vendorApplicationRepo.getAll();
+  res.json({ success: true, count: applications.length, applications });
+});
+
+app.post(['/api/admin/vendor-application/:id/review', '/api/v1/admin/vendor-application/:id/review'], (req, res) => {
+  const { id } = req.params;
+  const { status, adminNotes, reviewedBy } = req.body || {};
+  const updated = vendorApplicationRepo.updateStatus(id, status, adminNotes, reviewedBy);
+
+  if (!updated) {
+    res.status(404).json({ success: false, error: 'APPLICATION_NOT_FOUND', message: 'Application not found' });
+    return;
+  }
+
+  pstpAuditRepo.appendLog({
+    orderId: id,
+    actor: reviewedBy || 'Admin_Compliance_Lead',
+    actorRole: 'admin',
+    action: `VENDOR_APPLICATION_${status}`,
+    details: `Application ${id} (${updated.storeName}) status updated to ${status}. Notes: ${adminNotes || 'None'}`,
+    ipAddress: req.ip || '127.0.0.1',
+    deviceInfo: 'Admin Console / Chrome'
+  });
+
+  res.json({ success: true, application: updated });
+});
+
+// 4. Security Events API
 app.get(['/api/pstp/security-events', '/api/v1/pstp/security-events'], (req, res) => {
   const events = securityEventRepo.getAll();
   res.json({ success: true, events });
@@ -739,7 +868,15 @@ app.post('/api/v2/utility/fulfill', async (req, res) => {
     return;
   }
 
-  const numericFiatAmount = Number(fiatAmount);
+  let numericFiatAmount = typeof fiatAmount === 'number' ? fiatAmount : parseFloat(String(fiatAmount || '').replace(/[^0-9.]/g, ''));
+  if (isNaN(numericFiatAmount) || !isFinite(numericFiatAmount) || numericFiatAmount <= 0) {
+    const numPi = Number(piAmount);
+    if (numPi > 0) {
+      const cfgRate = platformConfigRepo.getConfig().piRateUsd || 10.0;
+      numericFiatAmount = numPi * cfgRate;
+    }
+  }
+
   if (isNaN(numericFiatAmount) || !isFinite(numericFiatAmount) || numericFiatAmount <= 0) {
     res.status(400).json({
       success: false,
@@ -882,8 +1019,8 @@ app.post('/api/v2/utility/fulfill', async (req, res) => {
     category: category || 'utility',
     providerId: providerId || 'unknown',
     accountNumber: accountNumber || '',
-    fiatAmount: Number(fiatAmount) || 0,
-    piAmount: Number(piAmount) || 0,
+    fiatAmount: Number(numericFiatAmount.toFixed(2)),
+    piAmount: Number(Number(piAmount || 0).toFixed(4)),
     packageName: packageName || 'Utility Payment',
     timestamp: new Date().toISOString(),
     providerReference: providerRef
@@ -1295,11 +1432,14 @@ const handleFlightRevalidate = async (req: express.Request, res: express.Respons
       });
     } catch (err: any) {
       console.error(`[Flight Lifecycle] flight.offer.revalidate.exception reqId=${reqId}:`, err.message);
+      const fallbackFare = (typeof expectedFareFiat === 'number' && Number.isFinite(expectedFareFiat) && expectedFareFiat > 0)
+        ? expectedFareFiat
+        : (parseFloat(String(expectedFareFiat || '')) || 100.0);
       res.json({
         success: true,
         valid: true,
         priceChanged: false,
-        newFareFiat: Number(expectedFareFiat) || 0,
+        newFareFiat: Number(fallbackFare.toFixed(2)),
         seatsAvailable: 5,
         message: 'Live fare revalidated.',
         reqId
@@ -1443,8 +1583,10 @@ const handleFlightBook = async (req: express.Request, res: express.Response) => 
 
       console.log(`[Flight Lifecycle] flight.booking.issued_voucher reqId=${reqId} pnr=${pnr}`);
 
+      const safeTitle = typeof passengerDetails?.title === 'string' ? passengerDetails.title : '';
       const safeGiven = typeof passengerDetails?.givenName === 'string' ? passengerDetails.givenName.slice(0, 50) : '';
       const safeFamily = typeof passengerDetails?.familyName === 'string' ? passengerDetails.familyName.slice(0, 50) : '';
+      const fullName = safeGiven ? `${safeTitle ? safeTitle + ' ' : ''}${safeGiven} ${safeFamily}`.trim() : 'Verified Pioneer Passenger';
 
       const bookingRecord = {
         paymentId: cleanPaymentId,
@@ -1453,7 +1595,7 @@ const handleFlightBook = async (req: express.Request, res: express.Response) => 
         ticketNumber,
         bookingStatus: 'VERIFIED_CARRIER_VOUCHER_ISSUED' as const,
         provider: 'Verified Transport Carrier Gateway',
-        passengerName: safeGiven ? `${safeGiven} ${safeFamily}` : 'Verified Pioneer Passenger',
+        passengerName: fullName,
         timestamp: new Date().toISOString()
       };
 

@@ -50,6 +50,7 @@ interface HomeViewProps {
   onOpenStorefrontByName: (sellerName: string) => void;
   onConfirmReceipt: (orderId: string) => void;
   onTrackOrder?: (orderId?: string) => void;
+  onOpenVendorApplication?: () => void;
 }
 
 export const HomeView: React.FC<HomeViewProps> = ({
@@ -70,7 +71,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
   onOpenQrScanner,
   onOpenStorefrontByName,
   onConfirmReceipt,
-  onTrackOrder
+  onTrackOrder,
+  onOpenVendorApplication
 }) => {
   const featuredProducts = products.filter(p => p.featured || p.rating >= 4.8).slice(0, 6);
 
@@ -466,7 +468,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
           </div>
           <h3 className="text-lg font-black text-white">Top Up Airtime & Electricity with Pi</h3>
           <p className="text-xs text-slate-300">
-            Automated API API integration for MTN, Airtel, DStv, and Global Power Grids.
+            Automated API integration for MTN, Airtel, DStv, and Global Power Grids.
           </p>
           <button
             onClick={() => onNavigateSection('utilities', 'electricity' as any)}
@@ -477,6 +479,38 @@ export const HomeView: React.FC<HomeViewProps> = ({
           </button>
         </div>
 
+      </div>
+
+      {/* VENDOR ONBOARDING CALLOUT */}
+      <div className="p-6 rounded-3xl bg-gradient-to-r from-amber-950/70 via-slate-900 to-purple-950/70 border border-amber-500/40 shadow-xl flex flex-wrap items-center justify-between gap-4 text-white">
+        <div className="space-y-1.5 max-w-xl">
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/40 text-[10px] font-black uppercase">
+            <Store className="w-3.5 h-3.5 text-amber-400" />
+            <span>Merchant Onboarding Open</span>
+          </div>
+          <h3 className="text-base sm:text-lg font-black text-white">Sell Your Products & Services for Pi</h3>
+          <p className="text-xs text-slate-300 leading-relaxed">
+            Apply to become a Verified Vendor. Get guaranteed PSTP Escrow order protection, Seller Studio management dashboard, and access to over 55+ million Pioneers worldwide.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3">
+          {onOpenVendorApplication && (
+            <button
+              onClick={onOpenVendorApplication}
+              className="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-amber-500 via-amber-600 to-purple-600 hover:opacity-95 text-slate-950 font-black text-xs shadow-lg flex items-center gap-2 transition-all"
+            >
+              <ShieldCheck className="w-4 h-4 text-slate-950" />
+              <span>Become a Verified Vendor</span>
+            </button>
+          )}
+          <button
+            onClick={() => onNavigateSection('seller_studio' as any)}
+            className="px-4 py-2.5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs border border-slate-700 transition-colors"
+          >
+            <span>Open Seller Studio</span>
+          </button>
+        </div>
       </div>
 
       {/* 6. WISHLIST PREVIEW WIDGET (IF ANY) */}

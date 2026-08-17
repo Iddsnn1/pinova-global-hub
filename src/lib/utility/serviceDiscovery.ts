@@ -18,6 +18,7 @@ import {
 } from '../../types/utility';
 import { resolveSubdivisionCode } from '../../data/countrySubdivisions';
 import { resolveElectricityProviders } from './electricityDiscovery';
+import { VERIFIED_TRANSPORT_PROVIDERS } from '../../data/transportData';
 
 /**
  * Filter utility providers by country name or 2-letter / ISO country code.
@@ -440,12 +441,44 @@ export function searchTransportRoutes(
   providers: UtilityServiceProvider[],
   criteria: TransportSearchCriteria
 ): TransportSearchResult {
-  const transportProviders = providers.filter((p) => p.category === 'transport');
+  // Combine input providers with system verified transport providers to ensure comprehensive carrier coverage
+  const allProvidersMap = new Map<string, UtilityServiceProvider>();
+  [...providers, ...VERIFIED_TRANSPORT_PROVIDERS].forEach((p) => {
+    if (p.category === 'transport') {
+      allProvidersMap.set(p.id, p);
+    }
+  });
 
-  let matchingProviders = transportProviders;
+  const transportProviders = Array.from(allProvidersMap.values());
 
-  if (criteria.countryCode) {
-    const countryMatches = filterProvidersByCountry(transportProviders, criteria.countryCode);
+  // Strict filtering by transportType (air, rail, bus)
+  let typeFiltered = transportProviders;
+  if (criteria.transportType && criteria.transportType !== 'all') {
+    typeFiltered = transportProviders.filter((p) => {
+      // If provider explicitly defines transportType, match it
+      if (p.transportType) {
+        return p.transportType === criteria.transportType;
+      }
+      // Infer from ID/name if not explicitly set
+      const pId = p.id.toLowerCase();
+      const pName = p.name.toLowerCase();
+      if (criteria.transportType === 'rail') {
+        return pId.includes('rail') || pId.includes('train') || pName.includes('rail') || pName.includes('train') || pName.includes('amtrak') || pName.includes('eurostar');
+      }
+      if (criteria.transportType === 'bus') {
+        return pId.includes('bus') || pId.includes('coach') || pName.includes('bus') || pName.includes('coach') || pName.includes('gigm') || pName.includes('greyhound');
+      }
+      if (criteria.transportType === 'air') {
+        return pId.includes('flight') || pId.includes('air') || pName.includes('air') || pName.includes('flight') || pName.includes('airline');
+      }
+      return true;
+    });
+  }
+
+  let matchingProviders = typeFiltered;
+
+  if (criteria.countryCode && criteria.countryCode !== 'ALL' && criteria.countryCode !== 'GLOBAL') {
+    const countryMatches = filterProvidersByCountry(typeFiltered, criteria.countryCode);
     if (countryMatches.length > 0) {
       matchingProviders = countryMatches;
     }
@@ -454,24 +487,25 @@ export function searchTransportRoutes(
   const results: TransportSearchResultItem[] = [];
 
   matchingProviders.forEach((p) => {
-    // Generate deterministic route result items for matching operators
-    const baseFare = p.minCustomFiat || p.packages[0]?.fiatPrice || 30;
+    // Generate deterministic, canonical numeric fare for matching operators
+    const rawFare = p.minCustomFiat ?? p.packages[0]?.fiatPrice ?? 25.0;
+    const cleanFare = typeof rawFare === 'number' && Number.isFinite(rawFare) && rawFare > 0 ? rawFare : 25.0;
 
     results.push({
       id: `trip-${p.id}-${criteria.originCode}-${criteria.destinationCode}`,
       providerId: p.id,
       providerName: p.name,
       providerLogo: p.logo,
-      transportType: p.transportType || 'air',
+      transportType: p.transportType || (criteria.transportType !== 'all' ? criteria.transportType : 'rail') || 'rail',
       originCode: criteria.originCode || 'ORIGIN',
       originCity: p.origin || criteria.originCode || 'Origin Station',
       destinationCode: criteria.destinationCode || 'DEST',
       destinationCity: p.destination || criteria.destinationCode || 'Destination Station',
-      fiatFare: baseFare,
+      fiatFare: cleanFare,
       currency: p.currency || 'USD',
-      badge: p.packages[0]?.badge || 'Verified Transit Pass',
+      badge: p.packages[0]?.badge || (p.transportType === 'rail' ? 'Verified Rail Express' : 'Verified Coach Pass'),
       isAvailable: true,
-      notes: `Voucher / E-ticket Pass for ${p.name}`
+      notes: `PSTP Guaranteed Transit Pass for ${p.name}`
     });
   });
 
@@ -482,8 +516,8 @@ export function searchTransportRoutes(
     totalFound: results.length,
     message:
       results.length > 0
-        ? `Found ${results.length} travel option(s) for ${criteria.originCode} -> ${criteria.destinationCode}.`
-        : `No transport routes found for ${criteria.originCode} -> ${criteria.destinationCode}.`
+        ? `Found ${results.length} verified ${criteria.transportType || 'transport'} option(s) for ${criteria.originCode} ➔ ${criteria.destinationCode}.`
+        : `No verified ${criteria.transportType || 'transport'} routes found for ${criteria.originCode} ➔ ${criteria.destinationCode}.`
   };
 }
 

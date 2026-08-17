@@ -7,9 +7,10 @@ import { LanguageSelectorDropdown } from './i18n/LanguageSelectorDropdown';
 interface FooterProps {
   onSelectCategory: (category: ProductCategory | 'all') => void;
   onOpenLanguageModal?: () => void;
+  onOpenVendorApplication?: () => void;
 }
 
-export const Footer: React.FC<FooterProps> = ({ onSelectCategory, onOpenLanguageModal }) => {
+export const Footer: React.FC<FooterProps> = ({ onSelectCategory, onOpenLanguageModal, onOpenVendorApplication }) => {
   const { t, currentLanguage, languages } = useTranslation();
 
   return (
@@ -122,8 +123,11 @@ export const Footer: React.FC<FooterProps> = ({ onSelectCategory, onOpenLanguage
             <p className="text-[11px] text-slate-400">
               Want to list your physical inventory or digital products to over 60M Pi Pioneers globally? Join PiNova Verified Sellers.
             </p>
-            <button className="w-full py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs transition-colors">
-              Become a Verified Vendor
+            <button
+              onClick={onOpenVendorApplication}
+              className="w-full py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs transition-colors flex items-center justify-center gap-1.5 shadow-md"
+            >
+              <span>Become a Verified Vendor</span>
             </button>
           </div>
 

@@ -10,6 +10,7 @@ interface ProfileViewProps {
   onOpenPstpShield: () => void;
   onNavigateSection?: (section: MainSection) => void;
   onOpenNotifications?: () => void;
+  onOpenVendorApplication?: () => void;
 }
 
 export const ProfileView: React.FC<ProfileViewProps> = ({
@@ -18,7 +19,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   onSwitchRole,
   onOpenPstpShield,
   onNavigateSection,
-  onOpenNotifications
+  onOpenNotifications,
+  onOpenVendorApplication
 }) => {
   const [address, setAddress] = useState({
     street: '102 Innovation Drive',
@@ -192,10 +194,31 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             <ChevronRight className="w-4 h-4 text-amber-400" />
           </div>
 
+          {onOpenVendorApplication && (
+            <div
+              onClick={onOpenVendorApplication}
+              className="p-4 rounded-xl bg-gradient-to-r from-amber-950/60 via-purple-950/60 to-slate-900 border border-amber-500/50 hover:border-amber-400 transition-all cursor-pointer flex items-center justify-between shadow-md"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold">
+                  <ShieldCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-xs font-bold text-white flex items-center gap-1.5">
+                    <span>Become a Verified Vendor</span>
+                    <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-500 text-slate-950 font-black">APPLY</span>
+                  </h3>
+                  <p className="text-[11px] text-amber-200/90">Store onboarding, merchant credentials & Seller Studio</p>
+                </div>
+              </div>
+              <ChevronRight className="w-4 h-4 text-amber-400" />
+            </div>
+          )}
+
           <div
             onClick={() => {
               onSwitchRole('seller');
-              if (onNavigateSection) onNavigateSection('orders');
+              if (onNavigateSection) onNavigateSection('seller_studio' as any);
             }}
             className="p-4 rounded-xl bg-purple-950/40 border border-purple-800/40 hover:border-purple-500 transition-all cursor-pointer flex items-center justify-between"
           >

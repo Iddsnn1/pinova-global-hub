@@ -77,7 +77,7 @@ export interface FlightOffer {
 }
 
 export interface FlightPassengerDetails {
-  title?: 'Mr' | 'Mrs' | 'Ms' | 'Dr';
+  title?: 'Mr' | 'Mrs' | 'Ms' | 'Dr' | 'Alh.' | 'Hjy.';
   givenName: string;
   familyName: string;
   dateOfBirth?: string;

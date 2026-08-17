@@ -62,6 +62,8 @@ import { INITIAL_PI_CONVERSION_CONFIG, INITIAL_CONVERSION_RATE_LOGS } from './da
 
 import { LanguageProvider } from './context/LanguageContext';
 import { LanguageSelectorModal } from './components/i18n/LanguageSelectorModal';
+import { MerchantEcosystemHub } from './components/merchant/MerchantEcosystemHub';
+import { VendorApplicationModal } from './components/vendor/VendorApplicationModal';
 
 function MainAppContent() {
   // Dark mode
@@ -148,6 +150,7 @@ function MainAppContent() {
   const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
   const [selectedVendor, setSelectedVendor] = useState<Vendor | null>(null);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [isVendorApplicationOpen, setIsVendorApplicationOpen] = useState(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [isPstpShieldOpen, setIsPstpShieldOpen] = useState(false);
   const [isQrScannerOpen, setIsQrScannerOpen] = useState(false);
@@ -459,7 +462,14 @@ function MainAppContent() {
   };
 
   // Update Order Lifecycle Status
-  const handleUpdateOrderStatus = (orderId: string, newStatus: PstpOrderStatus, note?: string) => {
+  const handleUpdateOrderStatus = (
+    orderId: string,
+    newStatus: PstpOrderStatus,
+    noteOrExtra?: string | { trackingNumber?: string; carrier?: string; note?: string }
+  ) => {
+    const noteText = typeof noteOrExtra === 'string' ? noteOrExtra : (noteOrExtra?.note || `Order status updated to ${newStatus}`);
+    const extraTracking = typeof noteOrExtra === 'object' ? noteOrExtra.trackingNumber : undefined;
+    const extraCarrier = typeof noteOrExtra === 'object' ? noteOrExtra.carrier : undefined;
     setOrders((prev) =>
       prev.map((o) => {
         if (o.id !== orderId) return o;
@@ -469,11 +479,13 @@ function MainAppContent() {
           timestamp: new Date().toISOString(),
           actor: user.username,
           actorRole: user.role,
-          note: note || `Order status updated to ${newStatus}`
+          note: noteText
         };
         return {
           ...o,
           pstpStatus: newStatus,
+          trackingNumber: extraTracking || o.trackingNumber,
+          carrier: extraCarrier || o.carrier,
           timeline: [...existingTimeline, newLog],
           updatedAt: new Date().toISOString()
         };
@@ -596,6 +608,7 @@ function MainAppContent() {
         onOpenQrScanner={() => setIsQrScannerOpen(true)}
         recentlyVisitedCategories={recentlyVisitedCategories}
         onSelectVisitedCategory={(visited) => handleSelectMarketplaceCategory(visited.id as MarketplaceCategory)}
+        onOpenVendorApplication={() => setIsVendorApplicationOpen(true)}
       />
 
       {/* Dedicated View Rendering */}
@@ -621,6 +634,7 @@ function MainAppContent() {
             onOpenStorefrontByName={handleOpenStorefrontByName}
             onConfirmReceipt={handleConfirmReceipt}
             onTrackOrder={handleTrackOrder}
+            onOpenVendorApplication={() => setIsVendorApplicationOpen(true)}
           />
         )}
 
@@ -840,6 +854,36 @@ function MainAppContent() {
             onOpenPstpShield={() => setIsPstpShieldOpen(true)}
             onNavigateSection={handleNavigateSection}
             onOpenNotifications={() => setIsNotificationsOpen(true)}
+            onOpenVendorApplication={() => setIsVendorApplicationOpen(true)}
+          />
+        )}
+
+        {activeSection === 'seller_studio' && (
+          <MerchantEcosystemHub
+            products={products}
+            orders={orders}
+            coupons={coupons}
+            vendorProfile={
+              vendors.find((v) => v.storeName.toLowerCase() === user.username.toLowerCase()) ||
+              vendors[0] || {
+                id: 'vendor-current',
+                storeName: `${user.username}'s Official Store`,
+                bio: 'Verified Pi Pioneer Merchant offering authentic merchandise & trusted local fulfillment.',
+                rating: 5.0,
+                reviewsCount: 1,
+                verified: true,
+                totalSalesPi: 140.0,
+                bannerImage: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=1200&q=80',
+                logoImage: 'https://images.unsplash.com/photo-1472851294608-062f824d29cc?auto=format&fit=crop&w=400&q=80',
+                joinedDate: '2025-01-01',
+                shippingCountries: ['Nigeria', 'Global']
+              }
+            }
+            onAddProduct={(newProd) => setProducts((prev) => [newProd, ...prev])}
+            onUpdateFulfillment={(orderId, trackingNumber, carrier) => {
+              handleUpdateOrderStatus(orderId, 'Shipped', { trackingNumber, carrier });
+            }}
+            onCreateCoupon={(newCoupon) => setCoupons((prev) => [newCoupon, ...prev])}
           />
         )}
 
@@ -878,6 +922,7 @@ function MainAppContent() {
       <Footer 
         onSelectCategory={(cat) => handleNavigateSection('marketplace', cat as any)} 
         onOpenLanguageModal={() => setIsLanguageModalOpen(true)}
+        onOpenVendorApplication={() => setIsVendorApplicationOpen(true)}
       />
 
       {/* Streamlined 5-Destination Mobile Bottom Navigation */}
@@ -1038,6 +1083,27 @@ function MainAppContent() {
               ...prev
             ]);
             setUserBalancePi((prev) => Math.max(0, prev - result.amount));
+          }}
+        />
+      )}
+
+      {isVendorApplicationOpen && (
+        <VendorApplicationModal
+          isOpen={isVendorApplicationOpen}
+          onClose={() => setIsVendorApplicationOpen(false)}
+          pioneerUsername={user.username}
+          onApplicationSubmitted={(app) => {
+            setNotifications((prev) => [
+              {
+                id: `notif-vendor-app-${Date.now()}`,
+                title: 'Vendor Application Submitted',
+                message: `Your vendor application for store "${app.storeName}" has been submitted for verification review. Reference: ${app.id}`,
+                type: 'order_protection',
+                timestamp: new Date().toISOString(),
+                read: false
+              },
+              ...prev
+            ]);
           }}
         />
       )}

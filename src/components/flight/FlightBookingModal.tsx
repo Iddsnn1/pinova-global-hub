@@ -42,7 +42,7 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
   const [step, setStep] = useState<'details' | 'payment' | 'confirmed'>('details');
 
   // Passenger form state
-  const [title, setTitle] = useState<'Mr' | 'Mrs' | 'Ms' | 'Dr'>('Mr');
+  const [title, setTitle] = useState<'Mr' | 'Mrs' | 'Ms' | 'Dr' | 'Alh.' | 'Hjy.'>('Mr');
   const [givenName, setGivenName] = useState('');
   const [familyName, setFamilyName] = useState('');
   const [dateOfBirth, setDateOfBirth] = useState('');
@@ -58,9 +58,18 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [confirmedBooking, setConfirmedBooking] = useState<FlightBookingRecord | null>(null);
 
-  // Calculate Pi amount
-  const piAmount = piRateUsd > 0 ? offer.fareAmountFiat / piRateUsd : 0;
-  const formattedPi = piAmount < 0.0001 ? piAmount.toFixed(6) : piAmount.toFixed(4);
+  // Canonical numeric fare state - guaranteed to be a valid positive JavaScript number
+  const initialFareNum = (() => {
+    const raw = offer.fareAmountFiat;
+    const parsed = typeof raw === 'number' ? raw : parseFloat(String(raw || '').replace(/[^0-9.]/g, ''));
+    return Number.isFinite(parsed) && parsed > 0 ? Number(parsed.toFixed(2)) : 100.00;
+  })();
+  const [currentFareFiat, setCurrentFareFiat] = useState<number>(initialFareNum);
+
+  // Calculate Pi amount deterministically from canonical fare
+  const effectivePiRate = piRateUsd > 0 ? piRateUsd : 10.0;
+  const canonicalPiAmount = Number((currentFareFiat / effectivePiRate).toFixed(4));
+  const formattedPi = canonicalPiAmount < 0.0001 ? canonicalPiAmount.toFixed(6) : canonicalPiAmount.toFixed(4);
 
   const handleProceedToPayment = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -78,11 +87,14 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
 
     try {
       // Revalidate offer with backend before proceeding
-      const reval = await revalidateFlightOffer(offer.offerId, offer.fareAmountFiat);
+      const reval = await revalidateFlightOffer(offer.offerId, currentFareFiat);
       if (!reval.valid) {
         setErrorMessage(reval.message || 'Fare has expired or is no longer available. Please select another flight.');
         setIsProcessing(false);
         return;
+      }
+      if (typeof reval.newFareFiat === 'number' && Number.isFinite(reval.newFareFiat) && reval.newFareFiat > 0) {
+        setCurrentFareFiat(Number(reval.newFareFiat.toFixed(2)));
       }
       setStep('payment');
     } catch (err: any) {
@@ -93,6 +105,11 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
   };
 
   const handleExecutePiPayment = async () => {
+    if (!Number.isFinite(currentFareFiat) || currentFareFiat <= 0) {
+      setErrorMessage('Validation Error: Flight fare must be a valid positive number greater than 0.');
+      return;
+    }
+
     setErrorMessage(null);
     setIsProcessing(true);
 
@@ -109,24 +126,37 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
       phone: phone.trim()
     };
 
-    const finalPiNumber = Number(formattedPi);
+    const finalPiNumber = canonicalPiAmount > 0 ? canonicalPiAmount : Number(formattedPi);
     const memo = `Flight Ticket: ${offer.airline} (${offer.flightNumber}) ${offer.originCode}➔${offer.destinationCode} for ${givenName} ${familyName}`;
 
     try {
-      // 1. Create Pi Payment via SDK / Backend
+      // 1. Create Pi Payment via SDK / Backend with strictly validated numeric fiat amounts
       const paymentResult = await createPiPayment({
         amountPi: finalPiNumber,
         memo,
         metadata: {
           serviceType: 'FLIGHT_TICKET',
+          category: 'transport',
+          transportType: 'air',
+          providerId: `prov-flight-${offer.airline.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
+          providerName: offer.airline,
+          countryCode: 'GLOBAL',
           offerId: offer.offerId,
           airline: offer.airline,
           flightNumber: offer.flightNumber,
           route: `${offer.originCode}-${offer.destinationCode}`,
-          fiatFare: offer.fareAmountFiat,
-          piRateApplied: piRateUsd,
-          passengerName: `${givenName} ${familyName}`,
-          passengerEmail: email
+          originCode: offer.originCode,
+          destinationCode: offer.destinationCode,
+          departureDate: offer.departureTime,
+          cabinClass: offer.cabinClass,
+          fiatAmount: Number(currentFareFiat.toFixed(2)),
+          fiatFare: Number(currentFareFiat.toFixed(2)),
+          fiatCurrency: offer.fareCurrency || 'USD',
+          piRateApplied: effectivePiRate,
+          passengerName: `${title ? title + ' ' : ''}${givenName} ${familyName}`.trim(),
+          passengerEmail: email,
+          passengerPhone: phone,
+          passportNumber: passportNumber
         }
       });
 
@@ -166,9 +196,9 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
               piPaymentId: paymentResult.paymentId || `pi_pay_${Date.now()}`,
               piTxid: paymentResult.txid,
               piAmount: finalPiNumber,
-              fiatAmount: offer.fareAmountFiat,
-              fiatCurrency: offer.fareCurrency,
-              piRateApplied: piRateUsd,
+              fiatAmount: Number(currentFareFiat.toFixed(2)),
+              fiatCurrency: offer.fareCurrency || 'USD',
+              piRateApplied: effectivePiRate,
               escrowProtected: true
             },
             provider: offer.isLive ? 'Duffel Live GDS' : 'Verified Partner Airline Gateway',
@@ -233,7 +263,7 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
               </div>
               <div className="text-right">
                 <span className="text-base font-black text-amber-300 font-mono">{formattedPi} π</span>
-                <span className="text-[11px] text-slate-400 block">≈ ${offer.fareAmountFiat} USD</span>
+                <span className="text-[11px] text-slate-400 block">≈ ${currentFareFiat.toFixed(2)} USD</span>
               </div>
             </div>
 
@@ -282,6 +312,8 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
                     <option value="Mrs">Mrs</option>
                     <option value="Ms">Ms</option>
                     <option value="Dr">Dr</option>
+                    <option value="Alh.">Alh.</option>
+                    <option value="Hjy.">Hjy.</option>
                   </select>
                 </div>
 
@@ -449,11 +481,11 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
               <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-2 text-xs">
                 <div className="flex justify-between text-slate-400">
                   <span>Base Airfare</span>
-                  <span className="font-mono text-white">${offer.baseFareFiat || (offer.fareAmountFiat - 35).toFixed(2)} USD</span>
+                  <span className="font-mono text-white">${Math.max(10, currentFareFiat - (offer.taxesAndFeesFiat || 35)).toFixed(2)} USD</span>
                 </div>
                 <div className="flex justify-between text-slate-400">
                   <span>Airport Taxes & Security Surcharge</span>
-                  <span className="font-mono text-white">${offer.taxesAndFeesFiat || '35.00'} USD</span>
+                  <span className="font-mono text-white">${(offer.taxesAndFeesFiat || 35).toFixed(2)} USD</span>
                 </div>
                 <div className="flex justify-between text-slate-400">
                   <span>Passenger</span>
@@ -461,7 +493,7 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
                 </div>
                 <div className="border-t border-slate-800 pt-2 flex justify-between items-center">
                   <span className="font-extrabold text-white">Total Amount (Fiat USD)</span>
-                  <span className="font-black text-sm text-white font-mono">${offer.fareAmountFiat.toFixed(2)} USD</span>
+                  <span className="font-black text-sm text-white font-mono">${currentFareFiat.toFixed(2)} USD</span>
                 </div>
                 <div className="flex justify-between items-center bg-purple-950/40 p-2.5 rounded-xl border border-purple-900/40">
                   <div>

@@ -776,20 +776,27 @@ export async function createPiPayment(params: {
           if (params.onStatusUpdate) params.onStatusUpdate('Payment verified on Pi ledger. Processing fulfillment...');
 
           try {
+            const rawFiat = params.metadata?.fiatAmount ?? params.metadata?.fiatFare;
+            const cleanFiat = typeof rawFiat === 'number' ? rawFiat : (typeof rawFiat === 'string' ? parseFloat(rawFiat.replace(/[^0-9.]/g, '')) : NaN);
+            const appliedRate = typeof params.metadata?.piRateApplied === 'number' && params.metadata.piRateApplied > 0 ? params.metadata.piRateApplied : 10.0;
+            const validFiat = (Number.isFinite(cleanFiat) && cleanFiat > 0)
+              ? Number(cleanFiat.toFixed(2))
+              : (params.amountPi > 0 ? Number((params.amountPi * appliedRate).toFixed(2)) : 10.0);
+
             const fulfillResult = await safeFetchJson('/api/v2/utility/fulfill', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 paymentId,
                 txid,
-                category: params.metadata?.category || 'utility',
-                country: params.metadata?.country,
-                countryCode: params.metadata?.countryCode,
+                category: params.metadata?.category || 'transport',
+                country: params.metadata?.country || 'Global',
+                countryCode: params.metadata?.countryCode || 'GLOBAL',
                 providerId: params.metadata?.providerId || 'unknown',
-                accountNumber: params.metadata?.accountNumber || '',
-                fiatAmount: params.metadata?.fiatAmount || 0,
-                piAmount: params.amountPi,
-                packageName: params.metadata?.packageName || '',
+                accountNumber: params.metadata?.accountNumber || params.metadata?.passportNumber || params.metadata?.passengerEmail || '',
+                fiatAmount: validFiat,
+                piAmount: Number(params.amountPi),
+                packageName: params.metadata?.packageName || params.metadata?.route || 'Travel Pass',
                 idempotencyKey: paymentId
               })
             });

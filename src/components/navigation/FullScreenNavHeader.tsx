@@ -48,6 +48,7 @@ interface FullScreenNavHeaderProps {
   onOpenQrScanner?: () => void;
   recentlyVisitedCategories: VisitedCategory[];
   onSelectVisitedCategory: (visited: VisitedCategory) => void;
+  onOpenVendorApplication?: () => void;
 }
 
 export const FullScreenNavHeader: React.FC<FullScreenNavHeaderProps> = ({
@@ -69,7 +70,8 @@ export const FullScreenNavHeader: React.FC<FullScreenNavHeaderProps> = ({
   onOpenPstpShield,
   onOpenQrScanner,
   recentlyVisitedCategories,
-  onSelectVisitedCategory
+  onSelectVisitedCategory,
+  onOpenVendorApplication
 }) => {
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
@@ -303,6 +305,18 @@ export const FullScreenNavHeader: React.FC<FullScreenNavHeaderProps> = ({
                     <Store className="w-4 h-4 text-amber-400" />
                     <span>Merchant Studio & Orders</span>
                   </button>
+                  {onOpenVendorApplication && (
+                    <button
+                      onClick={() => { onOpenVendorApplication(); setShowUserDropdown(false); }}
+                      className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-amber-300 hover:bg-amber-950/50 hover:text-amber-200 font-semibold transition-colors bg-amber-950/20 border border-amber-500/20"
+                    >
+                      <div className="flex items-center gap-2">
+                        <ShieldCheck className="w-4 h-4 text-amber-400" />
+                        <span>Become Verified Vendor</span>
+                      </div>
+                      <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-400 text-slate-950 font-black">APPLY</span>
+                    </button>
+                  )}
                   <button
                     onClick={() => { onNavigateSection('admin_governance'); setShowUserDropdown(false); }}
                     className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-slate-200 hover:bg-slate-800 hover:text-white font-semibold transition-colors"

@@ -31,6 +31,50 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   utilityRateLogs = []
 }) => {
   const [activeTab, setActiveTab] = useState<'overview' | 'i18n' | 'trust' | 'orders' | 'vendors' | 'disputes' | 'utility' | 'finance'>('trust');
+  const [vendorApplications, setVendorApplications] = useState<any[]>([]);
+  const [loadingApps, setLoadingApps] = useState(false);
+  const [reviewingAppId, setReviewingAppId] = useState<string | null>(null);
+  const [adminNotes, setAdminNotes] = useState('');
+
+  // Fetch applications when vendors tab is active
+  React.useEffect(() => {
+    if (activeTab === 'vendors') {
+      setLoadingApps(true);
+      fetch('/api/admin/vendor-applications')
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.success && Array.isArray(data.applications)) {
+            setVendorApplications(data.applications);
+          }
+        })
+        .catch((err) => console.warn('Failed to load vendor applications:', err))
+        .finally(() => setLoadingApps(false));
+    }
+  }, [activeTab]);
+
+  const handleReviewApplication = async (id: string, status: 'APPROVED' | 'REJECTED') => {
+    try {
+      const res = await fetch(`/api/admin/vendor-application/${id}/review`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status,
+          adminNotes: adminNotes || (status === 'APPROVED' ? 'Verified by PiNova Compliance Desk' : 'Incomplete documentation'),
+          reviewedBy: 'Admin_Lead_01'
+        })
+      });
+      const data = await res.json();
+      if (data.success && data.application) {
+        setVendorApplications((prev) =>
+          prev.map((app) => (app.id === id ? data.application : app))
+        );
+        setReviewingAppId(null);
+        setAdminNotes('');
+      }
+    } catch (err) {
+      console.error('Error reviewing vendor application:', err);
+    }
+  };
 
   const safeOrders = Array.isArray(orders) ? orders : [];
   const safeVendors = Array.isArray(vendors) ? vendors : [];
@@ -189,34 +233,158 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
       {/* VENDORS TAB */}
       {activeTab === 'vendors' && (
-        <div className="space-y-4">
-          <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">Merchant Verification Approvals</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {safeVendors.map((v) => (
-              <div key={v.id} className="p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <img src={v.logoImage} alt="logo" referrerPolicy="no-referrer" className="w-12 h-12 rounded-xl object-cover" />
-                  <div>
-                    <div className="flex items-center gap-1 font-bold text-xs text-slate-900 dark:text-slate-100">
-                      <span>{v.storeName}</span>
-                      {v.verified && <ShieldCheck className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />}
-                    </div>
-                    <p className="text-[11px] text-slate-400">Total Sales: {v.totalSalesPi.toFixed(2)} π</p>
-                  </div>
-                </div>
-
-                <button
-                  onClick={() => onToggleVendorVerification(v.id)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors ${
-                    v.verified
-                      ? 'bg-rose-500/10 text-rose-500 hover:bg-rose-500/20'
-                      : 'bg-purple-600 text-white hover:bg-purple-700'
-                  }`}
-                >
-                  {v.verified ? 'Revoke Badge' : 'Approve Verification'}
-                </button>
+        <div className="space-y-6">
+          
+          {/* Vendor Applications Review Queue */}
+          <div className="p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                  <UserCheck className="w-4 h-4 text-purple-500" />
+                  <span>Submitted Vendor Onboarding Applications ({vendorApplications.length})</span>
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">Review Pioneer KYC documents, store policies, and compliance credentials.</p>
               </div>
-            ))}
+              {loadingApps && <RefreshCw className="w-4 h-4 animate-spin text-purple-500" />}
+            </div>
+
+            {vendorApplications.length === 0 ? (
+              <div className="p-6 rounded-2xl bg-slate-50 dark:bg-slate-800/40 text-center text-xs text-slate-400">
+                No pending vendor applications found in queue.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {vendorApplications.map((app) => (
+                  <div
+                    key={app.id}
+                    className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-3"
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <img
+                          src={app.logoUrl || app.storeLogo || 'https://images.unsplash.com/photo-1534452203293-494d7ddbf7e0?auto=format&fit=crop&w=200&q=80'}
+                          alt={app.storeName}
+                          className="w-12 h-12 rounded-xl object-cover border border-slate-700"
+                        />
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-bold text-sm text-white">{app.storeName}</h4>
+                            <span className="text-[10px] font-extrabold px-2 py-0.5 rounded bg-purple-500/20 text-purple-300">
+                              @{app.pioneerUsername}
+                            </span>
+                            <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded ${
+                              app.status === 'APPROVED'
+                                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                                : app.status === 'REJECTED'
+                                ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                                : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                            }`}>
+                              {app.status}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-400 mt-0.5">
+                            {app.city ? `${app.city}, ` : ''}{app.country || 'Global'} • Type: <strong className="capitalize text-slate-300">{app.sellerType || 'Individual'}</strong> • Email: {app.contactEmail}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {app.status !== 'APPROVED' && (
+                          <button
+                            onClick={() => handleReviewApplication(app.id, 'APPROVED')}
+                            className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-colors flex items-center gap-1 shadow-sm"
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <span>Approve & Verify</span>
+                          </button>
+                        )}
+                        {app.status !== 'REJECTED' && (
+                          <button
+                            onClick={() => {
+                              if (reviewingAppId === app.id) {
+                                handleReviewApplication(app.id, 'REJECTED');
+                              } else {
+                                setReviewingAppId(app.id);
+                              }
+                            }}
+                            className="px-3.5 py-1.5 rounded-xl bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 text-xs font-bold transition-colors"
+                          >
+                            <span>{reviewingAppId === app.id ? 'Confirm Rejection' : 'Reject Application'}</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Store Description & Policy Preview */}
+                    <div className="text-xs text-slate-300 bg-slate-900/80 p-3 rounded-xl border border-slate-800 space-y-1">
+                      <div><strong>Bio:</strong> {app.storeDescription || 'No description provided.'}</div>
+                      {app.businessRegistrationNumber && (
+                        <div><strong>CAC/Reg:</strong> <span className="font-mono text-amber-300">{app.businessRegistrationNumber}</span></div>
+                      )}
+                      {app.policies?.returnRefundPolicy && (
+                        <div className="text-[11px] text-slate-400"><strong>Return Policy:</strong> {app.policies.returnRefundPolicy}</div>
+                      )}
+                    </div>
+
+                    {reviewingAppId === app.id && (
+                      <div className="flex gap-2 pt-1">
+                        <input
+                          type="text"
+                          placeholder="Enter rejection reason or compliance notes..."
+                          value={adminNotes}
+                          onChange={(e) => setAdminNotes(e.target.value)}
+                          className="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white"
+                        />
+                        <button
+                          onClick={() => handleReviewApplication(app.id, 'REJECTED')}
+                          className="px-3 py-1.5 rounded-xl bg-rose-600 text-white text-xs font-bold"
+                        >
+                          Submit Rejection
+                        </button>
+                        <button
+                          onClick={() => setReviewingAppId(null)}
+                          className="px-3 py-1.5 rounded-xl bg-slate-800 text-slate-300 text-xs"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Existing Verified Merchants */}
+          <div className="space-y-4">
+            <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">Live Merchant Directory ({safeVendors.length})</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {safeVendors.map((v) => (
+                <div key={v.id} className="p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <img src={v.logoImage} alt="logo" referrerPolicy="no-referrer" className="w-12 h-12 rounded-xl object-cover" />
+                    <div>
+                      <div className="flex items-center gap-1 font-bold text-xs text-slate-900 dark:text-slate-100">
+                        <span>{v.storeName}</span>
+                        {v.verified && <ShieldCheck className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />}
+                      </div>
+                      <p className="text-[11px] text-slate-400">Total Sales: {v.totalSalesPi.toFixed(2)} π</p>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => onToggleVendorVerification(v.id)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors ${
+                      v.verified
+                        ? 'bg-rose-500/10 text-rose-500 hover:bg-rose-500/20'
+                        : 'bg-purple-600 text-white hover:bg-purple-700'
+                    }`}
+                  >
+                    {v.verified ? 'Revoke Badge' : 'Approve Verification'}
+                  </button>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}

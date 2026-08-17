@@ -615,6 +615,13 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
             {selectedCategory === 'transport' && (
               <TransportDiscovery
                 providers={SAMPLE_UTILITY_PROVIDERS}
+                selectedCountryCode={selectedCountryCode}
+                initialState={selectedState}
+                onCountryChange={(code) => {
+                  setSelectedCountryCode(code);
+                  setSelectedState('');
+                }}
+                onStateChange={(st) => setSelectedState(st)}
                 piConversionConfig={piConversionConfig}
                 userBalancePi={userBalancePi}
                 buyerUsername={buyerUsername}
@@ -624,7 +631,10 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                   const paxStr = paxName ? ` [Pax: ${paxName}]` : '';
                   setSelectedDesignation(`${routeMeta.tripDetails}${paxStr}`);
                   setPurchaseMode('custom');
-                  setCustomAmountInput(routeMeta.fiatFare.toString());
+                  const cleanFare = typeof routeMeta.fiatFare === 'number' && Number.isFinite(routeMeta.fiatFare) && routeMeta.fiatFare > 0
+                    ? routeMeta.fiatFare
+                    : 25.0;
+                  setCustomAmountInput(cleanFare.toFixed(2));
                   setAccountNumber(
                     routeMeta.passengerDetails?.passportNumber 
                       ? `PAX-DOC-${routeMeta.passengerDetails.passportNumber}`

@@ -567,3 +567,50 @@ export interface MerchantStore {
   isDefault?: boolean;
 }
 
+export type VendorApplicationStatus = 'PENDING_REVIEW' | 'UNDER_REVIEW' | 'APPROVED' | 'REJECTED' | 'ACTION_REQUIRED';
+export type SellerType = 'individual' | 'business';
+
+export interface VendorApplicationDoc {
+  id: string;
+  docType: 'identity_proof' | 'address_proof' | 'business_registration' | 'tax_cert' | 'store_license';
+  fileName: string;
+  fileUrl: string;
+  uploadedAt: string;
+}
+
+export interface VendorApplication {
+  id: string;
+  pioneerUsername: string;
+  pioneerUid?: string;
+  storeName: string;
+  sellerType: SellerType;
+  country: string;
+  countryCode: string;
+  stateRegion: string;
+  city: string;
+  contactEmail: string;
+  contactPhone: string;
+  contactTelegram?: string;
+  storeDescription: string;
+  storeTagline?: string;
+  logoUrl?: string;
+  bannerUrl?: string;
+  businessRegistrationNumber?: string;
+  taxId?: string;
+  websiteUrl?: string;
+  categoriesToSell: string[];
+  documents: VendorApplicationDoc[];
+  policies: {
+    returnRefundPolicy: string;
+    deliveryShippingPolicy: string;
+    warrantyTerms?: string;
+  };
+  pstpAgreementAccepted: boolean;
+  status: VendorApplicationStatus;
+  adminReviewNotes?: string;
+  reviewedBy?: string;
+  reviewedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+

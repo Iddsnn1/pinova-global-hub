@@ -8,6 +8,7 @@ export type MainSection =
   | 'admin_governance'
   | 'security_trust'
   | 'developer_platform'
+  | 'seller_studio'
   | 'cart'
   | 'orders'
   | 'community'
