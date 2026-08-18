@@ -123,7 +123,7 @@ export const WaterDiscovery: React.FC<WaterDiscoveryProps> = ({
   const discoveryResult = useMemo(() => {
     const res = resolveWaterProviders(
       providers,
-      selectedCountryCode || 'AE',
+      selectedCountryCode || 'GLOBAL',
       selectedState
     );
     if (searchQuery.trim()) {

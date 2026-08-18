@@ -107,8 +107,12 @@ export const CartView: React.FC<CartViewProps> = ({
             >
               <div className="flex items-center gap-3 w-full sm:w-auto">
                 <img
-                  src={item.product.images[0]}
+                  src={item.product.images[0] || 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=800&q=80'}
                   alt={item.product.title}
+                  referrerPolicy="no-referrer"
+                  onError={(e) => {
+                    (e.currentTarget as HTMLImageElement).src = 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=800&q=80';
+                  }}
                   className="w-16 h-16 object-cover rounded-xl border border-slate-200 dark:border-slate-800 shrink-0"
                 />
                 <div>

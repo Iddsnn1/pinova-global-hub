@@ -325,7 +325,11 @@ function MainAppContent() {
   // Cart operations
   const handleAddToCart = (product: Product, quantity: number = 1, customDetails?: any) => {
     setCartItems((prev) => {
-      const existingIdx = prev.findIndex((item) => item.product.id === product.id);
+      const variantId = customDetails?.variant?.id;
+      const existingIdx = prev.findIndex((item) => {
+        const itemVariantId = item.customDetails?.variant?.id;
+        return item.product.id === product.id && itemVariantId === variantId;
+      });
       if (existingIdx > -1) {
         const updated = [...prev];
         updated[existingIdx].quantity += quantity;
@@ -371,23 +375,32 @@ function MainAppContent() {
 
   // Open Storefront by seller name
   const handleOpenStorefrontByName = (sellerName: string) => {
-    const targetName = (sellerName || '').toLowerCase();
-    const foundVendor = vendors.find(
-      (v) => (v.storeName || '').toLowerCase() === targetName || (v.sellerUsername || '').toLowerCase() === targetName
-    ) || {
-      id: `ven-${Date.now()}`,
-      sellerUsername: sellerName,
-      storeName: sellerName,
-      bio: 'Verified Merchant offering global products and instant digital delivery on Pi Network.',
-      rating: 4.9,
-      reviewsCount: 88,
-      verified: true,
-      totalSalesPi: 1250.00,
-      bannerImage: 'https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&w=1200&q=80',
-      logoImage: 'https://images.unsplash.com/photo-1560179707-f14e90ef3623?auto=format&fit=crop&w=300&q=80',
-      joinedDate: '2025-01-15',
-      shippingCountries: ['Worldwide']
-    };
+    const targetName = (sellerName || '').toLowerCase().trim();
+    let foundVendor = vendors.find(
+      (v) => (v.storeName || '').toLowerCase() === targetName || (v.sellerUsername || '').toLowerCase() === targetName || (v.id || '').toLowerCase() === targetName
+    );
+
+    if (!foundVendor) {
+      const matchingProduct = products.find(
+        (p) => (p.sellerName || '').toLowerCase() === targetName || (p.sellerId || '').toLowerCase() === targetName
+      );
+      foundVendor = {
+        id: matchingProduct?.sellerId || `ven-${Date.now()}`,
+        sellerUsername: matchingProduct?.sellerName?.toLowerCase().replace(/\s+/g, '_') || sellerName,
+        storeName: matchingProduct?.sellerName || sellerName,
+        bio: matchingProduct ? `Official Pioneer Storefront for ${matchingProduct.sellerName} on PiNova Global Hub.` : 'Pioneer Merchant on Pi Network.',
+        rating: matchingProduct?.rating || 4.8,
+        reviewsCount: matchingProduct?.reviewsCount || 24,
+        verified: Boolean(matchingProduct?.sellerVerified),
+        verificationStatus: matchingProduct?.sellerVerified ? 'Verified' : 'Standard',
+        totalSalesPi: 1250.00,
+        bannerImage: 'https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1200&q=80',
+        logoImage: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=200&q=80',
+        joinedDate: '2024-06-01',
+        shippingCountries: ['Worldwide']
+      };
+    }
+
     setSelectedVendor(foundVendor);
   };
 

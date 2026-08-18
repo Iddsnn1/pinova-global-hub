@@ -137,9 +137,12 @@ export const MerchantStorefrontView: React.FC<MerchantStorefrontViewProps> = ({
       {/* Top Banner */}
       <div className="relative h-48 sm:h-64 w-full bg-gradient-to-r from-purple-900 via-slate-900 to-indigo-950 overflow-hidden">
         <img
-          src={vendor.bannerImage}
+          src={vendor.bannerImage || 'https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1200&q=80'}
           alt={vendor.storeName}
           referrerPolicy="no-referrer"
+          onError={(e) => {
+            (e.currentTarget as HTMLImageElement).src = 'https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1200&q=80';
+          }}
           className="w-full h-full object-cover opacity-70"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent" />
@@ -167,9 +170,12 @@ export const MerchantStorefrontView: React.FC<MerchantStorefrontViewProps> = ({
         <div className="flex items-end gap-4">
           <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-3xl bg-slate-900 border-4 border-white dark:border-slate-900 shadow-2xl overflow-hidden flex-shrink-0">
             <img
-              src={vendor.logoImage}
+              src={vendor.logoImage || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=200&q=80'}
               alt={vendor.storeName}
               referrerPolicy="no-referrer"
+              onError={(e) => {
+                (e.currentTarget as HTMLImageElement).src = 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=200&q=80';
+              }}
               className="w-full h-full object-cover"
             />
           </div>

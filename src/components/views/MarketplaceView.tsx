@@ -402,8 +402,12 @@ export const MarketplaceView: React.FC<MarketplaceViewProps> = ({
                         className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-purple-500 transition-all cursor-pointer flex items-center gap-3 shadow-sm hover:shadow-md"
                       >
                         <img
-                          src={vendor.logoImage}
+                          src={vendor.logoImage || 'https://images.unsplash.com/photo-1560179707-f14e90ef3623?auto=format&fit=crop&w=150&q=80'}
                           alt={vendor.storeName}
+                          referrerPolicy="no-referrer"
+                          onError={(e) => {
+                            (e.currentTarget as HTMLImageElement).src = 'https://images.unsplash.com/photo-1560179707-f14e90ef3623?auto=format&fit=crop&w=150&q=80';
+                          }}
                           className="w-12 h-12 rounded-xl object-cover border border-slate-200 dark:border-slate-800"
                         />
                         <div className="min-w-0 flex-1">

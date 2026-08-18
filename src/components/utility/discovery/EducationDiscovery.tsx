@@ -135,7 +135,7 @@ export const EducationDiscovery: React.FC<EducationDiscoveryProps> = ({
   // Query institutions dynamically
   const eduResult = useMemo(() => {
     return searchInstitutions(providers, {
-      countryCode: selectedCountryCode || 'NG',
+      countryCode: selectedCountryCode || 'GLOBAL',
       state: selectedState,
       institutionType: selectedInstitutionType,
       searchQuery
@@ -307,7 +307,7 @@ export const EducationDiscovery: React.FC<EducationDiscoveryProps> = ({
       {/* Location & Institution Search */}
       <div className="bg-slate-900/80 p-4 rounded-2xl border border-slate-800 space-y-3">
         <LocationSelector
-          countryCode={selectedCountryCode || 'NG'}
+          countryCode={selectedCountryCode || 'GLOBAL'}
           state={selectedState}
           onCountryChange={handleCountrySelect}
           onStateChange={handleStateSelect}

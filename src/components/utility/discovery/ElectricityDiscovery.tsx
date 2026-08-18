@@ -290,29 +290,10 @@ export const ElectricityDiscovery: React.FC<ElectricityDiscoveryProps> = ({
 
   return (
     <div className="space-y-6 text-slate-100" id="electricity-discovery-container">
-      {/* 1. PRESERVED SERVICE AVAILABILITY LOCATION SELECTOR */}
-      <div className="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-sm space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
-              <Zap className="w-4 h-4" />
-            </div>
-            <div>
-              <h3 className="text-sm font-bold text-slate-100">Service availability</h3>
-              <p className="text-xs text-slate-400">
-                Select a country and region to see available utility providers and local services.
-              </p>
-            </div>
-          </div>
-          {selectedState && (
-            <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
-              {electricityResolution.countryName} · {selectedState}
-            </span>
-          )}
-        </div>
-
+      {/* 1. CANONICAL SERVICE AVAILABILITY LOCATION SELECTOR */}
+      <div className="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-sm">
         <LocationSelector
-          countryCode={selectedCountryCode}
+          countryCode={selectedCountryCode || 'GLOBAL'}
           state={selectedState}
           onCountryChange={onCountryChange}
           onStateChange={handleStateSelect}

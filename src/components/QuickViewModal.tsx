@@ -48,9 +48,12 @@ export const QuickViewModal: React.FC<QuickViewModalProps> = ({
           <div className="space-y-3">
             <div className="aspect-square w-full rounded-2xl bg-slate-100 dark:bg-slate-950 overflow-hidden border border-slate-200 dark:border-slate-800 relative">
               <img
-                src={product.images[selectedImage]}
+                src={product.images[selectedImage] || product.images[0] || 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=800&q=80'}
                 alt={product.title}
                 referrerPolicy="no-referrer"
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).src = 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=800&q=80';
+                }}
                 className="w-full h-full object-cover"
               />
               <button
@@ -75,7 +78,15 @@ export const QuickViewModal: React.FC<QuickViewModalProps> = ({
                       selectedImage === idx ? 'border-purple-600 scale-105' : 'border-transparent opacity-60'
                     }`}
                   >
-                    <img src={img} alt="thumb" referrerPolicy="no-referrer" className="w-full h-full object-cover" />
+                    <img 
+                      src={img} 
+                      alt="thumb" 
+                      referrerPolicy="no-referrer" 
+                      onError={(e) => {
+                        (e.currentTarget as HTMLImageElement).src = 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=800&q=80';
+                      }}
+                      className="w-full h-full object-cover" 
+                    />
                   </button>
                 ))}
               </div>
@@ -90,9 +101,12 @@ export const QuickViewModal: React.FC<QuickViewModalProps> = ({
                 <span>•</span>
                 <button
                   onClick={() => onOpenStorefront?.(product.sellerName)}
-                  className="hover:underline text-slate-500 dark:text-slate-400 font-semibold"
+                  className="hover:underline text-slate-500 dark:text-slate-400 font-semibold flex items-center gap-1"
                 >
-                  {product.sellerName}
+                  <span>{product.sellerName}</span>
+                  {product.sellerVerified && (
+                    <ShieldCheck className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+                  )}
                 </button>
               </div>
 

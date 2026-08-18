@@ -50,9 +50,12 @@ export const ProductCard: React.FC<ProductCardProps> = ({
       {/* Top Image & Badges */}
       <div className="relative aspect-square w-full bg-slate-100 dark:bg-slate-950 overflow-hidden">
         <img
-          src={product.images[0]}
+          src={product.images[0] || 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=800&q=80'}
           alt={product.title}
           referrerPolicy="no-referrer"
+          onError={(e) => {
+            (e.currentTarget as HTMLImageElement).src = 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=800&q=80';
+          }}
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
         />
 

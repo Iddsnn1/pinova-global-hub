@@ -783,6 +783,9 @@ export const BuyerOrderHub: React.FC<BuyerOrderHubProps> = ({
                             src={item.product?.images?.[0] || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=400&q=80'} 
                             alt={item.product?.title || 'Product'} 
                             referrerPolicy="no-referrer"
+                            onError={(e) => {
+                              (e.currentTarget as HTMLImageElement).src = 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=400&q=80';
+                            }}
                             className="w-12 h-12 object-cover rounded-xl border border-slate-200 dark:border-slate-800 shrink-0" 
                           />
                           <div>
