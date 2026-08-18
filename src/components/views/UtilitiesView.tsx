@@ -23,17 +23,16 @@ import {
   ChevronRight,
   Search,
   X,
-  Flag,
   Globe2,
-  MapPin,
-  Sparkles
+  ShieldCheck,
+  Lock,
+  Sparkles,
+  Clock
 } from 'lucide-react';
 import { UtilityCategory } from '../../types/navigation';
 import { UTILITY_CATEGORIES, UtilityCategoryDef } from '../../data/categoryData';
 import { PiConversionConfig, UtilityCategoryType } from '../../types/utility';
 import { FlexibleUtilityModal } from '../utility/FlexibleUtilityModal';
-import { SAMPLE_UTILITY_PROVIDERS } from '../../data/utilityData';
-import { getSubdivisionInfo } from '../../data/countrySubdivisions';
 
 const getMappedCategoryType = (utilityId: string | null): UtilityCategoryType => {
   if (!utilityId) return 'airtime';
@@ -50,43 +49,6 @@ const getMappedCategoryType = (utilityId: string | null): UtilityCategoryType =>
   if (utilityId === 'flight') return 'transport';
   return utilityId as UtilityCategoryType;
 };
-
-// Initial Popular Destinations List
-const POPULAR_COUNTRIES = [
-  { code: 'NG', name: 'Nigeria', flag: '🇳🇬' },
-  { code: 'GH', name: 'Ghana', flag: '🇬🇭' },
-  { code: 'KE', name: 'Kenya', flag: '🇰🇪' },
-  { code: 'ZA', name: 'South Africa', flag: '🇿🇦' },
-  { code: 'GB', name: 'United Kingdom', flag: '🇬🇧' },
-  { code: 'US', name: 'United States', flag: '🇺🇸' },
-  { code: 'AE', name: 'United Arab Emirates', flag: '🇦🇪' },
-  { code: 'TR', name: 'Türkiye', flag: '🇹🇷' },
-  { code: 'VN', name: 'Vietnam', flag: '🇻🇳' },
-  { code: 'ID', name: 'Indonesia', flag: '🇮🇩' },
-  { code: 'GLOBAL', name: 'Global Services', flag: '🌐' }
-];
-
-// Helper: Convert ISO code or Country Name to flag emoji
-function getCountryFlag(codeOrName: string): string {
-  if (!codeOrName) return '🌐';
-  const code = codeOrName.trim().toUpperCase();
-  if (code === 'GLOBAL' || code === 'GLOBAL SERVICES' || codeOrName === 'Global') return '🌐';
-  if (code.length === 2 && /^[A-Z]{2}$/.test(code)) {
-    return String.fromCodePoint(...code.split('').map(c => 127397 + c.charCodeAt(0)));
-  }
-  if (codeOrName === 'Nigeria') return '🇳🇬';
-  if (codeOrName === 'Ghana') return '🇬🇭';
-  if (codeOrName === 'Kenya') return '🇰🇪';
-  if (codeOrName === 'South Africa') return '🇿🇦';
-  if (codeOrName === 'United Arab Emirates' || codeOrName === 'UAE') return '🇦🇪';
-  if (codeOrName === 'United Kingdom' || codeOrName === 'UK') return '🇬🇧';
-  if (codeOrName === 'United States' || codeOrName === 'USA') return '🇺🇸';
-  if (codeOrName === 'Saudi Arabia') return '🇸🇦';
-  if (codeOrName === 'Turkey' || codeOrName === 'Türkiye') return '🇹🇷';
-  if (codeOrName === 'Vietnam') return '🇻🇳';
-  if (codeOrName === 'Indonesia') return '🇮🇩';
-  return '🌐';
-}
 
 interface UtilitiesViewProps {
   selectedUtilityCategory?: string;
@@ -121,12 +83,7 @@ export const UtilitiesView: React.FC<UtilitiesViewProps> = ({
     return null;
   });
 
-  // Canonical Service Area State (Service Country & Service Region)
-  const [serviceCountryCode, setServiceCountryCode] = useState<string>('NG');
-  const [serviceRegion, setServiceRegion] = useState<string>('Kano');
-  const [countrySearchInput, setCountrySearchInput] = useState<string>('');
-
-  // Global Service Search Input
+  // Universal Service Search Input
   const [serviceSearchQuery, setServiceSearchQuery] = useState<string>('');
 
   // Active Transaction Receipt State
@@ -145,63 +102,6 @@ export const UtilitiesView: React.FC<UtilitiesViewProps> = ({
       setSelectedUtility(selectedUtilityCategory as UtilityCategory);
     }
   }, [selectedUtilityCategory]);
-
-  // Derived full country database from providers and popular list
-  const allAvailableCountries = useMemo(() => {
-    const map = new Map<string, { code: string; name: string; flag: string }>();
-    
-    // Add popular defaults first
-    POPULAR_COUNTRIES.forEach(c => {
-      map.set(c.code, { code: c.code, name: c.name, flag: c.flag });
-    });
-
-    // Populate from provider database
-    SAMPLE_UTILITY_PROVIDERS.forEach(p => {
-      if (!p.enabled) return;
-      const code = (p.countryCode || (p.country === 'Global' ? 'GLOBAL' : p.country.slice(0, 2))).toUpperCase();
-      if (!map.has(code)) {
-        map.set(code, {
-          code,
-          name: p.country,
-          flag: getCountryFlag(code || p.country)
-        });
-      }
-    });
-
-    return Array.from(map.values());
-  }, []);
-
-  const selectedCountryObj = useMemo(() => {
-    return allAvailableCountries.find(c => c.code === serviceCountryCode) || {
-      code: serviceCountryCode,
-      name: serviceCountryCode === 'GLOBAL' ? 'Global Services' : serviceCountryCode,
-      flag: getCountryFlag(serviceCountryCode)
-    };
-  }, [allAvailableCountries, serviceCountryCode]);
-
-  // Handle Canonical Service Country Switch
-  const handleSelectServiceCountry = (countryCode: string) => {
-    setServiceCountryCode(countryCode);
-    const subInfo = getSubdivisionInfo(countryCode);
-    // Pick the first default region if available, otherwise clear
-    if (subInfo.subdivisions && subInfo.subdivisions.length > 0) {
-      setServiceRegion(subInfo.subdivisions[0]);
-    } else {
-      setServiceRegion('');
-    }
-    setCountrySearchInput('');
-  };
-
-  // Search filtered countries list
-  const filteredCountries = useMemo(() => {
-    if (!countrySearchInput.trim()) return allAvailableCountries;
-    const q = countrySearchInput.toLowerCase().trim();
-    return allAvailableCountries.filter(c => 
-      c.name.toLowerCase().includes(q) ||
-      c.code.toLowerCase().includes(q) ||
-      c.flag.includes(q)
-    );
-  }, [allAvailableCountries, countrySearchInput]);
 
   // Icon Resolver
   const getUtilityIcon = (iconName: string) => {
@@ -313,7 +213,7 @@ export const UtilitiesView: React.FC<UtilitiesViewProps> = ({
 
               </div>
 
-              {/* SEARCH SERVICE BAR */}
+              {/* UNIVERSAL SERVICE SEARCH BAR */}
               <div className="pt-2">
                 <div className="relative flex items-center">
                   <Search className="w-4 h-4 text-purple-400 absolute left-3.5 pointer-events-none" />
@@ -338,166 +238,23 @@ export const UtilitiesView: React.FC<UtilitiesViewProps> = ({
             </div>
           </div>
 
-          {/* SERVICE AVAILABILITY: CANONICAL SERVICE AREA & DYNAMIC REGION SELECTION */}
-          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-5 sm:p-6 shadow-sm space-y-5">
-            
-            {/* Header & Active Service Area Display */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-4">
-              <div className="space-y-1">
-                <h2 className="text-base font-extrabold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                  <Globe2 className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-                  <span>Service availability</span>
+          {/* EXPLORE SERVICES SECTION */}
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 border-b border-slate-200 dark:border-slate-800 pb-3">
+              <div>
+                <h2 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-slate-100">
+                  Explore Services
                 </h2>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Select a country and region to see available utility providers and local services.
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Choose a service category to get started.
                 </p>
               </div>
-
-              {/* Selected Service Area Pill */}
-              <div className="flex items-center gap-2 px-3.5 py-2 rounded-2xl bg-purple-50 dark:bg-purple-950/80 border border-purple-200 dark:border-purple-800 text-xs font-bold text-purple-900 dark:text-purple-200 self-start sm:self-auto shadow-sm">
-                <span className="text-lg leading-none">{selectedCountryObj.flag}</span>
-                <span className="font-extrabold">{selectedCountryObj.name}</span>
-                {serviceRegion ? (
-                  <span className="text-xs text-amber-600 dark:text-amber-400 font-extrabold border-l border-purple-300 dark:border-purple-700 pl-2">
-                    · {serviceRegion}
-                  </span>
-                ) : (
-                  <span className="text-[11px] text-slate-500 dark:text-slate-400 border-l border-purple-300 dark:border-purple-700 pl-2">
-                    · All Regions
-                  </span>
-                )}
-              </div>
-            </div>
-
-            {/* Quick-Pick Popular Destinations */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                  <span>Popular Destinations</span>
-                </span>
-                <span className="text-[11px] text-slate-400">Quick selection</span>
-              </div>
-              
-              <div className="flex flex-wrap gap-2">
-                {POPULAR_COUNTRIES.map((c) => {
-                  const isSelected = serviceCountryCode === c.code;
-                  return (
-                    <button
-                      key={c.code}
-                      type="button"
-                      onClick={() => handleSelectServiceCountry(c.code)}
-                      className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all flex items-center gap-1.5 ${
-                        isSelected
-                          ? 'bg-purple-600 text-white border-purple-600 shadow-md ring-2 ring-purple-500/30'
-                          : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-purple-400 hover:text-purple-600 dark:hover:text-purple-300'
-                      }`}
-                    >
-                      <span className="text-sm">{c.flag}</span>
-                      <span>{c.name}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Country Search Field */}
-            <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  Search All Supported Countries
-                </label>
-                {countrySearchInput && (
-                  <button
-                    type="button"
-                    onClick={() => setCountrySearchInput('')}
-                    className="text-[11px] text-purple-600 dark:text-purple-400 hover:underline"
-                  >
-                    Clear search
-                  </button>
-                )}
-              </div>
-
-              <div className="relative">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3 pointer-events-none" />
-                <input
-                  type="text"
-                  value={countrySearchInput}
-                  onChange={(e) => setCountrySearchInput(e.target.value)}
-                  placeholder="Search global country name, ISO code (e.g. ZA, GH, AE, US, TR, VN) or flag..."
-                  className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
-                />
-              </div>
-
-              {/* Filtered Country Chips (when searching or browsing) */}
-              {countrySearchInput && (
-                <div className="flex flex-wrap gap-2 max-h-36 overflow-y-auto pr-1 pt-1">
-                  {filteredCountries.map((c) => {
-                    const isSelected = serviceCountryCode === c.code;
-                    return (
-                      <button
-                        key={c.code}
-                        type="button"
-                        onClick={() => handleSelectServiceCountry(c.code)}
-                        className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all flex items-center gap-1.5 ${
-                          isSelected
-                            ? 'bg-purple-600 text-white border-purple-600 shadow-md ring-2 ring-purple-500/30'
-                            : 'bg-slate-50 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-purple-400'
-                        }`}
-                      >
-                        <span className="text-sm">{c.flag}</span>
-                        <span>{c.name}</span>
-                        <span className={`text-[10px] font-mono px-1 rounded ${
-                          isSelected ? 'bg-purple-700 text-amber-300' : 'bg-slate-200 dark:bg-slate-700 text-slate-500'
-                        }`}>
-                          {c.code}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* DYNAMIC REGION / STATE SELECTOR FOR CURRENT SERVICE COUNTRY */}
-            {(() => {
-              const subInfo = getSubdivisionInfo(serviceCountryCode);
-              if (!subInfo.subdivisions || subInfo.subdivisions.length === 0) return null;
-              return (
-                <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-purple-50/50 dark:bg-purple-950/20 p-3 rounded-2xl border border-purple-100 dark:border-purple-900/40">
-                  <div className="flex items-center gap-2 text-xs font-extrabold text-slate-800 dark:text-slate-200">
-                    <MapPin className="w-4 h-4 text-purple-600 dark:text-purple-400 shrink-0" />
-                    <span>
-                      Select {subInfo.subdivisionName || 'Region / State'} ({selectedCountryObj.name}):
-                    </span>
-                  </div>
-                  <select
-                    value={serviceRegion}
-                    onChange={(e) => setServiceRegion(e.target.value)}
-                    className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-900 dark:text-slate-100 focus:outline-none focus:border-purple-500 shadow-sm"
-                  >
-                    <option value="">All {subInfo.subdivisionName ? `${subInfo.subdivisionName}s` : 'Regions'} / Nationwide</option>
-                    {subInfo.subdivisions.map((st) => (
-                      <option key={st} value={st}>{st}</option>
-                    ))}
-                  </select>
-                </div>
-              );
-            })()}
-
-          </div>
-
-          {/* UTILITY DISCOVERY GRID */}
-          <div className="space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2">
-              <h2 className="text-base font-extrabold text-slate-900 dark:text-slate-100">
-                Available Services in {selectedCountryObj.name}
-              </h2>
-              <span className="text-xs text-slate-500 font-bold">
+              <span className="text-xs text-slate-500 dark:text-slate-400 font-bold self-start sm:self-auto mt-1 sm:mt-0">
                 {filteredCategories.length} Categories
               </span>
             </div>
 
+            {/* SERVICE CATEGORY CARDS */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {filteredCategories.map((cat) => (
                 <button
@@ -532,6 +289,49 @@ export const UtilitiesView: React.FC<UtilitiesViewProps> = ({
             </div>
           </div>
 
+          {/* TRUST INDICATORS & PLATFORM BENEFITS */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-2">
+            <div className="p-4 rounded-2xl bg-white dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800 flex items-start gap-3">
+              <div className="w-9 h-9 rounded-xl bg-purple-50 dark:bg-purple-950/80 border border-purple-200 dark:border-purple-800 flex items-center justify-center shrink-0">
+                <Zap className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+              </div>
+              <div className="space-y-0.5">
+                <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100">Instant Pi Settlement</h4>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">Direct automated fulfillment via the official Pi SDK.</p>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-white dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800 flex items-start gap-3">
+              <div className="w-9 h-9 rounded-xl bg-amber-50 dark:bg-amber-950/80 border border-amber-200 dark:border-amber-800 flex items-center justify-center shrink-0">
+                <Globe className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+              </div>
+              <div className="space-y-0.5">
+                <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100">190+ Global Regions</h4>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">Broad telecom, electricity & municipal coverage worldwide.</p>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-white dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800 flex items-start gap-3">
+              <div className="w-9 h-9 rounded-xl bg-emerald-50 dark:bg-emerald-950/80 border border-emerald-200 dark:border-emerald-800 flex items-center justify-center shrink-0">
+                <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+              </div>
+              <div className="space-y-0.5">
+                <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100">Verified Providers</h4>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">Authenticated billers, exam bodies & utility networks.</p>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-white dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800 flex items-start gap-3">
+              <div className="w-9 h-9 rounded-xl bg-blue-50 dark:bg-blue-950/80 border border-blue-200 dark:border-blue-800 flex items-center justify-center shrink-0">
+                <Lock className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+              </div>
+              <div className="space-y-0.5">
+                <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100">Secure Receipts</h4>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">Instant digital token tokens, PINs and audit references.</p>
+              </div>
+            </div>
+          </div>
+
         </div>
       ) : (
         /* CONTEXT-AWARE UTILITY STEP-BY-STEP PROGRESSIVE TRANSACTION FLOW */
@@ -561,14 +361,6 @@ export const UtilitiesView: React.FC<UtilitiesViewProps> = ({
                     {getCleanDescription(activeDef?.id || '', activeDef?.description || '')}
                   </p>
                 </div>
-              </div>
-
-              <div className="flex items-center gap-2 text-xs font-bold px-3 py-1.5 rounded-2xl bg-purple-50 dark:bg-purple-950/80 border border-purple-200 dark:border-purple-800 text-purple-900 dark:text-purple-200">
-                <span>{selectedCountryObj.flag}</span>
-                <span>{selectedCountryObj.name}</span>
-                {serviceRegion && (
-                  <span className="text-amber-500 font-extrabold">• {serviceRegion}</span>
-                )}
               </div>
             </div>
 
@@ -612,8 +404,7 @@ export const UtilitiesView: React.FC<UtilitiesViewProps> = ({
               <FlexibleUtilityModal
                 isEmbedded={true}
                 defaultCategory={getMappedCategoryType(selectedUtility)}
-                initialCountryCode={serviceCountryCode}
-                initialState={serviceRegion || undefined}
+                initialCountryCode="GLOBAL"
                 piConversionConfig={utilityConfig}
                 userBalancePi={userBalancePi}
                 buyerUsername={buyerUsername}

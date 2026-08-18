@@ -174,7 +174,7 @@ export const CartView: React.FC<CartViewProps> = ({
 
                 <div className="text-right">
                   <div className="text-xs font-black text-slate-900 dark:text-slate-100">
-                    {(item.product.pricePi * item.quantity).toFixed(2)} π
+                    {(getItemUnitPrice(item) * item.quantity).toFixed(2)} π
                   </div>
                   <button
                     onClick={() => onRemoveItem(item.product.id)}

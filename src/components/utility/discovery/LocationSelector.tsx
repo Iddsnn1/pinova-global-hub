@@ -1,6 +1,7 @@
 import React from 'react';
 import { MapPin, Globe, Building } from 'lucide-react';
 import { getSubdivisionInfo, COUNTRY_SUBDIVISIONS_MAP } from '../../../data/countrySubdivisions';
+import { ALL_GLOBAL_COUNTRIES } from '../../../data/countriesData';
 
 export interface LocationSelectorProps {
   countryCode: string;
@@ -20,23 +21,16 @@ export interface LocationSelectorProps {
 
 export const NIGERIAN_STATES = COUNTRY_SUBDIVISIONS_MAP.NG.subdivisions;
 
+const DEFAULT_GLOBAL_COUNTRIES: { code: string; name: string; flag: string }[] = [
+  { code: 'GLOBAL', name: 'Global Services / All Countries', flag: '🌐' },
+  ...ALL_GLOBAL_COUNTRIES.map((c) => ({ code: c.code, name: c.name, flag: c.flag }))
+];
+
 export const LocationSelector: React.FC<LocationSelectorProps> = ({
   countryCode,
   state = '',
   cityOrLga = '',
-  availableCountries = [
-    { code: 'NG', name: 'Nigeria', flag: '🇳🇬' },
-    { code: 'KE', name: 'Kenya', flag: '🇰🇪' },
-    { code: 'GH', name: 'Ghana', flag: '🇬🇭' },
-    { code: 'ZA', name: 'South Africa', flag: '🇿🇦' },
-    { code: 'SA', name: 'Saudi Arabia', flag: '🇸🇦' },
-    { code: 'AE', name: 'United Arab Emirates', flag: '🇦🇪' },
-    { code: 'IN', name: 'India', flag: '🇮🇳' },
-    { code: 'US', name: 'United States', flag: '🇺🇸' },
-    { code: 'GB', name: 'United Kingdom', flag: '🇬🇧' },
-    { code: 'TR', name: 'Turkey / Türkiye', flag: '🇹🇷' },
-    { code: 'GLOBAL', name: 'Global / International', flag: '🌐' }
-  ],
+  availableCountries = DEFAULT_GLOBAL_COUNTRIES,
   availableStates,
   onCountryChange,
   onStateChange,

@@ -44,6 +44,7 @@ import {
 } from '../../types/utility';
 import { UTILITY_CATEGORY_META, SAMPLE_UTILITY_PROVIDERS } from '../../data/utilityData';
 import { AIRTIME_COUNTRIES } from '../../data/airtimeData';
+import { ALL_GLOBAL_COUNTRIES } from '../../data/countriesData';
 import { createPiPayment } from '../../lib/piSdk';
 import { DigitalReceiptModal } from './DigitalReceiptModal';
 import { ProviderValidationFactory } from '../../modules/utility/providerValidation';
@@ -54,6 +55,7 @@ import { WaterDiscovery } from './discovery/WaterDiscovery';
 import { GovernmentDiscovery } from './discovery/GovernmentDiscovery';
 import { EducationDiscovery } from './discovery/EducationDiscovery';
 import { ElectricityDiscovery } from './discovery/ElectricityDiscovery';
+import { EventsDiscovery } from './discovery/EventsDiscovery';
 import { NIGERIAN_STATES } from './discovery/LocationSelector';
 import { getSubdivisionInfo } from '../../data/countrySubdivisions';
 
@@ -126,7 +128,7 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
   buyerUsername = 'Pioneer_User',
   onTransactionSuccess,
   defaultCategory = 'airtime',
-  initialCountryCode = 'NG',
+  initialCountryCode = 'GLOBAL',
   initialState,
   isEmbedded = false
 }) => {
@@ -134,7 +136,7 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
   const [selectedCategory, setSelectedCategory] = useState<UtilityCategoryType>(defaultCategory);
   
   // Country & State Selection State
-  const [selectedCountryCode, setSelectedCountryCode] = useState<string>(initialCountryCode || 'NG');
+  const [selectedCountryCode, setSelectedCountryCode] = useState<string>(initialCountryCode || 'GLOBAL');
   const [selectedState, setSelectedState] = useState<string>(initialState || '');
   const [countrySearchQuery, setCountrySearchQuery] = useState<string>('');
 
@@ -174,31 +176,19 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [generatedReceipt, setGeneratedReceipt] = useState<UtilityTransactionReceipt | null>(null);
 
-  // Popular quick-select countries
-  const POPULAR_QUICK_COUNTRIES = useMemo(() => [
-    { code: 'NG', name: 'Nigeria', flag: '🇳🇬', dialCode: '+234' },
-    { code: 'GH', name: 'Ghana', flag: '🇬🇭', dialCode: '+233' },
-    { code: 'KE', name: 'Kenya', flag: '🇰🇪', dialCode: '+254' },
-    { code: 'ZA', name: 'South Africa', flag: '🇿🇦', dialCode: '+27' },
-    { code: 'GB', name: 'United Kingdom', flag: '🇬🇧', dialCode: '+44' },
-    { code: 'US', name: 'United States', flag: '🇺🇸', dialCode: '+1' },
-    { code: 'AE', name: 'United Arab Emirates', flag: '🇦🇪', dialCode: '+971' },
-    { code: 'TR', name: 'Türkiye', flag: '🇹🇷', dialCode: '+90' },
-    { code: 'VN', name: 'Vietnam', flag: '🇻🇳', dialCode: '+84' },
-    { code: 'ID', name: 'Indonesia', flag: '🇮🇩', dialCode: '+62' },
-    { code: 'GLOBAL', name: 'Global Services', flag: '🌐', dialCode: '' }
-  ], []);
-
-  // Canonical full global country catalog derived from AIRTIME_COUNTRIES and SAMPLE_UTILITY_PROVIDERS
+  // Canonical full global country catalog derived from ALL_GLOBAL_COUNTRIES and SAMPLE_UTILITY_PROVIDERS
   const allGlobalCountries = useMemo(() => {
     const map = new Map<string, { code: string; name: string; flag: string; dialCode?: string }>();
 
-    // Popular defaults first
-    POPULAR_QUICK_COUNTRIES.forEach((c) => {
+    // Global Services default first
+    map.set('GLOBAL', { code: 'GLOBAL', name: 'Global Services', flag: '🌐', dialCode: '' });
+
+    // Canonical ALL_GLOBAL_COUNTRIES (190+ authoritative countries)
+    ALL_GLOBAL_COUNTRIES.forEach((c) => {
       map.set(c.code, { code: c.code, name: c.name, flag: c.flag, dialCode: c.dialCode });
     });
 
-    // Populate with 192 global countries from canonical AIRTIME_COUNTRIES
+    // Populate with any remaining entries from AIRTIME_COUNTRIES
     AIRTIME_COUNTRIES.forEach((c) => {
       if (!map.has(c.code)) {
         map.set(c.code, { code: c.code, name: c.name, flag: c.flag, dialCode: c.dialCode });
@@ -219,7 +209,7 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
     });
 
     return Array.from(map.values());
-  }, [POPULAR_QUICK_COUNTRIES]);
+  }, []);
 
   const selectedCountryObj = useMemo(() => {
     return allGlobalCountries.find((c) => c.code === selectedCountryCode) || {
@@ -248,7 +238,7 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
 
   // Filter providers for country and state (memoized)
   const availableProvidersForCountry = useMemo(() => {
-    const activeCode = (selectedCountryCode || 'NG').toUpperCase();
+    const activeCode = (selectedCountryCode || 'GLOBAL').toUpperCase();
 
     if (selectedCategory === 'electricity') {
       const elecRes = resolveElectricityProviders(
@@ -260,6 +250,9 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
 
     const countryMatches = categoryProviders.filter(p => {
       const pCode = (p.countryCode || (p.country === 'Global' ? 'GLOBAL' : p.country.slice(0, 2))).toUpperCase();
+      if (activeCode === 'GLOBAL') {
+        return true;
+      }
       return pCode === activeCode || pCode === 'GLOBAL';
     });
 
@@ -726,6 +719,20 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                 onTransactionSuccess={onTransactionSuccess}
               />
             )}
+
+            {selectedCategory === 'events' && (
+              <EventsDiscovery
+                selectedCountryCode={selectedCountryCode}
+                piConversionConfig={piConversionConfig}
+                userBalancePi={userBalancePi}
+                buyerUsername={buyerUsername}
+                onCountryChange={(code) => {
+                  setSelectedCountryCode(code);
+                  setSelectedState('');
+                }}
+                onTransactionSuccess={onTransactionSuccess}
+              />
+            )}
           </div>
         ) : (
           /* STANDARD UTILITY FLOW */
@@ -743,78 +750,84 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                       Service availability
                     </label>
                     <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                      Select a country and region to see available utility providers and local services.
+                      Search or select from 190+ countries to see available utility networks and local service providers.
                     </p>
                   </div>
-                  <span className="text-xs font-extrabold px-3 py-1.5 rounded-xl bg-purple-50 dark:bg-purple-950/80 border border-purple-200 dark:border-purple-800 text-purple-900 dark:text-purple-200 flex items-center gap-1.5 self-start sm:self-auto shadow-sm">
-                    <span className="text-base leading-none">{selectedCountryObj.flag}</span>
-                    <span>{selectedCountryObj.name}</span>
-                    {selectedState ? (
-                      <span className="text-amber-600 dark:text-amber-400 font-bold border-l border-purple-300 dark:border-purple-700 pl-1.5">
-                        · {selectedState}
-                      </span>
-                    ) : (
-                      <span className="text-slate-400 border-l border-purple-300 dark:border-purple-700 pl-1.5">
-                        · All Regions
-                      </span>
+                  
+                  <div className="flex items-center gap-1.5 self-start sm:self-auto">
+                    {selectedCountryCode !== 'GLOBAL' && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedCountryCode('GLOBAL');
+                          setSelectedState('');
+                          setCountrySearchQuery('');
+                          setErrorMessage(null);
+                          setAccountNumber('');
+                          setAccountValidationResult(null);
+                        }}
+                        className="text-[11px] font-extrabold px-2.5 py-1 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-purple-100 dark:hover:bg-purple-900/60 transition-colors"
+                      >
+                        Reset to Global
+                      </button>
                     )}
-                  </span>
-                </div>
-
-                {/* Popular Quick-Select Country Chips */}
-                <div className="space-y-1 pt-1 border-t border-slate-200/60 dark:border-slate-700/60">
-                  <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
-                    Popular Destinations
-                  </span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {POPULAR_QUICK_COUNTRIES.map((c) => {
-                      const isSelected = selectedCountryCode === c.code;
-                      return (
-                        <button
-                          key={c.code}
-                          type="button"
-                          onClick={() => {
-                            setSelectedCountryCode(c.code);
-                            const subInfo = getSubdivisionInfo(c.code);
-                            setSelectedState(subInfo.subdivisions && subInfo.subdivisions.length > 0 ? subInfo.subdivisions[0] : '');
-                            setCountrySearchQuery('');
-                            setErrorMessage(null);
-                            setAccountNumber('');
-                            setAccountValidationResult(null);
-                          }}
-                          className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 border ${
-                            isSelected
-                              ? 'bg-purple-600 text-white border-purple-600 shadow-sm'
-                              : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-purple-400'
-                          }`}
-                        >
-                          <span className="text-sm leading-none">{c.flag}</span>
-                          <span>{c.name}</span>
-                        </button>
-                      );
-                    })}
+                    <span className="text-xs font-extrabold px-3 py-1.5 rounded-xl bg-purple-50 dark:bg-purple-950/80 border border-purple-200 dark:border-purple-800 text-purple-900 dark:text-purple-200 flex items-center gap-1.5 shadow-sm">
+                      <span className="text-base leading-none">{selectedCountryObj.flag}</span>
+                      <span>{selectedCountryObj.name}</span>
+                      {selectedState ? (
+                        <span className="text-amber-600 dark:text-amber-400 font-bold border-l border-purple-300 dark:border-purple-700 pl-1.5">
+                          · {selectedState}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 border-l border-purple-300 dark:border-purple-700 pl-1.5">
+                          · All Regions
+                        </span>
+                      )}
+                    </span>
                   </div>
                 </div>
 
-                {/* Search Bar for All Global Countries */}
-                <div className="relative">
-                  <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input
-                    type="text"
-                    placeholder="Search all 190+ global countries (e.g. Canada, Germany, Japan, France, Brazil, +49)..."
-                    value={countrySearchQuery}
-                    onChange={(e) => setCountrySearchQuery(e.target.value)}
-                    className="w-full pl-9 pr-8 py-2 rounded-xl text-xs bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/30 transition-all"
-                  />
-                  {countrySearchQuery && (
-                    <button
-                      type="button"
-                      onClick={() => setCountrySearchQuery('')}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-0.5"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  )}
+                {/* Quick Discovery Button & Search Bar for All Global Countries */}
+                <div className="flex flex-col sm:flex-row gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedCountryCode('GLOBAL');
+                      setSelectedState('');
+                      setCountrySearchQuery('');
+                      setErrorMessage(null);
+                      setAccountNumber('');
+                      setAccountValidationResult(null);
+                    }}
+                    className={`px-3 py-2 rounded-xl text-xs font-extrabold transition-all flex items-center justify-center gap-1.5 border shrink-0 ${
+                      selectedCountryCode === 'GLOBAL'
+                        ? 'bg-purple-600 text-white border-purple-600 shadow-sm'
+                        : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700 hover:border-purple-400'
+                    }`}
+                  >
+                    <span>🌐</span>
+                    <span>Global Services</span>
+                  </button>
+
+                  <div className="relative flex-1">
+                    <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="Search all 190+ countries (e.g. Canada, Germany, Japan, Nigeria, +44)..."
+                      value={countrySearchQuery}
+                      onChange={(e) => setCountrySearchQuery(e.target.value)}
+                      className="w-full pl-9 pr-8 py-2 rounded-xl text-xs bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/30 transition-all"
+                    />
+                    {countrySearchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => setCountrySearchQuery('')}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-0.5"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {/* Search Results Filter (if searching) */}
@@ -844,8 +857,7 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                               type="button"
                               onClick={() => {
                                 setSelectedCountryCode(c.code);
-                                const subInfo = getSubdivisionInfo(c.code);
-                                setSelectedState(subInfo.subdivisions && subInfo.subdivisions.length > 0 ? subInfo.subdivisions[0] : '');
+                                setSelectedState('');
                                 setCountrySearchQuery('');
                                 setErrorMessage(null);
                                 setAccountNumber('');
@@ -876,28 +888,18 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                       onChange={(e) => {
                         const newCode = e.target.value;
                         setSelectedCountryCode(newCode);
-                        const subInfo = getSubdivisionInfo(newCode);
-                        setSelectedState(subInfo.subdivisions && subInfo.subdivisions.length > 0 ? subInfo.subdivisions[0] : '');
+                        setSelectedState('');
                         setErrorMessage(null);
                         setAccountNumber('');
                         setAccountValidationResult(null);
                       }}
                       className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-xs font-bold text-slate-900 dark:text-slate-100 focus:outline-none focus:border-purple-500"
                     >
-                      <optgroup label="Popular Countries">
-                        {POPULAR_QUICK_COUNTRIES.map((c) => (
-                          <option key={`pop-${c.code}`} value={c.code}>
-                            {c.flag} {c.name} ({c.code})
-                          </option>
-                        ))}
-                      </optgroup>
-                      <optgroup label="All Global Countries">
-                        {allGlobalCountries.map((c) => (
-                          <option key={`all-${c.code}`} value={c.code}>
-                            {c.flag} {c.name} ({c.code}){c.dialCode ? ` [${c.dialCode}]` : ''}
-                          </option>
-                        ))}
-                      </optgroup>
+                      {allGlobalCountries.map((c) => (
+                        <option key={`country-${c.code}`} value={c.code}>
+                          {c.flag} {c.name} {c.code !== 'GLOBAL' ? `(${c.code})` : ''}{c.dialCode ? ` [${c.dialCode}]` : ''}
+                        </option>
+                      ))}
                     </select>
                   </div>
 
@@ -952,7 +954,7 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                     <button
                       type="button"
                       onClick={() => {
-                        setSelectedCountryCode('NG');
+                        setSelectedCountryCode('GLOBAL');
                         setSelectedState('');
                         setCountrySearchQuery('');
                         setErrorMessage(null);
@@ -960,7 +962,7 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                       className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-purple-600 text-white text-xs font-bold shadow-md hover:bg-purple-700 transition-colors"
                     >
                       <Globe className="w-3.5 h-3.5" />
-                      <span>Explore Supported Countries</span>
+                      <span>Explore Global Services</span>
                     </button>
                   </div>
                 ) : (

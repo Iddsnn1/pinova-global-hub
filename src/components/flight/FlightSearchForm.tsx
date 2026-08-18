@@ -7,14 +7,12 @@ import {
   Search, 
   RefreshCw, 
   MapPin, 
-  Sparkles, 
   ShieldCheck, 
-  Info,
   ChevronDown,
   X
 } from 'lucide-react';
 import { FlightSearchCriteria, TripType, CabinClass, AirportOption } from '../../types/flight';
-import { GLOBAL_AIRPORTS, POPULAR_FLIGHT_ROUTES } from '../../data/flightData';
+import { GLOBAL_AIRPORTS } from '../../data/flightData';
 
 interface FlightSearchFormProps {
   onSearch: (criteria: FlightSearchCriteria) => void;
@@ -126,7 +124,7 @@ export const FlightSearchForm: React.FC<FlightSearchFormProps> = ({
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6 shadow-xl space-y-5 text-white">
       
-      {/* Flight Provider Scaffolding Status Indicator */}
+      {/* Flight Provider Status Indicator */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-950/70 p-3.5 rounded-2xl border border-slate-800/80">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center text-purple-300 shrink-0">
@@ -134,19 +132,13 @@ export const FlightSearchForm: React.FC<FlightSearchFormProps> = ({
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="font-extrabold text-xs text-white">Flight Services Architecture</span>
-              <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${
-                apiConfigured 
-                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' 
-                  : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-              }`}>
-                {apiConfigured ? 'LIVE DUFFEL GDS' : 'VERIFIED CARRIER SCHEDULES'}
+              <span className="font-extrabold text-xs text-white">Global Flight Services</span>
+              <span className="text-[10px] font-black px-2 py-0.5 rounded-full border bg-purple-500/20 text-purple-300 border-purple-500/40">
+                GDS & CARRIER NETWORK
               </span>
             </div>
             <p className="text-[11px] text-slate-400 mt-0.5">
-              {apiConfigured 
-                ? 'Direct GDS carrier ticketing connected with Pi Network Escrow.'
-                : 'Showing verified global routes. Live booking will switch automatically once FLIGHT_API_ACCESS_TOKEN is configured.'}
+              Direct international airline ticketing with Pi Network Escrow protection.
             </p>
           </div>
         </div>
@@ -318,7 +310,7 @@ export const FlightSearchForm: React.FC<FlightSearchFormProps> = ({
           {/* Origin Input */}
           <div className="relative" ref={originRef}>
             <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
-              From (Origin Airport)
+              From (Origin Airport or City)
             </label>
             <div
               onClick={() => setShowOriginDropdown(true)}
@@ -391,7 +383,7 @@ export const FlightSearchForm: React.FC<FlightSearchFormProps> = ({
           {/* Destination Input */}
           <div className="relative" ref={destRef}>
             <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
-              To (Destination Airport)
+              To (Destination Airport or City)
             </label>
             <div
               onClick={() => setShowDestDropdown(true)}
@@ -453,7 +445,7 @@ export const FlightSearchForm: React.FC<FlightSearchFormProps> = ({
 
         </div>
 
-        {/* Row 3: Travel Dates & Popular Routes */}
+        {/* Row 3: Travel Dates */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1.5">
@@ -486,33 +478,6 @@ export const FlightSearchForm: React.FC<FlightSearchFormProps> = ({
           )}
         </div>
 
-        {/* Popular Quick-Select Routes */}
-        <div className="space-y-1.5 pt-1">
-          <div className="text-[11px] text-slate-400 font-bold flex items-center gap-1.5">
-            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-            <span>Popular Pioneer Flight Routes:</span>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {POPULAR_FLIGHT_ROUTES.map((rt) => (
-              <button
-                type="button"
-                key={rt.label}
-                onClick={() => {
-                  setOriginCode(rt.origin);
-                  setDestinationCode(rt.dest);
-                }}
-                className={`px-3 py-1 rounded-xl text-xs font-bold transition-all border ${
-                  originCode === rt.origin && destinationCode === rt.dest
-                    ? 'bg-purple-600 text-white border-purple-500 shadow-sm'
-                    : 'bg-slate-800/80 text-slate-300 border-slate-700/80 hover:border-purple-500 hover:text-white'
-                }`}
-              >
-                {rt.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
         {/* Search Submit Button */}
         <button
           type="submit"
@@ -537,3 +502,4 @@ export const FlightSearchForm: React.FC<FlightSearchFormProps> = ({
     </div>
   );
 };
+

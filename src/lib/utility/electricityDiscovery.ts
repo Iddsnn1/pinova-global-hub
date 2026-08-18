@@ -32,7 +32,7 @@ export function resolveElectricityProviders(
   criteria: ElectricityResolutionCriteria,
   allProviders: UtilityServiceProvider[] = []
 ): ElectricityResolutionResult {
-  const countryCode = (criteria.countryCode || 'NG').toUpperCase();
+  const countryCode = (criteria.countryCode || 'GLOBAL').toUpperCase();
   const rawState = criteria.state || '';
   const normalizedState = normalizeStateName(rawState);
 
@@ -44,7 +44,22 @@ export function resolveElectricityProviders(
     )
   ];
 
-  // 1. Filter providers by country
+  // 1. If Global view requested
+  if (countryCode === 'GLOBAL' || countryCode === 'ALL' || countryCode === '') {
+    return {
+      countryCode: 'GLOBAL',
+      countryName: 'Global Services',
+      state: undefined,
+      availableServiceAreas: ELECTRICITY_SERVICE_AREAS,
+      availableProviders: elecProviders,
+      requiresServiceAreaSelection: false,
+      statusMessage: 'Showing all global electricity utility providers. Select a country and region to filter local distribution companies.',
+      isProviderResolved: false,
+      resolvedProvider: undefined
+    };
+  }
+
+  // 2. Filter providers by country
   const countryProviders = elecProviders.filter((p) => {
     const pCode = (p.countryCode || '').toUpperCase();
     const pCountry = (p.country || '').toUpperCase();
@@ -53,7 +68,22 @@ export function resolveElectricityProviders(
 
   const countryName = countryProviders.length > 0 ? countryProviders[0].country : countryCode;
 
-  // 2. If no state specified or ALL selected
+  // If no providers exist for this specific country, do NOT fallback to Nigeria
+  if (countryProviders.length === 0) {
+    return {
+      countryCode,
+      countryName,
+      state: rawState || undefined,
+      availableServiceAreas: [],
+      availableProviders: [],
+      requiresServiceAreaSelection: false,
+      statusMessage: `No local electricity distribution companies are currently registered for ${countryName}. You can browse global services or select another country.`,
+      isProviderResolved: false,
+      resolvedProvider: undefined
+    };
+  }
+
+  // 3. If no state specified or ALL selected
   if (!rawState || rawState.toUpperCase() === 'ALL' || rawState.trim() === '') {
     return {
       countryCode,

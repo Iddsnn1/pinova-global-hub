@@ -396,6 +396,8 @@ function MainAppContent() {
     setOrders((prev) => [newOrder, ...prev]);
     setUserBalancePi((prev) => Math.max(0, prev - newOrder.totalPi));
     setCartItems([]);
+    setSelectedTrackingOrderId(newOrder.id);
+    setSelectedTrackingSubTab('tracking');
 
     setNotifications((prev) => [
       {

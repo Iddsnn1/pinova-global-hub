@@ -1,87 +1,4 @@
-import { UtilityServiceProvider, TransportRouteDetails, TransportSearchCriteria, TransportSearchResultItem } from '../types/utility';
-
-export interface TransportHub {
-  code: string;
-  name: string;
-  city: string;
-  country: string;
-  countryCode: string;
-  type: 'airport' | 'rail_station' | 'bus_terminal';
-}
-
-export const REGIONAL_TRANSPORT_HUBS: Record<string, TransportHub[]> = {
-  NG: [
-    { code: 'KAN', name: 'Mallam Aminu Kano International Airport', city: 'Kano', country: 'Nigeria', countryCode: 'NG', type: 'airport' },
-    { code: 'LOS', name: 'Murtala Muhammed International Airport', city: 'Lagos', country: 'Nigeria', countryCode: 'NG', type: 'airport' },
-    { code: 'ABV', name: 'Nnamdi Azikiwe International Airport', city: 'Abuja', country: 'Nigeria', countryCode: 'NG', type: 'airport' },
-    { code: 'PHC', name: 'Port Harcourt International Airport', city: 'Port Harcourt', country: 'Nigeria', countryCode: 'NG', type: 'airport' },
-    { code: 'IDU-ABV', name: 'Idu Railway Terminal Station', city: 'Abuja', country: 'Nigeria', countryCode: 'NG', type: 'rail_station' },
-    { code: 'RIG-KAD', name: 'Rigasa Train Station', city: 'Kaduna', country: 'Nigeria', countryCode: 'NG', type: 'rail_station' },
-    { code: 'MOB-LOS', name: 'Mobolaji Johnson Station (Ebute Metta)', city: 'Lagos', country: 'Nigeria', countryCode: 'NG', type: 'rail_station' },
-    { code: 'MON-IBA', name: 'Chief Obafemi Awolowo Station (Moniya)', city: 'Ibadan', country: 'Nigeria', countryCode: 'NG', type: 'rail_station' },
-    { code: 'UTK-ABV', name: 'Utako Central Bus Terminal', city: 'Abuja', country: 'Nigeria', countryCode: 'NG', type: 'bus_terminal' },
-    { code: 'JIB-LOS', name: 'Jibowu Central Coach Terminal', city: 'Lagos', country: 'Nigeria', countryCode: 'NG', type: 'bus_terminal' },
-    { code: 'KOF-KAN', name: 'Kofar Ruwa Transit Terminal', city: 'Kano', country: 'Nigeria', countryCode: 'NG', type: 'bus_terminal' }
-  ],
-  GB: [
-    { code: 'LHR', name: 'London Heathrow Airport', city: 'London', country: 'United Kingdom', countryCode: 'GB', type: 'airport' },
-    { code: 'LGW', name: 'London Gatwick Airport', city: 'London', country: 'United Kingdom', countryCode: 'GB', type: 'airport' },
-    { code: 'MAN', name: 'Manchester Airport', city: 'Manchester', country: 'United Kingdom', countryCode: 'GB', type: 'airport' },
-    { code: 'KGX-LON', name: "London King's Cross Station", city: 'London', country: 'United Kingdom', countryCode: 'GB', type: 'rail_station' },
-    { code: 'EDB-EDI', name: 'Edinburgh Waverley Station', city: 'Edinburgh', country: 'United Kingdom', countryCode: 'GB', type: 'rail_station' },
-    { code: 'MAN-PIC', name: 'Manchester Piccadilly Station', city: 'Manchester', country: 'United Kingdom', countryCode: 'GB', type: 'rail_station' },
-    { code: 'VIC-LON', name: 'Victoria Coach Station', city: 'London', country: 'United Kingdom', countryCode: 'GB', type: 'bus_terminal' }
-  ],
-  US: [
-    { code: 'JFK', name: 'John F. Kennedy International Airport', city: 'New York', country: 'United States', countryCode: 'US', type: 'airport' },
-    { code: 'ORD', name: "O'Hare International Airport", city: 'Chicago', country: 'United States', countryCode: 'US', type: 'airport' },
-    { code: 'LAX', name: 'Los Angeles International Airport', city: 'Los Angeles', country: 'United States', countryCode: 'US', type: 'airport' },
-    { code: 'NYP-NYC', name: 'New York Penn Station', city: 'New York', country: 'United States', countryCode: 'US', type: 'rail_station' },
-    { code: 'WAS-DC', name: 'Washington Union Station', city: 'Washington D.C.', country: 'United States', countryCode: 'US', type: 'rail_station' },
-    { code: 'PAB-NYC', name: 'Port Authority Bus Terminal', city: 'New York', country: 'United States', countryCode: 'US', type: 'bus_terminal' },
-    { code: 'BOS-SOU', name: 'South Station Coach Terminal', city: 'Boston', country: 'United States', countryCode: 'US', type: 'bus_terminal' }
-  ],
-  SA: [
-    { code: 'JED', name: 'King Abdulaziz International Airport', city: 'Jeddah', country: 'Saudi Arabia', countryCode: 'SA', type: 'airport' },
-    { code: 'MED', name: 'Prince Mohammad Bin Abdulaziz Airport', city: 'Medina', country: 'Saudi Arabia', countryCode: 'SA' , type: 'airport' },
-    { code: 'RUH', name: 'King Khalid International Airport', city: 'Riyadh', country: 'Saudi Arabia', countryCode: 'SA', type: 'airport' },
-    { code: 'HHR-MAK', name: 'Makkah Haramain High Speed Station', city: 'Mecca', country: 'Saudi Arabia', countryCode: 'SA', type: 'rail_station' },
-    { code: 'HHR-MED', name: 'Madinah Haramain High Speed Station', city: 'Medina', country: 'Saudi Arabia', countryCode: 'SA', type: 'rail_station' },
-    { code: 'SAP-JED', name: 'SAPTCO Al-Balad VIP Terminal', city: 'Jeddah', country: 'Saudi Arabia', countryCode: 'SA', type: 'bus_terminal' }
-  ],
-  AE: [
-    { code: 'DXB', name: 'Dubai International Airport', city: 'Dubai', country: 'United Arab Emirates', countryCode: 'AE', type: 'airport' },
-    { code: 'AUH', name: 'Zayed International Airport', city: 'Abu Dhabi', country: 'United Arab Emirates', countryCode: 'AE', type: 'airport' },
-    { code: 'DXB-ALB', name: 'Al Ghubaiba Bus Terminal', city: 'Dubai', country: 'United Arab Emirates', countryCode: 'AE', type: 'bus_terminal' }
-  ],
-  KE: [
-    { code: 'NBO', name: 'Jomo Kenyatta International Airport', city: 'Nairobi', country: 'Kenya', countryCode: 'KE', type: 'airport' },
-    { code: 'MBA', name: 'Moi International Airport', city: 'Mombasa', country: 'Kenya', countryCode: 'KE', type: 'airport' },
-    { code: 'SYO-NBO', name: 'Nairobi Terminus (Syokimau SGR)', city: 'Nairobi', country: 'Kenya', countryCode: 'KE', type: 'rail_station' },
-    { code: 'MIR-MBA', name: 'Mombasa Terminus (Miritini SGR)', city: 'Mombasa', country: 'Kenya', countryCode: 'KE', type: 'rail_station' },
-    { code: 'RIV-NBO', name: 'River Road Express Coach Terminal', city: 'Nairobi', country: 'Kenya', countryCode: 'KE', type: 'bus_terminal' }
-  ]
-};
-
-export const POPULAR_RAIL_ROUTES = [
-  { origin: 'ABV', dest: 'KAD', originName: 'Abuja (Idu)', destName: 'Kaduna (Rigasa)', operator: 'NRC Standard Gauge', baseFare: 18, duration: '2h 15m', tag: 'High-Demand Express' },
-  { origin: 'LOS', dest: 'IBA', originName: 'Lagos (Ebute Metta)', destName: 'Ibadan (Moniya)', operator: 'NRC Speed Train', baseFare: 15, duration: '2h 30m', tag: 'Commercial Corridor' },
-  { origin: 'KGX', dest: 'EDB', originName: 'London (King\'s Cross)', destName: 'Edinburgh (Waverley)', operator: 'LNER InterCity', baseFare: 85, duration: '4h 20m', tag: 'UK East Coast Main Line' },
-  { origin: 'LON', dest: 'PAR', originName: 'London (St Pancras)', destName: 'Paris (Gare du Nord)', operator: 'Eurostar Express', baseFare: 110, duration: '2h 17m', tag: 'Channel Tunnel' },
-  { origin: 'NYP', dest: 'WAS', originName: 'New York (Penn Station)', destName: 'Washington (Union)', operator: 'Amtrak Acela', baseFare: 95, duration: '2h 55m', tag: 'Northeast Corridor' },
-  { origin: 'MAK', dest: 'MED', originName: 'Mecca (Haramain Station)', destName: 'Medina (Haramain Station)', operator: 'SAR Haramain High Speed', baseFare: 65, duration: '2h 20m', tag: 'Pilgrim High-Speed Rail' },
-  { origin: 'NBO', dest: 'MBA', originName: 'Nairobi (Syokimau)', destName: 'Mombasa (Miritini)', operator: 'Madaraka Express SGR', baseFare: 25, duration: '4h 45m', tag: 'Pan-African SGR' }
-];
-
-export const POPULAR_BUS_ROUTES = [
-  { origin: 'LOS', dest: 'ABV', originName: 'Lagos (Jibowu/Utako)', destName: 'Abuja (Central)', operator: 'GIGM Executive Coach', baseFare: 32, duration: '9h 30m', tag: 'Inter-City Express' },
-  { origin: 'KAN', dest: 'ABV', originName: 'Kano (Kofar Ruwa)', destName: 'Abuja (Utako)', operator: 'Chisco Express Coach', baseFare: 22, duration: '6h 15m', tag: 'Northern Hub' },
-  { origin: 'LOS', dest: 'ACC', originName: 'Lagos (Mazamaza)', destName: 'Accra (Circle)', operator: 'ABC Cross-Border Luxury', baseFare: 55, duration: '11h 00m', tag: 'West Africa Transit' },
-  { origin: 'NYC', dest: 'BOS', originName: 'New York (Port Authority)', destName: 'Boston (South Station)', operator: 'Greyhound Express', baseFare: 42, duration: '4h 15m', tag: 'Interstate Coach' },
-  { origin: 'LON', dest: 'MAN', originName: 'London (Victoria Coach)', destName: 'Manchester (Shudehill)', operator: 'National Express UK', baseFare: 38, duration: '4h 45m', tag: 'UK InterCity' },
-  { origin: 'JED', dest: 'MED', originName: 'Jeddah (Al Balad)', destName: 'Medina (Haram Central)', operator: 'SAPTCO VIP Coach', baseFare: 35, duration: '4h 30m', tag: 'Gulf Air-Conditioned VIP' },
-  { origin: 'NBO', dest: 'MBA', originName: 'Nairobi (River Road)', destName: 'Mombasa (Mwembe Tayari)', operator: 'Mash East Africa VIP', baseFare: 28, duration: '8h 00m', tag: 'Coastal Highway' }
-];
+import { UtilityServiceProvider } from '../types/utility';
 
 export const VERIFIED_TRANSPORT_PROVIDERS: UtilityServiceProvider[] = [
   // --- RAIL PROVIDERS ---
@@ -310,3 +227,4 @@ export const VERIFIED_TRANSPORT_PROVIDERS: UtilityServiceProvider[] = [
     ]
   }
 ];
+

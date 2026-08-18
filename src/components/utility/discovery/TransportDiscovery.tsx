@@ -36,12 +36,6 @@ import {
   constructTransportSearchCriteria, 
   searchTransportRoutes 
 } from '../../../lib/utility/serviceDiscovery';
-import { 
-  REGIONAL_TRANSPORT_HUBS, 
-  POPULAR_RAIL_ROUTES, 
-  POPULAR_BUS_ROUTES,
-  TransportHub 
-} from '../../../data/transportData';
 import { FlightServicesHub } from '../../flight/FlightServicesHub';
 
 export interface LiveFlightOffer {
@@ -169,7 +163,6 @@ export const TransportDiscovery: React.FC<TransportDiscoveryProps> = ({
   // Service Location Context
   const activeCountryCode = selectedCountryCode.toUpperCase();
   const activeCountry = COUNTRY_NAMES[activeCountryCode] || { name: activeCountryCode, flag: '🌐' };
-  const regionalHubs: TransportHub[] = REGIONAL_TRANSPORT_HUBS[activeCountryCode] || REGIONAL_TRANSPORT_HUBS['NG'] || [];
 
   // Mode-change sensible route defaults
   const handleModeChange = (newMode: 'air' | 'rail' | 'bus') => {
@@ -181,33 +174,11 @@ export const TransportDiscovery: React.FC<TransportDiscoveryProps> = ({
       setOriginInput('KAN');
       setDestinationInput('JED');
     } else if (newMode === 'rail') {
-      if (activeCountryCode === 'GB') {
-        setOriginInput('KGX');
-        setDestinationInput('EDB');
-      } else if (activeCountryCode === 'US') {
-        setOriginInput('NYP');
-        setDestinationInput('WAS');
-      } else if (activeCountryCode === 'SA') {
-        setOriginInput('MAK');
-        setDestinationInput('MED');
-      } else {
-        setOriginInput('ABV');
-        setDestinationInput('KAD');
-      }
+      setOriginInput('ABV');
+      setDestinationInput('KAD');
     } else if (newMode === 'bus') {
-      if (activeCountryCode === 'GB') {
-        setOriginInput('LON');
-        setDestinationInput('MAN');
-      } else if (activeCountryCode === 'US') {
-        setOriginInput('NYC');
-        setDestinationInput('BOS');
-      } else if (activeCountryCode === 'SA') {
-        setOriginInput('JED');
-        setDestinationInput('MED');
-      } else {
-        setOriginInput('LOS');
-        setDestinationInput('ABV');
-      }
+      setOriginInput('LOS');
+      setDestinationInput('ABV');
     }
   };
 
@@ -215,11 +186,6 @@ export const TransportDiscovery: React.FC<TransportDiscoveryProps> = ({
     const temp = originInput;
     setOriginInput(destinationInput);
     setDestinationInput(temp);
-  };
-
-  const handleApplySuggestedRoute = (orig: string, dest: string) => {
-    setOriginInput(orig.toUpperCase());
-    setDestinationInput(dest.toUpperCase());
   };
 
   const handleSearch = async (e: React.FormEvent) => {
@@ -314,11 +280,6 @@ export const TransportDiscovery: React.FC<TransportDiscoveryProps> = ({
     setSelectedPendingOption(null);
   };
 
-  // Relevant suggested routes for active mode
-  const suggestedRoutes = transportType === 'rail' 
-    ? POPULAR_RAIL_ROUTES 
-    : (transportType === 'bus' ? POPULAR_BUS_ROUTES : []);
-
   return (
     <div className="space-y-6">
       
@@ -352,68 +313,6 @@ export const TransportDiscovery: React.FC<TransportDiscoveryProps> = ({
             </div>
           </div>
         </div>
-
-        {/* Local Hub Quick-Selectors */}
-        {regionalHubs.length > 0 && (
-          <div className="pt-2 border-t border-slate-800/80">
-            <div className="flex items-center justify-between gap-2 mb-2">
-              <span className="text-[11px] font-bold text-slate-400 flex items-center gap-1.5">
-                <MapPin className="w-3.5 h-3.5 text-amber-400" />
-                <span>Major Regional Hubs in {activeCountry.name}:</span>
-              </span>
-              <span className="text-[10px] text-slate-500">Click to set as Departure or Arrival</span>
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {regionalHubs.map((hub) => {
-                const isSelectedOrigin = originInput === hub.code;
-                const isSelectedDest = destinationInput === hub.code;
-
-                return (
-                  <div
-                    key={hub.code}
-                    className={`group relative flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[11px] font-mono border transition-all ${
-                      isSelectedOrigin
-                        ? 'bg-purple-950/80 border-purple-500 text-purple-200'
-                        : isSelectedDest
-                        ? 'bg-amber-950/80 border-amber-500 text-amber-200'
-                        : 'bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-700'
-                    }`}
-                  >
-                    <span className="font-extrabold">{hub.code}</span>
-                    <span className="text-[10px] text-slate-400 font-sans">({hub.city})</span>
-                    
-                    <div className="flex items-center gap-1 ml-1">
-                      <button
-                        type="button"
-                        onClick={() => setOriginInput(hub.code)}
-                        title={`Set ${hub.name} as Origin`}
-                        className={`text-[9px] px-1.5 py-0.5 rounded font-sans font-bold transition-colors ${
-                          isSelectedOrigin 
-                            ? 'bg-purple-600 text-white' 
-                            : 'bg-slate-800 hover:bg-purple-600 text-slate-300 hover:text-white'
-                        }`}
-                      >
-                        Dep
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setDestinationInput(hub.code)}
-                        title={`Set ${hub.name} as Destination`}
-                        className={`text-[9px] px-1.5 py-0.5 rounded font-sans font-bold transition-colors ${
-                          isSelectedDest 
-                            ? 'bg-amber-600 text-white' 
-                            : 'bg-slate-800 hover:bg-amber-600 text-slate-300 hover:text-white'
-                        }`}
-                      >
-                        Arr
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
       </div>
 
       {/* 2. TRANSPORT MODE TABS */}
@@ -520,7 +419,7 @@ export const TransportDiscovery: React.FC<TransportDiscoveryProps> = ({
                   type="text"
                   value={originInput}
                   onChange={(e) => setOriginInput(e.target.value.toUpperCase())}
-                  placeholder={transportType === 'rail' ? 'e.g. ABV (Abuja Idu)' : 'e.g. LOS (Lagos Jibowu)'}
+                  placeholder={transportType === 'rail' ? 'e.g. Origin Station or City' : 'e.g. Origin Bus Terminal'}
                   className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs font-bold text-white placeholder-slate-500 focus:ring-2 focus:ring-purple-500"
                   required
                 />
@@ -545,39 +444,12 @@ export const TransportDiscovery: React.FC<TransportDiscoveryProps> = ({
                   type="text"
                   value={destinationInput}
                   onChange={(e) => setDestinationInput(e.target.value.toUpperCase())}
-                  placeholder={transportType === 'rail' ? 'e.g. KAD (Kaduna Rigasa)' : 'e.g. ABV (Abuja Utako)'}
+                  placeholder={transportType === 'rail' ? 'e.g. Destination Station or City' : 'e.g. Destination Bus Terminal'}
                   className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs font-bold text-white placeholder-slate-500 focus:ring-2 focus:ring-purple-500"
                   required
                 />
               </div>
             </div>
-
-            {/* Popular Verified Route Suggestions */}
-            {suggestedRoutes.length > 0 && (
-              <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800/80 space-y-1.5">
-                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1">
-                  <Sparkles className="w-3 h-3 text-amber-400" />
-                  <span>Popular Verified Routes:</span>
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {suggestedRoutes.map((rt) => (
-                    <button
-                      key={`${rt.origin}-${rt.dest}`}
-                      type="button"
-                      onClick={() => handleApplySuggestedRoute(rt.origin, rt.dest)}
-                      className={`text-[11px] px-2.5 py-1 rounded-xl border transition-all flex items-center gap-1.5 ${
-                        originInput === rt.origin && destinationInput === rt.dest
-                          ? 'bg-purple-900/60 border-purple-500 text-purple-200 font-bold'
-                          : 'bg-slate-900 border-slate-800 hover:border-slate-700 text-slate-300'
-                      }`}
-                    >
-                      <span className="font-mono font-bold">{rt.origin} ➔ {rt.dest}</span>
-                      <span className="text-[10px] text-slate-500 font-normal">(${rt.baseFare})</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
 
             {/* Journey Parameters: Date, Trip Type, Passengers, Class */}
             <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 pt-2">
@@ -749,7 +621,7 @@ export const TransportDiscovery: React.FC<TransportDiscoveryProps> = ({
                   <AlertCircle className="w-10 h-10 text-amber-400 mx-auto opacity-80" />
                   <p className="text-sm text-slate-200 font-bold">No direct carrier scheduled routes found for {originInput} ➔ {destinationInput}</p>
                   <p className="text-xs text-slate-400 max-w-md mx-auto">
-                    Try selecting one of the popular verified corridor routes above (e.g. ABV ➔ KAD for rail, or LOS ➔ ABV for bus) or check major regional hubs.
+                    Try searching with alternative station codes or major transit terminals.
                   </p>
                 </div>
               )}
@@ -884,3 +756,4 @@ export const TransportDiscovery: React.FC<TransportDiscoveryProps> = ({
     </div>
   );
 };
+

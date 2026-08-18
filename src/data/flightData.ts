@@ -9,6 +9,7 @@ export const GLOBAL_AIRPORTS: AirportOption[] = [
   { code: 'ACC', name: 'Kotoka International Airport', city: 'Accra', country: 'Ghana', countryCode: 'GH' },
   { code: 'ABJ', name: 'Félix-Houphouët-Boigny Airport', city: 'Abidjan', country: 'Ivory Coast', countryCode: 'CI' },
   { code: 'DSS', name: 'Blaise Diagne International Airport', city: 'Dakar', country: 'Senegal', countryCode: 'SN' },
+  { code: 'DLA', name: 'Douala International Airport', city: 'Douala', country: 'Cameroon', countryCode: 'CM' },
   
   // East & Southern Africa
   { code: 'NBO', name: 'Jomo Kenyatta International Airport', city: 'Nairobi', country: 'Kenya', countryCode: 'KE' },
@@ -19,30 +20,62 @@ export const GLOBAL_AIRPORTS: AirportOption[] = [
   { code: 'KGL', name: 'Kigali International Airport', city: 'Kigali', country: 'Rwanda', countryCode: 'RW' },
   { code: 'DAR', name: 'Julius Nyerere International Airport', city: 'Dar es Salaam', country: 'Tanzania', countryCode: 'TZ' },
   { code: 'CAI', name: 'Cairo International Airport', city: 'Cairo', country: 'Egypt', countryCode: 'EG' },
+  { code: 'CMN', name: 'Mohammed V International Airport', city: 'Casablanca', country: 'Morocco', countryCode: 'MA' },
 
   // Middle East & Gulf
   { code: 'JED', name: 'King Abdulaziz International Airport', city: 'Jeddah', country: 'Saudi Arabia', countryCode: 'SA' },
   { code: 'MED', name: 'Prince Mohammad Bin Abdulaziz Airport', city: 'Medina', country: 'Saudi Arabia', countryCode: 'SA' },
   { code: 'RUH', name: 'King Khalid International Airport', city: 'Riyadh', country: 'Saudi Arabia', countryCode: 'SA' },
+  { code: 'DMM', name: 'King Fahd International Airport', city: 'Dammam', country: 'Saudi Arabia', countryCode: 'SA' },
   { code: 'DXB', name: 'Dubai International Airport', city: 'Dubai', country: 'United Arab Emirates', countryCode: 'AE' },
   { code: 'AUH', name: 'Zayed International Airport', city: 'Abu Dhabi', country: 'United Arab Emirates', countryCode: 'AE' },
   { code: 'DOH', name: 'Hamad International Airport', city: 'Doha', country: 'Qatar', countryCode: 'QA' },
+  { code: 'BAH', name: 'Bahrain International Airport', city: 'Manama', country: 'Bahrain', countryCode: 'BH' },
+  { code: 'KWI', name: 'Kuwait International Airport', city: 'Kuwait City', country: 'Kuwait', countryCode: 'KW' },
+  { code: 'MCT', name: 'Muscat International Airport', city: 'Muscat', country: 'Oman', countryCode: 'OM' },
   { code: 'IST', name: 'Istanbul Airport', city: 'Istanbul', country: 'Türkiye', countryCode: 'TR' },
+  { code: 'SAW', name: 'Sabiha Gökçen International Airport', city: 'Istanbul', country: 'Türkiye', countryCode: 'TR' },
 
   // Europe
   { code: 'LHR', name: 'London Heathrow Airport', city: 'London', country: 'United Kingdom', countryCode: 'GB' },
   { code: 'LGW', name: 'London Gatwick Airport', city: 'London', country: 'United Kingdom', countryCode: 'GB' },
   { code: 'MAN', name: 'Manchester Airport', city: 'Manchester', country: 'United Kingdom', countryCode: 'GB' },
+  { code: 'EDI', name: 'Edinburgh Airport', city: 'Edinburgh', country: 'United Kingdom', countryCode: 'GB' },
   { code: 'CDG', name: 'Paris Charles de Gaulle Airport', city: 'Paris', country: 'France', countryCode: 'FR' },
+  { code: 'ORY', name: 'Paris Orly Airport', city: 'Paris', country: 'France', countryCode: 'FR' },
   { code: 'FRA', name: 'Frankfurt Airport', city: 'Frankfurt', country: 'Germany', countryCode: 'DE' },
+  { code: 'MUC', name: 'Munich Airport', city: 'Munich', country: 'Germany', countryCode: 'DE' },
   { code: 'AMS', name: 'Amsterdam Airport Schiphol', city: 'Amsterdam', country: 'Netherlands', countryCode: 'NL' },
+  { code: 'FCO', name: 'Leonardo da Vinci–Fiumicino Airport', city: 'Rome', country: 'Italy', countryCode: 'IT' },
+  { code: 'MXP', name: 'Milan Malpensa Airport', city: 'Milan', country: 'Italy', countryCode: 'IT' },
+  { code: 'MAD', name: 'Adolfo Suárez Madrid–Barajas Airport', city: 'Madrid', country: 'Spain', countryCode: 'ES' },
+  { code: 'BCN', name: 'Josep Tarradellas Barcelona-El Prat Airport', city: 'Barcelona', country: 'Spain', countryCode: 'ES' },
+  { code: 'ZRH', name: 'Zurich Airport', city: 'Zurich', country: 'Switzerland', countryCode: 'CH' },
+  { code: 'VIE', name: 'Vienna International Airport', city: 'Vienna', country: 'Austria', countryCode: 'AT' },
+  { code: 'DUB', name: 'Dublin Airport', city: 'Dublin', country: 'Ireland', countryCode: 'IE' },
 
   // North America
   { code: 'JFK', name: 'John F. Kennedy International Airport', city: 'New York', country: 'United States', countryCode: 'US' },
+  { code: 'EWR', name: 'Newark Liberty International Airport', city: 'Newark/New York', country: 'United States', countryCode: 'US' },
   { code: 'IAD', name: 'Washington Dulles International Airport', city: 'Washington D.C.', country: 'United States', countryCode: 'US' },
   { code: 'ATL', name: 'Hartsfield-Jackson Atlanta International Airport', city: 'Atlanta', country: 'United States', countryCode: 'US' },
   { code: 'ORD', name: "O'Hare International Airport", city: 'Chicago', country: 'United States', countryCode: 'US' },
+  { code: 'LAX', name: 'Los Angeles International Airport', city: 'Los Angeles', country: 'United States', countryCode: 'US' },
+  { code: 'SFO', name: 'San Francisco International Airport', city: 'San Francisco', country: 'United States', countryCode: 'US' },
+  { code: 'DFW', name: 'Dallas/Fort Worth International Airport', city: 'Dallas', country: 'United States', countryCode: 'US' },
+  { code: 'IAH', name: 'George Bush Intercontinental Airport', city: 'Houston', country: 'United States', countryCode: 'US' },
+  { code: 'MIA', name: 'Miami International Airport', city: 'Miami', country: 'United States', countryCode: 'US' },
+  { code: 'BOS', name: 'Boston Logan International Airport', city: 'Boston', country: 'United States', countryCode: 'US' },
   { code: 'YYZ', name: 'Toronto Pearson International Airport', city: 'Toronto', country: 'Canada', countryCode: 'CA' },
+  { code: 'YVR', name: 'Vancouver International Airport', city: 'Vancouver', country: 'Canada', countryCode: 'CA' },
+  { code: 'MEX', name: 'Mexico City International Airport', city: 'Mexico City', country: 'Mexico', countryCode: 'MX' },
+
+  // South America
+  { code: 'GRU', name: 'São Paulo/Guarulhos International Airport', city: 'São Paulo', country: 'Brazil', countryCode: 'BR' },
+  { code: 'GIG', name: 'Rio de Janeiro/Galeão International Airport', city: 'Rio de Janeiro', country: 'Brazil', countryCode: 'BR' },
+  { code: 'BOG', name: 'El Dorado International Airport', city: 'Bogotá', country: 'Colombia', countryCode: 'CO' },
+  { code: 'EZE', name: 'Ministro Pistarini International Airport', city: 'Buenos Aires', country: 'Argentina', countryCode: 'AR' },
+  { code: 'LIM', name: 'Jorge Chávez International Airport', city: 'Lima', country: 'Peru', countryCode: 'PE' },
 
   // Asia & Oceania
   { code: 'SIN', name: 'Singapore Changi Airport', city: 'Singapore', country: 'Singapore', countryCode: 'SG' },
@@ -50,19 +83,23 @@ export const GLOBAL_AIRPORTS: AirportOption[] = [
   { code: 'KUL', name: 'Kuala Lumpur International Airport', city: 'Kuala Lumpur', country: 'Malaysia', countryCode: 'MY' },
   { code: 'DEL', name: 'Indira Gandhi International Airport', city: 'Delhi', country: 'India', countryCode: 'IN' },
   { code: 'BOM', name: 'Chhatrapati Shivaji Maharaj Airport', city: 'Mumbai', country: 'India', countryCode: 'IN' },
-  { code: 'CAN', name: 'Guangzhou Baiyun International Airport', city: 'Guangzhou', country: 'China', countryCode: 'CN' }
+  { code: 'MAA', name: 'Chennai International Airport', city: 'Chennai', country: 'India', countryCode: 'IN' },
+  { code: 'BLR', name: 'Kempegowda International Airport', city: 'Bengaluru', country: 'India', countryCode: 'IN' },
+  { code: 'CAN', name: 'Guangzhou Baiyun International Airport', city: 'Guangzhou', country: 'China', countryCode: 'CN' },
+  { code: 'PVG', name: 'Shanghai Pudong International Airport', city: 'Shanghai', country: 'China', countryCode: 'CN' },
+  { code: 'PEK', name: 'Beijing Capital International Airport', city: 'Beijing', country: 'China', countryCode: 'CN' },
+  { code: 'HKG', name: 'Hong Kong International Airport', city: 'Hong Kong', country: 'Hong Kong', countryCode: 'HK' },
+  { code: 'HND', name: 'Tokyo Haneda Airport', city: 'Tokyo', country: 'Japan', countryCode: 'JP' },
+  { code: 'NRT', name: 'Narita International Airport', city: 'Tokyo', country: 'Japan', countryCode: 'JP' },
+  { code: 'ICN', name: 'Incheon International Airport', city: 'Seoul', country: 'South Korea', countryCode: 'KR' },
+  { code: 'CGK', name: 'Soekarno–Hatta International Airport', city: 'Jakarta', country: 'Indonesia', countryCode: 'ID' },
+  { code: 'MNL', name: 'Ninoy Aquino International Airport', city: 'Manila', country: 'Philippines', countryCode: 'PH' },
+  { code: 'SYD', name: 'Sydney Kingsford Smith Airport', city: 'Sydney', country: 'Australia', countryCode: 'AU' },
+  { code: 'MEL', name: 'Melbourne Airport', city: 'Melbourne', country: 'Australia', countryCode: 'AU' },
+  { code: 'AKL', name: 'Auckland Airport', city: 'Auckland', country: 'New Zealand', countryCode: 'NZ' }
 ];
 
-export const POPULAR_FLIGHT_ROUTES = [
-  { origin: 'KAN', dest: 'JED', label: 'Kano (KAN) ➔ Jeddah (JED)', tag: 'Pilgrimage & Trade' },
-  { origin: 'LOS', dest: 'LHR', label: 'Lagos (LOS) ➔ London (LHR)', tag: 'Direct Commercial' },
-  { origin: 'ABV', dest: 'DXB', label: 'Abuja (ABV) ➔ Dubai (DXB)', tag: 'Business & Leisure' },
-  { origin: 'LOS', dest: 'ACC', label: 'Lagos (LOS) ➔ Accra (ACC)', tag: 'Regional Express' },
-  { origin: 'NBO', dest: 'JNB', label: 'Nairobi (NBO) ➔ Johannesburg (JNB)', tag: 'Pan-African Hub' },
-  { origin: 'DXB', dest: 'JED', label: 'Dubai (DXB) ➔ Jeddah (JED)', tag: 'Gulf Connect' },
-  { origin: 'ACC', dest: 'LHR', label: 'Accra (ACC) ➔ London (LHR)', tag: 'International' },
-  { origin: 'LOS', dest: 'JFK', label: 'Lagos (LOS) ➔ New York (JFK)', tag: 'Transatlantic' }
-];
+export const POPULAR_FLIGHT_ROUTES: Array<{ origin: string; dest: string; label: string; tag: string }> = [];
 
 export const AIRLINE_INFO: Record<string, { logo: string; color: string; alliance?: string }> = {
   'Saudia': {
