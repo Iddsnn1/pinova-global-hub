@@ -1646,7 +1646,7 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 });
 
 async function startServer() {
-  if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL && !process.env.NOW_REGION) {
+  if (process.env.NODE_ENV !== 'production') {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
@@ -1666,17 +1666,8 @@ async function startServer() {
   });
 }
 
+startServer().catch(err => {
+  console.error('Failed to start server:', err);
+});
+
 export default app;
-
-const isMainModule = Boolean(
-  process.argv[1] &&
-  (process.argv[1].endsWith('server.ts') ||
-   process.argv[1].endsWith('server.js') ||
-   process.argv[1].endsWith('server.cjs'))
-);
-
-if (isMainModule && !process.env.VERCEL && !process.env.NOW_REGION) {
-  startServer().catch(err => {
-    console.error('Failed to start server:', err);
-  });
-}
