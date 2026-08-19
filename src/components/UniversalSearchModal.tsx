@@ -59,8 +59,6 @@ export const UniversalSearchModal: React.FC<UniversalSearchModalProps> = ({
     setQuery(initialQuery);
   }, [initialQuery]);
 
-  if (!isOpen) return null;
-
   const trimmed = query.trim().toLowerCase();
 
   // Search Products
@@ -169,6 +167,8 @@ export const UniversalSearchModal: React.FC<UniversalSearchModalProps> = ({
     filteredUtilities.length + 
     filteredServices.length + 
     filteredOrders.length;
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-start justify-center p-2 sm:p-4 md:p-6 overflow-y-auto animate-fade-in">
