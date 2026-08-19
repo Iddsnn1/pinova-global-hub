@@ -509,6 +509,146 @@ export const INITIAL_PRODUCTS: Product[] = [
     features: ['High-Performance NVMe Cloud VM', 'Pre-configured Docker & Pi Consensus Daemon', 'Automated Health Recovery', 'Dedicated Grafana Dashboard'],
     tags: ['service', 'node', 'cloud', 'hosting', 'infrastructure'],
     featured: true
+  },
+
+  // 14. Agriculture
+  {
+    id: 'prod-agri-01',
+    title: 'Certified Organic Non-GMO Heirloom Crop Seed Vault',
+    description: 'Hermetically sealed multi-variety seed bank containing 35 essential heirloom vegetables and grain crops with high germination rates and long-term storage capability.',
+    pricePi: 19.50,
+    category: 'physical',
+    subcategory: 'Agriculture',
+    images: [
+      'https://images.unsplash.com/photo-1500937386664-56d1dfef3854?auto=format&fit=crop&w=800&q=80'
+    ],
+    stock: 85,
+    rating: 4.92,
+    reviewsCount: 67,
+    sellerId: 'ven-003',
+    sellerName: 'Kyoto Artisan Collective',
+    sellerVerified: true,
+    features: ['35 Heirloom Seed Varieties', 'Non-GMO Certified', 'Hermetic Moisture Barrier Canister', 'Includes Germination Guide'],
+    shippingWeightKg: 1.2,
+    tags: ['agriculture', 'seeds', 'organic', 'farm produce', 'farming']
+  },
+
+  // 15. Travel & Transport Services
+  {
+    id: 'prod-trav-01',
+    title: 'Global High-Speed Rail & Regional Bus Open Pass (30-Day)',
+    description: 'Digital transit voucher providing flexible booking credits across verified international express bus and intercity rail lines with instant e-ticket issuance.',
+    pricePi: 34.00,
+    category: 'service',
+    subcategory: 'Travel & Transport Services',
+    productType: 'service',
+    fulfillmentType: 'service_delivery',
+    availabilityStatus: 'in_stock',
+    serviceLocation: 'Global Multi-Region',
+    serviceDuration: '30 Days Travel Validity',
+    images: [
+      'https://images.unsplash.com/photo-1436491865332-7a61a109cc05?auto=format&fit=crop&w=800&q=80'
+    ],
+    stock: 200,
+    rating: 4.88,
+    reviewsCount: 95,
+    sellerId: 'ven-007',
+    sellerName: 'PiNova Enterprise Services',
+    sellerVerified: true,
+    features: ['Instant Digital Travel Voucher', 'Flexible Rebooking', 'QR Code Boarding Pass'],
+    tags: ['travel_transport', 'flights', 'buses', 'hotels', 'travel', 'transport']
+  },
+
+  // 16. Entertainment & Creative
+  {
+    id: 'prod-ent-01',
+    title: '4K Cinema Drone Videography & Audio Mastering Package',
+    description: 'Professional remote creative studio package covering 4K HDR drone aerial capture, color grading, and broadcast-ready stereo audio mastering.',
+    pricePi: 55.00,
+    category: 'service',
+    subcategory: 'Entertainment & Creative',
+    productType: 'service',
+    fulfillmentType: 'service_delivery',
+    availabilityStatus: 'in_stock',
+    serviceLocation: 'Global Remote / On-Location Booking',
+    serviceDuration: '3-7 Business Days',
+    images: [
+      'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=800&q=80'
+    ],
+    stock: 15,
+    rating: 4.95,
+    reviewsCount: 42,
+    sellerId: 'ven-007',
+    sellerName: 'PiNova Enterprise Services',
+    sellerVerified: true,
+    features: ['4K Cinema Drone Capture', 'DaVinci Resolve Color Grade', 'Mastered Audio Delivery (WAV & FLAC)'],
+    tags: ['entertainment_creative', 'video', 'photography', 'music', 'creative services', 'media']
+  },
+
+  // 17. Pets & Animals
+  {
+    id: 'prod-pet-01',
+    title: 'Smart Ultrasonic Automatic Pet Feeder & HD Camera',
+    description: 'WiFi-connected dual-bowl automatic pet feeder with scheduled portion dispenser, 1080p two-way audio camera, and anti-clog rotor.',
+    pricePi: 29.00,
+    category: 'physical',
+    subcategory: 'Pets & Animals',
+    images: [
+      'https://images.unsplash.com/photo-1450778869180-41d0601e046e?auto=format&fit=crop&w=800&q=80'
+    ],
+    stock: 45,
+    rating: 4.86,
+    reviewsCount: 58,
+    sellerId: 'ven-002',
+    sellerName: 'Global Audio Masters',
+    sellerVerified: true,
+    features: ['1080p HD Night Vision Camera', 'Custom Voice Call-Outs', '4L Desiccant Sealed Hopper', 'App Portion Control'],
+    shippingWeightKg: 2.3,
+    tags: ['pets_animals', 'pet products', 'pet services', 'smart feeder', 'pets']
+  },
+
+  // 18. Baby & Kids
+  {
+    id: 'prod-baby-01',
+    title: 'Montessori Wooden Sensory Activity & Learning Board',
+    description: 'Eco-friendly solid birch sensory activity station designed for fine motor skill development, cognitive sorting, and interactive STEM discovery.',
+    pricePi: 17.50,
+    category: 'physical',
+    subcategory: 'Baby & Kids',
+    images: [
+      'https://images.unsplash.com/photo-1515488042361-ee00e0ddd4e4?auto=format&fit=crop&w=800&q=80'
+    ],
+    stock: 55,
+    rating: 4.93,
+    reviewsCount: 71,
+    sellerId: 'ven-003',
+    sellerName: 'Kyoto Artisan Collective',
+    sellerVerified: true,
+    features: ['100% Solid Birch Wood', 'Non-Toxic Water-Based Paint', 'Montessori Certified Design'],
+    shippingWeightKg: 1.4,
+    tags: ['baby_kids', 'toys', 'baby products', 'montessori', 'kids clothing']
+  },
+
+  // 19. Business & Office
+  {
+    id: 'prod-off-01',
+    title: 'Thermal Barcode & Shipping Label High-Speed Printer',
+    description: 'Commercial 203 DPI direct thermal label printer with USB and Bluetooth connectivity for automated warehouse and e-commerce merchant dispatch.',
+    pricePi: 42.00,
+    category: 'physical',
+    subcategory: 'Business & Office',
+    images: [
+      'https://images.unsplash.com/photo-1497215728101-856f4ea42174?auto=format&fit=crop&w=800&q=80'
+    ],
+    stock: 35,
+    rating: 4.91,
+    reviewsCount: 64,
+    sellerId: 'ven-001',
+    sellerName: 'PiTech Official Store',
+    sellerVerified: true,
+    features: ['150mm/s High-Speed Printing', 'No Ink or Toner Needed', 'Works with 4x6 Shipping Labels', 'Cross-Platform Drivers'],
+    shippingWeightKg: 1.8,
+    tags: ['business_office', 'office supplies', 'business equipment', 'printing', 'wholesale']
   }
 ];
 

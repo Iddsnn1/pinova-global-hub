@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Plane, 
   Train, 
@@ -36,6 +36,7 @@ import {
   constructTransportSearchCriteria, 
   searchTransportRoutes 
 } from '../../../lib/utility/serviceDiscovery';
+import { ALL_GLOBAL_COUNTRIES } from '../../../data/countriesData';
 import { FlightServicesHub } from '../../flight/FlightServicesHub';
 
 export interface LiveFlightOffer {
@@ -112,7 +113,7 @@ const COUNTRY_NAMES: Record<string, { name: string; flag: string }> = {
 
 export const TransportDiscovery: React.FC<TransportDiscoveryProps> = ({
   providers,
-  selectedCountryCode = 'NG',
+  selectedCountryCode = 'GLOBAL',
   initialState = '',
   onCountryChange,
   onStateChange,
@@ -161,8 +162,15 @@ export const TransportDiscovery: React.FC<TransportDiscoveryProps> = ({
   const [specialRequest, setSpecialRequest] = useState<string>('');
 
   // Service Location Context
-  const activeCountryCode = selectedCountryCode.toUpperCase();
-  const activeCountry = COUNTRY_NAMES[activeCountryCode] || { name: activeCountryCode, flag: '🌐' };
+  const activeCountryCode = (selectedCountryCode || 'GLOBAL').toUpperCase();
+  const activeCountry = useMemo(() => {
+    if (activeCountryCode === 'GLOBAL') {
+      return { name: 'Global Services', flag: '🌐' };
+    }
+    const matched = ALL_GLOBAL_COUNTRIES.find((c) => c.code.toUpperCase() === activeCountryCode);
+    if (matched) return { name: matched.name, flag: matched.flag };
+    return COUNTRY_NAMES[activeCountryCode] || { name: activeCountryCode, flag: '🌐' };
+  }, [activeCountryCode]);
 
   // Mode-change sensible route defaults
   const handleModeChange = (newMode: 'air' | 'rail' | 'bus') => {

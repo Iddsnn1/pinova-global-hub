@@ -667,6 +667,7 @@ function MainAppContent() {
             onOpenStorefront={handleOpenStorefrontByName}
             onQuickView={(p) => setQuickViewProduct(p)}
             onOpenAiSearch={() => handleNavigateSection('ai_search')}
+            onOpenUniversalSearch={handleOpenUniversalSearch}
             recentlyViewedProducts={recentlyViewedProducts}
           />
         )}

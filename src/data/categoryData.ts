@@ -32,118 +32,365 @@ export interface ServiceCategoryDef {
 
 export const MARKETPLACE_CATEGORIES: MarketplaceCategoryDef[] = [
   {
-    id: 'smartphones',
-    name: 'Smart Phones',
-    description: 'Flagship & budget smartphones, 5G devices, mobile accessories, and Pi-compatible mobile hardware.',
+    id: 'phones_mobile',
+    name: 'Phones & Mobile',
+    description: 'Smartphones, feature phones, tablets, accessories, chargers, protective cases, and spare parts.',
     iconName: 'Smartphone',
     bannerImage: 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=1200&q=80',
-    subcategories: ['Flagship 5G', 'Android Phones', 'iPhones & iOS', 'Phone Accessories', 'Screen Protectors']
+    subcategories: [
+      'Smartphones',
+      'Feature Phones',
+      'Tablets',
+      'Phone Accessories',
+      'Chargers & Cables',
+      'Cases & Protection',
+      'Batteries',
+      'Spare Parts'
+    ]
   },
   {
-    id: 'computers',
-    name: 'Computers',
-    description: 'Laptops, desktop workstations, gaming PCs, PC components, monitors, and networking hardware.',
+    id: 'computers_technology',
+    name: 'Computers & Technology',
+    description: 'Laptops, desktop workstations, monitors, printers, networking hardware, storage, and software.',
     iconName: 'Laptop',
     bannerImage: 'https://images.unsplash.com/photo-1496181133206-80ce9b88a853?auto=format&fit=crop&w=1200&q=80',
-    subcategories: ['Laptops', 'Desktops', 'Monitors', 'PC Parts', 'Storage & SSDs', 'Keyboards & Mice']
-  },
-  {
-    id: 'fashion',
-    name: 'Fashion',
-    description: 'Men & women apparel, designer footwear, artisan jewelry, luxury silk robes, and activewear.',
-    iconName: 'Shirt',
-    bannerImage: 'https://images.unsplash.com/photo-1445205170230-053b83016050?auto=format&fit=crop&w=1200&q=80',
-    subcategories: ['Men\'s Wear', 'Women\'s Wear', 'Footwear', 'Watches & Jewelry', 'Bags & Accessories']
-  },
-  {
-    id: 'home_living',
-    name: 'Home & Living',
-    description: 'Smart home automation, artisan furniture, kitchen appliances, luxury bedding, and decor.',
-    iconName: 'Home',
-    bannerImage: 'https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?auto=format&fit=crop&w=1200&q=80',
-    subcategories: ['Smart Home', 'Furniture', 'Kitchenware', 'Lighting', 'Bedding & Textiles']
+    subcategories: [
+      'Laptops',
+      'Desktops',
+      'Monitors',
+      'Printers & Scanners',
+      'Computer Accessories',
+      'Networking',
+      'Storage',
+      'Software & Digital Products'
+    ]
   },
   {
     id: 'electronics',
     name: 'Electronics',
-    description: 'Audio devices, hardware wallets, solar generators, cameras, drones, and wearable tech.',
+    description: 'TVs, audio systems, digital cameras, gaming consoles, smart home devices, wearables, and appliances.',
     iconName: 'Zap',
     bannerImage: 'https://images.unsplash.com/photo-1550009158-9ebf69173e03?auto=format&fit=crop&w=1200&q=80',
-    subcategories: ['Audio & ANC Headphones', 'Crypto Hardware Wallets', 'Power Banks & Solar', 'Cameras & Drones', 'Smartwatches']
+    subcategories: [
+      'TVs',
+      'Audio',
+      'Cameras',
+      'Gaming',
+      'Smart Home',
+      'Wearables',
+      'Appliances',
+      'Electronic Components'
+    ]
   },
   {
-    id: 'beauty',
-    name: 'Beauty',
-    description: 'Organic skincare, luxury fragrances, haircare formulas, grooming tools, and wellness kits.',
-    iconName: 'Sparkles',
-    bannerImage: 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?auto=format&fit=crop&w=1200&q=80',
-    subcategories: ['Skincare', 'Perfumes & Fragrances', 'Makeup', 'Haircare', 'Grooming Tools']
-  },
-  {
-    id: 'groceries',
-    name: 'Groceries',
-    description: 'Organic foods, specialty coffee beans, gourmet pantry items, imported snacks, and beverages.',
-    iconName: 'ShoppingBag',
-    bannerImage: 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=1200&q=80',
-    subcategories: ['Specialty Coffee & Tea', 'Organic Snacks', 'Pantry Staples', 'Superfoods', 'Spices & Oils']
-  },
-  {
-    id: 'vehicles',
-    name: 'Vehicles',
-    description: 'Electric scooters, EV accessories, auto spare parts, car diagnostic tools, and dashcams.',
+    id: 'automotive_transport',
+    name: 'Automotive & Transport',
+    description: 'Cars, motorcycles, commercial vehicles, auto spare parts, tires, wheels, batteries, and repair services.',
     iconName: 'Car',
     bannerImage: 'https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&w=1200&q=80',
-    subcategories: ['Electric Scooters & E-Bikes', 'Car Electronics & Dashcams', 'Spare Parts', 'Car Care & Detailing']
+    subcategories: [
+      'Cars',
+      'Motorcycles',
+      'Commercial Vehicles',
+      'Auto Parts',
+      'Tires & Wheels',
+      'Batteries',
+      'Accessories',
+      'Repairs & Services'
+    ]
   },
   {
-    id: 'books',
-    name: 'Books',
-    description: 'Cryptocurrency masterclasses, technical manuals, fiction bestsellers, e-books, and audiobooks.',
-    iconName: 'BookOpen',
-    bannerImage: 'https://images.unsplash.com/photo-1495446815901-a7297e633e8d?auto=format&fit=crop&w=1200&q=80',
-    subcategories: ['Crypto & Blockchain', 'Business & Tech', 'E-Books', 'Fiction & Literature', 'Educational']
+    id: 'home_living',
+    name: 'Home & Living',
+    description: 'Furniture, kitchenware, home appliances, ambient lighting, home improvement, security, and garden decor.',
+    iconName: 'Home',
+    bannerImage: 'https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?auto=format&fit=crop&w=1200&q=80',
+    subcategories: [
+      'Furniture',
+      'Kitchen',
+      'Home Appliances',
+      'Lighting',
+      'Home Improvement',
+      'Security',
+      'Garden & Outdoor'
+    ]
   },
   {
-    id: 'sports',
-    name: 'Sports',
-    description: 'Fitness equipment, smartwatch trackers, outdoor camping gear, sports wear, and bicycles.',
-    iconName: 'Activity',
-    bannerImage: 'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?auto=format&fit=crop&w=1200&q=80',
-    subcategories: ['Fitness Equipment', 'Outdoor & Camping', 'Cycling & Scooters', 'Sportswear', 'Recovery Tech']
+    id: 'fashion_beauty',
+    name: 'Fashion & Beauty',
+    description: 'Men & women apparel, kids wear, designer footwear, bags, artisan jewelry, watches, and personal care.',
+    iconName: 'Shirt',
+    bannerImage: 'https://images.unsplash.com/photo-1445205170230-053b83016050?auto=format&fit=crop&w=1200&q=80',
+    subcategories: [
+      'Men',
+      'Women',
+      'Kids',
+      'Shoes',
+      'Bags',
+      'Jewelry',
+      'Watches',
+      'Beauty & Personal Care'
+    ]
   },
   {
-    id: 'health',
-    name: 'Health',
-    description: 'Medical monitors, herbal supplements, wellness massage tools, and air purifiers.',
-    iconName: 'HeartPulse',
-    bannerImage: 'https://images.unsplash.com/photo-1505751172876-fa1923c5c528?auto=format&fit=crop&w=1200&q=80',
-    subcategories: ['Vitamins & Supplements', 'Health Monitors', 'Massage Devices', 'Air Quality & Purifiers']
+    id: 'food_groceries',
+    name: 'Food & Groceries',
+    description: 'Specialty pantry staples, organic fresh foods, packaged snacks, fine beverages, and catering services.',
+    iconName: 'ShoppingBag',
+    bannerImage: 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=1200&q=80',
+    subcategories: [
+      'Groceries',
+      'Fresh Food',
+      'Packaged Food',
+      'Beverages',
+      'Restaurants & Food Services',
+      'Catering'
+    ]
   },
   {
-    id: 'toys',
-    name: 'Toys',
-    description: 'STEM building kits, programmable robotics, remote control drones, board games, and plushies.',
-    iconName: 'Gamepad2',
-    bannerImage: 'https://images.unsplash.com/photo-1566576721346-d4a3b4eaeb55?auto=format&fit=crop&w=1200&q=80',
-    subcategories: ['STEM & Robotics', 'RC Drones & Cars', 'Board Games & Puzzles', 'Action Figures']
-  },
-  {
-    id: 'industrial_equipment',
-    name: 'Industrial Equipment',
-    description: 'Solar panels, 3D printers, commercial tools, measuring instruments, and heavy workshop gear.',
+    id: 'industrial_construction',
+    name: 'Industrial, Tools & Construction',
+    description: 'Power tools, building materials, electrical components, plumbing equipment, and industrial machinery.',
     iconName: 'Wrench',
     bannerImage: 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=1200&q=80',
-    subcategories: ['Solar Inverters & Batteries', '3D Printers & CNC', 'Power Tools', 'Safety & PPE']
+    subcategories: [
+      'Tools',
+      'Building Materials',
+      'Electrical Supplies',
+      'Plumbing',
+      'Machinery',
+      'Industrial Equipment',
+      'Agricultural Equipment'
+    ]
   },
   {
-    id: 'deals',
-    name: 'Promotions & Deals',
-    description: 'Merchant Week Offers, Featured Deals, Flash Sales, Limited-Time Discounts & Recommended Promotions.',
-    iconName: 'Flame',
+    id: 'agriculture',
+    name: 'Agriculture',
+    description: 'Direct farm produce, certified seeds, organic fertilizers, livestock, and agricultural machinery.',
+    iconName: 'Sprout',
+    bannerImage: 'https://images.unsplash.com/photo-1500937386664-56d1dfef3854?auto=format&fit=crop&w=1200&q=80',
+    subcategories: [
+      'Farm Produce',
+      'Seeds',
+      'Fertilizers',
+      'Livestock',
+      'Farm Equipment',
+      'Agricultural Services'
+    ]
+  },
+  {
+    id: 'education',
+    name: 'Education',
+    description: 'Online masterclasses, blockchain courses, academic tutoring, professional certifications, and study guides.',
+    iconName: 'GraduationCap',
+    bannerImage: 'https://images.unsplash.com/photo-1495446815901-a7297e633e8d?auto=format&fit=crop&w=1200&q=80',
+    subcategories: [
+      'Courses',
+      'Tutoring',
+      'Training',
+      'Certifications',
+      'Educational Materials'
+    ]
+  },
+  {
+    id: 'professional_services',
+    name: 'Professional & Local Services',
+    description: 'Technology development, repair technicians, home cleaning, legal consulting, accounting, and delivery.',
+    iconName: 'Briefcase',
+    bannerImage: 'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?auto=format&fit=crop&w=1200&q=80',
+    subcategories: [
+      'Technology Services',
+      'Repairs',
+      'Cleaning',
+      'Construction',
+      'Design',
+      'Legal',
+      'Accounting',
+      'Marketing',
+      'Consulting',
+      'Delivery & Logistics'
+    ]
+  },
+  {
+    id: 'travel_transport',
+    name: 'Travel & Transport Services',
+    description: 'Flight bookings, hotel reservations, interstate buses, train passes, vehicle rentals, and travel itineraries.',
+    iconName: 'Plane',
+    bannerImage: 'https://images.unsplash.com/photo-1436491865332-7a61a109cc05?auto=format&fit=crop&w=1200&q=80',
+    subcategories: [
+      'Flights',
+      'Hotels',
+      'Buses',
+      'Trains',
+      'Car Rental',
+      'Travel Services'
+    ]
+  },
+  {
+    id: 'entertainment_creative',
+    name: 'Entertainment & Creative',
+    description: 'Concert & event passes, media production, professional photography, studio audio recording, and visual arts.',
+    iconName: 'Camera',
+    bannerImage: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=1200&q=80',
+    subcategories: [
+      'Events',
+      'Photography',
+      'Video',
+      'Music',
+      'Creative Services',
+      'Media'
+    ]
+  },
+  {
+    id: 'pets_animals',
+    name: 'Pets & Animals',
+    description: 'Pet food, animal accessories, veterinary consultations, grooming supplies, and livestock services.',
+    iconName: 'Footprints',
+    bannerImage: 'https://images.unsplash.com/photo-1450778869180-41d0601e046e?auto=format&fit=crop&w=1200&q=80',
+    subcategories: [
+      'Pet Products',
+      'Pet Services',
+      'Livestock & Animal Services'
+    ]
+  },
+  {
+    id: 'baby_kids',
+    name: 'Baby & Kids',
+    description: 'Baby essentials, educational toys, kids fashion, nursery furniture, and maternity care products.',
+    iconName: 'Gamepad2',
+    bannerImage: 'https://images.unsplash.com/photo-1566576721346-d4a3b4eaeb55?auto=format&fit=crop&w=1200&q=80',
+    subcategories: [
+      'Baby Products',
+      'Toys',
+      'Kids Clothing',
+      'Maternity'
+    ]
+  },
+  {
+    id: 'health_wellness',
+    name: 'Health & Wellness',
+    description: 'Vitamins, supplements, fitness gym gear, personal wellness trackers, therapeutic devices, and air care.',
+    iconName: 'HeartPulse',
+    bannerImage: 'https://images.unsplash.com/photo-1505751172876-fa1923c5c528?auto=format&fit=crop&w=1200&q=80',
+    subcategories: [
+      'Health Products',
+      'Fitness',
+      'Wellness Services',
+      'Personal Care'
+    ]
+  },
+  {
+    id: 'business_office',
+    name: 'Business & Office',
+    description: 'Office stationery, commercial printing, business hardware, corporate solutions, and wholesale merchandise.',
+    iconName: 'Building2',
+    bannerImage: 'https://images.unsplash.com/photo-1497215728101-856f4ea42174?auto=format&fit=crop&w=1200&q=80',
+    subcategories: [
+      'Office Supplies',
+      'Business Equipment',
+      'Printing',
+      'Corporate Services',
+      'Wholesale'
+    ]
+  },
+  {
+    id: 'other_general',
+    name: 'Other & Promotions',
+    description: 'Flash sales, limited-time promotions, merchant week specials, and general catalog marketplace listings.',
+    iconName: 'Layers',
     bannerImage: 'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?auto=format&fit=crop&w=1200&q=80',
-    subcategories: ['Merchant Week Offers', 'Featured Deals', 'Flash Sales', 'Limited-Time Discounts', 'Recommended Promotions']
+    subcategories: [
+      'Miscellaneous Products',
+      'Miscellaneous Services',
+      'Flash Deals & Promotions'
+    ]
   }
 ];
+
+export const MARKETPLACE_CATEGORY_ALIASES: Record<string, MarketplaceCategory> = {
+  phones_mobile: 'phones_mobile',
+  computers_technology: 'computers_technology',
+  electronics: 'electronics',
+  automotive_transport: 'automotive_transport',
+  home_living: 'home_living',
+  fashion_beauty: 'fashion_beauty',
+  food_groceries: 'food_groceries',
+  industrial_construction: 'industrial_construction',
+  agriculture: 'agriculture',
+  education: 'education',
+  professional_services: 'professional_services',
+  travel_transport: 'travel_transport',
+  entertainment_creative: 'entertainment_creative',
+  pets_animals: 'pets_animals',
+  baby_kids: 'baby_kids',
+  health_wellness: 'health_wellness',
+  business_office: 'business_office',
+  other_general: 'other_general',
+
+  // Aliases and legacy mappings
+  smartphones: 'phones_mobile',
+  phones: 'phones_mobile',
+  mobile: 'phones_mobile',
+  computers: 'computers_technology',
+  technology: 'computers_technology',
+  laptops: 'computers_technology',
+  vehicles: 'automotive_transport',
+  automotive: 'automotive_transport',
+  cars: 'automotive_transport',
+  fashion: 'fashion_beauty',
+  beauty: 'fashion_beauty',
+  clothing: 'fashion_beauty',
+  apparel: 'fashion_beauty',
+  groceries: 'food_groceries',
+  food: 'food_groceries',
+  industrial_equipment: 'industrial_construction',
+  tools: 'industrial_construction',
+  construction: 'industrial_construction',
+  books: 'education',
+  courses: 'education',
+  services: 'professional_services',
+  technology_services: 'professional_services',
+  freelance: 'professional_services',
+  travel: 'travel_transport',
+  transport_services: 'travel_transport',
+  entertainment: 'entertainment_creative',
+  creative: 'entertainment_creative',
+  pets: 'pets_animals',
+  animals: 'pets_animals',
+  toys: 'baby_kids',
+  baby: 'baby_kids',
+  kids: 'baby_kids',
+  sports: 'health_wellness',
+  health: 'health_wellness',
+  wellness: 'health_wellness',
+  fitness: 'health_wellness',
+  office: 'business_office',
+  business: 'business_office',
+  deals: 'other_general',
+  promotions: 'other_general',
+  other: 'other_general',
+  general: 'other_general',
+  all: 'all'
+};
+
+export const resolveMarketplaceCategory = (input?: string): MarketplaceCategory => {
+  if (!input) return 'all';
+  const clean = input.trim().toLowerCase().replace(/[\s-&]+/g, '_');
+  if (clean === 'all') return 'all';
+  if (MARKETPLACE_CATEGORY_ALIASES[clean]) {
+    return MARKETPLACE_CATEGORY_ALIASES[clean];
+  }
+  const found = MARKETPLACE_CATEGORIES.find(
+    (c) => c.id === clean || c.name.toLowerCase().replace(/[\s-&]+/g, '_') === clean
+  );
+  return found ? found.id : (clean as MarketplaceCategory);
+};
+
+export const getMarketplaceCategoryDef = (id?: string): MarketplaceCategoryDef | undefined => {
+  if (!id || id === 'all') return undefined;
+  const canonicalId = resolveMarketplaceCategory(id);
+  return MARKETPLACE_CATEGORIES.find((c) => c.id === canonicalId) || MARKETPLACE_CATEGORIES.find((c) => c.id === id);
+};
 
 export const UTILITY_CATEGORIES: UtilityCategoryDef[] = [
   {

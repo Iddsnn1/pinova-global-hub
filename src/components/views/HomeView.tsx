@@ -171,16 +171,16 @@ export const HomeView: React.FC<HomeViewProps> = ({
             <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pt-3 text-xs">
               <span className="text-slate-400 text-[11px] font-bold shrink-0">Popular Searches:</span>
               {[
-                { label: '⚡ Airtime Topup', query: 'airtime' },
-                { label: '📱 Flagship Phones', query: 'smartphones' },
-                { label: '💡 Electricity Pay', query: 'electricity' },
-                { label: '💻 Laptops', query: 'computers' },
-                { label: '🎨 Tech Services', query: 'freelance' },
-                { label: '📦 Active Orders', query: 'orders' }
+                { label: '⚡ Airtime Topup', action: () => onNavigateSection('utilities', 'airtime' as any) },
+                { label: '📱 Flagship Phones', action: () => onNavigateSection('marketplace', 'phones_mobile') },
+                { label: '💡 Electricity Pay', action: () => onNavigateSection('utilities', 'electricity' as any) },
+                { label: '💻 Laptops', action: () => onNavigateSection('marketplace', 'computers_technology') },
+                { label: '🎨 Tech Services', action: () => onNavigateSection('marketplace', 'professional_services') },
+                { label: '📦 Active Orders', action: () => onNavigateSection('orders') }
               ].map((chip, idx) => (
                 <button
                   key={idx}
-                  onClick={() => onOpenUniversalSearch(chip.query)}
+                  onClick={chip.action}
                   className="px-3 py-1 rounded-full bg-slate-800/80 hover:bg-purple-950 text-slate-300 hover:text-amber-300 border border-slate-700/60 transition-colors whitespace-nowrap font-medium text-[11px]"
                 >
                   {chip.label}

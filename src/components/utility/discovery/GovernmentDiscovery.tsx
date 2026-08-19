@@ -26,7 +26,7 @@ import { DigitalReceiptModal } from '../DigitalReceiptModal';
 
 interface GovernmentDiscoveryProps {
   providers: UtilityServiceProvider[];
-  selectedCountryCode: string;
+  selectedCountryCode?: string;
   initialState?: string;
   piConversionConfig?: PiConversionConfig;
   userBalancePi?: number;
@@ -43,7 +43,7 @@ interface GovernmentDiscoveryProps {
 
 export const GovernmentDiscovery: React.FC<GovernmentDiscoveryProps> = ({
   providers,
-  selectedCountryCode,
+  selectedCountryCode = 'GLOBAL',
   initialState = '',
   piConversionConfig,
   userBalancePi = 100,
@@ -113,7 +113,7 @@ export const GovernmentDiscovery: React.FC<GovernmentDiscoveryProps> = ({
 
   const govResult = useMemo(() => {
     return resolveGovernmentServices(providers, {
-      countryCode: selectedCountryCode || 'NG',
+      countryCode: selectedCountryCode || 'GLOBAL',
       state: selectedState,
       searchQuery,
       jurisdictionLevel
@@ -251,7 +251,7 @@ export const GovernmentDiscovery: React.FC<GovernmentDiscoveryProps> = ({
       {/* Location & Jurisdiction Filter */}
       <div className="bg-slate-900/80 p-4 rounded-2xl border border-slate-800 space-y-3">
         <LocationSelector
-          countryCode={selectedCountryCode || 'NG'}
+          countryCode={selectedCountryCode || 'GLOBAL'}
           state={selectedState}
           onCountryChange={handleCountrySelect}
           onStateChange={handleStateSelect}

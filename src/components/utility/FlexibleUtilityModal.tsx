@@ -56,7 +56,6 @@ import { GovernmentDiscovery } from './discovery/GovernmentDiscovery';
 import { EducationDiscovery } from './discovery/EducationDiscovery';
 import { ElectricityDiscovery } from './discovery/ElectricityDiscovery';
 import { EventsDiscovery } from './discovery/EventsDiscovery';
-import { NIGERIAN_STATES } from './discovery/LocationSelector';
 import { getSubdivisionInfo } from '../../data/countrySubdivisions';
 
 interface FlexibleUtilityModalProps {

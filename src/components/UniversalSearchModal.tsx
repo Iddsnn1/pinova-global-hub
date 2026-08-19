@@ -135,7 +135,8 @@ export const UniversalSearchModal: React.FC<UniversalSearchModalProps> = ({
   const sampleServices = [
     { id: 'srv-1', title: 'Pi Network App & Smart Contract Dev', provider: 'CryptoCode Solutions', category: 'freelance_tech', pricePi: 150.00, rating: 4.9 },
     { id: 'srv-2', title: 'Pi Merchant Accounting & Tax Legal Settle', provider: 'Pioneer Legal Group', category: 'consultation', pricePi: 45.00, rating: 5.0 },
-    { id: 'srv-3', title: 'Hardware POS & Crypto Terminal Repair', provider: 'TechFix Global', category: 'repairs_maintenance', pricePi: 30.00, rating: 4.8 }
+    { id: 'srv-3', title: 'Hardware POS & Crypto Terminal Repair', provider: 'TechFix Global', category: 'repairs_maintenance', pricePi: 30.00, rating: 4.8 },
+    { id: 'srv-4', title: 'Professional Web Design & UI/UX Audit', provider: 'Studio PiNova Design', category: 'freelance_tech', pricePi: 65.00, rating: 4.95 }
   ];
 
   const filteredServices = useMemo(() => {
@@ -213,6 +214,7 @@ export const UniversalSearchModal: React.FC<UniversalSearchModalProps> = ({
           <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pt-1">
             {[
               { id: 'all', label: `All (${totalResultsCount})`, icon: <Layers className="w-3.5 h-3.5" /> },
+              { id: 'categories', label: `Categories (${filteredCategories.length})`, icon: <Tag className="w-3.5 h-3.5 text-pink-400" /> },
               { id: 'products', label: `Products (${filteredProducts.length})`, icon: <Package className="w-3.5 h-3.5" /> },
               { id: 'utilities', label: `Utilities (${filteredUtilities.length})`, icon: <Zap className="w-3.5 h-3.5 text-emerald-400" /> },
               { id: 'services', label: `Services (${filteredServices.length})`, icon: <Briefcase className="w-3.5 h-3.5 text-blue-400" /> },
@@ -255,6 +257,51 @@ export const UniversalSearchModal: React.FC<UniversalSearchModalProps> = ({
                 <span>Ask AI Concierge</span>
                 <ChevronRight className="w-4 h-4" />
               </button>
+            </div>
+          )}
+
+          {/* CATEGORIES SECTION */}
+          {(activeTab === 'all' || activeTab === 'categories') && filteredCategories.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-extrabold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                  <Tag className="w-4 h-4 text-pink-500" />
+                  <span>Matching Hub Categories</span>
+                </h3>
+                <span className="text-[11px] text-slate-400">{filteredCategories.length} categories</span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                {filteredCategories.map((cat) => (
+                  <div
+                    key={`${cat.type}-${cat.id}`}
+                    onClick={() => {
+                      onClose();
+                      if (cat.type === 'marketplace') {
+                        onNavigateSection('marketplace', cat.id);
+                      } else {
+                        onNavigateSection('utilities', cat.id);
+                      }
+                    }}
+                    className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-pink-500 hover:bg-pink-50/10 transition-all cursor-pointer flex items-center justify-between gap-3 shadow-sm group"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-9 h-9 rounded-xl bg-pink-500/10 text-pink-500 flex items-center justify-center font-bold shrink-0">
+                        {cat.type === 'marketplace' ? <ShoppingBag className="w-4 h-4" /> : <Zap className="w-4 h-4" />}
+                      </div>
+                      <div className="min-w-0">
+                        <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100 group-hover:text-pink-400 truncate">
+                          {cat.name}
+                        </h4>
+                        <span className="text-[10px] uppercase font-semibold text-slate-400">
+                          {cat.type === 'marketplace' ? 'Marketplace Category' : 'Utility Service'}
+                        </span>
+                      </div>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-pink-400 shrink-0" />
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
@@ -329,7 +376,7 @@ export const UniversalSearchModal: React.FC<UniversalSearchModalProps> = ({
                     key={util.id}
                     onClick={() => {
                       onClose();
-                      onNavigateSection('utilities');
+                      onNavigateSection('utilities', util.category);
                     }}
                     className="p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-emerald-500 transition-all cursor-pointer flex items-center justify-between gap-3 shadow-sm"
                   >
@@ -367,7 +414,7 @@ export const UniversalSearchModal: React.FC<UniversalSearchModalProps> = ({
                     key={srv.id}
                     onClick={() => {
                       onClose();
-                      onNavigateSection('services');
+                      onNavigateSection('services', srv.category);
                     }}
                     className="p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-blue-500 transition-all cursor-pointer flex items-center justify-between gap-3 shadow-sm"
                   >
