@@ -185,12 +185,13 @@ export const FullScreenNavHeader: React.FC<FullScreenNavHeaderProps> = ({
         {/* Right Actions (Desktop) */}
         <div className="flex items-center gap-2 shrink-0">
           
-          {/* QR Scanner Trigger */}
+          {/* QR Scanner Trigger (Directly Visible Primary Header Control) */}
           {onOpenQrScanner && (
             <button
               onClick={onOpenQrScanner}
-              className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-amber-400 hover:text-amber-300 transition-colors flex items-center gap-1 text-xs font-bold"
-              title="Universal QR & Barcode Scanner"
+              aria-label="QR Scanner"
+              className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-amber-400 hover:text-amber-300 transition-colors flex items-center gap-1.5 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-amber-400"
+              title="QR Scanner"
             >
               <QrCode className="w-4 h-4 text-amber-400" />
               <span className="hidden lg:inline text-[11px]">Scan QR</span>
@@ -461,14 +462,15 @@ export const FullScreenNavHeader: React.FC<FullScreenNavHeaderProps> = ({
             )}
           </button>
 
-          {/* 5. QR Scanner (Visible on screen width >= 360px or accessible via More menu) */}
+          {/* 5. QR Scanner - Directly Visible Primary Header Control (Never in overflow) */}
           {onOpenQrScanner && (
             <button
               onClick={onOpenQrScanner}
-              className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-amber-400 transition-colors shrink-0 hidden xs:flex items-center"
-              title="Universal QR Scanner"
+              aria-label="QR Scanner"
+              className="p-1.5 xs:p-2 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-amber-400 border border-amber-500/30 hover:border-amber-400/50 transition-all shrink-0 flex items-center justify-center min-w-[36px] min-h-[36px] focus:outline-none focus:ring-2 focus:ring-amber-400 shadow-sm"
+              title="QR Scanner"
             >
-              <QrCode className="w-4 h-4" />
+              <QrCode className="w-4 h-4 text-amber-400" />
             </button>
           )}
 
@@ -481,7 +483,7 @@ export const FullScreenNavHeader: React.FC<FullScreenNavHeaderProps> = ({
             <Search className="w-4 h-4" />
           </button>
 
-          {/* Overflow "More" Menu Button (Houses 5. QR, 6. Search, 7. Language Selector, 8. Theme Toggle on small screens) */}
+          {/* Overflow "More" Menu Button (Houses Search on small screens, Language Selector, Theme Toggle, PSTP Shield) */}
           <div className="relative shrink-0" ref={moreMenuRef}>
             <button
               onClick={() => { setShowMoreMenu(!showMoreMenu); setShowUserDropdown(false); }}
@@ -513,17 +515,6 @@ export const FullScreenNavHeader: React.FC<FullScreenNavHeaderProps> = ({
                     <Search className="w-4 h-4 text-purple-400" />
                     <span>Search Products & Utilities</span>
                   </button>
-
-                  {/* QR Scanner */}
-                  {onOpenQrScanner && (
-                    <button
-                      onClick={() => { onOpenQrScanner(); setShowMoreMenu(false); }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-slate-200 hover:bg-slate-800 hover:text-white font-semibold transition-colors"
-                    >
-                      <QrCode className="w-4 h-4 text-amber-400" />
-                      <span>Universal QR Scanner</span>
-                    </button>
-                  )}
 
                   {/* Language Selector */}
                   <div className="px-3 py-1.5 flex items-center justify-between bg-slate-950/60 rounded-xl border border-slate-800">
