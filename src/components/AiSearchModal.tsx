@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { safeFetchJson } from '../lib/safeFetch';
 import { X, Sparkles, Search, ArrowRight, Loader2, Bot, CheckCircle2 } from 'lucide-react';
 import { Product } from '../types';
+import { aiCommerceEngine } from '../modules/ai';
 
 interface AiSearchModalProps {
   onClose: () => void;
@@ -41,11 +42,30 @@ export const AiSearchModal: React.FC<AiSearchModalProps> = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query: searchPrompt, catalog: products })
       });
-      if (res.data) {
+      if (res.data && res.data.recommendedProductIds) {
         setAiResult(res.data);
+      } else {
+        const engineRes = await aiCommerceEngine.searchCatalog({
+          query: searchPrompt,
+          catalog: products
+        });
+        setAiResult({
+          aiInsights: engineRes.aiInsights,
+          recommendedProductIds: engineRes.recommendedProductIds,
+          suggestedCategory: engineRes.suggestedCategory
+        });
       }
     } catch (err) {
-      console.error('AI Search client error:', err);
+      console.error('AI Search client error, falling back to local AI engine:', err);
+      const engineRes = await aiCommerceEngine.searchCatalog({
+        query: searchPrompt,
+        catalog: products
+      });
+      setAiResult({
+        aiInsights: engineRes.aiInsights,
+        recommendedProductIds: engineRes.recommendedProductIds,
+        suggestedCategory: engineRes.suggestedCategory
+      });
     } finally {
       setLoading(false);
     }

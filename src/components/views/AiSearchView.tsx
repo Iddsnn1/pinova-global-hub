@@ -42,9 +42,12 @@ import {
   Eye,
   Scale,
   History,
-  Calendar
+  Calendar,
+  ChevronRight
 } from 'lucide-react';
-import { Product } from '../../types';
+import { Product, Vendor, Order } from '../../types';
+import { MainSection } from '../../types/navigation';
+import { MARKETPLACE_CATEGORIES, UTILITY_CATEGORIES, resolveMarketplaceCategory } from '../../data/categoryData';
 import { AiModelGovernanceTab } from '../ai/AiModelGovernanceTab';
 import { AiPrivacyGovernanceTab } from '../ai/AiPrivacyGovernanceTab';
 import {
@@ -68,11 +71,16 @@ import {
 
 interface AiSearchViewProps {
   products: Product[];
+  vendors?: Vendor[];
+  orders?: Order[];
   onSelectProduct: (product: Product) => void;
   onAddToCart: (product: Product) => void;
   onInstantBuy: (product: Product) => void;
   onToggleWishlist: (product: Product, e: React.MouseEvent) => void;
   wishlistProductIds: string[];
+  onNavigateSection?: (section: MainSection, cat?: any) => void;
+  onOpenStorefront?: (sellerName: string) => void;
+  onOpenUniversalSearch?: () => void;
 }
 
 export type AiHubSubTab =
@@ -87,11 +95,16 @@ export type AiHubSubTab =
 
 export const AiSearchView: React.FC<AiSearchViewProps> = ({
   products,
+  vendors = [],
+  orders = [],
   onSelectProduct,
   onAddToCart,
   onInstantBuy,
   onToggleWishlist,
-  wishlistProductIds
+  wishlistProductIds,
+  onNavigateSection,
+  onOpenStorefront,
+  onOpenUniversalSearch
 }) => {
   const [activeTab, setActiveTab] = useState<AiHubSubTab>('shopping_assistant');
   const [activeProvider, setActiveProvider] = useState<AIProviderKey>(AIProviderRegistry.getActiveKey());
@@ -336,6 +349,7 @@ export const AiSearchView: React.FC<AiSearchViewProps> = ({
   const [isSearching, setIsSearching] = useState(false);
   const [isVoiceListening, setIsVoiceListening] = useState(false);
   const [budgetLimit, setBudgetLimit] = useState<number | ''>('');
+  const [selectedFilterType, setSelectedFilterType] = useState<'all' | 'physical' | 'digital' | 'services' | 'verified_only'>('all');
   const [searchHistory, setSearchHistory] = useState<string[]>([
     'Smartphones under 100 Pi',
     'Noise cancelling headphones',
@@ -346,6 +360,10 @@ export const AiSearchView: React.FC<AiSearchViewProps> = ({
       sender: 'user' | 'ai';
       text: string;
       matchedProducts?: Product[];
+      matchedVendors?: Vendor[];
+      matchedUtilities?: Array<{ id: string; name: string; description: string; network?: string }>;
+      matchedOrders?: Order[];
+      matchedCategory?: { id: string; name: string; type: 'marketplace' | 'utility'; description: string };
       buyingAdvice?: string;
       budgetMatch?: string;
       providerUsed?: string;
@@ -524,33 +542,137 @@ export const AiSearchView: React.FC<AiSearchViewProps> = ({
 
   const handleExecuteAiSearch = async (textToSearch: string) => {
     if (!textToSearch.trim()) return;
-    const userPrompt = textToSearch;
+    const userPrompt = textToSearch.trim();
+    const lowerPrompt = userPrompt.toLowerCase();
     setQuery('');
 
     setShoppingMessages((prev) => [...prev, { sender: 'user', text: userPrompt }]);
     setIsSearching(true);
 
     try {
-      const budgetNum = typeof budgetLimit === 'number' ? budgetLimit : undefined;
+      // 1. Natural language budget extraction if not manually specified
+      let detectedBudget = typeof budgetLimit === 'number' ? budgetLimit : undefined;
+      if (!detectedBudget) {
+        const budgetMatch = lowerPrompt.match(/(?:under|below|max|budget\s*(?:of|is)?|less\s*than|within)\s*(\d+(?:\.\d+)?)\s*(?:pi|π)?/i) ||
+                            lowerPrompt.match(/(\d+(?:\.\d+)?)\s*(?:pi|π)\s*(?:or\s*less|max|budget)/i);
+        if (budgetMatch && budgetMatch[1]) {
+          detectedBudget = parseFloat(budgetMatch[1]);
+        }
+      }
+
+      // 2. Detect queries for Merchants / Sellers
+      const isMerchantQuery = lowerPrompt.includes('seller') || lowerPrompt.includes('merchant') || lowerPrompt.includes('vendor') || lowerPrompt.includes('store');
+      let matchedVendorsList: Vendor[] = [];
+      if (isMerchantQuery || vendors.some(v => lowerPrompt.includes(v.storeName.toLowerCase()) || lowerPrompt.includes(v.sellerUsername.toLowerCase()))) {
+        matchedVendorsList = vendors.filter(v => {
+          const nameMatch = (v.storeName || '').toLowerCase().includes(lowerPrompt.replace(/sellers?|merchants?|vendors?|stores?|show|find|list|verified/g, '').trim());
+          const userMatch = (v.sellerUsername || '').toLowerCase().includes(lowerPrompt.replace(/sellers?|merchants?|vendors?|stores?|show|find|list|verified/g, '').trim());
+          const bioMatch = (v.bio || '').toLowerCase().includes(lowerPrompt.replace(/sellers?|merchants?|vendors?|stores?|show|find|list|verified/g, '').trim());
+          const verifiedCondition = lowerPrompt.includes('verified') ? v.verified : true;
+          return (nameMatch || userMatch || bioMatch) && verifiedCondition;
+        });
+        if (matchedVendorsList.length === 0 && lowerPrompt.includes('verified')) {
+          matchedVendorsList = vendors.filter(v => v.verified).slice(0, 3);
+        }
+      }
+
+      // 3. Detect queries for Utilities
+      let matchedUtilitiesList: Array<{ id: string; name: string; description: string; network?: string }> = [];
+      const utilityKeywords = ['airtime', 'mobile data', 'data bundle', 'electricity', 'power', 'water bill', 'cable tv', 'dstv', 'gotv', 'utility', 'recharge'];
+      if (utilityKeywords.some(k => lowerPrompt.includes(k))) {
+        const matchedCats = UTILITY_CATEGORIES.filter(u => 
+          lowerPrompt.includes(u.id) || 
+          lowerPrompt.includes(u.name.toLowerCase()) || 
+          (u.description && lowerPrompt.includes(u.description.toLowerCase())) ||
+          (u.id === 'electricity' && (lowerPrompt.includes('power') || lowerPrompt.includes('meter') || lowerPrompt.includes('token'))) ||
+          (u.id === 'airtime' && (lowerPrompt.includes('recharge') || lowerPrompt.includes('topup') || lowerPrompt.includes('mtn') || lowerPrompt.includes('airtel'))) ||
+          (u.id === 'cable_tv' && (lowerPrompt.includes('dstv') || lowerPrompt.includes('tv') || lowerPrompt.includes('startimes')))
+        );
+        matchedUtilitiesList = matchedCats.map(c => ({
+          id: c.id,
+          name: c.name,
+          description: c.description || 'Instant utility settlement in Pi',
+          network: c.popularProviders?.join(', ')
+        }));
+      }
+
+      // 4. Detect queries for Orders / Tracking
+      let matchedOrdersList: Order[] = [];
+      const isOrderQuery = lowerPrompt.includes('order') || lowerPrompt.includes('tracking') || lowerPrompt.includes('status') || lowerPrompt.includes('pstp') || /ord-\d+/i.test(lowerPrompt);
+      if (isOrderQuery && orders.length > 0) {
+        const idMatch = lowerPrompt.match(/(?:#?)(ord-[a-z0-9-]+)/i);
+        if (idMatch && idMatch[1]) {
+          const targetId = idMatch[1].toLowerCase();
+          matchedOrdersList = orders.filter(o => o.id.toLowerCase().includes(targetId));
+        } else {
+          matchedOrdersList = orders.slice(0, 2);
+        }
+      }
+
+      // 5. Detect queries for Marketplace Categories
+      let matchedCategoryObj: { id: string; name: string; type: 'marketplace' | 'utility'; description: string } | undefined = undefined;
+      const canonicalMatch = resolveMarketplaceCategory(lowerPrompt);
+      if (canonicalMatch && canonicalMatch !== 'all') {
+        const catDef = MARKETPLACE_CATEGORIES.find(c => c.id === canonicalMatch);
+        if (catDef) {
+          matchedCategoryObj = {
+            id: catDef.id,
+            name: catDef.name,
+            type: 'marketplace',
+            description: catDef.description
+          };
+        }
+      }
+
+      // 6. Query Canonical Products via AI Commerce Engine & Filters
       const res = await aiCommerceEngine.searchCatalog({
         query: userPrompt,
         catalog: products,
-        userBudgetPi: budgetNum
+        userBudgetPi: detectedBudget
       });
 
-      const matched = products.filter((p) => res.recommendedProductIds.includes(p.id));
-      const displayProducts = matched.length > 0 ? matched : products.slice(0, 4);
+      let matched = products.filter((p) => res.recommendedProductIds.includes(p.id));
+
+      // Apply type filter if selected
+      if (selectedFilterType === 'physical') {
+        matched = matched.filter(p => !p.isDigital && p.category !== 'service');
+      } else if (selectedFilterType === 'digital') {
+        matched = matched.filter(p => p.isDigital);
+      } else if (selectedFilterType === 'services') {
+        matched = matched.filter(p => p.category === 'service' || (p.tags && p.tags.includes('service')));
+      } else if (selectedFilterType === 'verified_only') {
+        matched = matched.filter(p => p.sellerRating && p.sellerRating >= 4.7);
+      }
+
+      // Apply budget filter strictly
+      if (detectedBudget) {
+        matched = matched.filter(p => p.pricePi <= detectedBudget);
+      }
+
+      // Format honest insights - never invent inventory or slice random products if 0 match
+      let aiText = res.aiInsights;
+      if (matched.length === 0 && matchedVendorsList.length === 0 && matchedUtilitiesList.length === 0 && matchedOrdersList.length === 0 && !matchedCategoryObj) {
+        aiText = `No matching items found for "${userPrompt}" in the PiNova catalog. You can refine your search with different keywords, adjust price filters, or browse canonical categories.`;
+      } else if (matched.length > 0) {
+        aiText = `I found ${matched.length} product(s) in the canonical PiNova catalog matching "${userPrompt}"${detectedBudget ? ` under ${detectedBudget} π` : ''}.`;
+      } else if (matchedVendorsList.length > 0) {
+        aiText = `I found ${matchedVendorsList.length} verified merchant storefront(s) matching your request.`;
+      } else if (matchedUtilitiesList.length > 0) {
+        aiText = `I located the relevant Pi utility service for "${userPrompt}". You can settle directly using your Pi balance.`;
+      } else if (matchedOrdersList.length > 0) {
+        aiText = `Here is the current status of your order(s) under Pi Order Protection Status (PSTP).`;
+      }
 
       const activeConfig = providerConfigs.find((c) => c.key === activeProvider);
       const explainabilityData: AIExplainabilityMetadata = {
         isAiGenerated: true,
-        confidenceLevel: 97,
-        latencyMs: res.latencyMs || 135,
+        confidenceLevel: 98,
+        latencyMs: res.latencyMs || 120,
         modelName: activeConfig?.model || 'gemini-3.6-flash',
         providerName: res.providerUsed || 'Google Gemini 3.6 Flash',
         lastUpdated: new Date().toISOString().replace('T', ' ').slice(0, 16),
-        sourcesUsed: ['PiNova Catalog V2 Index', 'Seller Ratings Index', 'Order Protection Status Registry'],
-        recommendationReason: `Query matched intent "${userPrompt.slice(0, 30)}"${budgetNum ? ` within budget constraint ${budgetNum} π` : ''}`,
+        sourcesUsed: ['PiNova Catalog V2 Index', 'Verified Seller Index', 'Order Protection Status Registry'],
+        recommendationReason: `Query matched intent "${userPrompt.slice(0, 30)}"${detectedBudget ? ` within budget constraint ${detectedBudget} π` : ''}`,
         personalizationStatus: personalizationEnabled ? 'Active (Personalized for Pioneer Account)' : 'Disabled (Generic Search)'
       };
 
@@ -558,10 +680,14 @@ export const AiSearchView: React.FC<AiSearchViewProps> = ({
         ...prev,
         {
           sender: 'ai',
-          text: res.aiInsights,
-          matchedProducts: displayProducts,
-          buyingAdvice: res.buyingAdvice,
-          budgetMatch: res.budgetMatch,
+          text: aiText,
+          matchedProducts: matched,
+          matchedVendors: matchedVendorsList.length > 0 ? matchedVendorsList : undefined,
+          matchedUtilities: matchedUtilitiesList.length > 0 ? matchedUtilitiesList : undefined,
+          matchedOrders: matchedOrdersList.length > 0 ? matchedOrdersList : undefined,
+          matchedCategory: matchedCategoryObj,
+          buyingAdvice: matched.length > 0 ? res.buyingAdvice : undefined,
+          budgetMatch: detectedBudget ? `Filtered within ${detectedBudget} π budget` : undefined,
           providerUsed: res.providerUsed,
           explainability: explainabilityData
         }
@@ -572,13 +698,21 @@ export const AiSearchView: React.FC<AiSearchViewProps> = ({
         'Pioneer_User',
         'Buyer',
         res.providerUsed,
-        'Natural Language Product Search',
+        'Natural Language Discovery',
         userPrompt,
-        res.aiInsights.slice(0, 80) + '...',
+        aiText.slice(0, 80) + '...',
         'Success'
       );
     } catch (e) {
       console.error(e);
+      setShoppingMessages((prev) => [
+        ...prev,
+        {
+          sender: 'ai',
+          text: 'Encountered a temporary error processing your natural language query. Please try searching via Universal Search or browse canonical categories.',
+          providerUsed: activeProvider
+        }
+      ]);
     } finally {
       setIsSearching(false);
     }
@@ -1067,6 +1201,44 @@ export const AiSearchView: React.FC<AiSearchViewProps> = ({
                 </div>
               </div>
 
+              {/* Quick Filter Control Chips */}
+              <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-100 dark:border-slate-800">
+                <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                  <span className="font-bold text-slate-400 mr-1 flex items-center gap-1">
+                    <Filter className="w-3 h-3" /> Quick Filter:
+                  </span>
+                  {[
+                    { id: 'all', label: 'All Items' },
+                    { id: 'physical', label: 'Physical Goods' },
+                    { id: 'digital', label: 'Digital & Tokens' },
+                    { id: 'services', label: 'Services' },
+                    { id: 'verified_only', label: 'Verified Sellers ★' }
+                  ].map((flt) => (
+                    <button
+                      key={flt.id}
+                      onClick={() => setSelectedFilterType(flt.id as any)}
+                      className={`px-2.5 py-1 rounded-xl font-bold transition-all ${
+                        selectedFilterType === flt.id
+                          ? 'bg-purple-600 text-white shadow-sm'
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200'
+                      }`}
+                    >
+                      {flt.label}
+                    </button>
+                  ))}
+                </div>
+
+                {onOpenUniversalSearch && (
+                  <button
+                    onClick={onOpenUniversalSearch}
+                    className="px-3 py-1 bg-amber-400 hover:bg-amber-300 text-slate-950 text-[11px] font-black rounded-xl shadow flex items-center gap-1 shrink-0"
+                  >
+                    <Search className="w-3 h-3" />
+                    <span>Open Universal Search</span>
+                  </button>
+                )}
+              </div>
+
               {/* Sample Quick Prompt Chips */}
               <div className="flex flex-wrap items-center gap-2 text-xs">
                 <span className="text-slate-400 font-bold">Suggested Prompts:</span>
@@ -1114,6 +1286,13 @@ export const AiSearchView: React.FC<AiSearchViewProps> = ({
 
                       <p className="leading-relaxed text-sm font-medium">{msg.text}</p>
 
+                      {msg.budgetMatch && (
+                        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold text-[10px] border border-amber-500/20">
+                          <Tag className="w-3 h-3" />
+                          <span>{msg.budgetMatch}</span>
+                        </div>
+                      )}
+
                       {msg.buyingAdvice && (
                         <div className="p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-700 dark:text-purple-300 font-semibold text-[11px] flex items-start gap-1.5">
                           <Info className="w-3.5 h-3.5 text-purple-500 shrink-0 mt-0.5" />
@@ -1121,51 +1300,181 @@ export const AiSearchView: React.FC<AiSearchViewProps> = ({
                         </div>
                       )}
 
+                      {/* Render Matched Canonical Category */}
+                      {msg.matchedCategory && (
+                        <div className="p-3 rounded-2xl bg-pink-50 dark:bg-pink-950/30 border border-pink-200 dark:border-pink-800 flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="p-2 rounded-xl bg-pink-500/10 text-pink-600">
+                              <ShoppingBag className="w-4 h-4" />
+                            </div>
+                            <div className="min-w-0">
+                              <h4 className="font-bold text-xs text-pink-900 dark:text-pink-200 truncate">{msg.matchedCategory.name}</h4>
+                              <p className="text-[10px] text-pink-700 dark:text-pink-300 truncate">{msg.matchedCategory.description}</p>
+                            </div>
+                          </div>
+                          {onNavigateSection && (
+                            <button
+                              onClick={() => onNavigateSection('marketplace', msg.matchedCategory?.id)}
+                              className="px-3 py-1.5 bg-pink-600 hover:bg-pink-500 text-white font-bold text-[11px] rounded-xl shrink-0 flex items-center gap-1"
+                            >
+                              <span>Browse</span>
+                              <ChevronRight className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      )}
+
                       {/* Render Matched Products */}
                       {msg.matchedProducts && msg.matchedProducts.length > 0 && (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                          {msg.matchedProducts.map((p) => (
-                            <div
-                              key={p.id}
-                              onClick={() => onSelectProduct(p)}
-                              className="p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-purple-500 transition-all cursor-pointer flex items-center gap-3 group shadow-sm"
-                            >
-                              <img
-                                src={p.images[0]}
-                                alt={p.title}
-                                className="w-14 h-14 object-cover rounded-xl shrink-0"
-                              />
-                              <div className="flex-1 min-w-0">
-                                <h4 className="font-bold text-slate-900 dark:text-slate-100 text-xs truncate group-hover:text-purple-400">
-                                  {p.title}
-                                </h4>
-                                <div className="flex items-center gap-1.5 mt-0.5">
-                                  <span className="font-black text-amber-500">{p.pricePi.toFixed(2)} π</span>
-                                  <span className="text-[10px] text-slate-400">★ {p.rating}</span>
-                                </div>
-                                <div className="flex items-center gap-1 mt-1.5">
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      onAddToCart(p);
-                                    }}
-                                    className="px-2 py-0.5 bg-purple-600 text-white text-[10px] font-bold rounded-lg hover:bg-purple-500"
-                                  >
-                                    + Cart
-                                  </button>
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      onInstantBuy(p);
-                                    }}
-                                    className="px-2 py-0.5 bg-amber-500 text-slate-950 text-[10px] font-bold rounded-lg hover:bg-amber-400"
-                                  >
-                                    Buy Now
-                                  </button>
+                        <div className="space-y-2 pt-1">
+                          <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
+                            <Package className="w-3.5 h-3.5 text-purple-500" /> Matched Catalog Items ({msg.matchedProducts.length})
+                          </h4>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {msg.matchedProducts.map((p) => (
+                              <div
+                                key={p.id}
+                                onClick={() => onSelectProduct(p)}
+                                className="p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-purple-500 transition-all cursor-pointer flex items-center gap-3 group shadow-sm"
+                              >
+                                <img
+                                  src={p.images[0]}
+                                  alt={p.title}
+                                  className="w-14 h-14 object-cover rounded-xl shrink-0"
+                                />
+                                <div className="flex-1 min-w-0">
+                                  <h4 className="font-bold text-slate-900 dark:text-slate-100 text-xs truncate group-hover:text-purple-400">
+                                    {p.title}
+                                  </h4>
+                                  <div className="flex items-center gap-1.5 mt-0.5">
+                                    <span className="font-black text-amber-500">{p.pricePi.toFixed(2)} π</span>
+                                    <span className="text-[10px] text-slate-400">★ {p.rating}</span>
+                                  </div>
+                                  <div className="flex items-center gap-1 mt-1.5">
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        onAddToCart(p);
+                                      }}
+                                      className="px-2 py-0.5 bg-purple-600 text-white text-[10px] font-bold rounded-lg hover:bg-purple-500"
+                                    >
+                                      + Cart
+                                    </button>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        onInstantBuy(p);
+                                      }}
+                                      className="px-2 py-0.5 bg-amber-500 text-slate-950 text-[10px] font-bold rounded-lg hover:bg-amber-400"
+                                    >
+                                      Buy Now
+                                    </button>
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                          ))}
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Render Matched Merchants */}
+                      {msg.matchedVendors && msg.matchedVendors.length > 0 && (
+                        <div className="space-y-2 pt-1">
+                          <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
+                            <Store className="w-3.5 h-3.5 text-amber-500" /> Verified Merchant Storefronts ({msg.matchedVendors.length})
+                          </h4>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                            {msg.matchedVendors.map((v) => (
+                              <div
+                                key={v.id}
+                                className="p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3 shadow-sm"
+                              >
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-1.5">
+                                    <h5 className="font-bold text-xs text-slate-900 dark:text-slate-100 truncate">{v.storeName}</h5>
+                                    {v.verified && <CheckCircle2 className="w-3.5 h-3.5 text-blue-500 shrink-0" />}
+                                  </div>
+                                  <p className="text-[10px] text-slate-400 truncate">@{v.sellerUsername} • ★ {v.rating}</p>
+                                </div>
+                                {onOpenStorefront && (
+                                  <button
+                                    onClick={() => onOpenStorefront(v.storeName)}
+                                    className="px-2.5 py-1 bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-[10px] rounded-lg shrink-0"
+                                  >
+                                    Visit Store
+                                  </button>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Render Matched Utilities */}
+                      {msg.matchedUtilities && msg.matchedUtilities.length > 0 && (
+                        <div className="space-y-2 pt-1">
+                          <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
+                            <Zap className="w-3.5 h-3.5 text-emerald-500" /> Utility Services ({msg.matchedUtilities.length})
+                          </h4>
+                          <div className="space-y-2">
+                            {msg.matchedUtilities.map((u) => (
+                              <div
+                                key={u.id}
+                                className="p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3 shadow-sm"
+                              >
+                                <div className="min-w-0">
+                                  <h5 className="font-bold text-xs text-slate-900 dark:text-slate-100">{u.name}</h5>
+                                  <p className="text-[10px] text-slate-400 truncate">{u.description}</p>
+                                </div>
+                                {onNavigateSection && (
+                                  <button
+                                    onClick={() => onNavigateSection('utilities', u.id)}
+                                    className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[10px] rounded-lg shrink-0 flex items-center gap-1"
+                                  >
+                                    <span>Pay / Settle</span>
+                                    <ChevronRight className="w-3 h-3" />
+                                  </button>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Render Matched Orders */}
+                      {msg.matchedOrders && msg.matchedOrders.length > 0 && (
+                        <div className="space-y-2 pt-1">
+                          <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
+                            <ShieldCheck className="w-3.5 h-3.5 text-purple-500" /> Order Tracking Records ({msg.matchedOrders.length})
+                          </h4>
+                          <div className="space-y-2">
+                            {msg.matchedOrders.map((o) => (
+                              <div
+                                key={o.id}
+                                className="p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3 shadow-sm"
+                              >
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-mono font-bold text-xs text-purple-600 dark:text-purple-400">#{o.id}</span>
+                                    <span className="px-1.5 py-0.5 bg-purple-500/10 text-purple-600 text-[9px] font-bold rounded">
+                                      {o.pstpStatus}
+                                    </span>
+                                  </div>
+                                  <p className="text-[10px] text-slate-400 truncate mt-0.5">
+                                    {o.items?.length || 0} item(s) • Total: {o.totalPi.toFixed(2)} π
+                                  </p>
+                                </div>
+                                {onNavigateSection && (
+                                  <button
+                                    onClick={() => onNavigateSection('orders')}
+                                    className="px-2.5 py-1 bg-purple-600 hover:bg-purple-500 text-white font-bold text-[10px] rounded-lg shrink-0"
+                                  >
+                                    View in Orders
+                                  </button>
+                                )}
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       )}
 

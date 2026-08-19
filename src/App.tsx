@@ -808,11 +808,16 @@ function MainAppContent() {
         {activeSection === 'ai_search' && (
           <AiSearchView
             products={products}
+            vendors={vendors}
+            orders={orders}
             onSelectProduct={handleSelectProduct}
             onAddToCart={(p) => handleAddToCart(p, 1)}
             onInstantBuy={(p) => handleInstantBuy(p, 1)}
             onToggleWishlist={handleToggleWishlist}
             wishlistProductIds={wishlist.map((w) => w.id)}
+            onNavigateSection={handleNavigateSection}
+            onOpenStorefront={handleOpenStorefrontByName}
+            onOpenUniversalSearch={handleOpenUniversalSearch}
           />
         )}
 
