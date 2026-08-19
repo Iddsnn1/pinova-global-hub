@@ -6,23 +6,22 @@ import {
   CameraOff,
   Zap, 
   ZapOff, 
-  AlertCircle, 
   CheckCircle2, 
   Copy, 
-  ArrowRight, 
   RefreshCw, 
   Keyboard, 
   Sparkles,
   ShieldCheck,
   ShieldAlert,
   Store,
-  Package,
-  FileText,
   Wallet,
   Upload,
   Settings,
   HelpCircle,
-  Loader2
+  Loader2,
+  FileCheck,
+  Maximize2,
+  SwitchCamera
 } from 'lucide-react';
 
 interface QRScannerModalProps {
@@ -50,6 +49,9 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [torchOn, setTorchOn] = useState(false);
   const [hasTorchSupport, setHasTorchSupport] = useState(false);
+  const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
+  const [hasMultipleCameras, setHasMultipleCameras] = useState(false);
+  const [scanMode, setScanMode] = useState<'qr' | 'document'>('qr');
   const [manualCode, setManualCode] = useState('');
   const [scannedResult, setScannedResult] = useState<{ code: string; type: string; details: string } | null>(null);
   const [copySuccess, setCopySuccess] = useState(false);
@@ -61,7 +63,7 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
   const animFrameIdRef = useRef<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Helper to cleanly stop all camera tracks
+  // Helper to cleanly stop all camera tracks and release hardware
   const stopCameraStream = useCallback(() => {
     if (animFrameIdRef.current) {
       cancelAnimationFrame(animFrameIdRef.current);
@@ -79,6 +81,8 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
     }
     if (videoRef.current) {
       videoRef.current.srcObject = null;
+      videoRef.current.onloadedmetadata = null;
+      videoRef.current.oncanplay = null;
     }
     setTorchOn(false);
     setHasTorchSupport(false);
@@ -99,13 +103,15 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
       return { type: 'PSTP Escrow Reference', details: 'PSTP Escrow Payment Protection Reference' };
     } else if (trimmed.startsWith('ORD_')) {
       return { type: 'Order Tracking Reference', details: 'Pioneer Order Tracking & Delivery Verification' };
+    } else if (trimmed.startsWith('DOC_') || trimmed.startsWith('KYC_') || trimmed.startsWith('RECEIPT_')) {
+      return { type: 'Verified Document Payload', details: 'Encrypted Pi Ecosystem Document Record' };
     } else if (trimmed.startsWith('PAY_') || trimmed.startsWith('TX_')) {
       return { type: 'Payment Transaction', details: 'Pi Mainnet Payment Receipt Reference' };
     }
-    return { type: 'Universal Data QR', details: 'Custom PiNova Payload Data' };
+    return { type: 'Universal Data QR', details: 'Custom PiNova Ecosystem Payload' };
   }, []);
 
-  // Process a detected QR code
+  // Process a detected QR or Document code
   const handleProcessCode = useCallback((rawCode: string) => {
     if (!rawCode.trim()) return;
     const classified = classifyCode(rawCode);
@@ -121,7 +127,7 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
   }, [classifyCode, onScanResult]);
 
   // Start the on-demand camera stream (User-Initiated ONLY)
-  const startCamera = useCallback(async () => {
+  const startCamera = useCallback(async (desiredFacing: 'environment' | 'user' = facingMode) => {
     // Development Guard: Prevent any camera call before explicit user activation
     if (!isOpen) {
       if (process.env.NODE_ENV !== 'production') {
@@ -149,12 +155,25 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
 
       setCameraStatus('initializing_camera');
 
-      // Explicitly request user camera with fallback
+      // Check available media devices
+      try {
+        if (navigator.mediaDevices.enumerateDevices) {
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          const videoInputs = devices.filter(d => d.kind === 'videoinput');
+          setHasMultipleCameras(videoInputs.length > 1);
+        }
+      } catch {
+        // device enumeration is optional
+      }
+
+      // Explicitly request user camera with crisp HD resolution & environment facing
       let stream: MediaStream | null = null;
       try {
         const constraints: MediaStreamConstraints = {
           video: {
-            facingMode: { ideal: 'environment' }
+            facingMode: { ideal: desiredFacing },
+            width: { ideal: 1280, min: 640 },
+            height: { ideal: 720, min: 480 }
           },
           audio: false
         };
@@ -164,8 +183,15 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
           constraintErr?.name === 'OverconstrainedError' ||
           constraintErr?.name === 'ConstraintNotSatisfiedError'
         ) {
-          // Fallback to any available video camera
-          stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+          // Fallback to basic video constraint without resolution boundaries
+          try {
+            stream = await navigator.mediaDevices.getUserMedia({
+              video: { facingMode: desiredFacing },
+              audio: false
+            });
+          } catch {
+            stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+          }
         } else {
           throw constraintErr;
         }
@@ -194,20 +220,44 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
         // torch check optional
       }
 
-      // Attach stream to video element
+      // Explicitly attach stream to the live video element and ensure playback
       if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.setAttribute('playsinline', 'true');
-        videoRef.current.setAttribute('muted', 'true');
+        const video = videoRef.current;
+        video.srcObject = stream;
+        video.setAttribute('playsinline', 'true');
+        video.setAttribute('muted', 'true');
+        video.setAttribute('autoplay', 'true');
+        video.muted = true;
+        video.playsInline = true;
+        video.autoplay = true;
 
-        try {
-          await videoRef.current.play();
-        } catch {
-          // Play will auto-play on next frame
-        }
+        // Ensure video is playing and ready before declaring active
+        await new Promise<void>((resolve) => {
+          let resolved = false;
+          const onVideoReady = async () => {
+            if (resolved) return;
+            resolved = true;
+            try {
+              await video.play();
+            } catch (playErr) {
+              console.warn('Video auto-play triggered on frame', playErr);
+            }
+            resolve();
+          };
+
+          if (video.readyState >= 2) {
+            onVideoReady();
+          } else {
+            video.onloadedmetadata = () => onVideoReady();
+            video.oncanplay = () => onVideoReady();
+            video.onplaying = () => onVideoReady();
+            // Fallback timer to prevent hanging
+            setTimeout(onVideoReady, 400);
+          }
+        });
       }
 
-      // Stream successfully started and verified
+      // Stream successfully attached, verified, and rendering
       setCameraStatus('camera_active');
     } catch (err: any) {
       console.warn('QRScanner camera request error:', err);
@@ -238,14 +288,14 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
     } finally {
       isInitializingRef.current = false;
     }
-  }, [isOpen, stopCameraStream]);
+  }, [isOpen, facingMode, stopCameraStream]);
 
   // Lifecycle: start camera only on open, stop on close or unmount
   useEffect(() => {
     if (isOpen) {
       setScannedResult(null);
       setShowSettingsHelp(false);
-      startCamera();
+      startCamera(facingMode);
     } else {
       stopCameraStream();
       setCameraStatus('closed');
@@ -254,7 +304,14 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
     return () => {
       stopCameraStream();
     };
-  }, [isOpen, startCamera, stopCameraStream]);
+  }, [isOpen, startCamera, stopCameraStream, facingMode]);
+
+  // Switch between front/back camera
+  const toggleCameraFacing = () => {
+    const nextFacing = facingMode === 'environment' ? 'user' : 'environment';
+    setFacingMode(nextFacing);
+    startCamera(nextFacing);
+  };
 
   // Live BarcodeDetector detection loop when camera is active
   useEffect(() => {
@@ -362,7 +419,7 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
     setScannedResult(null);
     setManualCode('');
     if (cameraStatus !== 'camera_active') {
-      startCamera();
+      startCamera(facingMode);
     }
   };
 
@@ -387,15 +444,17 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
             </div>
             <div>
               <h3 id="qr-scanner-title" className="text-sm sm:text-base font-black text-white tracking-tight flex items-center gap-2">
-                <span>QR Scanner</span>
+                <span>QR / Document Scanner</span>
                 {cameraStatus === 'camera_active' && (
                   <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800 flex items-center gap-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    HD Stream
+                    HD Preview
                   </span>
                 )}
               </h3>
-              <p className="text-[11px] text-slate-400">Position the QR code inside the scanning frame.</p>
+              <p className="text-[11px] text-slate-400">
+                {scanMode === 'qr' ? 'Position the QR code inside the scanning frame.' : 'Align document edges within the live viewport.'}
+              </p>
             </div>
           </div>
           <button
@@ -411,6 +470,32 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
         {/* Modal Content */}
         <div className="p-4 sm:p-5 space-y-4">
           
+          {/* Mode Switcher: QR Code vs Document Scan */}
+          <div className="flex items-center justify-between bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs">
+            <button
+              onClick={() => setScanMode('qr')}
+              className={`flex-1 py-1.5 px-3 rounded-lg font-bold transition-all flex items-center justify-center gap-1.5 ${
+                scanMode === 'qr'
+                  ? 'bg-amber-500 text-slate-950 shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <QrCode className="w-3.5 h-3.5" />
+              <span>QR Code Mode</span>
+            </button>
+            <button
+              onClick={() => setScanMode('document')}
+              className={`flex-1 py-1.5 px-3 rounded-lg font-bold transition-all flex items-center justify-center gap-1.5 ${
+                scanMode === 'document'
+                  ? 'bg-amber-500 text-slate-950 shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <FileCheck className="w-3.5 h-3.5" />
+              <span>Document / KYC Mode</span>
+            </button>
+          </div>
+
           {/* Result Card (When Scanned) */}
           {scannedResult ? (
             <div className="p-4 rounded-2xl bg-slate-950 border border-emerald-500/40 space-y-3 animate-in fade-in zoom-in-95 duration-200">
@@ -472,78 +557,111 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
             /* Active / Permission / Error Scanner View */
             <div className="space-y-4">
               
-              {/* Camera Viewport Container */}
-              <div className="relative aspect-video sm:aspect-[4/3] rounded-2xl bg-slate-950 border border-slate-800 overflow-hidden flex items-center justify-center shadow-inner">
+              {/* Camera Viewport Container - High Contrast & Full Transparency for Crisp Live Video */}
+              <div className="relative aspect-[4/3] sm:aspect-[16/10] rounded-2xl bg-black border border-slate-800 overflow-hidden flex items-center justify-center shadow-2xl">
                 
-                {/* 1. CAMERA ACTIVE STATE */}
+                {/* 1. Live Video Element - ALWAYS MOUNTED to ensure ref and stream binding */}
+                <video
+                  ref={videoRef}
+                  className={`absolute inset-0 w-full h-full object-cover z-0 transition-opacity duration-300 ${
+                    cameraStatus === 'camera_active' ? 'opacity-100' : 'opacity-0 pointer-events-none'
+                  }`}
+                  playsInline
+                  muted
+                  autoPlay
+                />
+
+                {/* 2. CAMERA ACTIVE STATE - Non-obscuring Scanning Frame Overlay */}
                 {cameraStatus === 'camera_active' && (
-                  <>
-                    <video
-                      ref={videoRef}
-                      className="w-full h-full object-cover"
-                      playsInline
-                      muted
-                      autoPlay
-                    />
-
-                    {/* Laser Overlay Viewport Guide */}
-                    <div className="absolute inset-0 border-[20px] sm:border-[36px] border-slate-950/70 pointer-events-none flex items-center justify-center">
-                      <div className="relative w-48 h-48 sm:w-56 sm:h-56 rounded-xl border-2 border-dashed border-amber-400/80 shadow-[0_0_20px_rgba(245,158,11,0.2)]">
-                        {/* Scanning Laser Beam */}
-                        <div className="absolute left-0 right-0 h-0.5 bg-gradient-to-r from-amber-500 via-emerald-400 to-purple-500 shadow-[0_0_12px_#34d399] animate-scan" />
-                        
-                        {/* Corner Target Brackets */}
-                        <div className="absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2 border-amber-400 -mt-1 -ml-1" />
-                        <div className="absolute top-0 right-0 w-4 h-4 border-t-2 border-r-2 border-amber-400 -mt-1 -mr-1" />
-                        <div className="absolute bottom-0 left-0 w-4 h-4 border-b-2 border-l-2 border-amber-400 -mb-1 -ml-1" />
-                        <div className="absolute bottom-0 right-0 w-4 h-4 border-b-2 border-r-2 border-amber-400 -mb-1 -mr-1" />
-                      </div>
-                    </div>
-
-                    {/* Camera Control Overlays (Camera Active Only) */}
-                    <div className="absolute top-3 left-3 right-3 flex items-center justify-between pointer-events-auto">
-                      <span className="px-2.5 py-1 rounded-full bg-slate-950/80 border border-slate-800 text-[10px] font-black text-emerald-400 flex items-center gap-1.5 backdrop-blur-md">
+                  <div className="absolute inset-0 z-10 pointer-events-none flex flex-col items-center justify-between p-4">
+                    
+                    {/* Top Status & Controls Bar */}
+                    <div className="w-full flex items-center justify-between pointer-events-auto">
+                      <span className="px-2.5 py-1 rounded-full bg-slate-950/80 border border-emerald-500/40 text-[11px] font-black text-emerald-400 flex items-center gap-1.5 backdrop-blur-md shadow-lg">
                         <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
                         <span>Camera active</span>
                       </span>
 
-                      {hasTorchSupport && (
-                        <button
-                          onClick={toggleTorch}
-                          className={`p-2 rounded-xl border backdrop-blur-md transition-all ${
-                            torchOn 
-                              ? 'bg-amber-400 text-slate-950 border-amber-300 font-bold' 
-                              : 'bg-slate-900/80 text-slate-300 border-slate-700 hover:bg-slate-800'
-                          }`}
-                          title="Toggle Flashlight"
-                          aria-label="Toggle Flashlight"
-                        >
-                          {torchOn ? <Zap className="w-4 h-4 fill-slate-950" /> : <ZapOff className="w-4 h-4" />}
-                        </button>
-                      )}
+                      <div className="flex items-center gap-1.5">
+                        {hasMultipleCameras && (
+                          <button
+                            onClick={toggleCameraFacing}
+                            className="p-2 rounded-xl bg-slate-950/80 text-slate-200 border border-slate-700/80 hover:bg-slate-800 backdrop-blur-md transition-all"
+                            title="Switch Camera (Front/Rear)"
+                            aria-label="Switch Camera"
+                          >
+                            <SwitchCamera className="w-4 h-4 text-purple-400" />
+                          </button>
+                        )}
+                        {hasTorchSupport && (
+                          <button
+                            onClick={toggleTorch}
+                            className={`p-2 rounded-xl border backdrop-blur-md transition-all ${
+                              torchOn 
+                                ? 'bg-amber-400 text-slate-950 border-amber-300 font-bold shadow-lg shadow-amber-400/30' 
+                                : 'bg-slate-950/80 text-slate-300 border-slate-700 hover:bg-slate-800'
+                            }`}
+                            title="Toggle Flashlight"
+                            aria-label="Toggle Flashlight"
+                          >
+                            {torchOn ? <Zap className="w-4 h-4 fill-slate-950" /> : <ZapOff className="w-4 h-4" />}
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  </>
+
+                    {/* Central Target Scanner Reticle - Clear & Transparent */}
+                    <div className="relative my-auto flex items-center justify-center">
+                      <div className={`relative rounded-2xl border-2 transition-all duration-300 ${
+                        scanMode === 'qr' 
+                          ? 'w-48 h-48 sm:w-56 sm:h-56 border-amber-400/80' 
+                          : 'w-64 h-44 sm:w-72 sm:h-48 border-emerald-400/80'
+                      }`}>
+                        {/* Laser Scan Beam */}
+                        <div className="absolute left-1 right-1 h-0.5 bg-gradient-to-r from-amber-400 via-emerald-400 to-purple-400 shadow-[0_0_12px_#10b981] animate-scan" />
+
+                        {/* Corner Target Markers */}
+                        <div className="absolute top-0 left-0 w-5 h-5 border-t-4 border-l-4 border-amber-400 -mt-1 -ml-1 rounded-tl" />
+                        <div className="absolute top-0 right-0 w-5 h-5 border-t-4 border-r-4 border-amber-400 -mt-1 -mr-1 rounded-tr" />
+                        <div className="absolute bottom-0 left-0 w-5 h-5 border-b-4 border-l-4 border-amber-400 -mb-1 -ml-1 rounded-bl" />
+                        <div className="absolute bottom-0 right-0 w-5 h-5 border-b-4 border-r-4 border-amber-400 -mb-1 -mr-1 rounded-br" />
+
+                        {/* Center alignment crosshair */}
+                        <div className="absolute inset-0 flex items-center justify-center opacity-30">
+                          <Maximize2 className="w-8 h-8 text-white" />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Bottom Guidance Tag */}
+                    <div className="px-3 py-1 rounded-full bg-slate-950/85 border border-slate-800/80 text-[11px] font-semibold text-slate-300 backdrop-blur-md shadow-md">
+                      {scanMode === 'qr' 
+                        ? 'Align QR code inside the glowing frame' 
+                        : 'Align document or ID card flat within bounds'}
+                    </div>
+
+                  </div>
                 )}
 
-                {/* 2. INITIALIZING / REQUESTING PERMISSION STATE */}
+                {/* 3. INITIALIZING / REQUESTING PERMISSION STATE */}
                 {(cameraStatus === 'requesting_permission' || cameraStatus === 'initializing_camera') && (
-                  <div className="p-6 text-center space-y-3 animate-in fade-in duration-200">
-                    <div className="w-12 h-12 rounded-2xl bg-purple-950/60 border border-purple-800 text-purple-400 mx-auto flex items-center justify-center">
+                  <div className="relative z-20 p-6 text-center space-y-3 animate-in fade-in duration-200">
+                    <div className="w-12 h-12 rounded-2xl bg-purple-950/80 border border-purple-800 text-purple-400 mx-auto flex items-center justify-center shadow-lg">
                       <Loader2 className="w-6 h-6 text-amber-400 animate-spin" />
                     </div>
                     <div>
                       <h4 className="text-sm font-black text-white">Initializing camera...</h4>
                       <p className="text-xs text-slate-400 mt-1 max-w-xs mx-auto">
-                        Requesting camera access. Please approve the permission prompt if requested.
+                        Starting camera stream. Please approve the permission prompt if requested.
                       </p>
                     </div>
                   </div>
                 )}
 
-                {/* 3. PERMISSION DENIED STATE */}
+                {/* 4. PERMISSION DENIED STATE */}
                 {cameraStatus === 'permission_denied' && (
-                  <div className="p-5 sm:p-6 text-center space-y-3 animate-in fade-in duration-200 max-w-sm">
-                    <div className="w-12 h-12 rounded-2xl bg-red-950/60 border border-red-800/80 text-red-400 mx-auto flex items-center justify-center">
+                  <div className="relative z-20 p-5 sm:p-6 text-center space-y-3 animate-in fade-in duration-200 max-w-sm">
+                    <div className="w-12 h-12 rounded-2xl bg-red-950/80 border border-red-800/80 text-red-400 mx-auto flex items-center justify-center shadow-lg">
                       <ShieldAlert className="w-6 h-6 text-red-400" />
                     </div>
                     <div>
@@ -558,7 +676,7 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
 
                     <div className="flex items-center justify-center gap-2 pt-1">
                       <button
-                        onClick={startCamera}
+                        onClick={() => startCamera(facingMode)}
                         className="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center gap-1.5 transition-colors shadow-md"
                       >
                         <RefreshCw className="w-3.5 h-3.5" />
@@ -575,10 +693,10 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
                   </div>
                 )}
 
-                {/* 4. CAMERA ERROR / UNAVAILABLE / FALLBACK STATE */}
+                {/* 5. CAMERA ERROR / UNAVAILABLE / FALLBACK STATE */}
                 {cameraStatus === 'camera_error' && (
-                  <div className="p-5 sm:p-6 text-center space-y-3 animate-in fade-in duration-200 max-w-sm">
-                    <div className="w-12 h-12 rounded-2xl bg-amber-950/60 border border-amber-800/80 text-amber-400 mx-auto flex items-center justify-center">
+                  <div className="relative z-20 p-5 sm:p-6 text-center space-y-3 animate-in fade-in duration-200 max-w-sm">
+                    <div className="w-12 h-12 rounded-2xl bg-amber-950/80 border border-amber-800/80 text-amber-400 mx-auto flex items-center justify-center shadow-lg">
                       <CameraOff className="w-6 h-6 text-amber-400" />
                     </div>
                     <div>
@@ -590,7 +708,7 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
 
                     <div className="flex items-center justify-center gap-2 pt-1">
                       <button
-                        onClick={startCamera}
+                        onClick={() => startCamera(facingMode)}
                         className="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center gap-1.5 transition-colors shadow-md"
                       >
                         <RefreshCw className="w-3.5 h-3.5" />
@@ -617,8 +735,8 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
                     <span>How to Enable Camera Permission</span>
                   </div>
                   <ul className="list-disc pl-5 space-y-1 text-slate-300 text-[11px]">
-                    <li><strong>Pi Browser / Mobile Chrome:</strong> Tap the lock or tune icon in the address bar &gt; Site settings &gt; Set Camera to "Allow".</li>
-                    <li><strong>Desktop Browser:</strong> Click the camera or lock icon next to the URL &gt; Reset or allow Camera permissions &gt; Click "Try Again".</li>
+                    <li><strong>Pi Browser / Mobile Chrome:</strong> Tap the lock or tune icon in the address bar &gt; Site settings &gt; Set Camera to &quot;Allow&quot;.</li>
+                    <li><strong>Desktop Browser:</strong> Click the camera or lock icon next to the URL &gt; Reset or allow Camera permissions &gt; Click &quot;Try Again&quot;.</li>
                   </ul>
                 </div>
               )}
