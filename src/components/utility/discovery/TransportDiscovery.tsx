@@ -24,7 +24,9 @@ import {
   Globe,
   MapPin,
   Compass,
-  Check
+  Check,
+  Navigation,
+  Milestone
 } from 'lucide-react';
 import { 
   UtilityServiceProvider, 
@@ -34,8 +36,13 @@ import {
 } from '../../../types/utility';
 import { 
   constructTransportSearchCriteria, 
-  searchTransportRoutes 
+  searchTransportRoutes,
+  resolveTransitStation
 } from '../../../lib/utility/serviceDiscovery';
+import { 
+  TRANSIT_STATIONS,
+  VERIFIED_TRANSPORT_ROUTES 
+} from '../../../data/transportData';
 import { ALL_GLOBAL_COUNTRIES } from '../../../data/countriesData';
 import { FlightServicesHub } from '../../flight/FlightServicesHub';
 
@@ -413,8 +420,135 @@ export const TransportDiscovery: React.FC<TransportDiscoveryProps> = ({
               </div>
               <span className="text-[11px] font-bold text-emerald-400 bg-emerald-950/60 px-2.5 py-1 rounded-xl border border-emerald-800/40 flex items-center gap-1">
                 <ShieldCheck className="w-3.5 h-3.5" />
-                PSTP Escrow Protected
+                Route-Aware Verification
               </span>
+            </div>
+
+            {/* Quick Corridor Selection Chips */}
+            <div className="space-y-1.5">
+              <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                <Navigation className="w-3 h-3 text-purple-400" />
+                Popular Verified Corridors
+              </label>
+              <div className="flex items-center gap-2 flex-wrap">
+                {transportType === 'rail' ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => { setOriginInput('ABV'); setDestinationInput('KAD'); }}
+                      className={`text-[11px] font-bold px-2.5 py-1 rounded-xl border transition-all ${
+                        originInput === 'ABV' && destinationInput === 'KAD'
+                          ? 'bg-amber-500/20 border-amber-500/60 text-amber-300'
+                          : 'bg-slate-800/80 border-slate-700 text-slate-300 hover:text-white hover:border-slate-600'
+                      }`}
+                    >
+                      Abuja (ABV) ➔ Kaduna (KAD)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setOriginInput('LOS'); setDestinationInput('IBA'); }}
+                      className={`text-[11px] font-bold px-2.5 py-1 rounded-xl border transition-all ${
+                        originInput === 'LOS' && destinationInput === 'IBA'
+                          ? 'bg-amber-500/20 border-amber-500/60 text-amber-300'
+                          : 'bg-slate-800/80 border-slate-700 text-slate-300 hover:text-white hover:border-slate-600'
+                      }`}
+                    >
+                      Lagos (LOS) ➔ Ibadan (IBA)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setOriginInput('LON'); setDestinationInput('PAR'); }}
+                      className={`text-[11px] font-bold px-2.5 py-1 rounded-xl border transition-all ${
+                        originInput === 'LON' && destinationInput === 'PAR'
+                          ? 'bg-amber-500/20 border-amber-500/60 text-amber-300'
+                          : 'bg-slate-800/80 border-slate-700 text-slate-300 hover:text-white hover:border-slate-600'
+                      }`}
+                    >
+                      London (LON) ➔ Paris (PAR)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setOriginInput('MEK'); setDestinationInput('MED'); }}
+                      className={`text-[11px] font-bold px-2.5 py-1 rounded-xl border transition-all ${
+                        originInput === 'MEK' && destinationInput === 'MED'
+                          ? 'bg-amber-500/20 border-amber-500/60 text-amber-300'
+                          : 'bg-slate-800/80 border-slate-700 text-slate-300 hover:text-white hover:border-slate-600'
+                      }`}
+                    >
+                      Makkah (MEK) ➔ Madinah (MED)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setOriginInput('NYP'); setDestinationInput('WAS'); }}
+                      className={`text-[11px] font-bold px-2.5 py-1 rounded-xl border transition-all ${
+                        originInput === 'NYP' && destinationInput === 'WAS'
+                          ? 'bg-amber-500/20 border-amber-500/60 text-amber-300'
+                          : 'bg-slate-800/80 border-slate-700 text-slate-300 hover:text-white hover:border-slate-600'
+                      }`}
+                    >
+                      New York (NYP) ➔ Washington (WAS)
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => { setOriginInput('LOS'); setDestinationInput('ABV'); }}
+                      className={`text-[11px] font-bold px-2.5 py-1 rounded-xl border transition-all ${
+                        originInput === 'LOS' && destinationInput === 'ABV'
+                          ? 'bg-emerald-500/20 border-emerald-500/60 text-emerald-300'
+                          : 'bg-slate-800/80 border-slate-700 text-slate-300 hover:text-white hover:border-slate-600'
+                      }`}
+                    >
+                      Lagos (LOS) ➔ Abuja (ABV)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setOriginInput('LOS'); setDestinationInput('BNI'); }}
+                      className={`text-[11px] font-bold px-2.5 py-1 rounded-xl border transition-all ${
+                        originInput === 'LOS' && destinationInput === 'BNI'
+                          ? 'bg-emerald-500/20 border-emerald-500/60 text-emerald-300'
+                          : 'bg-slate-800/80 border-slate-700 text-slate-300 hover:text-white hover:border-slate-600'
+                      }`}
+                    >
+                      Lagos (LOS) ➔ Benin City (BNI)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setOriginInput('ABV'); setDestinationInput('KAN'); }}
+                      className={`text-[11px] font-bold px-2.5 py-1 rounded-xl border transition-all ${
+                        originInput === 'ABV' && destinationInput === 'KAN'
+                          ? 'bg-emerald-500/20 border-emerald-500/60 text-emerald-300'
+                          : 'bg-slate-800/80 border-slate-700 text-slate-300 hover:text-white hover:border-slate-600'
+                      }`}
+                    >
+                      Abuja (ABV) ➔ Kano (KAN)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setOriginInput('NYC'); setDestinationInput('BOS'); }}
+                      className={`text-[11px] font-bold px-2.5 py-1 rounded-xl border transition-all ${
+                        originInput === 'NYC' && destinationInput === 'BOS'
+                          ? 'bg-emerald-500/20 border-emerald-500/60 text-emerald-300'
+                          : 'bg-slate-800/80 border-slate-700 text-slate-300 hover:text-white hover:border-slate-600'
+                      }`}
+                    >
+                      New York (NYC) ➔ Boston (BOS)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setOriginInput('LON'); setDestinationInput('MAN'); }}
+                      className={`text-[11px] font-bold px-2.5 py-1 rounded-xl border transition-all ${
+                        originInput === 'LON' && destinationInput === 'MAN'
+                          ? 'bg-emerald-500/20 border-emerald-500/60 text-emerald-300'
+                          : 'bg-slate-800/80 border-slate-700 text-slate-300 hover:text-white hover:border-slate-600'
+                      }`}
+                    >
+                      London (LON) ➔ Manchester (MAN)
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
 
             {/* Origin & Destination Inputs with Swap */}
@@ -427,7 +561,7 @@ export const TransportDiscovery: React.FC<TransportDiscoveryProps> = ({
                   type="text"
                   value={originInput}
                   onChange={(e) => setOriginInput(e.target.value.toUpperCase())}
-                  placeholder={transportType === 'rail' ? 'e.g. Origin Station or City' : 'e.g. Origin Bus Terminal'}
+                  placeholder={transportType === 'rail' ? 'e.g. ABV, KAD, LOS, NYP' : 'e.g. LOS, ABV, NYC, LON'}
                   className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs font-bold text-white placeholder-slate-500 focus:ring-2 focus:ring-purple-500"
                   required
                 />
@@ -452,7 +586,7 @@ export const TransportDiscovery: React.FC<TransportDiscoveryProps> = ({
                   type="text"
                   value={destinationInput}
                   onChange={(e) => setDestinationInput(e.target.value.toUpperCase())}
-                  placeholder={transportType === 'rail' ? 'e.g. Destination Station or City' : 'e.g. Destination Bus Terminal'}
+                  placeholder={transportType === 'rail' ? 'e.g. KAD, ABV, IBA, PAR' : 'e.g. ABV, BNI, KAN, BOS'}
                   className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs font-bold text-white placeholder-slate-500 focus:ring-2 focus:ring-purple-500"
                   required
                 />
@@ -530,12 +664,12 @@ export const TransportDiscovery: React.FC<TransportDiscoveryProps> = ({
               {isSearching ? (
                 <>
                   <RefreshCw className="w-4 h-4 animate-spin text-white" />
-                  <span>Searching Route Schedules...</span>
+                  <span>Filtering Route Schedules...</span>
                 </>
               ) : (
                 <>
                   <Search className="w-4 h-4" />
-                  <span>Search Verified {transportType === 'rail' ? 'Train' : 'Bus'} Routes ({originInput} ➔ {destinationInput})</span>
+                  <span>Search Route Corridors ({originInput} ➔ {destinationInput})</span>
                 </>
               )}
             </button>
@@ -546,9 +680,9 @@ export const TransportDiscovery: React.FC<TransportDiscoveryProps> = ({
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
-                  <span>Available Route Schedules</span>
+                  <span>Available Route Corridors & Schedules</span>
                   <span className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 text-[10px]">
-                    {staticResults.length} options
+                    {staticResults.length} verified options
                   </span>
                 </h4>
                 <span className="text-[11px] text-slate-400">
@@ -576,28 +710,48 @@ export const TransportDiscovery: React.FC<TransportDiscoveryProps> = ({
                           }`}>
                             {transportType === 'rail' ? <Train className="w-6 h-6" /> : <Bus className="w-6 h-6" />}
                           </div>
-                          <div>
+                          <div className="space-y-1">
                             <div className="flex items-center gap-2 flex-wrap">
                               <h5 className="text-sm font-extrabold text-white group-hover:text-amber-300 transition-colors">
                                 {item.providerName}
                               </h5>
                               <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-md font-bold border border-emerald-500/30">
-                                VERIFIED OPERATOR
+                                {item.badge || 'VERIFIED OPERATOR'}
                               </span>
+                              {item.corridorName && (
+                                <span className="text-[10px] bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded-md font-bold border border-purple-500/30 flex items-center gap-1">
+                                  <Milestone className="w-3 h-3" />
+                                  {item.corridorName}
+                                </span>
+                              )}
                             </div>
-                            <div className="text-xs text-slate-300 flex items-center gap-2 mt-1">
-                              <span className="font-bold text-white">{item.originCode}</span>
+                            <div className="text-xs text-slate-300 flex items-center gap-2 flex-wrap">
+                              <span className="font-bold text-white">{item.originCity || item.originCode}</span>
                               <ArrowRight className="w-3 h-3 text-slate-500" />
-                              <span className="font-bold text-white">{item.destinationCode}</span>
+                              <span className="font-bold text-white">{item.destinationCity || item.destinationCode}</span>
                               <span className="text-slate-600">•</span>
                               <span className="text-purple-300 capitalize">{cabinClass} Class</span>
                               <span className="text-slate-600">•</span>
-                              <span className="text-slate-400">{item.duration || 'Direct Express'}</span>
+                              <span className="text-slate-400 flex items-center gap-1">
+                                <Clock className="w-3 h-3 text-slate-500" />
+                                {item.duration || 'Direct Express'}
+                              </span>
+                              {item.distanceKm && (
+                                <>
+                                  <span className="text-slate-600">•</span>
+                                  <span className="text-slate-400">{item.distanceKm} km</span>
+                                </>
+                              )}
                             </div>
+                            {item.stops && item.stops.length > 0 && (
+                              <div className="text-[11px] text-slate-400">
+                                Stops: <span className="text-slate-300">{item.stops.join(' ➔ ')}</span>
+                              </div>
+                            )}
                           </div>
                         </div>
 
-                        <div className="flex items-center justify-between w-full sm:w-auto gap-5 pt-3 sm:pt-0 border-t sm:border-0 border-slate-800">
+                        <div className="flex items-center justify-between w-full sm:w-auto gap-5 pt-3 sm:pt-0 border-t sm:border-0 border-slate-800 shrink-0">
                           <div className="text-right">
                             <div className="text-base font-black text-amber-400 font-mono">
                               {piFare.toFixed(4)} π
@@ -625,12 +779,35 @@ export const TransportDiscovery: React.FC<TransportDiscoveryProps> = ({
                   })}
                 </div>
               ) : (
-                <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 text-center space-y-3">
-                  <AlertCircle className="w-10 h-10 text-amber-400 mx-auto opacity-80" />
-                  <p className="text-sm text-slate-200 font-bold">No direct carrier scheduled routes found for {originInput} ➔ {destinationInput}</p>
-                  <p className="text-xs text-slate-400 max-w-md mx-auto">
-                    Try searching with alternative station codes or major transit terminals.
-                  </p>
+                <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 text-center space-y-4">
+                  <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center mx-auto">
+                    <AlertCircle className="w-6 h-6" />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-sm text-slate-200 font-bold">
+                      No verified {transportType === 'rail' ? 'Train' : 'Bus'} routes serve {originInput} ➔ {destinationInput}
+                    </p>
+                    <p className="text-xs text-slate-400 max-w-md mx-auto">
+                      Destination filtering is enforced as a strict routing constraint. Only carriers that actually operate along this corridor are displayed.
+                    </p>
+                  </div>
+                  <div className="pt-2 flex justify-center gap-2 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (transportType === 'rail') {
+                          setOriginInput('ABV');
+                          setDestinationInput('KAD');
+                        } else {
+                          setOriginInput('LOS');
+                          setDestinationInput('ABV');
+                        }
+                      }}
+                      className="text-xs font-bold px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-purple-300 border border-slate-700 transition-colors"
+                    >
+                      Try Popular Verified Corridor
+                    </button>
+                  </div>
                 </div>
               )}
             </div>

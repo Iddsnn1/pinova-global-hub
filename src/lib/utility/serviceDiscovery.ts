@@ -18,7 +18,13 @@ import {
 } from '../../types/utility';
 import { resolveSubdivisionCode } from '../../data/countrySubdivisions';
 import { resolveElectricityProviders } from './electricityDiscovery';
-import { VERIFIED_TRANSPORT_PROVIDERS } from '../../data/transportData';
+import {
+  VERIFIED_TRANSPORT_PROVIDERS,
+  VERIFIED_TRANSPORT_ROUTES,
+  TRANSIT_STATIONS,
+  TransportRouteDefinition,
+  TransitStation
+} from '../../data/transportData';
 
 /**
  * Filter utility providers by country name or 2-letter / ISO country code.
@@ -434,14 +440,179 @@ export function constructTransportSearchCriteria(
 }
 
 /**
+ * Normalizes transit terminal, station, city, or alias query string.
+ */
+export function normalizeTransitTerm(term: string): string {
+  if (!term) return '';
+  return term
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+    .trim();
+}
+
+/**
+ * Resolves a given station code, city name, or alias against the canonical transit station registry.
+ */
+export function resolveTransitStation(query: string): TransitStation | undefined {
+  if (!query || !query.trim()) return undefined;
+  const clean = normalizeTransitTerm(query);
+  if (!clean) return undefined;
+
+  return TRANSIT_STATIONS.find((st) => {
+    if (normalizeTransitTerm(st.code) === clean) return true;
+    if (normalizeTransitTerm(st.city) === clean) return true;
+    if (normalizeTransitTerm(st.name).includes(clean) || clean.includes(normalizeTransitTerm(st.name))) return true;
+    if (st.aliases.some((a) => normalizeTransitTerm(a) === clean || clean.includes(normalizeTransitTerm(a)) || normalizeTransitTerm(a).includes(clean))) return true;
+    return false;
+  });
+}
+
+/**
+ * Checks if a given query matches a station's code, city, name, aliases, or intermediate corridor stops.
+ */
+export function matchesStationOrCity(
+  query: string,
+  stationCode: string,
+  stationCity: string,
+  stationName: string,
+  aliases?: string[],
+  stops?: string[]
+): boolean {
+  if (!query || !query.trim()) return true;
+  const cleanQuery = normalizeTransitTerm(query);
+  if (!cleanQuery) return true;
+
+  // Direct code match (e.g. "ABV", "KAD", "LOS", "NYP", "WAS")
+  if (normalizeTransitTerm(stationCode) === cleanQuery) return true;
+
+  // City match (e.g. "ABUJA", "KADUNA", "LAGOS", "NEW YORK")
+  const cleanCity = normalizeTransitTerm(stationCity);
+  if (cleanCity === cleanQuery || cleanCity.includes(cleanQuery) || cleanQuery.includes(cleanCity)) return true;
+
+  // Station full name match
+  const cleanName = normalizeTransitTerm(stationName);
+  if (cleanName === cleanQuery || cleanName.includes(cleanQuery) || cleanQuery.includes(cleanName)) return true;
+
+  // Station aliases match
+  if (aliases && aliases.length > 0) {
+    if (aliases.some((a) => {
+      const cleanAlias = normalizeTransitTerm(a);
+      return cleanAlias === cleanQuery || cleanAlias.includes(cleanQuery) || cleanQuery.includes(cleanAlias);
+    })) {
+      return true;
+    }
+  }
+
+  // Registry alias fallback
+  const resolved = resolveTransitStation(query);
+  if (resolved) {
+    if (normalizeTransitTerm(resolved.code) === normalizeTransitTerm(stationCode)) return true;
+    if (normalizeTransitTerm(resolved.city) === cleanCity) return true;
+  }
+
+  // Intermediate stops match (if query specifies a stop along this corridor)
+  if (stops && stops.length > 0) {
+    if (stops.some((s) => {
+      const cleanStop = normalizeTransitTerm(s);
+      return cleanStop === cleanQuery || cleanStop.includes(cleanQuery) || cleanQuery.includes(cleanStop);
+    })) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Canonical route-aware matcher: Evaluates whether a transport route satisfies the hard routing constraints.
+ * Hierarchy: Origin -> Destination -> Country/Region -> Transport Mode -> Route Corridor -> Available Operators
+ */
+export function matchesTransportRoute(
+  route: TransportRouteDefinition,
+  criteria: TransportSearchCriteria
+): boolean {
+  // 1. Transport Mode Constraint (rail, bus)
+  if (criteria.transportType && criteria.transportType !== 'all') {
+    if (route.transportType !== criteria.transportType) {
+      return false;
+    }
+  }
+
+  // 2. Country / Region Constraint
+  if (criteria.countryCode && criteria.countryCode !== 'ALL' && criteria.countryCode !== 'GLOBAL') {
+    const targetCountry = criteria.countryCode.toUpperCase().trim();
+    const matchesCountry =
+      route.originCountryCode.toUpperCase() === targetCountry ||
+      route.destinationCountryCode.toUpperCase() === targetCountry ||
+      normalizeTransitTerm(route.originCountry).includes(normalizeTransitTerm(targetCountry)) ||
+      normalizeTransitTerm(route.destinationCountry).includes(normalizeTransitTerm(targetCountry));
+
+    if (!matchesCountry) {
+      return false;
+    }
+  }
+
+  // 3. HARD DESTINATION CONSTRAINT
+  // If destination is specified, the route MUST serve this destination station/city/alias or corridor stop.
+  const destQuery = criteria.destinationCode?.trim();
+  if (destQuery && destQuery.length > 0) {
+    const destStation = resolveTransitStation(destQuery);
+    const destAliases = destStation?.aliases || [];
+    const isDestMatch = matchesStationOrCity(
+      destQuery,
+      route.destinationCode,
+      route.destinationCity,
+      route.destinationName,
+      destAliases,
+      route.stops
+    );
+
+    if (!isDestMatch) {
+      return false;
+    }
+  }
+
+  // 4. HARD ORIGIN CONSTRAINT
+  // If origin is specified, the route MUST originate from or serve this origin station/city/alias or corridor stop.
+  const origQuery = criteria.originCode?.trim();
+  if (origQuery && origQuery.length > 0) {
+    const origStation = resolveTransitStation(origQuery);
+    const origAliases = origStation?.aliases || [];
+    const isOrigMatch = matchesStationOrCity(
+      origQuery,
+      route.originCode,
+      route.originCity,
+      route.originName,
+      origAliases,
+      route.stops
+    );
+
+    if (!isOrigMatch) {
+      return false;
+    }
+  }
+
+  // 5. Origin and Destination cannot be the exact same terminal unless it's a loop/transit card
+  if (origQuery && destQuery) {
+    const cleanOrig = normalizeTransitTerm(origQuery);
+    const cleanDest = normalizeTransitTerm(destQuery);
+    if (cleanOrig === cleanDest && cleanOrig.length > 0) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+/**
  * Searches transport routes and operators based on transport criteria.
- * Operates deterministically against verified dataset transport carriers.
+ * Operates deterministically against verified dataset transport carriers and route corridors.
  */
 export function searchTransportRoutes(
   providers: UtilityServiceProvider[],
   criteria: TransportSearchCriteria
 ): TransportSearchResult {
-  // Combine input providers with system verified transport providers to ensure comprehensive carrier coverage
+  // Combine input providers with system verified transport providers
   const allProvidersMap = new Map<string, UtilityServiceProvider>();
   [...providers, ...VERIFIED_TRANSPORT_PROVIDERS].forEach((p) => {
     if (p.category === 'transport') {
@@ -449,65 +620,68 @@ export function searchTransportRoutes(
     }
   });
 
-  const transportProviders = Array.from(allProvidersMap.values());
-
-  // Strict filtering by transportType (air, rail, bus)
-  let typeFiltered = transportProviders;
-  if (criteria.transportType && criteria.transportType !== 'all') {
-    typeFiltered = transportProviders.filter((p) => {
-      // If provider explicitly defines transportType, match it
-      if (p.transportType) {
-        return p.transportType === criteria.transportType;
-      }
-      // Infer from ID/name if not explicitly set
-      const pId = p.id.toLowerCase();
-      const pName = p.name.toLowerCase();
-      if (criteria.transportType === 'rail') {
-        return pId.includes('rail') || pId.includes('train') || pName.includes('rail') || pName.includes('train') || pName.includes('amtrak') || pName.includes('eurostar');
-      }
-      if (criteria.transportType === 'bus') {
-        return pId.includes('bus') || pId.includes('coach') || pName.includes('bus') || pName.includes('coach') || pName.includes('gigm') || pName.includes('greyhound');
-      }
-      if (criteria.transportType === 'air') {
-        return pId.includes('flight') || pId.includes('air') || pName.includes('air') || pName.includes('flight') || pName.includes('airline');
-      }
-      return true;
-    });
-  }
-
-  let matchingProviders = typeFiltered;
-
-  if (criteria.countryCode && criteria.countryCode !== 'ALL' && criteria.countryCode !== 'GLOBAL') {
-    const countryMatches = filterProvidersByCountry(typeFiltered, criteria.countryCode);
-    if (countryMatches.length > 0) {
-      matchingProviders = countryMatches;
-    }
-  }
+  // Filter routes using canonical matchesTransportRoute
+  const matchedRoutes = VERIFIED_TRANSPORT_ROUTES.filter((route) =>
+    matchesTransportRoute(route, criteria)
+  );
 
   const results: TransportSearchResultItem[] = [];
+  const matchingProviderIds = new Set<string>();
 
-  matchingProviders.forEach((p) => {
-    // Generate deterministic, canonical numeric fare for matching operators
-    const rawFare = p.minCustomFiat ?? p.packages[0]?.fiatPrice ?? 25.0;
-    const cleanFare = typeof rawFare === 'number' && Number.isFinite(rawFare) && rawFare > 0 ? rawFare : 25.0;
+  matchedRoutes.forEach((route) => {
+    const provider = allProvidersMap.get(route.providerId) || VERIFIED_TRANSPORT_PROVIDERS.find(p => p.id === route.providerId);
+    matchingProviderIds.add(route.providerId);
+
+    // Calculate class fare
+    let fare = route.fiatFare;
+    let badge = route.transportType === 'rail' ? 'Verified Rail Express' : 'Verified Coach Pass';
+    if (criteria.cabinClass && criteria.cabinClass !== 'economy') {
+      const matchClass = route.classOptions.find(
+        (c) => c.id.includes(criteria.cabinClass!) || c.name.toLowerCase().includes(criteria.cabinClass!)
+      );
+      if (matchClass) {
+        fare = matchClass.fiatPrice;
+        badge = matchClass.badge || 'VIP';
+      }
+    }
+
+    const depTime = route.departureTimes[0] || '08:00';
+    const departureFormatted = `${criteria.departureDate} ${depTime}`;
+    const tripNumber = `${route.transportType === 'rail' ? 'TRN' : 'BUS'}-${route.originCode}${route.destinationCode}-${depTime.replace(':', '')}`;
 
     results.push({
-      id: `trip-${p.id}-${criteria.originCode}-${criteria.destinationCode}`,
-      providerId: p.id,
-      providerName: p.name,
-      providerLogo: p.logo,
-      transportType: p.transportType || (criteria.transportType !== 'all' ? criteria.transportType : 'rail') || 'rail',
-      originCode: criteria.originCode || 'ORIGIN',
-      originCity: p.origin || criteria.originCode || 'Origin Station',
-      destinationCode: criteria.destinationCode || 'DEST',
-      destinationCity: p.destination || criteria.destinationCode || 'Destination Station',
-      fiatFare: cleanFare,
-      currency: p.currency || 'USD',
-      badge: p.packages[0]?.badge || (p.transportType === 'rail' ? 'Verified Rail Express' : 'Verified Coach Pass'),
+      id: `trip-${route.id}-${criteria.originCode || route.originCode}-${criteria.destinationCode || route.destinationCode}`,
+      providerId: route.providerId,
+      providerName: route.providerName,
+      providerLogo: provider?.logo,
+      transportType: route.transportType,
+      originCode: route.originCode,
+      originCity: `${route.originCity} (${route.originName})`,
+      destinationCode: route.destinationCode,
+      destinationCity: `${route.destinationCity} (${route.destinationName})`,
+      departureTime: departureFormatted,
+      arrivalTime: `${criteria.departureDate} (+${route.duration})`,
+      flightOrTripNumber: tripNumber,
+      duration: route.duration,
+      corridorName: route.corridorName,
+      distanceKm: route.distanceKm,
+      frequency: route.frequency,
+      stops: route.stops,
+      fiatFare: fare,
+      currency: route.currency,
+      badge: badge,
       isAvailable: true,
-      notes: `PSTP Guaranteed Transit Pass for ${p.name}`
+      notes: `PSTP Guaranteed Transit on ${route.corridorName}`
     });
   });
+
+  // Providers that match the filtered routes
+  const matchingProviders = Array.from(matchingProviderIds)
+    .map((id) => allProvidersMap.get(id))
+    .filter((p): p is UtilityServiceProvider => p !== undefined);
+
+  const originDisplay = criteria.originCode || 'Selected Origin';
+  const destDisplay = criteria.destinationCode || 'Selected Destination';
 
   return {
     criteria,
@@ -516,8 +690,8 @@ export function searchTransportRoutes(
     totalFound: results.length,
     message:
       results.length > 0
-        ? `Found ${results.length} verified ${criteria.transportType || 'transport'} option(s) for ${criteria.originCode} ➔ ${criteria.destinationCode}.`
-        : `No verified ${criteria.transportType || 'transport'} routes found for ${criteria.originCode} ➔ ${criteria.destinationCode}.`
+        ? `Found ${results.length} verified ${criteria.transportType || 'transport'} route(s) for ${originDisplay} ➔ ${destDisplay}.`
+        : `No verified ${criteria.transportType || 'transport'} services found for ${originDisplay} ➔ ${destDisplay}.`
   };
 }
 

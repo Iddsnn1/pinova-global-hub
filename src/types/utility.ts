@@ -99,6 +99,7 @@ export interface UtilityServiceProvider {
 // ==========================================
 
 export interface TransportRouteDetails {
+  id?: string;
   originName: string;
   originCode: string;
   originCity: string;
@@ -108,6 +109,9 @@ export interface TransportRouteDetails {
   destinationCity: string;
   destinationCountry: string;
   frequency?: string; // e.g. "Daily", "Mon, Wed, Fri"
+  duration?: string;
+  distanceKm?: number;
+  stops?: string[];
   operatingCarriers?: string[];
 }
 
@@ -140,6 +144,11 @@ export interface TransportSearchResultItem {
   departureTime?: string;
   arrivalTime?: string;
   flightOrTripNumber?: string;
+  duration?: string;
+  corridorName?: string;
+  distanceKm?: number;
+  frequency?: string;
+  stops?: string[];
   fiatFare: number;
   currency: string;
   badge?: string;
