@@ -531,9 +531,13 @@ export function matchesTransportRoute(
   route: TransportRouteDefinition,
   criteria: TransportSearchCriteria
 ): boolean {
-  // 1. Transport Mode Constraint (rail, bus)
+  // 1. Transport Mode Constraint (rail, bus, bus_line)
   if (criteria.transportType && criteria.transportType !== 'all') {
-    if (route.transportType !== criteria.transportType) {
+    if (criteria.transportType === 'bus' || criteria.transportType === 'bus_line') {
+      if (route.transportType !== 'bus') {
+        return false;
+      }
+    } else if (route.transportType !== criteria.transportType) {
       return false;
     }
   }
@@ -634,7 +638,12 @@ export function searchTransportRoutes(
 
     // Calculate class fare
     let fare = route.fiatFare;
-    let badge = route.transportType === 'rail' ? 'Verified Rail Express' : 'Verified Coach Pass';
+    let badge = route.transportType === 'rail' 
+      ? 'Verified Rail Express' 
+      : criteria.transportType === 'bus_line' 
+        ? 'Verified Highway Bus Line' 
+        : 'Verified Coach Pass';
+        
     if (criteria.cabinClass && criteria.cabinClass !== 'economy') {
       const matchClass = route.classOptions.find(
         (c) => c.id.includes(criteria.cabinClass!) || c.name.toLowerCase().includes(criteria.cabinClass!)
@@ -693,6 +702,39 @@ export function searchTransportRoutes(
         ? `Found ${results.length} verified ${criteria.transportType || 'transport'} route(s) for ${originDisplay} ➔ ${destDisplay}.`
         : `No verified ${criteria.transportType || 'transport'} services found for ${originDisplay} ➔ ${destDisplay}.`
   };
+}
+
+/**
+ * Authoritative Route Resolver:
+ * Single canonical entry point to resolve routes and matched services given mode, origin, and destination.
+ */
+export function resolveTransportRoute(
+  providers: UtilityServiceProvider[],
+  params: {
+    mode: 'air' | 'rail' | 'bus' | 'bus_line' | 'all';
+    origin: string;
+    destination: string;
+    departureDate?: string;
+    returnDate?: string;
+    tripType?: 'one_way' | 'round_trip';
+    passengers?: { adults: number; children?: number; infants?: number };
+    cabinClass?: 'economy' | 'premium_economy' | 'business' | 'first';
+    countryCode?: string;
+  }
+): TransportSearchResult {
+  const criteria = constructTransportSearchCriteria({
+    transportType: params.mode,
+    originCode: params.origin.trim().toUpperCase(),
+    destinationCode: params.destination.trim().toUpperCase(),
+    departureDate: params.departureDate,
+    returnDate: params.returnDate,
+    tripType: params.tripType,
+    passengers: params.passengers,
+    cabinClass: params.cabinClass,
+    countryCode: params.countryCode
+  });
+
+  return searchTransportRoutes(providers, criteria);
 }
 
 /**

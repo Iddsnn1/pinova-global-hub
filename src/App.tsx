@@ -599,9 +599,6 @@ function MainAppContent() {
   return (
     <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans transition-colors pb-16 md:pb-0">
       
-      {/* Top Banner */}
-      <PiBrowserBanner sandboxMode={true} userBalancePi={userBalancePi} />
-
       {/* Enterprise Full-Screen Navigation Header */}
       <FullScreenNavHeader
         activeSection={activeSection}
@@ -931,10 +928,13 @@ function MainAppContent() {
         )}
 
         {activeSection === 'developer_platform' && (
-          <DeveloperPlatformView
-            userRole={user.role}
-            onNavigateSection={handleNavigateSection}
-          />
+          <div className="space-y-4">
+            <PiBrowserBanner sandboxMode={true} userBalancePi={userBalancePi} />
+            <DeveloperPlatformView
+              userRole={user.role}
+              onNavigateSection={handleNavigateSection}
+            />
+          </div>
         )}
 
       </main>
@@ -944,6 +944,7 @@ function MainAppContent() {
         onSelectCategory={(cat) => handleNavigateSection('marketplace', cat as any)} 
         onOpenLanguageModal={() => setIsLanguageModalOpen(true)}
         onOpenVendorApplication={() => setIsVendorApplicationOpen(true)}
+        onOpenSellerStudio={() => handleNavigateSection('seller_studio' as any)}
       />
 
       {/* Streamlined 5-Destination Mobile Bottom Navigation */}

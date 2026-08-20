@@ -8,9 +8,10 @@ interface FooterProps {
   onSelectCategory: (category: ProductCategory | 'all') => void;
   onOpenLanguageModal?: () => void;
   onOpenVendorApplication?: () => void;
+  onOpenSellerStudio?: () => void;
 }
 
-export const Footer: React.FC<FooterProps> = ({ onSelectCategory, onOpenLanguageModal, onOpenVendorApplication }) => {
+export const Footer: React.FC<FooterProps> = ({ onSelectCategory, onOpenLanguageModal, onOpenVendorApplication, onOpenSellerStudio }) => {
   const { t, currentLanguage, languages } = useTranslation();
 
   return (
@@ -117,18 +118,20 @@ export const Footer: React.FC<FooterProps> = ({ onSelectCategory, onOpenLanguage
             </ul>
           </div>
 
-          {/* Newsletter / Security Notice */}
+          {/* Merchant / Seller Information */}
           <div className="space-y-3 p-4 rounded-2xl bg-slate-900 border border-slate-800">
             <h4 className="font-bold text-xs text-white">Merchant Seller Studio</h4>
-            <p className="text-[11px] text-slate-400">
-              Want to list your physical inventory or digital products to over 60M Pi Pioneers globally? Join PiNova Verified Sellers.
+            <p className="text-[11px] text-slate-400 leading-relaxed">
+              Enterprise management portal for verified vendors, global inventory management, and automated escrow fulfillment.
             </p>
-            <button
-              onClick={onOpenVendorApplication}
-              className="w-full py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs transition-colors flex items-center justify-center gap-1.5 shadow-md"
-            >
-              <span>Become a Verified Vendor</span>
-            </button>
+            <div className="pt-1">
+              <button
+                onClick={onOpenSellerStudio || onOpenVendorApplication}
+                className="text-xs text-purple-400 hover:text-purple-300 font-bold transition-colors flex items-center gap-1.5"
+              >
+                <span>Seller Studio & Inventory Portal →</span>
+              </button>
+            </div>
           </div>
 
         </div>

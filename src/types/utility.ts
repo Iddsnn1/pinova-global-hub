@@ -85,7 +85,7 @@ export interface UtilityServiceProvider {
   serviceTypes?: string[];
 
   // Transport & Travel Metadata
-  transportType?: 'air' | 'rail' | 'bus' | 'ferry' | 'transit_card';
+  transportType?: 'air' | 'rail' | 'bus' | 'bus_line' | 'ferry' | 'transit_card';
   origin?: string;
   destination?: string;
   originCode?: string; // IATA (e.g. "KAN", "JED", "LOS") or Terminal Code
@@ -116,7 +116,7 @@ export interface TransportRouteDetails {
 }
 
 export interface TransportSearchCriteria {
-  transportType?: 'air' | 'rail' | 'bus' | 'ferry' | 'transit_card' | 'all';
+  transportType?: 'air' | 'rail' | 'bus' | 'bus_line' | 'ferry' | 'transit_card' | 'all';
   originCode: string; // e.g. "KAN"
   destinationCode: string; // e.g. "JED"
   departureDate: string; // YYYY-MM-DD
@@ -136,7 +136,7 @@ export interface TransportSearchResultItem {
   providerId: string;
   providerName: string;
   providerLogo?: string;
-  transportType: 'air' | 'rail' | 'bus' | 'ferry' | 'transit_card';
+  transportType: 'air' | 'rail' | 'bus' | 'bus_line' | 'ferry' | 'transit_card';
   originCode: string;
   originCity: string;
   destinationCode: string;
