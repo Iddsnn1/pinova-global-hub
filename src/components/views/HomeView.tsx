@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   Search, 
   Zap, 
@@ -14,7 +14,11 @@ import {
   Code,
   Flame,
   CheckCircle2,
-  ChevronRight
+  ChevronRight,
+  Truck,
+  CreditCard,
+  Box,
+  Clock
 } from 'lucide-react';
 import { Product, Order, Vendor, PiUser } from '../../types';
 import { MainSection, MarketplaceCategory } from '../../types/navigation';
@@ -50,6 +54,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
   onTrackOrder,
   onOpenVendorApplication
 }) => {
+  const [trackingQuery, setTrackingQuery] = useState('');
   return (
     <div className="max-w-7xl mx-auto px-3 sm:px-6 space-y-6 sm:space-y-7 pb-20 animate-fade-in">
       
@@ -297,111 +302,128 @@ export const HomeView: React.FC<HomeViewProps> = ({
       </section>
 
       {/* ========================================================================= */}
-      {/* 3. INDEPENDENT PLATFORM SECTION: ORDERS & LOGISTICS / ACTIVE ORDERS       */}
+      {/* 3. INDEPENDENT PLATFORM SECTION: TRACK ORDER                              */}
       {/* ========================================================================= */}
-      <section id="orders-logistics-section" className="space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-xl bg-purple-500/10 text-purple-500 dark:text-purple-400 flex items-center justify-center font-bold">
-              <Package className="w-4 h-4" />
-            </div>
-            <div>
-              <h2 className="text-base sm:text-lg font-black text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                <span>Orders & Logistics</span>
-                <span className="text-xs px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-950/80 text-purple-700 dark:text-purple-300 font-bold border border-purple-200 dark:border-purple-800">
-                  Active Tracking
-                </span>
+      <section 
+        id="track-order-section" 
+        className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 sm:p-5 shadow-sm space-y-4 transition-colors hover:border-purple-500/30"
+      >
+        {/* Header: Concise Title + Status Badge + Single Subtitle */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="space-y-0.5">
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
+                <Package className="w-3.5 h-3.5" />
+              </div>
+              <h2 className="text-sm sm:text-base font-black text-slate-900 dark:text-slate-100 tracking-tight">
+                TRACK ORDER
               </h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-                Live shipment monitoring, PSTP escrow milestones, and carrier verification
-              </p>
+              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-950/80 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                PSTP Live
+              </span>
             </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium pl-8 sm:pl-8">
+              Track your order from payment to delivery.
+            </p>
           </div>
+        </div>
+
+        {/* Compact Active Order & Lifecycle Indicator Card */}
+        {(() => {
+          const displayOrder = activeOrders && activeOrders.length > 0 ? activeOrders[0] : null;
+          const orderId = displayOrder?.id || 'ORD-PI-892341';
+          const orderStatus = displayOrder?.status || 'IN TRANSIT';
+
+          return (
+            <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 p-3 sm:p-3.5 space-y-2.5">
+              {/* Order ID & Status Header */}
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-xs sm:text-sm font-black text-slate-900 dark:text-white">
+                    {orderId}
+                  </span>
+                  {displayOrder && (
+                    <span className="text-[11px] text-amber-500 dark:text-amber-400 font-bold hidden sm:inline">
+                      • {displayOrder.totalPi || displayOrder.totalAmount} π
+                    </span>
+                  )}
+                </div>
+                <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 shrink-0">
+                  {orderStatus}
+                </span>
+              </div>
+
+              {/* Lifecycle Progress Sequence */}
+              <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap text-[11px] text-slate-600 dark:text-slate-300 pt-1 border-t border-slate-200/60 dark:border-slate-700/50">
+                <span className="inline-flex items-center gap-1 font-medium text-purple-600 dark:text-purple-400">
+                  <CreditCard className="w-3 h-3 text-purple-500 shrink-0" />
+                  <span>Payment</span>
+                </span>
+                <span className="text-slate-300 dark:text-slate-600 font-mono text-[10px]">→</span>
+                <span className="inline-flex items-center gap-1 font-medium text-blue-600 dark:text-blue-400">
+                  <Box className="w-3 h-3 text-blue-500 shrink-0" />
+                  <span>Fulfillment</span>
+                </span>
+                <span className="text-slate-300 dark:text-slate-600 font-mono text-[10px]">→</span>
+                <span className="inline-flex items-center gap-1 font-semibold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 rounded border border-amber-200/60 dark:border-amber-800/60">
+                  <Truck className="w-3 h-3 text-amber-500 shrink-0 animate-pulse" />
+                  <span>Shipment</span>
+                </span>
+                <span className="text-slate-300 dark:text-slate-600 font-mono text-[10px]">→</span>
+                <span className="inline-flex items-center gap-1 font-medium text-slate-400 dark:text-slate-500">
+                  <ShieldCheck className="w-3 h-3 text-slate-400 dark:text-slate-500 shrink-0" />
+                  <span>Delivery</span>
+                </span>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* Input & Action Buttons Row */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pt-1">
+          <form 
+            id="quick-order-track-form"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const targetId = trackingQuery.trim() || (activeOrders && activeOrders.length > 0 ? activeOrders[0].id : 'ORD-PI-892341');
+              if (targetId) {
+                onTrackOrder?.(targetId);
+              } else {
+                onNavigateSection('orders');
+              }
+            }}
+            className="flex items-center gap-2 flex-1 sm:max-w-md"
+          >
+            <div className="relative flex-1">
+              <input
+                id="home-quick-track-input"
+                type="text"
+                value={trackingQuery}
+                onChange={(e) => setTrackingQuery(e.target.value)}
+                placeholder="Order ID / Tracking Number"
+                className="w-full pl-8 pr-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50 transition-all font-mono"
+              />
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            </div>
+
+            <button
+              id="home-quick-track-submit-btn"
+              type="submit"
+              className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold transition-all shadow-sm active:scale-95 flex items-center justify-center gap-1.5 shrink-0"
+            >
+              <Package className="w-3.5 h-3.5" />
+              <span>Track Order</span>
+            </button>
+          </form>
 
           <button
             id="view-all-orders-btn"
             onClick={() => onNavigateSection('orders')}
-            className="text-xs font-bold text-purple-600 dark:text-purple-400 hover:text-purple-500 flex items-center gap-1 transition-colors group"
+            className="px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700/80 text-slate-700 dark:text-slate-300 text-xs font-bold transition-all flex items-center justify-center gap-1.5 shrink-0"
           >
             <span>View All Orders</span>
-            <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+            <ChevronRight className="w-3.5 h-3.5" />
           </button>
-        </div>
-
-        {/* Orders Card / Preview Strip */}
-        <div className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 sm:p-5 shadow-sm space-y-3">
-          {activeOrders && activeOrders.length > 0 ? (
-            <div className="space-y-3">
-              {activeOrders.slice(0, 2).map((ord) => {
-                const firstItem = ord.items?.[0];
-                const totalItemsCount = ord.items?.reduce((sum, item) => sum + item.quantity, 0) || 1;
-                return (
-                  <div
-                    key={ord.id}
-                    className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60"
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-12 h-12 rounded-xl bg-purple-500/10 border border-purple-500/20 overflow-hidden flex items-center justify-center shrink-0">
-                        {firstItem?.product?.images?.[0] ? (
-                          <img
-                            src={firstItem.product.images[0]}
-                            alt={firstItem.product.title}
-                            className="w-full h-full object-cover"
-                            referrerPolicy="no-referrer"
-                          />
-                        ) : (
-                          <Package className="w-6 h-6 text-purple-400" />
-                        )}
-                      </div>
-                      <div className="min-w-0 space-y-0.5">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-mono text-xs font-black text-slate-900 dark:text-white">
-                            {ord.id}
-                          </span>
-                          <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
-                            {ord.status || 'PAID / IN TRANSIT'}
-                          </span>
-                        </div>
-                        <p className="text-xs text-slate-600 dark:text-slate-300 font-medium truncate max-w-sm">
-                          {firstItem?.product?.title || 'Order Package'} {totalItemsCount > 1 && `+ ${totalItemsCount - 1} more`}
-                        </p>
-                        <p className="text-[11px] text-slate-400">
-                          Total: <strong className="text-amber-400 font-black">{ord.totalPi || ord.totalAmount} π</strong> • Carrier: FedEx Express / Tracking: FX-9921-PI
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 w-full sm:w-auto justify-end shrink-0">
-                      <button
-                        onClick={() => onTrackOrder?.(ord.id)}
-                        className="px-3.5 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold transition-all shadow-sm active:scale-95 flex items-center gap-1"
-                      >
-                        <Package className="w-3.5 h-3.5" />
-                        <span>Track Live</span>
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left py-2">
-              <div className="space-y-0.5">
-                <h4 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-slate-100">
-                  No Pending Orders Currently
-                </h4>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  All your past orders have been completed and verified under PSTP escrow.
-                </p>
-              </div>
-              <button
-                onClick={() => onNavigateSection('marketplace', 'all')}
-                className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold transition-all shadow-md shrink-0"
-              >
-                Browse Marketplace
-              </button>
-            </div>
-          )}
         </div>
       </section>
 
