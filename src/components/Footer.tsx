@@ -12,17 +12,17 @@ interface FooterProps {
 }
 
 export const Footer: React.FC<FooterProps> = ({ onSelectCategory, onOpenLanguageModal, onOpenVendorApplication, onOpenSellerStudio }) => {
-  const { t, currentLanguage, languages } = useTranslation();
+  const { t } = useTranslation();
 
   return (
-    <footer className="bg-slate-950 text-slate-400 border-t border-slate-900 pt-12 pb-8">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 space-y-12">
+    <footer className="bg-slate-950 text-slate-400 border-t border-slate-900 pt-10 sm:pt-12 pb-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 space-y-10">
         
-        {/* Top Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+        {/* Main Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-7 sm:gap-8">
           
-          {/* Brand Info */}
-          <div className="space-y-4 md:col-span-1">
+          {/* Column 1: Brand Info & Compliance */}
+          <div className="space-y-3.5 sm:col-span-2 lg:col-span-1">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-purple-600 to-amber-500 flex items-center justify-center font-bold text-slate-950 text-lg">
                 π
@@ -38,20 +38,20 @@ export const Footer: React.FC<FooterProps> = ({ onSelectCategory, onOpenLanguage
             </div>
 
             {/* Permanent Transparency & Operational Notice */}
-            <div className="pt-2 text-[11px] text-slate-400 leading-relaxed border-t border-slate-900 mt-2 space-y-1.5">
+            <div className="pt-2 text-[11px] text-slate-400 leading-relaxed border-t border-slate-900 space-y-1.5">
               <p>
                 <strong>Transparency Notice:</strong> PiNova Global Hub is built on a non-custodial architecture. Payment processing relies on the Official Pi SDK v2 and Pi Platform API. PiNova never stores or manages Pi wallet private keys, recovery phrases, passphrases, blockchain infrastructure, or official Pi Network services.
               </p>
               <p>
-                <strong>Operational Notice:</strong> Certain marketplace capabilities rely on external service providers and official Pi Platform services. Feature availability, response times, and service outcomes may vary depending on provider availability, network connectivity, and Official Pi Platform service status.
+                <strong>Operational Notice:</strong> Certain marketplace capabilities rely on external service providers and official Pi Platform services. Feature availability and response times may vary depending on provider availability and official Pi Platform status.
               </p>
             </div>
 
-            {/* Language Selection Bar in Footer */}
+            {/* Language & Region Selection Bar */}
             <div className="pt-2">
               <div className="text-[11px] font-semibold text-slate-400 mb-1.5 flex items-center gap-1.5">
                 <Globe className="w-3.5 h-3.5 text-amber-400" />
-                <span>Global Language & Region:</span>
+                <span>Language & Region:</span>
               </div>
               <div className="flex items-center gap-2">
                 <LanguageSelectorDropdown variant="footer" />
@@ -67,59 +67,59 @@ export const Footer: React.FC<FooterProps> = ({ onSelectCategory, onOpenLanguage
             </div>
           </div>
 
-          {/* Categories */}
+          {/* Column 2: Categories */}
           <div className="space-y-3">
             <h4 className="font-bold text-xs uppercase text-slate-200 tracking-wider">Product Categories</h4>
             <ul className="space-y-2 text-xs">
               <li>
-                <button onClick={() => onSelectCategory('physical')} className="hover:text-purple-400 transition-colors">
+                <button onClick={() => onSelectCategory('physical')} className="hover:text-purple-400 transition-colors text-left">
                   Physical Products & Electronics
                 </button>
               </li>
               <li>
-                <button onClick={() => onSelectCategory('digital')} className="hover:text-purple-400 transition-colors">
+                <button onClick={() => onSelectCategory('digital')} className="hover:text-purple-400 transition-colors text-left">
                   Digital Downloads & Source Code
                 </button>
               </li>
               <li>
-                <button onClick={() => onSelectCategory('airtime')} className="hover:text-purple-400 transition-colors">
+                <button onClick={() => onSelectCategory('airtime')} className="hover:text-purple-400 transition-colors text-left">
                   Airtime & Mobile Data Bundles
                 </button>
               </li>
               <li>
-                <button onClick={() => onSelectCategory('utility')} className="hover:text-purple-400 transition-colors">
+                <button onClick={() => onSelectCategory('utility')} className="hover:text-purple-400 transition-colors text-left">
                   Electricity & Water Utility Payments
                 </button>
               </li>
               <li>
-                <button onClick={() => onSelectCategory('giftcard')} className="hover:text-purple-400 transition-colors">
+                <button onClick={() => onSelectCategory('giftcard')} className="hover:text-purple-400 transition-colors text-left">
                   Amazon & Digital Gift Cards
                 </button>
               </li>
             </ul>
           </div>
 
-          {/* Pi Ecosystem Trust */}
+          {/* Column 3: Pi Ecosystem Trust */}
           <div className="space-y-3">
             <h4 className="font-bold text-xs uppercase text-slate-200 tracking-wider">Pi Network Integration</h4>
-            <ul className="space-y-2 text-xs">
+            <ul className="space-y-2.5 text-xs">
               <li className="flex items-center gap-1.5 text-slate-300">
-                <Lock className="w-3.5 h-3.5 text-amber-400" />
+                <Lock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                 <span>Official Pi SDK v2.0 Protocol</span>
               </li>
               <li className="flex items-center gap-1.5 text-slate-300">
-                <Globe className="w-3.5 h-3.5 text-indigo-400" />
+                <Globe className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
                 <span>Pi Platform Server Approvals</span>
               </li>
               <li className="flex items-center gap-1.5 text-slate-300">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
                 <span>Verified Blockchain Txid Audit</span>
               </li>
             </ul>
           </div>
 
-          {/* Merchant / Seller Information */}
-          <div className="space-y-3 p-4 rounded-2xl bg-slate-900 border border-slate-800">
+          {/* Column 4: Merchant / Seller Studio */}
+          <div className="space-y-3 p-4 rounded-2xl bg-slate-900/90 border border-slate-800 h-fit">
             <h4 className="font-bold text-xs text-white">Merchant Seller Studio</h4>
             <p className="text-[11px] text-slate-400 leading-relaxed">
               Enterprise management portal for verified vendors, global inventory management, and automated escrow fulfillment.
@@ -137,7 +137,7 @@ export const Footer: React.FC<FooterProps> = ({ onSelectCategory, onOpenLanguage
         </div>
 
         {/* Bottom Line */}
-        <div className="pt-8 border-t border-slate-900 flex flex-wrap items-center justify-between gap-4 text-xs text-slate-500">
+        <div className="pt-6 border-t border-slate-900 flex flex-wrap items-center justify-between gap-4 text-xs text-slate-500">
           <p>© 2026 PiNova Global Hub. Built for the Pi Network Ecosystem.</p>
           <div className="flex items-center gap-4">
             <span>Privacy Policy</span>
