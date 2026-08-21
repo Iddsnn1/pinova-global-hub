@@ -181,25 +181,26 @@ export const FutureServicesView: React.FC<FutureServicesViewProps> = ({
         </div>
       </section>
 
-      {/* Developer & Pioneer Action Center */}
+      {/* Developer & Pioneer Action Reference */}
       <div className="p-6 sm:p-8 rounded-2xl bg-slate-900 text-white border border-slate-800 shadow-xl flex flex-col md:flex-row items-center justify-between gap-6">
-        <div className="space-y-2 text-center md:text-left max-w-xl">
+        <div className="space-y-1.5 text-center md:text-left max-w-xl">
           <h3 className="text-base sm:text-lg font-black text-white">
             Building a New Service on Pi Network?
           </h3>
-          <p className="text-xs text-slate-300">
-            Access our Developer SDK and API endpoints to integrate your decentralized services, utility gateways, or logistics carriers with PiNova's native PSTP Escrow.
+          <p className="text-xs text-slate-300 leading-relaxed">
+            Developer integration is available through the PiNova Developer SDK.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center justify-center gap-3 shrink-0">
           <button
+            id="future-services-open-sdk-btn"
             onClick={() => onNavigateSection('developer_platform')}
-            className="px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold transition-all shadow-md flex items-center gap-1.5"
+            className="px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold transition-all shadow-md flex items-center gap-2 active:scale-95 group"
           >
             <Code className="w-4 h-4" />
-            <span>Developer SDK</span>
-            <ArrowRight className="w-3.5 h-3.5" />
+            <span>Open Developer SDK</span>
+            <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
           </button>
 
           {onOpenPstpShield && (
