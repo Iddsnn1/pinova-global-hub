@@ -272,6 +272,12 @@ function MainAppContent() {
       if (top && top.section === newSection && top.category === newCategory) return prev;
       return [...prev, { section: newSection, category: newCategory }];
     });
+
+    try {
+      window.scrollTo({ top: 0, behavior: 'instant' });
+    } catch {
+      window.scrollTo(0, 0);
+    }
   };
 
   // Select Marketplace Category Handler
@@ -299,6 +305,11 @@ function MainAppContent() {
     }
 
     setNavigationStack((prev) => [...prev, { section: 'marketplace', category: cat }]);
+    try {
+      window.scrollTo({ top: 0, behavior: 'instant' });
+    } catch {
+      window.scrollTo(0, 0);
+    }
   };
 
   // Back Navigation Handler
@@ -311,6 +322,11 @@ function MainAppContent() {
     if (previous) {
       setActiveSection(previous.section);
       setSelectedMarketplaceCategory(previous.category);
+      try {
+        window.scrollTo({ top: 0, behavior: 'instant' });
+      } catch {
+        window.scrollTo(0, 0);
+      }
     }
   };
 
@@ -582,6 +598,8 @@ function MainAppContent() {
         return [{ label: 'Community Hub', section: 'community' }];
       case 'profile':
         return [{ label: 'Pioneer Profile', section: 'profile' }];
+      case 'seller_studio':
+        return [{ label: 'Seller Studio & Inventory Portal', section: 'seller_studio' }];
       case 'finance_analytics':
         return [{ label: 'Finance & Analytics', section: 'finance_analytics' }];
       case 'admin_governance':
@@ -905,6 +923,8 @@ function MainAppContent() {
               handleUpdateOrderStatus(orderId, 'Shipped', { trackingNumber, carrier });
             }}
             onCreateCoupon={(newCoupon) => setCoupons((prev) => [newCoupon, ...prev])}
+            onNavigateSection={handleNavigateSection}
+            onOpenVendorApplication={() => setIsVendorApplicationOpen(true)}
           />
         )}
 

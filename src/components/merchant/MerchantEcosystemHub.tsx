@@ -43,10 +43,12 @@ import {
   HelpCircle,
   Receipt,
   Key,
-  Activity
+  Activity,
+  ArrowLeft
 } from 'lucide-react';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid, BarChart, Bar } from 'recharts';
 import { FinanceAnalyticsView } from '../views/FinanceAnalyticsView';
+import { MainSection } from '../../types/navigation';
 import { 
   Product, 
   Order, 
@@ -78,6 +80,8 @@ interface MerchantEcosystemHubProps {
   onAddProduct: (newProduct: Product) => void;
   onUpdateFulfillment: (orderId: string, trackingNumber: string, carrier: string) => void;
   onCreateCoupon: (newCoupon: Coupon) => void;
+  onNavigateSection?: (section: MainSection, cat?: any) => void;
+  onOpenVendorApplication?: () => void;
 }
 
 export const MerchantEcosystemHub: React.FC<MerchantEcosystemHubProps> = ({
@@ -87,7 +91,9 @@ export const MerchantEcosystemHub: React.FC<MerchantEcosystemHubProps> = ({
   vendorProfile,
   onAddProduct,
   onUpdateFulfillment,
-  onCreateCoupon
+  onCreateCoupon,
+  onNavigateSection,
+  onOpenVendorApplication
 }) => {
   // Navigation Tabs
   const [activeTab, setActiveTab] = useState<
@@ -348,8 +354,46 @@ export const MerchantEcosystemHub: React.FC<MerchantEcosystemHubProps> = ({
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-8 pb-24">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6 pb-24">
       
+      {/* Top Back & Ecosystem Portal Header */}
+      <div className="flex flex-wrap items-center justify-between gap-3 pb-2 border-b border-slate-200 dark:border-slate-800">
+        <div className="flex items-center gap-3">
+          {onNavigateSection && (
+            <button
+              onClick={() => onNavigateSection('home')}
+              className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-purple-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 hover:text-purple-700 dark:hover:text-purple-300 text-xs font-bold transition-all"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Back to Global Hub</span>
+            </button>
+          )}
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center font-bold">
+              <Store className="w-4 h-4" />
+            </div>
+            <div>
+              <h2 className="text-sm font-black text-slate-900 dark:text-white leading-tight">
+                Seller Studio & Inventory Portal
+              </h2>
+              <span className="text-[10px] font-bold text-amber-500">Verified Merchant Management Console</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {onOpenVendorApplication && (
+            <button
+              onClick={onOpenVendorApplication}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 text-xs font-bold transition-all"
+            >
+              <ShieldCheck className="w-3.5 h-3.5" />
+              <span>Vendor Credentials</span>
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Top Banner & Multi-Store Switcher Header */}
       <div className="relative rounded-3xl overflow-hidden bg-gradient-to-r from-slate-900 via-purple-950 to-slate-900 text-white shadow-2xl border border-purple-800/40">
         <img

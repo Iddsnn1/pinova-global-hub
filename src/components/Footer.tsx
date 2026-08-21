@@ -1,5 +1,5 @@
 import React from 'react';
-import { ShieldCheck, Lock, Globe, Smartphone, Zap, Gift, Download, Heart } from 'lucide-react';
+import { ShieldCheck, Lock, Globe, Smartphone, Zap, Gift, Download, Heart, Store, ArrowRight } from 'lucide-react';
 import { ProductCategory } from '../types';
 import { useTranslation } from '../context/LanguageContext';
 import { LanguageSelectorDropdown } from './i18n/LanguageSelectorDropdown';
@@ -119,18 +119,40 @@ export const Footer: React.FC<FooterProps> = ({ onSelectCategory, onOpenLanguage
           </div>
 
           {/* Column 4: Merchant / Seller Studio */}
-          <div className="space-y-3 p-4 rounded-2xl bg-slate-900/90 border border-slate-800 h-fit">
-            <h4 className="font-bold text-xs text-white">Merchant Seller Studio</h4>
-            <p className="text-[11px] text-slate-400 leading-relaxed">
+          <div
+            id="footer-seller-studio-portal-card"
+            role="button"
+            tabIndex={0}
+            onClick={onOpenSellerStudio || onOpenVendorApplication}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                (onOpenSellerStudio || onOpenVendorApplication)?.();
+              }
+            }}
+            className="space-y-3 p-4 rounded-2xl bg-slate-900/90 hover:bg-slate-850 border border-slate-800 hover:border-purple-500/50 h-fit cursor-pointer transition-all duration-200 group focus:outline-none focus:ring-2 focus:ring-purple-500/60 active:scale-[0.99]"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-lg bg-purple-500/10 text-purple-400 flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <Store className="w-3.5 h-3.5" />
+                </div>
+                <h4 className="font-bold text-xs text-white group-hover:text-purple-300 transition-colors">
+                  Merchant Seller Studio
+                </h4>
+              </div>
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-purple-950/80 text-purple-300 border border-purple-800/80">
+                Portal
+              </span>
+            </div>
+            
+            <p className="text-[11px] text-slate-400 group-hover:text-slate-300 leading-relaxed transition-colors">
               Enterprise management portal for verified vendors, global inventory management, and automated escrow fulfillment.
             </p>
-            <div className="pt-1">
-              <button
-                onClick={onOpenSellerStudio || onOpenVendorApplication}
-                className="text-xs text-purple-400 hover:text-purple-300 font-bold transition-colors flex items-center gap-1.5"
-              >
-                <span>Seller Studio & Inventory Portal →</span>
-              </button>
+            
+            <div className="pt-1 flex items-center gap-1.5 text-xs text-purple-400 group-hover:text-purple-300 font-bold transition-colors">
+              <span>Seller Studio & Inventory Portal</span>
+              <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
             </div>
           </div>
 
