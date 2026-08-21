@@ -1,0 +1,62 @@
+[
+  {
+    "id": "DSP-UUID-1787305019729",
+    "orderId": "ORD-AUDIT-001",
+    "buyerUsername": "pioneer_alice",
+    "sellerUsername": "tech_seller",
+    "reason": "item_not_received",
+    "description": "Buyer submitted a dispute",
+    "amountPi": 0,
+    "status": "open",
+    "evidenceFiles": [],
+    "comments": [
+      {
+        "id": "CMT-1787305019729",
+        "sender": "pioneer_alice",
+        "role": "buyer",
+        "text": "Opened dispute ticket.",
+        "timestamp": "2026-08-21T09:36:59.729Z"
+      }
+    ],
+    "createdAt": "2026-08-21T09:36:59.729Z",
+    "updatedAt": "2026-08-21T09:36:59.729Z"
+  },
+  {
+    "id": "DSP-UUID-1001",
+    "orderId": "ORD-PI-334110",
+    "buyerUsername": "Pioneer_Explorer",
+    "sellerUsername": "Nexus_Gadgets",
+    "reason": "Damaged package upon delivery",
+    "description": "The sealed parcel arrived with visible physical impact damage to the box outer shell. Screen cracked.",
+    "amountPi": 145,
+    "status": "open",
+    "evidenceFiles": [
+      {
+        "id": "EVI-1",
+        "fileName": "damaged_box_front.jpg",
+        "fileUrl": "https://images.unsplash.com/photo-1578575437130-527eed3abbec?auto=format&fit=crop&w=400&q=80",
+        "fileType": "image",
+        "uploadedBy": "Pioneer_Explorer",
+        "uploadedAt": "2026-08-20T07:14:50.462Z"
+      }
+    ],
+    "comments": [
+      {
+        "id": "CMT-1",
+        "sender": "Pioneer_Explorer",
+        "role": "buyer",
+        "text": "I received the package today at 2 PM. Photos attached show severe transit damage.",
+        "timestamp": "2026-08-20T07:14:50.462Z"
+      },
+      {
+        "id": "CMT-2",
+        "sender": "Nexus_Gadgets",
+        "role": "seller",
+        "text": "We inspect all outgoing shipments with video logs. We have requested transit insurance claim from carrier.",
+        "timestamp": "2026-08-20T19:14:50.462Z"
+      }
+    ],
+    "createdAt": "2026-08-20T07:14:50.462Z",
+    "updatedAt": "2026-08-20T19:14:50.462Z"
+  }
+]

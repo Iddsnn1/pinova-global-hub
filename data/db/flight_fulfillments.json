@@ -1,0 +1,14 @@
+[
+  {
+    "id": "FLT-BOK-1787304386541",
+    "key": "dev_pay_flight_test_01",
+    "paymentId": "dev_pay_flight_test_01",
+    "pnr": "PNR-VOUCHER-EST_01",
+    "bookingReference": "REF-CARRIER-1787304386541",
+    "ticketNumber": "TKT-CARRIER-8475015050",
+    "bookingStatus": "VERIFIED_CARRIER_VOUCHER_ISSUED",
+    "provider": "Verified Transport Carrier Gateway",
+    "passengerName": "Jane Doe",
+    "timestamp": "2026-08-21T09:26:26.541Z"
+  }
+]

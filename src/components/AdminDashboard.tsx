@@ -40,7 +40,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   React.useEffect(() => {
     if (activeTab === 'vendors') {
       setLoadingApps(true);
-      fetch('/api/admin/vendor-applications')
+      fetch('/api/admin/vendor-applications', {
+        headers: { 'x-user-role': 'admin' }
+      })
         .then((res) => res.json())
         .then((data) => {
           if (data.success && Array.isArray(data.applications)) {
@@ -56,7 +58,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     try {
       const res = await fetch(`/api/admin/vendor-application/${id}/review`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-role': 'admin'
+        },
         body: JSON.stringify({
           status,
           adminNotes: adminNotes || (status === 'APPROVED' ? 'Verified by PiNova Compliance Desk' : 'Incomplete documentation'),

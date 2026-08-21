@@ -160,13 +160,21 @@ export const UniversalSearchModal: React.FC<UniversalSearchModalProps> = ({
     });
   }, [orders, trimmed]);
 
+  // Future Services Portal Match
+  const isFutureServicesMatch = useMemo(() => {
+    if (!trimmed) return false;
+    const keywords = ['future', 'upcoming', 'expansion', 'roadmap', 'oracle', 'ai agent', 'rwa', 'decentralized', 'did'];
+    return keywords.some(k => k.includes(trimmed) || trimmed.includes(k));
+  }, [trimmed]);
+
   const totalResultsCount = 
     filteredProducts.length + 
     filteredSellers.length + 
     filteredCategories.length + 
     filteredUtilities.length + 
     filteredServices.length + 
-    filteredOrders.length;
+    filteredOrders.length +
+    (isFutureServicesMatch ? 1 : 0);
 
   if (!isOpen) return null;
 
@@ -255,6 +263,40 @@ export const UniversalSearchModal: React.FC<UniversalSearchModalProps> = ({
                 className="px-3.5 py-1.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs rounded-xl shadow flex items-center gap-1"
               >
                 <span>Ask AI Concierge</span>
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
+          {/* FUTURE SERVICES HUB PORTAL MATCH */}
+          {isFutureServicesMatch && (
+            <div className="p-4 rounded-2xl bg-indigo-950/40 border border-indigo-800/60 flex items-center justify-between gap-4 shadow-sm hover:border-indigo-500 transition-colors">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center font-bold shrink-0">
+                  <Layers className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h4 className="text-xs sm:text-sm font-black text-white">
+                      Future Services & Platform Expansion
+                    </h4>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-900 text-indigo-300 font-bold border border-indigo-700">
+                      Core Portal 07
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Decentralized services, AI autonomous agents, oracles & ecosystem expansion
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  onClose();
+                  onNavigateSection('future_services');
+                }}
+                className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shrink-0 flex items-center gap-1 transition-all"
+              >
+                <span>Open Portal</span>
                 <ChevronRight className="w-4 h-4" />
               </button>
             </div>

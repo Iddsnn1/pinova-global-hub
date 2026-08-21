@@ -627,6 +627,17 @@ export const FullScreenNavHeader: React.FC<FullScreenNavHeaderProps> = ({
             <span>Developer API</span>
           </button>
           <button
+            onClick={() => onNavigateSection('future_services')}
+            className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+              activeSection === 'future_services'
+                ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
+                : 'text-indigo-300 hover:bg-slate-800/60'
+            }`}
+          >
+            <Layers className="w-3.5 h-3.5 text-indigo-300" />
+            <span>Future Services</span>
+          </button>
+          <button
             onClick={() => onNavigateSection('security_trust')}
             className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
               activeSection === 'security_trust'

@@ -111,13 +111,23 @@ export const PstpShieldCenter: React.FC<PstpShieldCenterProps> = ({
   const fetchPstpData = async () => {
     setLoading(true);
     try {
+      const authHeaders: Record<string, string> = {};
+      if (currentUser?.role) {
+        authHeaders['x-user-role'] = currentUser.role;
+        authHeaders['x-user-id'] = currentUser.username || '';
+      }
+
       const [logsRes, disputesRes, secRes] = await Promise.all([
-        safeFetchJson('/api/pstp/audit-logs'),
-        safeFetchJson('/api/pstp/disputes'),
-        safeFetchJson('/api/pstp/security-events')
+        safeFetchJson('/api/pstp/audit-logs', { headers: authHeaders }),
+        safeFetchJson('/api/pstp/disputes', { headers: authHeaders }),
+        safeFetchJson('/api/pstp/security-events', { headers: authHeaders })
       ]);
 
-      if (logsRes.data && logsRes.data.logs) setAuditLogs(logsRes.data.logs);
+      if (logsRes.data && Array.isArray(logsRes.data.logs)) {
+        setAuditLogs(logsRes.data.logs);
+      } else {
+        setAuditLogs([]);
+      }
       if (disputesRes.data && disputesRes.data.disputes) setDisputes(disputesRes.data.disputes);
       if (secRes.data && secRes.data.events) setSecurityEvents(secRes.data.events);
     } catch (err) {

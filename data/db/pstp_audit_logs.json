@@ -1,0 +1,48 @@
+[
+  {
+    "id": "LOG-UUID-1787305019730-6snt",
+    "orderId": "ORD-AUDIT-001",
+    "actor": "pioneer_alice",
+    "actorRole": "buyer",
+    "action": "DISPUTE_FILED",
+    "details": "Dispute filed for order ORD-AUDIT-001. Reason: item_not_received",
+    "ipAddress": "127.0.0.1",
+    "deviceInfo": "curl/7.88.1",
+    "timestamp": "2026-08-21T09:36:59.730Z"
+  },
+  {
+    "id": "LOG-UUID-1787304994432-g4l2",
+    "orderId": "VAPP-NG-994431",
+    "actor": "auditor_01",
+    "actorRole": "seller",
+    "action": "VENDOR_APPLICATION_SUBMITTED",
+    "details": "Vendor application submitted for store \"Audit Electronics\". Type: individual",
+    "ipAddress": "127.0.0.1",
+    "deviceInfo": "curl/7.88.1",
+    "timestamp": "2026-08-21T09:36:34.432Z"
+  },
+  {
+    "id": "LOG-UUID-9001",
+    "orderId": "ORD-PI-778210",
+    "paymentId": "PAY-PI-449102",
+    "actor": "system",
+    "actorRole": "system",
+    "action": "PAYMENT_SERVER_APPROVED",
+    "details": "Pi Platform API v2 payment verification completed with 256-bit signature validation.",
+    "ipAddress": "127.0.0.1",
+    "deviceInfo": "Pi Nova Core Escrow Engine",
+    "timestamp": "2026-08-21T05:14:50.461Z"
+  },
+  {
+    "id": "LOG-UUID-9002",
+    "orderId": "ORD-PI-778210",
+    "paymentId": "PAY-PI-449102",
+    "actor": "TechPulse_Official",
+    "actorRole": "seller",
+    "action": "ORDER_STATUS_CHANGED",
+    "details": "Order status updated from \"Payment Verified\" to \"Shipped\". Carrier: FedEx Express, Tracking: FX-9921-PI.",
+    "ipAddress": "198.51.100.44",
+    "deviceInfo": "Merchant Workstation / Chrome 124",
+    "timestamp": "2026-08-21T06:14:50.461Z"
+  }
+]

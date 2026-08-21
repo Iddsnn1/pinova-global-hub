@@ -3,6 +3,7 @@ export type MainSection =
   | 'marketplace'
   | 'utilities'
   | 'services'
+  | 'future_services'
   | 'ai_search'
   | 'finance_analytics'
   | 'admin_governance'

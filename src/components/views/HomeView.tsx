@@ -10,6 +10,8 @@ import {
   Store,
   Compass,
   Sparkles,
+  Layers,
+  Code,
   Flame,
   CheckCircle2,
   ChevronRight
@@ -41,9 +43,11 @@ interface HomeViewProps {
 
 export const HomeView: React.FC<HomeViewProps> = ({
   user,
+  activeOrders,
   onNavigateSection,
   onOpenUniversalSearch,
   onOpenPstpShield,
+  onTrackOrder,
   onOpenVendorApplication
 }) => {
   return (
@@ -164,11 +168,11 @@ export const HomeView: React.FC<HomeViewProps> = ({
             </p>
           </div>
           <span className="hidden sm:inline-block text-xs text-purple-400 font-bold bg-purple-500/10 px-3 py-1 rounded-full border border-purple-500/20">
-            6 Core Portals
+            7 Core Portals
           </span>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-3.5">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-7 gap-2.5 sm:gap-3.5">
           
           {/* Module 1: Marketplace */}
           <div
@@ -198,7 +202,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             </div>
             <div>
               <h3 className="text-xs sm:text-sm font-black text-slate-900 dark:text-slate-100 group-hover:text-emerald-500 transition-colors">
-                Utilities
+                Global Utilities
               </h3>
               <p className="text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Airtime, Power & TV</p>
             </div>
@@ -221,24 +225,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             </div>
           </div>
 
-          {/* Module 4: Order & Logistics */}
-          <div
-            id="hub-module-orders"
-            onClick={() => onNavigateSection('orders')}
-            className="p-3.5 sm:p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-purple-500 dark:hover:border-purple-500 transition-all cursor-pointer group shadow-sm flex flex-col items-center text-center space-y-2 hover:-translate-y-0.5 hover:shadow-md"
-          >
-            <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-purple-500/10 text-purple-500 dark:text-purple-400 flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
-              <Package className="w-5 h-5 sm:w-6 sm:h-6" />
-            </div>
-            <div>
-              <h3 className="text-xs sm:text-sm font-black text-slate-900 dark:text-slate-100 group-hover:text-purple-500 transition-colors">
-                Order & Logistics
-              </h3>
-              <p className="text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Active Orders & Tracking</p>
-            </div>
-          </div>
-
-          {/* Module 5: Services */}
+          {/* Module 4: Services */}
           <div
             id="hub-module-services"
             onClick={() => onNavigateSection('services')}
@@ -255,7 +242,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             </div>
           </div>
 
-          {/* Module 6: PSTP Security */}
+          {/* Module 5: PSTP Security */}
           <div
             id="hub-module-pstp-security"
             onClick={onOpenPstpShield}
@@ -272,11 +259,154 @@ export const HomeView: React.FC<HomeViewProps> = ({
             </div>
           </div>
 
+          {/* Module 6: Developer SDK */}
+          <div
+            id="hub-module-developer"
+            onClick={() => onNavigateSection('developer_platform' as any)}
+            className="p-3.5 sm:p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-purple-500 dark:hover:border-purple-500 transition-all cursor-pointer group shadow-sm flex flex-col items-center text-center space-y-2 hover:-translate-y-0.5 hover:shadow-md"
+          >
+            <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-purple-500/10 text-purple-500 dark:text-purple-400 flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
+              <Code className="w-5 h-5 sm:w-6 sm:h-6" />
+            </div>
+            <div>
+              <h3 className="text-xs sm:text-sm font-black text-slate-900 dark:text-slate-100 group-hover:text-purple-500 transition-colors">
+                Developer SDK
+              </h3>
+              <p className="text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">APIs & Integrations</p>
+            </div>
+          </div>
+
+          {/* Module 7: Future Services */}
+          <div
+            id="hub-module-future-services"
+            onClick={() => onNavigateSection('future_services')}
+            className="p-3.5 sm:p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-indigo-500 dark:hover:border-indigo-500 transition-all cursor-pointer group shadow-sm flex flex-col items-center text-center space-y-2 hover:-translate-y-0.5 hover:shadow-md"
+          >
+            <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-indigo-500/10 text-indigo-500 dark:text-indigo-400 flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
+              <Layers className="w-5 h-5 sm:w-6 sm:h-6" />
+            </div>
+            <div>
+              <h3 className="text-xs sm:text-sm font-black text-slate-900 dark:text-slate-100 group-hover:text-indigo-500 transition-colors">
+                Future Services
+              </h3>
+              <p className="text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Ecosystem Expansion</p>
+            </div>
+          </div>
+
         </div>
       </section>
 
       {/* ========================================================================= */}
-      {/* 3. PI MERCHANT WEEK: PROMOTIONAL CAMPAIGN SECTION                         */}
+      {/* 3. INDEPENDENT PLATFORM SECTION: ORDERS & LOGISTICS / ACTIVE ORDERS       */}
+      {/* ========================================================================= */}
+      <section id="orders-logistics-section" className="space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-xl bg-purple-500/10 text-purple-500 dark:text-purple-400 flex items-center justify-center font-bold">
+              <Package className="w-4 h-4" />
+            </div>
+            <div>
+              <h2 className="text-base sm:text-lg font-black text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                <span>Orders & Logistics</span>
+                <span className="text-xs px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-950/80 text-purple-700 dark:text-purple-300 font-bold border border-purple-200 dark:border-purple-800">
+                  Active Tracking
+                </span>
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                Live shipment monitoring, PSTP escrow milestones, and carrier verification
+              </p>
+            </div>
+          </div>
+
+          <button
+            id="view-all-orders-btn"
+            onClick={() => onNavigateSection('orders')}
+            className="text-xs font-bold text-purple-600 dark:text-purple-400 hover:text-purple-500 flex items-center gap-1 transition-colors group"
+          >
+            <span>View All Orders</span>
+            <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+          </button>
+        </div>
+
+        {/* Orders Card / Preview Strip */}
+        <div className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 sm:p-5 shadow-sm space-y-3">
+          {activeOrders && activeOrders.length > 0 ? (
+            <div className="space-y-3">
+              {activeOrders.slice(0, 2).map((ord) => {
+                const firstItem = ord.items?.[0];
+                const totalItemsCount = ord.items?.reduce((sum, item) => sum + item.quantity, 0) || 1;
+                return (
+                  <div
+                    key={ord.id}
+                    className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-12 h-12 rounded-xl bg-purple-500/10 border border-purple-500/20 overflow-hidden flex items-center justify-center shrink-0">
+                        {firstItem?.product?.images?.[0] ? (
+                          <img
+                            src={firstItem.product.images[0]}
+                            alt={firstItem.product.title}
+                            className="w-full h-full object-cover"
+                            referrerPolicy="no-referrer"
+                          />
+                        ) : (
+                          <Package className="w-6 h-6 text-purple-400" />
+                        )}
+                      </div>
+                      <div className="min-w-0 space-y-0.5">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-mono text-xs font-black text-slate-900 dark:text-white">
+                            {ord.id}
+                          </span>
+                          <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+                            {ord.status || 'PAID / IN TRANSIT'}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-600 dark:text-slate-300 font-medium truncate max-w-sm">
+                          {firstItem?.product?.title || 'Order Package'} {totalItemsCount > 1 && `+ ${totalItemsCount - 1} more`}
+                        </p>
+                        <p className="text-[11px] text-slate-400">
+                          Total: <strong className="text-amber-400 font-black">{ord.totalPi || ord.totalAmount} π</strong> • Carrier: FedEx Express / Tracking: FX-9921-PI
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 w-full sm:w-auto justify-end shrink-0">
+                      <button
+                        onClick={() => onTrackOrder?.(ord.id)}
+                        className="px-3.5 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold transition-all shadow-sm active:scale-95 flex items-center gap-1"
+                      >
+                        <Package className="w-3.5 h-3.5" />
+                        <span>Track Live</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left py-2">
+              <div className="space-y-0.5">
+                <h4 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-slate-100">
+                  No Pending Orders Currently
+                </h4>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  All your past orders have been completed and verified under PSTP escrow.
+                </p>
+              </div>
+              <button
+                onClick={() => onNavigateSection('marketplace', 'all')}
+                className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold transition-all shadow-md shrink-0"
+              >
+                Browse Marketplace
+              </button>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* ========================================================================= */}
+      {/* 4. PI MERCHANT WEEK: PROMOTIONAL CAMPAIGN SECTION                         */}
       {/* ========================================================================= */}
       <section 
         id="pi-merchant-week" 
@@ -311,7 +441,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
       </section>
 
       {/* ========================================================================= */}
-      {/* 4. MERCHANT ONBOARDING OPEN: PRIMARY ACQUISITION PORTAL                   */}
+      {/* 5. MERCHANT ONBOARDING OPEN: PRIMARY ACQUISITION PORTAL                   */}
       {/* ========================================================================= */}
       <section 
         id="merchant-onboarding-open" 

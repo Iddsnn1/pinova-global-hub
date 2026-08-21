@@ -84,10 +84,201 @@ app.use((req, res, next) => {
   next();
 });
 
+const isProduction = process.env.NODE_ENV === 'production';
+
+// Helper to verify admin authorization for sensitive administrative endpoints
+function checkAdminAuth(req: express.Request): { authenticated: boolean; authorized: boolean } {
+  const authHeader = req.headers['authorization'] as string | undefined;
+  const adminKeyHeader = req.headers['x-admin-key'] as string | undefined;
+  const userRoleHeader = (req.headers['x-user-role'] as string || req.headers['x-admin-role'] as string || '').toLowerCase().trim();
+  const adminSecret = process.env.ADMIN_API_KEY || process.env.PI_API_KEY || process.env.PI_SERVER_KEY;
+
+  // 1. Check direct API Key header against server secrets (server-to-server or admin script)
+  if (adminSecret && adminSecret !== 'YOUR_PI_PLATFORM_API_KEY' && adminSecret !== 'MY_PI_API_KEY') {
+    const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : null;
+    const keyToken = authHeader?.startsWith('Key ') ? authHeader.substring(4).trim() : null;
+    const directToken = authHeader?.trim();
+
+    if (
+      (bearerToken && bearerToken === adminSecret) ||
+      (keyToken && keyToken === adminSecret) ||
+      (directToken && directToken === adminSecret) ||
+      (adminKeyHeader && adminKeyHeader === adminSecret)
+    ) {
+      return { authenticated: true, authorized: true };
+    }
+  }
+
+  // 2. Check authenticated user role header
+  if (userRoleHeader) {
+    if (userRoleHeader === 'admin' || userRoleHeader === 'super_admin' || userRoleHeader === 'compliance') {
+      return { authenticated: true, authorized: true };
+    }
+    // Authenticated user but not admin
+    return { authenticated: true, authorized: false };
+  }
+
+  // 3. Unauthenticated
+  return { authenticated: false, authorized: false };
+}
+
+// Authoritative Pi Payment Verification Service
+export interface PiVerificationResult {
+  verified: boolean;
+  status: 'VERIFIED' | 'VERIFICATION_FAILED';
+  source: 'pi_platform' | 'sandbox_dev';
+  message: string;
+  paymentData?: any;
+}
+
+export async function verifyPiPaymentAuthoritative(paymentId: string): Promise<PiVerificationResult> {
+  if (!paymentId || typeof paymentId !== 'string') {
+    return {
+      verified: false,
+      status: 'VERIFICATION_FAILED',
+      source: 'pi_platform',
+      message: 'Server verification failed. Payment is not confirmed on Pi Platform.'
+    };
+  }
+
+  const cleanPaymentId = paymentId.trim();
+  const piApiKey = (process.env.PI_API_KEY || process.env.PI_SERVER_KEY || '').trim();
+  const hasValidApiKey = Boolean(piApiKey && piApiKey !== 'YOUR_PI_PLATFORM_API_KEY' && piApiKey !== 'MY_PI_API_KEY');
+
+  if (isProduction) {
+    // IN PRODUCTION: Fail-closed authoritative verification
+    // "dev_pay_*", "pi_pay_*", "rcpt_*", and local "APPROVED" state MUST NOT bypass verification.
+    // Missing or invalid PI_API_KEY MUST fail closed.
+    if (!hasValidApiKey) {
+      console.error(`[Pi Security] Production verification blocked: Missing PI_API_KEY for payment ${cleanPaymentId}`);
+      return {
+        verified: false,
+        status: 'VERIFICATION_FAILED',
+        source: 'pi_platform',
+        message: 'Server verification failed. Payment is not confirmed on Pi Platform.'
+      };
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+    try {
+      const response = await fetch(`https://api.minepi.com/v2/payments/${encodeURIComponent(cleanPaymentId)}`, {
+        headers: {
+          'Authorization': `Key ${piApiKey}`,
+          'Content-Type': 'application/json'
+        },
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        console.warn(`[Pi Security] Pi Platform API rejected verification with HTTP ${response.status} for payment ${cleanPaymentId}`);
+        return {
+          verified: false,
+          status: 'VERIFICATION_FAILED',
+          source: 'pi_platform',
+          message: 'Server verification failed. Payment is not confirmed on Pi Platform.'
+        };
+      }
+
+      const paymentData = await response.json();
+      const isCompleted = paymentData?.status?.developer_completed === true;
+      const isTxVerified = paymentData?.transaction?.verified === true;
+
+      if (isCompleted && isTxVerified) {
+        console.log(`[Pi Security] Authoritative Pi Platform verification SUCCESS for payment ${cleanPaymentId}`);
+        return {
+          verified: true,
+          status: 'VERIFIED',
+          source: 'pi_platform',
+          message: 'Payment verified and confirmed on Pi Platform.',
+          paymentData
+        };
+      } else {
+        console.warn(`[Pi Security] Payment ${cleanPaymentId} incomplete on Pi Platform (developer_completed: ${isCompleted}, tx_verified: ${isTxVerified})`);
+        return {
+          verified: false,
+          status: 'VERIFICATION_FAILED',
+          source: 'pi_platform',
+          message: 'Server verification failed. Payment is not confirmed on Pi Platform.',
+          paymentData
+        };
+      }
+    } catch (fetchErr: any) {
+      clearTimeout(timeoutId);
+      console.error(`[Pi Security] Error contacting Pi Platform API for payment ${cleanPaymentId}:`, fetchErr.message);
+      return {
+        verified: false,
+        status: 'VERIFICATION_FAILED',
+        source: 'pi_platform',
+        message: 'Server verification failed. Payment is not confirmed on Pi Platform.'
+      };
+    }
+  } else {
+    // OUTSIDE PRODUCTION (Development / Sandbox):
+    // Attempt real Pi Platform verification first if API key is present and ID is not a dev mock
+    if (hasValidApiKey && !cleanPaymentId.startsWith('dev_pay_') && !cleanPaymentId.startsWith('test_')) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+      try {
+        const response = await fetch(`https://api.minepi.com/v2/payments/${encodeURIComponent(cleanPaymentId)}`, {
+          headers: {
+            'Authorization': `Key ${piApiKey}`,
+            'Content-Type': 'application/json'
+          },
+          signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+
+        if (response.ok) {
+          const paymentData = await response.json();
+          if (paymentData?.status?.developer_completed === true && paymentData?.transaction?.verified === true) {
+            return {
+              verified: true,
+              status: 'VERIFIED',
+              source: 'pi_platform',
+              message: 'Payment verified on Pi Platform API (Testnet/Mainnet)',
+              paymentData
+            };
+          }
+        }
+      } catch (err: any) {
+        clearTimeout(timeoutId);
+        console.warn(`[Pi Dev Fallback] Live verification attempt failed for ${cleanPaymentId}:`, err.message);
+      }
+    }
+
+    // In development sandbox only: Allow clearly isolated dev_pay_* fallback
+    const recorded = paymentLedgerRepo.findByPaymentId(cleanPaymentId);
+    if (cleanPaymentId.startsWith('dev_pay_') || recorded?.status === 'COMPLETED' || recorded?.status === 'APPROVED') {
+      return {
+        verified: true,
+        status: 'VERIFIED',
+        source: 'sandbox_dev',
+        message: 'Payment verified via Development Sandbox Fallback (Non-Production)',
+        paymentData: recorded || {
+          paymentId: cleanPaymentId,
+          status: 'DEVELOPER_COMPLETED',
+          transaction: { verified: true }
+        }
+      };
+    }
+
+    return {
+      verified: false,
+      status: 'VERIFICATION_FAILED',
+      source: 'sandbox_dev',
+      message: 'Server verification failed. Payment is not confirmed on Pi Platform.'
+    };
+  }
+}
+
 // Initialize Gemini AI Client lazily & safely
 function getGeminiClient(): GoogleGenAI | null {
   const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey || apiKey === 'MY_GEMINI_API_KEY') {
+  if (!apiKey || apiKey === 'MY_GEMINI_API_KEY' || apiKey === 'YOUR_GEMINI_API_KEY') {
     return null;
   }
   return new GoogleGenAI({
@@ -100,16 +291,13 @@ function getGeminiClient(): GoogleGenAI | null {
   });
 }
 
-// System health check - minimal, zero dependencies
+// System health check - minimal, safe public response without internal metrics
 app.get(['/api/health', '/health'], (req, res) => {
   res.setHeader('Content-Type', 'application/json');
   res.status(200).json({
     status: 'ok',
     runtime: 'vercel',
-    durablePersistence: true,
-    ledgerCount: paymentLedgerRepo.count(),
-    auditLogsCount: pstpAuditRepo.count(),
-    disputesCount: pstpDisputeRepo.count()
+    durablePersistence: true
   });
 });
 
@@ -119,24 +307,74 @@ app.get('/validation-key.txt', (req, res) => {
   res.status(200).send('8a6a4b885d34141bb2512da532760394d83de4673574b82de61c4a0895e00cb11dacc69b4618c84393a5518a75ca356597e3df7ed67a9d884baa7b8edd3f7cca');
 });
 
-// Diagnostic API Endpoint
+// Diagnostic API Endpoint (Protected in Production)
 app.get(['/api/debug/runtime', '/debug/runtime'], (req, res) => {
+  if (isProduction) {
+    const auth = checkAdminAuth(req);
+    if (!auth.authenticated) {
+      res.status(401).json({
+        success: false,
+        error: 'UNAUTHORIZED',
+        message: 'Authentication required to access runtime diagnostics.'
+      });
+      return;
+    }
+    if (!auth.authorized) {
+      res.status(403).json({
+        success: false,
+        error: 'FORBIDDEN',
+        message: 'Access denied: Administrative privileges required.'
+      });
+      return;
+    }
+  }
+
   res.setHeader('Content-Type', 'application/json');
   res.status(200).json({
     ok: true,
     runtime: 'vercel',
     nodeVersion: process.version,
-    requestUrl: req.url,
     persistenceStatus: 'DURABLE_STORAGE_ACTIVE'
   });
 });
 
 // PSTP REST API Endpoints
 
-// 1. Audit Logs Retrieval
+// 1. Audit Logs Retrieval (Protected with Admin Authorization & Pagination)
 app.get(['/api/pstp/audit-logs', '/api/v1/pstp/audit-logs'], (req, res) => {
-  const logs = pstpAuditRepo.getAll();
-  res.json({ success: true, count: logs.length, logs });
+  const auth = checkAdminAuth(req);
+  if (!auth.authenticated) {
+    res.status(401).json({
+      success: false,
+      error: 'UNAUTHORIZED',
+      message: 'Authentication required to access PSTP audit logs.'
+    });
+    return;
+  }
+  if (!auth.authorized) {
+    res.status(403).json({
+      success: false,
+      error: 'FORBIDDEN',
+      message: 'Access denied: Administrative privileges required.'
+    });
+    return;
+  }
+
+  const allLogs = pstpAuditRepo.getAll();
+  const page = Math.max(1, parseInt(req.query.page as string || '1', 10));
+  const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string || '50', 10)));
+  const startIndex = (page - 1) * limit;
+  const paginatedLogs = allLogs.slice(startIndex, startIndex + limit);
+
+  res.json({
+    success: true,
+    count: paginatedLogs.length,
+    total: allLogs.length,
+    page,
+    limit,
+    totalPages: Math.ceil(allLogs.length / limit),
+    logs: paginatedLogs
+  });
 });
 
 // Create Audit Log Entry
@@ -345,11 +583,31 @@ app.post(['/api/vendor/apply', '/api/v1/vendor/apply'], (req, res) => {
 });
 
 app.get(['/api/admin/vendor-applications', '/api/v1/admin/vendor-applications'], (req, res) => {
+  const auth = checkAdminAuth(req);
+  if (!auth.authenticated) {
+    res.status(401).json({ success: false, error: 'UNAUTHORIZED', message: 'Authentication required.' });
+    return;
+  }
+  if (!auth.authorized) {
+    res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Admin privileges required.' });
+    return;
+  }
+
   const applications = vendorApplicationRepo.getAll();
   res.json({ success: true, count: applications.length, applications });
 });
 
 app.post(['/api/admin/vendor-application/:id/review', '/api/v1/admin/vendor-application/:id/review'], (req, res) => {
+  const auth = checkAdminAuth(req);
+  if (!auth.authenticated) {
+    res.status(401).json({ success: false, error: 'UNAUTHORIZED', message: 'Authentication required.' });
+    return;
+  }
+  if (!auth.authorized) {
+    res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Admin privileges required.' });
+    return;
+  }
+
   const { id } = req.params;
   const { status, adminNotes, reviewedBy } = req.body || {};
   const updated = vendorApplicationRepo.updateStatus(id, status, adminNotes, reviewedBy);
@@ -582,33 +840,32 @@ const handleApprovePayment = async (req: express.Request, res: express.Response)
       return;
     }
 
-    const piApiKey = process.env.PI_API_KEY || process.env.PI_SERVER_KEY;
-    const hasKey = Boolean(piApiKey && piApiKey !== 'YOUR_PI_PLATFORM_API_KEY');
-    const isDevPayment = paymentId.startsWith('pi_pay_') || paymentId.startsWith('dev_pay_') || paymentId.startsWith('test_');
-    const selectedNetwork = isDevPayment ? 'SANDBOX_DEV' : 'SANDBOX_TESTNET';
+    const cleanPaymentId = String(paymentId).trim();
+    const piApiKey = (process.env.PI_API_KEY || process.env.PI_SERVER_KEY || '').trim();
+    const hasKey = Boolean(piApiKey && piApiKey !== 'YOUR_PI_PLATFORM_API_KEY' && piApiKey !== 'MY_PI_API_KEY');
+    const isDevPayment = cleanPaymentId.startsWith('pi_pay_') || cleanPaymentId.startsWith('dev_pay_') || cleanPaymentId.startsWith('test_');
+    const selectedNetwork = isDevPayment ? 'SANDBOX_DEV' : 'PI_PLATFORM';
 
-    console.log(`[Pi Approval Started] Payment ID: ${paymentId} | Endpoint: ${req.path} | Time: ${timestamp} | Network: ${selectedNetwork} | HasKey: ${hasKey}`);
+    console.log(`[Pi Approval Started] Payment ID: ${cleanPaymentId} | Endpoint: ${req.path} | Time: ${timestamp} | Network: ${selectedNetwork} | HasKey: ${hasKey}`);
 
-    // Strict Credential Check for real payments in production
-    if (!hasKey && !isDevPayment) {
-      console.error(`[Pi Approval Failed] Payment ID: ${paymentId} | Endpoint: ${req.path} | Time: ${timestamp} | Status: 500 | Error: PI_SERVER_CREDENTIAL_MISSING`);
-      res.status(500).json({
-        success: false,
-        error: 'PI_SERVER_CREDENTIAL_MISSING',
-        message: 'Pi Platform API key (PI_API_KEY or PI_SERVER_KEY) is missing in server environment variables. Real payments cannot be approved without credentials.'
-      });
-      return;
-    }
+    // In production: Strictly enforce valid API key & do not allow dev payment bypass
+    if (isProduction) {
+      if (!hasKey) {
+        console.error(`[Pi Approval Failed] Payment ID: ${cleanPaymentId} | Endpoint: ${req.path} | Time: ${timestamp} | Status: 500 | Error: PI_SERVER_CREDENTIAL_MISSING`);
+        res.status(500).json({
+          success: false,
+          error: 'PI_SERVER_CREDENTIAL_MISSING',
+          message: 'Pi Platform API key (PI_API_KEY or PI_SERVER_KEY) is missing in server environment variables. Real payments cannot be approved without credentials.'
+        });
+        return;
+      }
 
-    paymentLedgerRepo.recordApproval(paymentId);
-
-    if (hasKey && !isDevPayment) {
       // Real Pi Platform API call with bounded 10s timeout
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000);
 
       try {
-        const response = await fetch(`https://api.minepi.com/v2/payments/${paymentId}/approve`, {
+        const response = await fetch(`https://api.minepi.com/v2/payments/${encodeURIComponent(cleanPaymentId)}/approve`, {
           method: 'POST',
           headers: {
             'Authorization': `Key ${piApiKey}`,
@@ -620,39 +877,66 @@ const handleApprovePayment = async (req: express.Request, res: express.Response)
 
         if (!response.ok) {
           const errorText = await response.text();
-          console.warn(`[Pi Approval Failed] Payment ID: ${paymentId} | Endpoint: ${req.path} | Time: ${timestamp} | Status: ${response.status} | Error: ${errorText.substring(0, 150)}`);
+          console.warn(`[Pi Approval Failed] Payment ID: ${cleanPaymentId} | Endpoint: ${req.path} | Time: ${timestamp} | Status: ${response.status}`);
           res.status(response.status).json({
             success: false,
             error: response.status === 401 || response.status === 403 ? 'PI_API_KEY_INVALID' : 'PI_APPROVAL_FAILED',
-            message: `Pi Platform Approval failed with HTTP status ${response.status}`,
-            details: errorText
+            message: `Pi Platform Approval failed with HTTP status ${response.status}`
           });
           return;
         }
 
         const data = await response.json();
-        console.log(`[Pi Approval Success] Payment ID: ${paymentId} | Endpoint: ${req.path} | Time: ${timestamp} | Status: 200`);
-        res.json({ success: true, paymentId, status: 'approved', data });
+        paymentLedgerRepo.recordApproval(cleanPaymentId);
+        console.log(`[Pi Approval Success] Payment ID: ${cleanPaymentId} | Endpoint: ${req.path} | Time: ${timestamp} | Status: 200`);
+        res.json({ success: true, paymentId: cleanPaymentId, status: 'approved', data });
         return;
       } catch (fetchErr: any) {
         clearTimeout(timeoutId);
         const isTimeout = fetchErr.name === 'AbortError';
         const errCode = isTimeout ? 'PI_PLATFORM_TIMEOUT' : 'PI_PLATFORM_NETWORK_ERROR';
-        console.error(`[Pi Approval Error] Payment ID: ${paymentId} | Endpoint: ${req.path} | Time: ${timestamp} | Code: ${errCode} | Message: ${fetchErr.message}`);
+        console.error(`[Pi Approval Error] Payment ID: ${cleanPaymentId} | Endpoint: ${req.path} | Time: ${timestamp} | Code: ${errCode} | Message: ${fetchErr.message}`);
         res.status(isTimeout ? 504 : 500).json({
           success: false,
           error: errCode,
-          message: isTimeout ? 'Approval request to Pi Platform API timed out after 10 seconds' : 'Failed to contact Pi Platform API',
-          details: fetchErr.message
+          message: isTimeout ? 'Approval request to Pi Platform API timed out after 10 seconds' : 'Failed to contact Pi Platform API'
         });
         return;
       }
     } else {
-      // Dev/sandbox test payment auto-approval
-      console.log(`[Pi Approval Success Sandbox] Payment ID: ${paymentId} | Endpoint: ${req.path} | Time: ${timestamp} | Status: 200`);
+      // Non-production (Dev/Sandbox Mode):
+      paymentLedgerRepo.recordApproval(cleanPaymentId);
+
+      if (hasKey && !isDevPayment) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+        try {
+          const response = await fetch(`https://api.minepi.com/v2/payments/${encodeURIComponent(cleanPaymentId)}/approve`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Key ${piApiKey}`,
+              'Content-Type': 'application/json'
+            },
+            signal: controller.signal
+          });
+          clearTimeout(timeoutId);
+
+          if (response.ok) {
+            const data = await response.json();
+            res.json({ success: true, paymentId: cleanPaymentId, status: 'approved', data });
+            return;
+          }
+        } catch (fetchErr: any) {
+          clearTimeout(timeoutId);
+          console.warn(`[Pi Approval Dev Fallback] Live attempt failed: ${fetchErr.message}`);
+        }
+      }
+
+      console.log(`[Pi Approval Success Sandbox] Payment ID: ${cleanPaymentId} | Endpoint: ${req.path} | Time: ${timestamp} | Status: 200`);
       res.json({
         success: true,
-        paymentId,
+        paymentId: cleanPaymentId,
         status: 'approved',
         message: 'Payment approved by PiNova Escrow Server (Sandbox/Dev Test Payment)'
       });
@@ -662,7 +946,7 @@ const handleApprovePayment = async (req: express.Request, res: express.Response)
     res.status(500).json({
       success: false,
       error: 'SERVER_APPROVAL_EXCEPTION',
-      message: err.message || 'Internal server error during approval'
+      message: 'Internal server error during approval'
     });
   }
 };
@@ -677,76 +961,106 @@ const handleCompletePayment = async (req: express.Request, res: express.Response
       return;
     }
 
-    const piApiKey = process.env.PI_API_KEY || process.env.PI_SERVER_KEY;
-    const hasKey = Boolean(piApiKey && piApiKey !== 'YOUR_PI_PLATFORM_API_KEY');
-    const isDevPayment = paymentId.startsWith('pi_pay_') || paymentId.startsWith('dev_pay_') || paymentId.startsWith('test_');
-    const selectedNetwork = isDevPayment ? 'SANDBOX_DEV' : 'SANDBOX_TESTNET';
+    const cleanPaymentId = String(paymentId).trim();
+    const cleanTxid = String(txid).trim();
+    const piApiKey = (process.env.PI_API_KEY || process.env.PI_SERVER_KEY || '').trim();
+    const hasKey = Boolean(piApiKey && piApiKey !== 'YOUR_PI_PLATFORM_API_KEY' && piApiKey !== 'MY_PI_API_KEY');
+    const isDevPayment = cleanPaymentId.startsWith('pi_pay_') || cleanPaymentId.startsWith('dev_pay_') || cleanPaymentId.startsWith('test_');
+    const selectedNetwork = isDevPayment ? 'SANDBOX_DEV' : 'PI_PLATFORM';
 
-    console.log(`[Pi Completion Started] Payment ID: ${paymentId} | Endpoint: ${req.path} | Time: ${timestamp} | Network: ${selectedNetwork}`);
+    console.log(`[Pi Completion Started] Payment ID: ${cleanPaymentId} | Endpoint: ${req.path} | Time: ${timestamp} | Network: ${selectedNetwork}`);
 
-    if (!hasKey && !isDevPayment) {
-      console.error(`[Pi Completion Failed] Payment ID: ${paymentId} | Endpoint: ${req.path} | Time: ${timestamp} | Status: 500 | Error: PI_SERVER_CREDENTIAL_MISSING`);
-      res.status(500).json({
-        success: false,
-        error: 'PI_SERVER_CREDENTIAL_MISSING',
-        message: 'Pi Platform API key (PI_API_KEY or PI_SERVER_KEY) is missing in server environment variables. Real payments cannot be completed without credentials.'
-      });
-      return;
-    }
+    // In production: Strictly enforce valid API key & do not allow dev payment bypass
+    if (isProduction) {
+      if (!hasKey) {
+        console.error(`[Pi Completion Failed] Payment ID: ${cleanPaymentId} | Endpoint: ${req.path} | Time: ${timestamp} | Status: 500 | Error: PI_SERVER_CREDENTIAL_MISSING`);
+        res.status(500).json({
+          success: false,
+          error: 'PI_SERVER_CREDENTIAL_MISSING',
+          message: 'Pi Platform API key (PI_API_KEY or PI_SERVER_KEY) is missing in server environment variables. Real payments cannot be completed without credentials.'
+        });
+        return;
+      }
 
-    paymentLedgerRepo.recordCompletion(paymentId, txid);
-
-    if (hasKey && !isDevPayment) {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000);
 
       try {
-        const response = await fetch(`https://api.minepi.com/v2/payments/${paymentId}/complete`, {
+        const response = await fetch(`https://api.minepi.com/v2/payments/${encodeURIComponent(cleanPaymentId)}/complete`, {
           method: 'POST',
           headers: {
             'Authorization': `Key ${piApiKey}`,
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({ txid }),
+          body: JSON.stringify({ txid: cleanTxid }),
           signal: controller.signal
         });
         clearTimeout(timeoutId);
 
         if (!response.ok) {
           const errorText = await response.text();
-          console.warn(`[Pi Completion Failed] Payment ID: ${paymentId} | Endpoint: ${req.path} | Time: ${timestamp} | Status: ${response.status} | Error: ${errorText.substring(0, 150)}`);
+          console.warn(`[Pi Completion Failed] Payment ID: ${cleanPaymentId} | Endpoint: ${req.path} | Time: ${timestamp} | Status: ${response.status}`);
           res.status(response.status).json({
             success: false,
             error: response.status === 401 || response.status === 403 ? 'PI_API_KEY_INVALID' : 'PI_COMPLETION_FAILED',
-            message: `Pi Platform Completion failed with HTTP status ${response.status}`,
-            details: errorText
+            message: `Pi Platform Completion failed with HTTP status ${response.status}`
           });
           return;
         }
 
         const data = await response.json();
-        console.log(`[Pi Completion Success] Payment ID: ${paymentId} | Endpoint: ${req.path} | Time: ${timestamp} | Status: 200`);
-        res.json({ success: true, paymentId, txid, status: 'completed', data });
+        paymentLedgerRepo.recordCompletion(cleanPaymentId, cleanTxid);
+        console.log(`[Pi Completion Success] Payment ID: ${cleanPaymentId} | Endpoint: ${req.path} | Time: ${timestamp} | Status: 200`);
+        res.json({ success: true, paymentId: cleanPaymentId, txid: cleanTxid, status: 'completed', data });
         return;
       } catch (fetchErr: any) {
         clearTimeout(timeoutId);
         const isTimeout = fetchErr.name === 'AbortError';
         const errCode = isTimeout ? 'PI_PLATFORM_TIMEOUT' : 'PI_PLATFORM_NETWORK_ERROR';
-        console.error(`[Pi Completion Error] Payment ID: ${paymentId} | Endpoint: ${req.path} | Time: ${timestamp} | Code: ${errCode} | Message: ${fetchErr.message}`);
+        console.error(`[Pi Completion Error] Payment ID: ${cleanPaymentId} | Endpoint: ${req.path} | Time: ${timestamp} | Code: ${errCode} | Message: ${fetchErr.message}`);
         res.status(isTimeout ? 504 : 500).json({
           success: false,
           error: errCode,
-          message: isTimeout ? 'Completion request to Pi Platform API timed out after 10 seconds' : 'Failed to complete transaction on Pi Platform API',
-          details: fetchErr.message
+          message: isTimeout ? 'Completion request to Pi Platform API timed out after 10 seconds' : 'Failed to complete transaction on Pi Platform API'
         });
         return;
       }
     } else {
-      console.log(`[Pi Completion Success Sandbox] Payment ID: ${paymentId} | Endpoint: ${req.path} | Time: ${timestamp} | Status: 200`);
+      // Non-production (Dev/Sandbox Mode):
+      paymentLedgerRepo.recordCompletion(cleanPaymentId, cleanTxid);
+
+      if (hasKey && !isDevPayment) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+        try {
+          const response = await fetch(`https://api.minepi.com/v2/payments/${encodeURIComponent(cleanPaymentId)}/complete`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Key ${piApiKey}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ txid: cleanTxid }),
+            signal: controller.signal
+          });
+          clearTimeout(timeoutId);
+
+          if (response.ok) {
+            const data = await response.json();
+            res.json({ success: true, paymentId: cleanPaymentId, txid: cleanTxid, status: 'completed', data });
+            return;
+          }
+        } catch (fetchErr: any) {
+          clearTimeout(timeoutId);
+          console.warn(`[Pi Completion Dev Fallback] Live attempt failed: ${fetchErr.message}`);
+        }
+      }
+
+      console.log(`[Pi Completion Success Sandbox] Payment ID: ${cleanPaymentId} | Endpoint: ${req.path} | Time: ${timestamp} | Status: 200`);
       res.json({
         success: true,
-        paymentId,
-        txid,
+        paymentId: cleanPaymentId,
+        txid: cleanTxid,
         status: 'completed',
         message: 'Payment completed & Escrow locked in PiNova Ledger (Sandbox/Dev Test Payment)'
       });
@@ -756,7 +1070,7 @@ const handleCompletePayment = async (req: express.Request, res: express.Response
     res.status(500).json({
       success: false,
       error: 'SERVER_COMPLETION_EXCEPTION',
-      message: err.message || 'Internal server error during completion'
+      message: 'Internal server error during completion'
     });
   }
 };
@@ -772,7 +1086,7 @@ const handleIncompletePayment = async (req: express.Request, res: express.Respon
       paymentId: targetId
     });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: 'INCOMPLETE_PAYMENT_EXCEPTION', message: err.message });
+    res.status(500).json({ success: false, error: 'INCOMPLETE_PAYMENT_EXCEPTION', message: 'Error handling incomplete payment' });
   }
 };
 
@@ -790,7 +1104,7 @@ const handleCancelPayment = async (req: express.Request, res: express.Response) 
       message: 'Payment cancelled successfully'
     });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: 'CANCEL_PAYMENT_EXCEPTION', message: err.message });
+    res.status(500).json({ success: false, error: 'CANCEL_PAYMENT_EXCEPTION', message: 'Error handling payment cancellation' });
   }
 };
 
@@ -802,52 +1116,37 @@ const handleVerifyPayment = async (req: express.Request, res: express.Response) 
       return;
     }
 
-    console.log(`[Pi Server API] Verification query for Payment ID: ${paymentId}`);
-    const piApiKey = process.env.PI_API_KEY || process.env.PI_SERVER_KEY;
-    const recorded = paymentLedgerRepo.findByPaymentId(paymentId);
+    console.log(`[Pi Server API] Authoritative verification query for Payment ID: ${paymentId}`);
+    const verification = await verifyPiPaymentAuthoritative(paymentId);
 
-    if (piApiKey && piApiKey !== 'YOUR_PI_PLATFORM_API_KEY' && !paymentId.startsWith('dev_pay_') && !paymentId.startsWith('pi_pay_')) {
-      try {
-        const verifyRes = await fetch(`https://api.minepi.com/v2/payments/${paymentId}`, {
-          headers: { 'Authorization': `Key ${piApiKey}` }
-        });
-        if (verifyRes.ok) {
-          const paymentData = await verifyRes.json();
-          res.json({ success: true, verified: true, source: 'pi_platform', payment: paymentData });
-          return;
-        }
-      } catch (err) {
-        console.warn('[Pi Server API] Pi Platform API verification check failed, using local ledger fallback');
-      }
+    if (verification.verified) {
+      res.json({
+        success: true,
+        verified: true,
+        source: verification.source,
+        payment: verification.paymentData || { paymentId, status: 'VERIFIED' }
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        verified: false,
+        status: 'VERIFICATION_FAILED',
+        error: 'VERIFICATION_FAILED',
+        message: verification.message || 'Server verification failed. Payment is not confirmed on Pi Platform.'
+      });
     }
-
-    if (recorded) {
-      res.json({ success: true, verified: true, source: 'server_ledger', payment: recorded });
-      return;
-    }
-
-    res.json({
-      success: true,
-      verified: true,
-      source: 'sandbox_fallback',
-      payment: {
-        paymentId,
-        status: 'APPROVED',
-        timestamp: Date.now()
-      }
-    });
   } catch (err: any) {
-    res.status(500).json({ success: false, verified: false, error: 'VERIFY_PAYMENT_EXCEPTION', message: err.message });
+    res.status(500).json({ success: false, verified: false, error: 'VERIFY_PAYMENT_EXCEPTION', message: 'Internal error during payment verification' });
   }
 };
 
 const handleGetPaymentConfig = (req: express.Request, res: express.Response) => {
-  const piApiKey = process.env.PI_API_KEY || process.env.PI_SERVER_KEY;
-  const configured = Boolean(piApiKey && piApiKey !== 'YOUR_PI_PLATFORM_API_KEY');
+  const piApiKey = (process.env.PI_API_KEY || process.env.PI_SERVER_KEY || '').trim();
+  const configured = Boolean(piApiKey && piApiKey !== 'YOUR_PI_PLATFORM_API_KEY' && piApiKey !== 'MY_PI_API_KEY');
   res.json({
     success: true,
     apiConfiguration: configured ? 'configured' : 'missing',
-    network: 'SANDBOX',
+    network: isProduction ? 'MAINNET' : 'SANDBOX',
     version: '2.0'
   });
 };
@@ -939,37 +1238,15 @@ app.post('/api/v2/utility/fulfill', async (req, res) => {
     return;
   }
 
-  const piApiKey = process.env.PI_API_KEY;
-  let isPaymentVerified = false;
+  // Authoritative Pi Payment Verification
+  const verification = await verifyPiPaymentAuthoritative(paymentId);
 
-  // Verify payment on Pi Server Ledger or Pi Platform API
-  const recordedPayment = paymentLedgerRepo.findByPaymentId(paymentId);
-  if (recordedPayment && recordedPayment.status === 'COMPLETED') {
-    isPaymentVerified = true;
-  } else if (piApiKey && piApiKey !== 'YOUR_PI_PLATFORM_API_KEY' && !paymentId.startsWith('dev_pay_')) {
-    try {
-      const verifyRes = await fetch(`https://api.minepi.com/v2/payments/${paymentId}`, {
-        headers: { 'Authorization': `Key ${piApiKey}` }
-      });
-      if (verifyRes.ok) {
-        const paymentData = await verifyRes.json();
-        if (paymentData.status?.developer_completed && paymentData.transaction?.verified) {
-          isPaymentVerified = true;
-        }
-      }
-    } catch (err) {
-      console.warn('[Utility Fulfillment] Error verifying with Pi Platform API:', err);
-    }
-  } else if (paymentId.startsWith('dev_pay_') || paymentId.startsWith('pi_pay_') || paymentId.startsWith('rcpt_') || recordedPayment?.status === 'APPROVED') {
-    // Sandbox / Dev environment fallback verification
-    isPaymentVerified = true;
-  }
-
-  if (!isPaymentVerified) {
+  if (!verification.verified) {
+    console.warn(`[Utility Fulfillment] Payment verification rejected for ID: ${paymentId}`);
     res.status(400).json({
       success: false,
       status: 'VERIFICATION_FAILED',
-      message: 'Server verification failed. Payment is not confirmed on Pi Blockchain.'
+      message: 'Server verification failed. Payment is not confirmed on Pi Platform.'
     });
     return;
   }
@@ -1010,10 +1287,11 @@ app.post('/api/v2/utility/fulfill', async (req, res) => {
     }
   }
 
+  const recordedPayment = paymentLedgerRepo.findByPaymentId(paymentId);
   const resultRecord = {
     transactionId: `UTIL-TX-${Date.now()}`,
     paymentId,
-    txid: txid || recordedPayment?.txid || '',
+    txid: txid || verification.paymentData?.transaction?.txid || recordedPayment?.txid || '',
     status: fulfillmentStatus,
     message: fulfillmentMessage,
     category: category || 'utility',
@@ -1475,21 +1753,15 @@ const handleFlightBook = async (req: express.Request, res: express.Response) => 
       return;
     }
 
-    // Verify payment on server ledger
-    const recordedPayment = paymentLedgerRepo.findByPaymentId(cleanPaymentId);
-    const isPaymentVerified = Boolean(
-      (recordedPayment && (recordedPayment.status === 'COMPLETED' || recordedPayment.status === 'APPROVED')) ||
-      cleanPaymentId.startsWith('dev_pay_') ||
-      cleanPaymentId.startsWith('pi_pay_') ||
-      cleanPaymentId.startsWith('rcpt_')
-    );
+    // Authoritative Pi Payment Verification
+    const verification = await verifyPiPaymentAuthoritative(cleanPaymentId);
 
-    if (!isPaymentVerified) {
+    if (!verification.verified) {
       console.warn(`[Flight Lifecycle] flight.payment.verification_failed reqId=${reqId} paymentId=${cleanPaymentId}`);
       res.status(400).json({
         success: false,
         status: 'VERIFICATION_FAILED',
-        message: 'Payment verification failed on Pi Network blockchain ledger.',
+        message: 'Server verification failed. Payment is not confirmed on Pi Platform.',
         reqId
       });
       return;

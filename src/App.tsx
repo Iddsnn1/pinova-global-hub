@@ -44,6 +44,7 @@ import { FinanceAnalyticsView } from './components/views/FinanceAnalyticsView';
 import { PlatformAdminView } from './components/views/PlatformAdminView';
 import { EnterpriseSecurityView } from './components/views/EnterpriseSecurityView';
 import { DeveloperPlatformView } from './components/views/DeveloperPlatformView';
+import { FutureServicesView } from './components/views/FutureServicesView';
 
 import { UniversalSearchModal } from './components/UniversalSearchModal';
 import { PiBrowserBanner } from './components/PiBrowserBanner';
@@ -589,6 +590,8 @@ function MainAppContent() {
         return [{ label: 'Enterprise Security & Trust', section: 'security_trust' }];
       case 'developer_platform':
         return [{ label: 'Developer Platform', section: 'developer_platform' }];
+      case 'future_services':
+        return [{ label: 'Future Services', section: 'future_services' }];
       default:
         return [{ label: String(activeSection), section: activeSection }];
     }
@@ -935,6 +938,13 @@ function MainAppContent() {
               onNavigateSection={handleNavigateSection}
             />
           </div>
+        )}
+
+        {activeSection === 'future_services' && (
+          <FutureServicesView
+            onNavigateSection={handleNavigateSection}
+            onOpenPstpShield={() => setIsPstpShieldOpen(true)}
+          />
         )}
 
       </main>

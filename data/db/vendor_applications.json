@@ -1,0 +1,82 @@
+[
+  {
+    "id": "VAPP-NG-9081",
+    "pioneerUsername": "pi_artisan_hub",
+    "pioneerUid": "UID_99812_ARTISAN",
+    "storeName": "Pi Artisan Crafts & Heritage",
+    "sellerType": "business",
+    "country": "Nigeria",
+    "countryCode": "NG",
+    "stateRegion": "Kano",
+    "city": "Kano Municipal",
+    "contactEmail": "artisan@pinova.hub",
+    "contactPhone": "+234 803 111 2233",
+    "contactTelegram": "@pi_artisan",
+    "storeDescription": "Handcrafted authentic leathercraft, artisanal textiles, and heritage memorabilia.",
+    "storeTagline": "Preserving African Heritage on the Pi Blockchain",
+    "logoUrl": "https://images.unsplash.com/photo-1544816155-12df9643f363?auto=format&fit=crop&w=200&q=80",
+    "bannerUrl": "https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=1200&q=80",
+    "businessRegistrationNumber": "RC-1049283-NG",
+    "taxId": "TIN-99482711",
+    "categoriesToSell": [
+      "physical",
+      "giftcard"
+    ],
+    "documents": [
+      {
+        "id": "doc_id_1",
+        "docType": "business_registration",
+        "fileName": "CAC_Certificate_ArtisanCrafts.pdf",
+        "fileUrl": "https://images.unsplash.com/photo-1568602471122-7832951cc4c5?auto=format&fit=crop&w=400&q=80",
+        "uploadedAt": "2026-08-19T07:14:50.462Z"
+      },
+      {
+        "id": "doc_id_2",
+        "docType": "identity_proof",
+        "fileName": "National_ID_Slip.pdf",
+        "fileUrl": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80",
+        "uploadedAt": "2026-08-19T07:14:50.462Z"
+      }
+    ],
+    "policies": {
+      "returnRefundPolicy": "14-day hassle-free return for unwashed items with PSTP buyer guarantee.",
+      "deliveryShippingPolicy": "Standard express dispatch within 24-48 business hours across Nigeria & West Africa.",
+      "warrantyTerms": "6-month craftsmanship guarantee on leather goods."
+    },
+    "pstpAgreementAccepted": true,
+    "status": "APPROVED",
+    "adminReviewNotes": "Verified against CAC business registry and verified Pioneer KYC credentials.",
+    "reviewedBy": "PiNova Chief Compliance Officer",
+    "reviewedAt": "2026-08-20T07:14:50.462Z",
+    "createdAt": "2026-08-18T07:14:50.462Z",
+    "updatedAt": "2026-08-20T07:14:50.462Z"
+  },
+  {
+    "id": "VAPP-NG-994431",
+    "pioneerUsername": "auditor_01",
+    "pioneerUid": "UID_AUDITOR_01",
+    "storeName": "Audit Electronics",
+    "sellerType": "individual",
+    "country": "Nigeria",
+    "countryCode": "NG",
+    "stateRegion": "",
+    "city": "",
+    "contactEmail": "auditor@example.com",
+    "contactPhone": "",
+    "storeDescription": "",
+    "logoUrl": "https://images.unsplash.com/photo-1534452203293-494d7ddbf7e0?auto=format&fit=crop&w=200&q=80",
+    "bannerUrl": "https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=1200&q=80",
+    "categoriesToSell": [
+      "physical"
+    ],
+    "documents": [],
+    "policies": {
+      "returnRefundPolicy": "14-day standard return on unused goods under PSTP buyer protection.",
+      "deliveryShippingPolicy": "Standard dispatch within 24-48 business hours with tracking."
+    },
+    "pstpAgreementAccepted": false,
+    "status": "PENDING_REVIEW",
+    "createdAt": "2026-08-21T09:36:34.431Z",
+    "updatedAt": "2026-08-21T09:36:34.431Z"
+  }
+]
