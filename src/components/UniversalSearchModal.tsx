@@ -167,6 +167,82 @@ export const UniversalSearchModal: React.FC<UniversalSearchModalProps> = ({
     return keywords.some(k => k.includes(trimmed) || trimmed.includes(k));
   }, [trimmed]);
 
+  // AI Services & Concierge Match
+  const filteredAiServices = useMemo(() => {
+    const allAiServices = [
+      {
+        subTab: 'shopping_assistant',
+        title: 'AI Concierge',
+        subtitle: 'Conversational Shopping & Recommendation Assistant',
+        badge: 'Module 7',
+        keywords: ['ai concierge', 'concierge', 'shopping assistant', 'recommendation', 'ai shopping', 'ai bot']
+      },
+      {
+        subTab: 'shopping_assistant',
+        title: 'AI Smart Search & Support',
+        subtitle: 'Natural language search & intelligent Pioneer assistance',
+        badge: 'Module 7',
+        keywords: ['smart search', 'ai search', 'support', 'help', 'search support', 'natural language']
+      },
+      {
+        subTab: 'merchant_assistant',
+        title: 'AI Merchant & Marketing Studio',
+        subtitle: 'Product copywriter, SEO tags & promotional marketing pack generator',
+        badge: 'Module 7',
+        keywords: ['merchant studio', 'marketing', 'copywriter', 'seo', 'promotions', 'ai merchant', 'listing']
+      },
+      {
+        subTab: 'inventory_intelligence',
+        title: 'AI Inventory Intelligence',
+        subtitle: 'Predictive stock forecasting, velocity tracking & reorder advisory',
+        badge: 'Module 7',
+        keywords: ['inventory', 'stock', 'forecasting', 'inventory intelligence', 'demand', 'velocity', 'reorder']
+      },
+      {
+        subTab: 'smart_automation',
+        title: 'Fraud Detection & Translation',
+        subtitle: 'Automated content moderation, spam detection & multilingual neural translator',
+        badge: 'Module 7',
+        keywords: ['fraud detection', 'translation', 'moderation', 'spam', 'translate', 'languages', 'security']
+      },
+      {
+        subTab: 'model_governance',
+        title: 'AI Model Governance',
+        subtitle: 'Enterprise model registry, approval workflows & compliance scorecards',
+        badge: 'Module 7',
+        keywords: ['model governance', 'governance', 'compliance', 'model registry', 'approvals']
+      },
+      {
+        subTab: 'privacy_governance',
+        title: 'AI Privacy Governance',
+        subtitle: 'Zero data retention policies, PII anonymization & telemetry audits',
+        badge: 'Module 7',
+        keywords: ['privacy governance', 'privacy', 'data retention', 'pii', 'anonymization', 'telemetry']
+      },
+      {
+        subTab: 'architecture_governance',
+        title: 'Provider Registry & Health',
+        subtitle: 'AI provider availability status, adapter latency monitoring & automated failover',
+        badge: 'Module 7',
+        keywords: ['provider registry', 'health', 'provider health', 'uptime', 'failover', 'adapters']
+      },
+      {
+        subTab: 'audit_monitoring',
+        title: 'AI Analytics & Usage Metrics',
+        subtitle: 'Real-time token usage breakdown, query telemetry & comprehensive audit logs',
+        badge: 'Module 7',
+        keywords: ['ai analytics', 'usage metrics', 'token usage', 'audit logs', 'metrics', 'telemetry', 'analytics']
+      }
+    ];
+
+    if (!trimmed) return [];
+    return allAiServices.filter(s => 
+      s.title.toLowerCase().includes(trimmed) ||
+      s.subtitle.toLowerCase().includes(trimmed) ||
+      s.keywords.some(k => k.includes(trimmed) || trimmed.includes(k))
+    );
+  }, [trimmed]);
+
   const totalResultsCount = 
     filteredProducts.length + 
     filteredSellers.length + 
@@ -174,6 +250,7 @@ export const UniversalSearchModal: React.FC<UniversalSearchModalProps> = ({
     filteredUtilities.length + 
     filteredServices.length + 
     filteredOrders.length +
+    filteredAiServices.length +
     (isFutureServicesMatch ? 1 : 0);
 
   if (!isOpen) return null;
@@ -299,6 +376,52 @@ export const UniversalSearchModal: React.FC<UniversalSearchModalProps> = ({
                 <span>Open Portal</span>
                 <ChevronRight className="w-4 h-4" />
               </button>
+            </div>
+          )}
+
+          {/* AI CONCIERGE & INTELLIGENCE SERVICES MATCH */}
+          {filteredAiServices.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-extrabold text-amber-500 uppercase tracking-wider flex items-center gap-1.5">
+                  <Sparkles className="w-4 h-4 text-amber-400" />
+                  <span>Matching AI Intelligence Services</span>
+                </h3>
+                <span className="text-[11px] text-slate-400">{filteredAiServices.length} AI Services</span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {filteredAiServices.map((aiSvc, idx) => (
+                  <div
+                    key={`ai-svc-${idx}`}
+                    onClick={() => {
+                      onClose();
+                      onNavigateSection('ai_search', aiSvc.subTab);
+                    }}
+                    className="p-4 rounded-2xl bg-gradient-to-r from-purple-950/40 via-indigo-950/40 to-slate-900 border border-purple-800/50 hover:border-amber-400/80 transition-all cursor-pointer flex items-center justify-between gap-3 shadow-md group active:scale-95"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 rounded-xl bg-purple-500/20 text-amber-300 flex items-center justify-center font-bold shrink-0 group-hover:scale-110 transition-transform">
+                        <Sparkles className="w-5 h-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-xs sm:text-sm font-bold text-white group-hover:text-amber-300 transition-colors truncate">
+                            {aiSvc.title}
+                          </h4>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-900/80 text-purple-300 font-bold border border-purple-700/60 shrink-0">
+                            {aiSvc.badge}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-300 truncate mt-0.5">
+                          {aiSvc.subtitle}
+                        </p>
+                      </div>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-amber-300 shrink-0" />
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 

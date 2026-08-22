@@ -617,6 +617,7 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                 piConversionConfig={piConversionConfig}
                 userBalancePi={userBalancePi}
                 buyerUsername={buyerUsername}
+                onTransactionSuccess={onTransactionSuccess}
                 onSelectOption={(provider, routeMeta) => {
                   handleSelectProvider(provider);
                   const paxName = routeMeta.passengerDetails ? `${routeMeta.passengerDetails.givenName} ${routeMeta.passengerDetails.familyName}` : '';

@@ -43,7 +43,8 @@ import {
   Scale,
   History,
   Calendar,
-  ChevronRight
+  ChevronRight,
+  ArrowUp
 } from 'lucide-react';
 import { Product, Vendor, Order } from '../../types';
 import { MainSection } from '../../types/navigation';
@@ -81,6 +82,8 @@ interface AiSearchViewProps {
   onNavigateSection?: (section: MainSection, cat?: any) => void;
   onOpenStorefront?: (sellerName: string) => void;
   onOpenUniversalSearch?: () => void;
+  initialTab?: AiHubSubTab;
+  onTabChange?: (tab: AiHubSubTab) => void;
 }
 
 export type AiHubSubTab =
@@ -93,6 +96,162 @@ export type AiHubSubTab =
   | 'architecture_governance'
   | 'audit_monitoring';
 
+interface AIExplainabilityFooterProps {
+  explainability?: AIExplainabilityMetadata;
+  fallbackProvider: string;
+  onRetry?: () => void;
+  activeProvider: AIProviderKey;
+  providerConfigs: AIProviderConfig[];
+  personalizationEnabled: boolean;
+  onNotice: (msg: string) => void;
+  onTriggerHumanReview: (context: string) => void;
+  onReportIncorrect: (context: string) => void;
+}
+
+export const AIExplainabilityFooter: React.FC<AIExplainabilityFooterProps> = ({
+  explainability,
+  fallbackProvider,
+  onRetry,
+  activeProvider,
+  providerConfigs,
+  personalizationEnabled,
+  onNotice,
+  onTriggerHumanReview,
+  onReportIncorrect
+}) => {
+  const [showReasoning, setShowReasoning] = useState(false);
+  const [userRating, setUserRating] = useState<'liked' | 'disliked' | null>(null);
+
+  const activeConfig = providerConfigs.find((c) => c.key === activeProvider);
+  const meta: AIExplainabilityMetadata = explainability || {
+    isAiGenerated: true,
+    confidenceLevel: 98,
+    latencyMs: 135,
+    modelName: activeConfig?.model || 'gemini-3.6-flash',
+    providerName: fallbackProvider || 'Google Gemini 3.6 Flash',
+    lastUpdated: new Date().toISOString().replace('T', ' ').slice(0, 16),
+    sourcesUsed: ['PiNova Catalog V2 Index', 'Order Protection Status Index'],
+    recommendationReason: 'Query intent matching & verified seller parameters',
+    personalizationStatus: personalizationEnabled ? 'Active (Personalized)' : 'Disabled'
+  };
+
+  return (
+    <div className="mt-3 pt-3 border-t border-slate-200/60 dark:border-slate-800/80 space-y-2 text-xs">
+      {/* Header Indicator Badges */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
+          <span className="px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-600 dark:text-purple-300 font-bold border border-purple-500/30 flex items-center gap-1">
+            <Sparkles className="w-3 h-3 text-amber-400" /> AI Generated
+          </span>
+          <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold">
+            {meta.confidenceLevel}% Confidence
+          </span>
+          <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-500 font-mono">
+            {meta.latencyMs}ms
+          </span>
+          <span className="px-2 py-0.5 rounded-md bg-indigo-500/10 text-indigo-600 dark:text-indigo-300 font-medium">
+            Model: {meta.modelName}
+          </span>
+        </div>
+
+        <button
+          onClick={() => setShowReasoning(!showReasoning)}
+          className="text-[10px] font-bold text-purple-600 dark:text-purple-400 hover:underline flex items-center gap-1"
+        >
+          <Info className="w-3 h-3" /> {showReasoning ? 'Hide Reasoning' : 'Why this recommendation?'}
+        </button>
+      </div>
+
+      {/* Reasoning & Data Sources Accordion */}
+      {showReasoning && (
+        <div className="p-3 rounded-xl bg-slate-100/80 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-2 text-[11px] text-slate-700 dark:text-slate-300">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div>
+              <span className="font-bold text-slate-900 dark:text-white block">AI Provider:</span>
+              <span className="text-[10px] text-slate-500">{meta.providerName} ({meta.modelName})</span>
+            </div>
+            <div>
+              <span className="font-bold text-slate-900 dark:text-white block">Last Model Update:</span>
+              <span className="text-[10px] text-slate-500">{meta.lastUpdated}</span>
+            </div>
+          </div>
+
+          <div>
+            <span className="font-bold text-slate-900 dark:text-white block">Information Sources Used:</span>
+            <div className="flex flex-wrap gap-1 mt-0.5">
+              {meta.sourcesUsed.map((src, i) => (
+                <span key={i} className="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-800 text-[9px] font-semibold text-slate-600 dark:text-slate-400">
+                  • {src}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <span className="font-bold text-slate-900 dark:text-white block">Recommendation Reason:</span>
+            <p className="text-[10px] text-slate-500 leading-relaxed">{meta.recommendationReason}</p>
+          </div>
+
+          <div className="flex items-center justify-between text-[10px] text-slate-400 pt-1 border-t border-slate-200 dark:border-slate-800">
+            <span>Personalization: <strong>{meta.personalizationStatus}</strong></span>
+            <span className="text-amber-500 font-bold">Verified Marketplace Data vs AI Advisory Distinction Verified</span>
+          </div>
+        </div>
+      )}
+
+      {/* Escalation & Actions Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+        <div className="flex items-center gap-1.5 text-[10px]">
+          <span className="text-slate-400 font-bold">Feedback:</span>
+          <button
+            onClick={() => {
+              setUserRating('liked');
+              onNotice('Thank you! Your feedback helps optimize our AI Shopping Concierge.');
+            }}
+            className={`px-2 py-0.5 rounded border transition-colors ${userRating === 'liked' ? 'bg-emerald-500 text-white font-bold' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-emerald-500/20'}`}
+          >
+            👍 Helpful
+          </button>
+          <button
+            onClick={() => {
+              setUserRating('disliked');
+              onNotice('Feedback recorded for model tuning.');
+            }}
+            className={`px-2 py-0.5 rounded border transition-colors ${userRating === 'disliked' ? 'bg-rose-500 text-white font-bold' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-rose-500/20'}`}
+          >
+            👎 Needs Improvement
+          </button>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-1 text-[10px]">
+          {onRetry && (
+            <button
+              onClick={onRetry}
+              className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-purple-600 hover:text-white font-bold transition-colors"
+            >
+              🔄 Retry Response
+            </button>
+          )}
+
+          <button
+            onClick={() => onTriggerHumanReview('AI Shopping Recommendation')}
+            className="px-2 py-0.5 rounded bg-purple-500/10 text-purple-600 dark:text-purple-300 hover:bg-purple-600 hover:text-white font-bold border border-purple-500/20 transition-colors"
+          >
+            🙋‍♂️ Request Human Review
+          </button>
+
+          <button
+            onClick={() => onReportIncorrect('AI Shopping Recommendation')}
+            className="px-2 py-0.5 rounded bg-rose-500/10 text-rose-500 hover:bg-rose-600 hover:text-white font-bold border border-rose-500/20 transition-colors"
+          >
+            🚩 Report Incorrect AI
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export const AiSearchView: React.FC<AiSearchViewProps> = ({
   products,
   vendors = [],
@@ -104,9 +263,184 @@ export const AiSearchView: React.FC<AiSearchViewProps> = ({
   wishlistProductIds,
   onNavigateSection,
   onOpenStorefront,
-  onOpenUniversalSearch
+  onOpenUniversalSearch,
+  initialTab = 'shopping_assistant',
+  onTabChange
 }) => {
-  const [activeTab, setActiveTab] = useState<AiHubSubTab>('shopping_assistant');
+  const CANONICAL_SERVICES = [
+    {
+      canonicalId: 'ai-concierge',
+      label: '1. AI Concierge',
+      subTab: 'shopping_assistant' as AiHubSubTab,
+      desc: 'Conversational Shopping',
+      actionName: 'Shopping Concierge Chat',
+      targetAnchorId: 'ai-concierge-chat-workspace',
+      focusInputId: 'ai-chat-input',
+      icon: Bot,
+      status: 'Operational'
+    },
+    {
+      canonicalId: 'ai-smart-search',
+      label: '2. AI Smart Search',
+      subTab: 'shopping_assistant' as AiHubSubTab,
+      desc: 'Natural Search & Support',
+      actionName: 'Catalog Discovery & Filters',
+      targetAnchorId: 'ai-smart-search-workspace',
+      focusInputId: 'ai-search-filter-input',
+      icon: Search,
+      status: 'Operational'
+    },
+    {
+      canonicalId: 'ai-merchant-marketing',
+      label: '3. AI Merchant Studio',
+      subTab: 'merchant_assistant' as AiHubSubTab,
+      desc: 'Copywriter & Marketing',
+      actionName: 'SEO & Copy Generator',
+      targetAnchorId: 'ai-merchant-studio-workspace',
+      focusInputId: 'merchant-title-input',
+      icon: Store,
+      status: 'Operational'
+    },
+    {
+      canonicalId: 'ai-inventory-intelligence',
+      label: '4. Inventory Intelligence',
+      subTab: 'inventory_intelligence' as AiHubSubTab,
+      desc: 'Forecasting & Reorder',
+      actionName: 'Stock Velocity & Forecast',
+      targetAnchorId: 'ai-inventory-workspace',
+      focusInputId: undefined,
+      icon: Package,
+      status: 'Operational'
+    },
+    {
+      canonicalId: 'fraud-detection-translation',
+      label: '5. Fraud & Translation',
+      subTab: 'smart_automation' as AiHubSubTab,
+      desc: 'Moderation & Neural Lang',
+      actionName: 'Policy Scan & Translation',
+      targetAnchorId: 'ai-fraud-translation-workspace',
+      focusInputId: 'moderation-text-input',
+      icon: ShieldCheck,
+      status: 'Operational'
+    },
+    {
+      canonicalId: 'ai-model-governance',
+      label: '6. Model Governance',
+      subTab: 'model_governance' as AiHubSubTab,
+      desc: 'Model Approvals & Registry',
+      actionName: 'Model Registry & Governance',
+      targetAnchorId: 'ai-model-governance-workspace',
+      focusInputId: undefined,
+      icon: FileText,
+      status: 'Operational'
+    },
+    {
+      canonicalId: 'ai-privacy-governance',
+      label: '7. Privacy Governance',
+      subTab: 'privacy_governance' as AiHubSubTab,
+      desc: 'Zero Retention & PII',
+      actionName: 'Zero Retention & Privacy Matrix',
+      targetAnchorId: 'ai-privacy-governance-workspace',
+      focusInputId: undefined,
+      icon: Lock,
+      status: 'Operational'
+    },
+    {
+      canonicalId: 'provider-registry-health',
+      label: '8. Provider Registry',
+      subTab: 'architecture_governance' as AiHubSubTab,
+      desc: 'Health & Failover',
+      actionName: 'Multi-Provider Registry',
+      targetAnchorId: 'ai-provider-registry-workspace',
+      focusInputId: undefined,
+      icon: Sliders,
+      status: 'Operational'
+    },
+    {
+      canonicalId: 'ai-analytics-usage',
+      label: '9. AI Usage & Analytics',
+      subTab: 'audit_monitoring' as AiHubSubTab,
+      desc: 'Telemetry & Audit Logs',
+      actionName: 'Resource Metrics & Audit Trail',
+      targetAnchorId: 'ai-usage-analytics-workspace',
+      focusInputId: undefined,
+      icon: Activity,
+      status: 'Operational'
+    }
+  ];
+
+  const getServiceIdForSubTab = (subTab?: string): string => {
+    switch (subTab) {
+      case 'shopping_assistant':
+        return 'ai-concierge';
+      case 'merchant_assistant':
+        return 'ai-merchant-marketing';
+      case 'inventory_intelligence':
+        return 'ai-inventory-intelligence';
+      case 'smart_automation':
+        return 'fraud-detection-translation';
+      case 'model_governance':
+        return 'ai-model-governance';
+      case 'privacy_governance':
+        return 'ai-privacy-governance';
+      case 'architecture_governance':
+        return 'provider-registry-health';
+      case 'audit_monitoring':
+        return 'ai-analytics-usage';
+      default:
+        return 'ai-concierge';
+    }
+  };
+
+  const [activeTab, setActiveTab] = useState<AiHubSubTab>(initialTab || 'shopping_assistant');
+  const [activeServiceId, setActiveServiceId] = useState<string>(getServiceIdForSubTab(initialTab || 'shopping_assistant'));
+  const [isLaunchingService, setIsLaunchingService] = useState<string | null>(null);
+
+  // Keep internal tab synchronized when navigated to from external sections
+  React.useEffect(() => {
+    if (initialTab && initialTab !== activeTab) {
+      setActiveTab(initialTab);
+      setActiveServiceId(getServiceIdForSubTab(initialTab));
+    }
+  }, [initialTab]);
+
+  const handleTabSwitch = (tab: AiHubSubTab) => {
+    setActiveTab(tab);
+    setActiveServiceId(getServiceIdForSubTab(tab));
+    if (onTabChange) {
+      onTabChange(tab);
+    }
+  };
+
+  const handleLaunchService = (svc: typeof CANONICAL_SERVICES[0]) => {
+    if (isLaunchingService) return;
+    setIsLaunchingService(svc.canonicalId);
+    setActiveServiceId(svc.canonicalId);
+    setActiveTab(svc.subTab);
+    if (onTabChange) {
+      onTabChange(svc.subTab);
+    }
+
+    setNoticeMessage(`Launched: ${svc.label} — ${svc.actionName}`);
+
+    setTimeout(() => {
+      setIsLaunchingService(null);
+      const targetElement = document.getElementById(svc.targetAnchorId);
+      if (targetElement) {
+        targetElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+      if (svc.focusInputId) {
+        const inputElem = document.getElementById(svc.focusInputId) as HTMLInputElement | HTMLTextAreaElement | null;
+        if (inputElem) {
+          inputElem.focus();
+        }
+      }
+    }, 120);
+
+    setTimeout(() => {
+      setNoticeMessage(null);
+    }, 3500);
+  };
   const [activeProvider, setActiveProvider] = useState<AIProviderKey>(AIProviderRegistry.getActiveKey());
   const [providerConfigs, setProviderConfigs] = useState<AIProviderConfig[]>(AIProviderRegistry.getProviderConfigs());
 
@@ -921,146 +1255,62 @@ export const AiSearchView: React.FC<AiSearchViewProps> = ({
     setTimeout(() => setNoticeMessage(null), 4000);
   };
 
-  // Helper renderer for AI Explainability & Human Escalation Bar
-  const renderExplainabilityFooter = (
-    explainability: AIExplainabilityMetadata | undefined,
-    fallbackProvider: string,
-    onRetry?: () => void
-  ) => {
-    const [showReasoning, setShowReasoning] = useState(false);
-    const [userRating, setUserRating] = useState<'liked' | 'disliked' | null>(null);
 
-    const activeConfig = providerConfigs.find((c) => c.key === activeProvider);
-    const meta: AIExplainabilityMetadata = explainability || {
-      isAiGenerated: true,
-      confidenceLevel: 98,
-      latencyMs: 135,
-      modelName: activeConfig?.model || 'gemini-3.6-flash',
-      providerName: fallbackProvider || 'Google Gemini 3.6 Flash',
-      lastUpdated: new Date().toISOString().replace('T', ' ').slice(0, 16),
-      sourcesUsed: ['PiNova Catalog V2 Index', 'Order Protection Status Index'],
-      recommendationReason: 'Query intent matching & verified seller parameters',
-      personalizationStatus: personalizationEnabled ? 'Active (Personalized)' : 'Disabled'
-    };
 
-    return (
-      <div className="mt-3 pt-3 border-t border-slate-200/60 dark:border-slate-800/80 space-y-2 text-xs">
-        {/* Header Indicator Badges */}
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
-            <span className="px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-600 dark:text-purple-300 font-bold border border-purple-500/30 flex items-center gap-1">
-              <Sparkles className="w-3 h-3 text-amber-400" /> AI Generated
-            </span>
-            <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold">
-              {meta.confidenceLevel}% Confidence
-            </span>
-            <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-500 font-mono">
-              {meta.latencyMs}ms
-            </span>
-            <span className="px-2 py-0.5 rounded-md bg-indigo-500/10 text-indigo-600 dark:text-indigo-300 font-medium">
-              Model: {meta.modelName}
-            </span>
-          </div>
-
-          <button
-            onClick={() => setShowReasoning(!showReasoning)}
-            className="text-[10px] font-bold text-purple-600 dark:text-purple-400 hover:underline flex items-center gap-1"
-          >
-            <Info className="w-3 h-3" /> {showReasoning ? 'Hide Reasoning' : 'Why this recommendation?'}
-          </button>
+  const WorkspaceHeader: React.FC<{
+    title: string;
+    subtitle: string;
+    icon: React.ComponentType<{ className?: string }>;
+    badgeText?: string;
+    serviceNumber?: string;
+    actionName?: string;
+  }> = ({ title, subtitle, icon: Icon, badgeText = 'Operational', serviceNumber, actionName }) => (
+    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-200 dark:border-slate-800">
+      <div className="flex items-start gap-3">
+        <div className="w-10 h-10 rounded-2xl bg-purple-500/10 dark:bg-purple-500/20 text-purple-600 dark:text-purple-300 flex items-center justify-center shrink-0 shadow-sm mt-0.5">
+          <Icon className="w-5 h-5" />
         </div>
-
-        {/* Reasoning & Data Sources Accordion */}
-        {showReasoning && (
-          <div className="p-3 rounded-xl bg-slate-100/80 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-2 text-[11px] text-slate-700 dark:text-slate-300">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <div>
-                <span className="font-bold text-slate-900 dark:text-white block">AI Provider:</span>
-                <span className="text-[10px] text-slate-500">{meta.providerName} ({meta.modelName})</span>
-              </div>
-              <div>
-                <span className="font-bold text-slate-900 dark:text-white block">Last Model Update:</span>
-                <span className="text-[10px] text-slate-500">{meta.lastUpdated}</span>
-              </div>
-            </div>
-
-            <div>
-              <span className="font-bold text-slate-900 dark:text-white block">Information Sources Used:</span>
-              <div className="flex flex-wrap gap-1 mt-0.5">
-                {meta.sourcesUsed.map((src, i) => (
-                  <span key={i} className="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-800 text-[9px] font-semibold text-slate-600 dark:text-slate-400">
-                    • {src}
-                  </span>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <span className="font-bold text-slate-900 dark:text-white block">Recommendation Reason:</span>
-              <p className="text-[10px] text-slate-500 leading-relaxed">{meta.recommendationReason}</p>
-            </div>
-
-            <div className="flex items-center justify-between text-[10px] text-slate-400 pt-1 border-t border-slate-200 dark:border-slate-800">
-              <span>Personalization: <strong>{meta.personalizationStatus}</strong></span>
-              <span className="text-amber-500 font-bold">Verified Marketplace Data vs AI Advisory Distinction Verified</span>
-            </div>
-          </div>
-        )}
-
-        {/* Escalation & Actions Bar */}
-        <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-          <div className="flex items-center gap-1.5 text-[10px]">
-            <span className="text-slate-400 font-bold">Feedback:</span>
-            <button
-              onClick={() => {
-                setUserRating('liked');
-                setNoticeMessage('Thank you! Your feedback helps optimize our AI Shopping Concierge.');
-                setTimeout(() => setNoticeMessage(null), 3000);
-              }}
-              className={`px-2 py-0.5 rounded border transition-colors ${userRating === 'liked' ? 'bg-emerald-500 text-white font-bold' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-emerald-500/20'}`}
-            >
-              👍 Helpful
-            </button>
-            <button
-              onClick={() => {
-                setUserRating('disliked');
-                setNoticeMessage('Feedback recorded for model tuning.');
-                setTimeout(() => setNoticeMessage(null), 3000);
-              }}
-              className={`px-2 py-0.5 rounded border transition-colors ${userRating === 'disliked' ? 'bg-rose-500 text-white font-bold' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-rose-500/20'}`}
-            >
-              👎 Needs Improvement
-            </button>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-1 text-[10px]">
-            {onRetry && (
-              <button
-                onClick={onRetry}
-                className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-purple-600 hover:text-white font-bold transition-colors"
-              >
-                🔄 Retry Response
-              </button>
+        <div className="space-y-0.5">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-sm sm:text-base font-black text-slate-900 dark:text-white">
+              {title}
+            </h3>
+            {serviceNumber && (
+              <span className="px-2 py-0.5 rounded-md bg-purple-600 text-white text-[10px] font-black uppercase tracking-wider">
+                {serviceNumber}
+              </span>
             )}
-
-            <button
-              onClick={() => handleTriggerHumanReview('AI Shopping Recommendation')}
-              className="px-2 py-0.5 rounded bg-purple-500/10 text-purple-600 dark:text-purple-300 hover:bg-purple-600 hover:text-white font-bold border border-purple-500/20 transition-colors"
-            >
-              🙋‍♂️ Request Human Review
-            </button>
-
-            <button
-              onClick={() => handleReportIncorrect('AI Shopping Recommendation')}
-              className="px-2 py-0.5 rounded bg-rose-500/10 text-rose-500 hover:bg-rose-600 hover:text-white font-bold border border-rose-500/20 transition-colors"
-            >
-              🚩 Report Incorrect AI
-            </button>
+            {actionName && (
+              <span className="px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[10px] font-bold border border-amber-500/20">
+                {actionName}
+              </span>
+            )}
+            <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold border border-emerald-500/20 flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              {badgeText}
+            </span>
           </div>
+          <p className="text-xs text-slate-500 dark:text-slate-400 max-w-2xl">
+            {subtitle}
+          </p>
         </div>
       </div>
-    );
-  };
+
+      <button
+        type="button"
+        onClick={() => {
+          const matrixElem = document.getElementById('ai-canonical-matrix');
+          if (matrixElem) {
+            matrixElem.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        }}
+        className="px-3.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-purple-600 hover:text-white text-slate-700 dark:text-slate-300 text-xs font-bold transition-all border border-slate-200 dark:border-slate-700 flex items-center gap-1.5 self-start sm:self-auto shrink-0 shadow-sm"
+      >
+        <ArrowUp className="w-3.5 h-3.5" />
+        <span>Back to 9 AI Services Matrix</span>
+      </button>
+    </div>
+  );
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 space-y-6 pb-20">
@@ -1114,6 +1364,96 @@ export const AiSearchView: React.FC<AiSearchViewProps> = ({
         </div>
       )}
 
+      {/* 9 Canonical AI Intelligence Services Quick Access & Identity Matrix */}
+      <div id="ai-canonical-matrix" className="p-4 sm:p-5 rounded-3xl bg-slate-900/90 dark:bg-slate-900/95 border border-purple-900/50 shadow-2xl space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-purple-900/40 pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-purple-600 to-amber-500 text-white flex items-center justify-center font-bold shadow">
+              <Sparkles className="w-4 h-4 text-amber-300" />
+            </div>
+            <div>
+              <span className="text-xs sm:text-sm font-black uppercase tracking-wider text-white flex items-center gap-2">
+                AI Concierge & Intelligence Services
+                <span className="px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 text-[10px] font-bold border border-purple-500/30">
+                  9 Canonical Services
+                </span>
+              </span>
+              <p className="text-[11px] text-slate-400">
+                Tap any service to launch its authoritative workspace, neural model, and interactive tools.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 self-start sm:self-auto">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-400 text-[10px] font-extrabold border border-emerald-500/30">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              All 9 Services Operational
+            </span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-3 gap-2.5 sm:gap-3">
+          {CANONICAL_SERVICES.map((svc) => {
+            const isSelected = activeServiceId === svc.canonicalId || (activeTab === svc.subTab && activeServiceId === svc.canonicalId);
+            const isLaunching = isLaunchingService === svc.canonicalId;
+            const Icon = svc.icon;
+
+            return (
+              <button
+                key={svc.canonicalId}
+                id={`canonical-svc-btn-${svc.canonicalId}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleLaunchService(svc);
+                }}
+                disabled={isLaunching}
+                aria-label={`Launch ${svc.label}: ${svc.desc}`}
+                className={`group relative p-3.5 rounded-2xl border text-left transition-all duration-200 min-h-[78px] flex flex-col justify-between cursor-pointer focus:outline-none focus:ring-2 focus:ring-purple-500 active:scale-[0.98] ${
+                  isSelected
+                    ? 'bg-gradient-to-br from-purple-950/90 via-purple-900/70 to-indigo-950/80 border-amber-400 shadow-lg shadow-purple-950/50 ring-1 ring-amber-400/50'
+                    : 'bg-slate-800/80 border-slate-700/70 hover:border-purple-500/80 hover:bg-slate-800'
+                }`}
+              >
+                {/* Top Row: Icon + Title + Operational Status Badge */}
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-110 ${
+                      isSelected ? 'bg-amber-400 text-slate-950 font-black' : 'bg-purple-500/20 text-purple-300'
+                    }`}>
+                      {isLaunching ? (
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Icon className="w-3.5 h-3.5" />
+                      )}
+                    </div>
+                    <span className={`text-xs font-black truncate ${isSelected ? 'text-amber-300' : 'text-white group-hover:text-purple-200'}`}>
+                      {svc.label}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-1 shrink-0">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
+                    <span className="text-[9px] font-bold text-emerald-400 hidden xs:inline">Active</span>
+                  </div>
+                </div>
+
+                {/* Bottom Row: Description + Launch Action Cue */}
+                <div className="flex items-center justify-between gap-2 mt-2 pt-2 border-t border-slate-700/50 text-[10px]">
+                  <span className="text-slate-300 truncate font-medium">
+                    {svc.desc}
+                  </span>
+                  <span className={`flex items-center gap-0.5 font-bold shrink-0 transition-transform group-hover:translate-x-0.5 ${
+                    isSelected ? 'text-amber-400' : 'text-purple-400 group-hover:text-amber-300'
+                  }`}>
+                    <span>{isLaunching ? 'Opening...' : isSelected ? 'Active Now' : 'Launch'}</span>
+                    <ChevronRight className="w-3 h-3" />
+                  </span>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Sub-Navigation Tabs */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-2">
         <div className="flex items-center gap-2 overflow-x-auto pb-1">
@@ -1132,7 +1472,8 @@ export const AiSearchView: React.FC<AiSearchViewProps> = ({
             return (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id as AiHubSubTab)}
+                id={`ai-tab-btn-${tab.id}`}
+                onClick={() => handleTabSwitch(tab.id as AiHubSubTab)}
                 className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
                   isActive
                     ? 'bg-purple-600 text-white shadow-md shadow-purple-600/25'
@@ -1168,21 +1509,34 @@ export const AiSearchView: React.FC<AiSearchViewProps> = ({
       </div>
 
       {/* ==================================================== */}
-      {/* TAB 1: AI SHOPPING ASSISTANT */}
+      {/* TAB 1: AI SHOPPING ASSISTANT & SMART SEARCH */}
       {/* ==================================================== */}
       {activeTab === 'shopping_assistant' && (
         <div className="space-y-6">
+          <WorkspaceHeader
+            title="AI Shopping Assistant & Natural Search Workspace"
+            subtitle="Autonomous multi-provider shopping concierge with real-time Pi catalog querying, semantic ranking, and interactive support."
+            icon={Bot}
+            serviceNumber="Services 1 & 2"
+            actionName="Shopping Concierge & Smart Search"
+          />
+
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             
             {/* Main Conversational Stream */}
-            <div className="lg:col-span-8 p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl space-y-6">
+            <div id="ai-concierge-chat-workspace" className="lg:col-span-8 p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl space-y-6 scroll-mt-24">
               
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100 dark:border-slate-800">
                 <div>
-                  <h3 className="font-black text-sm text-slate-900 dark:text-white flex items-center gap-2">
-                    <Bot className="w-5 h-5 text-purple-600" /> Conversational Product Search & Buying Guidance
-                  </h3>
-                  <p className="text-xs text-slate-500">
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 rounded-md bg-purple-600 text-white text-[10px] font-black uppercase">
+                      Service 1
+                    </span>
+                    <h3 className="font-black text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                      <Bot className="w-5 h-5 text-purple-600" /> AI Concierge — Conversational Product Search & Buying Guidance
+                    </h3>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-1">
                     Natural language product discovery, budget constraint matching, and buying suggestions.
                   </p>
                 </div>
@@ -1479,7 +1833,21 @@ export const AiSearchView: React.FC<AiSearchViewProps> = ({
                       )}
 
                       {/* Render Explainability & Escalation Footer for AI Messages */}
-                      {msg.sender === 'ai' && renderExplainabilityFooter(msg.explainability, msg.providerUsed || 'Google Gemini 3.6 Flash')}
+                      {msg.sender === 'ai' && (
+                        <AIExplainabilityFooter
+                          explainability={msg.explainability}
+                          fallbackProvider={msg.providerUsed || 'Google Gemini 3.6 Flash'}
+                          activeProvider={activeProvider}
+                          providerConfigs={providerConfigs}
+                          personalizationEnabled={personalizationEnabled}
+                          onNotice={(m) => {
+                            setNoticeMessage(m);
+                            setTimeout(() => setNoticeMessage(null), 3000);
+                          }}
+                          onTriggerHumanReview={handleTriggerHumanReview}
+                          onReportIncorrect={handleReportIncorrect}
+                        />
+                      )}
                     </div>
                   </div>
                 ))}
@@ -1497,6 +1865,7 @@ export const AiSearchView: React.FC<AiSearchViewProps> = ({
                 <div className="flex items-center gap-2">
                   <div className="relative flex-1">
                     <input
+                      id="ai-chat-input"
                       type="text"
                       value={query}
                       onChange={(e) => setQuery(e.target.value)}
@@ -1582,12 +1951,19 @@ export const AiSearchView: React.FC<AiSearchViewProps> = ({
               </div>
             </div>
 
-            {/* Sidebar Capabilities & Support Concierge */}
-            <div className="lg:col-span-4 space-y-6">
+            {/* Sidebar Capabilities & Support Concierge (Service 2: AI Smart Search) */}
+            <div id="ai-smart-search-workspace" className="lg:col-span-4 space-y-6 scroll-mt-24">
               <div className="p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl space-y-4">
-                <h3 className="font-black text-sm text-slate-900 dark:text-white flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-purple-600" /> AI Recommendation Engine
-                </h3>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 rounded-md bg-purple-600 text-white text-[10px] font-black uppercase">
+                      Service 2
+                    </span>
+                    <h3 className="font-black text-sm text-slate-900 dark:text-white flex items-center gap-1.5">
+                      <Sparkles className="w-4 h-4 text-purple-600" /> AI Smart Search & Recommendations
+                    </h3>
+                  </div>
+                </div>
 
                 <div className="space-y-3 text-xs">
                   <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 space-y-1.5">
@@ -1670,14 +2046,27 @@ export const AiSearchView: React.FC<AiSearchViewProps> = ({
       {/* TAB 2: AI MERCHANT STUDIO */}
       {/* ==================================================== */}
       {activeTab === 'merchant_assistant' && (
-        <div className="space-y-6">
+        <div id="ai-merchant-studio-workspace" className="space-y-6 scroll-mt-24">
+          <WorkspaceHeader
+            title="AI Merchant Studio & Copywriting Suite"
+            subtitle="Autonomous neural copywriting, SEO meta-generation, localized translations, and market positioning hooks for verified Pi merchants."
+            icon={Store}
+            serviceNumber="Service 3"
+            actionName="Merchant Copy & Marketing"
+          />
+
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             
             {/* Merchant Copy Generator Form */}
             <div className="lg:col-span-6 p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl space-y-4">
-              <h3 className="font-black text-sm text-slate-900 dark:text-white flex items-center gap-2">
-                <Store className="w-5 h-5 text-purple-600" /> AI Product Copywriter & SEO Generator
-              </h3>
+              <div className="flex items-center justify-between">
+                <h3 className="font-black text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                  <Store className="w-5 h-5 text-purple-600" /> AI Product Copywriter & SEO Generator
+                </h3>
+                <span className="px-2 py-0.5 rounded-md bg-purple-600 text-white text-[10px] font-black uppercase">
+                  Service 3
+                </span>
+              </div>
               <p className="text-xs text-slate-500">
                 Generate compelling product descriptions, SEO tags, category suggestions, and marketing hooks in seconds.
               </p>
@@ -1686,11 +2075,12 @@ export const AiSearchView: React.FC<AiSearchViewProps> = ({
                 <div className="space-y-1.5">
                   <label className="font-bold text-slate-700 dark:text-slate-300">Product Title / Name:</label>
                   <input
+                    id="merchant-title-input"
                     type="text"
                     required
                     value={merchantTitleInput}
                     onChange={(e) => setMerchantTitleInput(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-medium"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-medium focus:ring-2 focus:ring-purple-500 focus:outline-none"
                   />
                 </div>
 
@@ -1776,7 +2166,18 @@ export const AiSearchView: React.FC<AiSearchViewProps> = ({
                     <span className="block text-[10px] opacity-80">Inventory Advisory: {merchantCopyResult.inventoryAdvice}</span>
                   </div>
 
-                  {renderExplainabilityFooter(undefined, merchantCopyResult.providerUsed)}
+                  <AIExplainabilityFooter
+                    fallbackProvider={merchantCopyResult.providerUsed}
+                    activeProvider={activeProvider}
+                    providerConfigs={providerConfigs}
+                    personalizationEnabled={personalizationEnabled}
+                    onNotice={(m) => {
+                      setNoticeMessage(m);
+                      setTimeout(() => setNoticeMessage(null), 3000);
+                    }}
+                    onTriggerHumanReview={handleTriggerHumanReview}
+                    onReportIncorrect={handleReportIncorrect}
+                  />
                 </div>
               )}
             </div>
@@ -1788,14 +2189,27 @@ export const AiSearchView: React.FC<AiSearchViewProps> = ({
       {/* TAB 3: INVENTORY INTELLIGENCE */}
       {/* ==================================================== */}
       {activeTab === 'inventory_intelligence' && (
-        <div className="space-y-6">
+        <div id="ai-inventory-workspace" className="space-y-6 scroll-mt-24">
+          <WorkspaceHeader
+            title="AI Inventory Intelligence & Demand Forecasting Suite"
+            subtitle="Predictive restock modeling, inventory velocity forecasting, SKU safety stock calculations, and warehouse telemetry."
+            icon={Package}
+            serviceNumber="Service 4"
+            actionName="Inventory Intelligence"
+          />
+
           <div className="p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
-                <h3 className="font-black text-sm text-slate-900 dark:text-white flex items-center gap-2">
-                  <Package className="w-5 h-5 text-purple-600" /> AI Inventory Intelligence & Demand Forecasting
-                </h3>
-                <p className="text-xs text-slate-500">
+                <div className="flex items-center gap-2">
+                  <span className="px-2 py-0.5 rounded-md bg-purple-600 text-white text-[10px] font-black uppercase">
+                    Service 4
+                  </span>
+                  <h3 className="font-black text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                    <Package className="w-5 h-5 text-purple-600" /> Stock Velocity & Predictive Reorder Engine
+                  </h3>
+                </div>
+                <p className="text-xs text-slate-500 mt-1">
                   Predictive low stock alerts, overstock warnings, velocity tracking, and warehouse reorder advice.
                 </p>
               </div>
@@ -1853,7 +2267,18 @@ export const AiSearchView: React.FC<AiSearchViewProps> = ({
                     </div>
                   )}
 
-                  {renderExplainabilityFooter(undefined, 'AI Inventory Intelligence Engine')}
+                  <AIExplainabilityFooter
+                    fallbackProvider="AI Inventory Intelligence Engine"
+                    activeProvider={activeProvider}
+                    providerConfigs={providerConfigs}
+                    personalizationEnabled={personalizationEnabled}
+                    onNotice={(m) => {
+                      setNoticeMessage(m);
+                      setTimeout(() => setNoticeMessage(null), 3000);
+                    }}
+                    onTriggerHumanReview={handleTriggerHumanReview}
+                    onReportIncorrect={handleReportIncorrect}
+                  />
                 </div>
               ))}
             </div>
@@ -1865,25 +2290,39 @@ export const AiSearchView: React.FC<AiSearchViewProps> = ({
       {/* TAB 4: SMART AUTOMATION & TRANSLATION */}
       {/* ==================================================== */}
       {activeTab === 'smart_automation' && (
-        <div className="space-y-6">
+        <div id="ai-fraud-translation-workspace" className="space-y-6 scroll-mt-24">
+          <WorkspaceHeader
+            title="AI Fraud Detection, Policy Moderation & Translation Suite"
+            subtitle="Automated phishing scanning, policy moderation, heuristic risk scoring, and multilingual neural translation."
+            icon={ShieldCheck}
+            serviceNumber="Service 5"
+            actionName="Fraud & Translation"
+          />
+
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             
             {/* Auto Content Moderation */}
             <div className="lg:col-span-6 p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl space-y-4">
-              <h3 className="font-black text-sm text-slate-900 dark:text-white flex items-center gap-2">
-                <ShieldCheck className="w-5 h-5 text-purple-600" /> Automated Policy Moderation Engine
-              </h3>
+              <div className="flex items-center justify-between">
+                <h3 className="font-black text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                  <ShieldCheck className="w-5 h-5 text-purple-600" /> Automated Policy Moderation Engine
+                </h3>
+                <span className="px-2 py-0.5 rounded-md bg-purple-600 text-white text-[10px] font-black uppercase">
+                  Service 5
+                </span>
+              </div>
               <p className="text-xs text-slate-500">
                 Scans user comments, product listings, and messages for phishing, seed phrase scams, or inappropriate language.
               </p>
 
               <div className="space-y-3 text-xs">
                 <textarea
+                  id="moderation-text-input"
                   rows={3}
                   value={moderationTextInput}
                   onChange={(e) => setModerationTextInput(e.target.value)}
                   placeholder="Paste text to moderate..."
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-medium"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-medium focus:ring-2 focus:ring-purple-500 focus:outline-none"
                 />
 
                 <button
@@ -1912,7 +2351,18 @@ export const AiSearchView: React.FC<AiSearchViewProps> = ({
                       Action Required: {moderationResult.suggestedCorrection}
                     </div>
                   )}
-                  {renderExplainabilityFooter(undefined, 'AI Policy Moderation Engine')}
+                  <AIExplainabilityFooter
+                    fallbackProvider="AI Policy Moderation Engine"
+                    activeProvider={activeProvider}
+                    providerConfigs={providerConfigs}
+                    personalizationEnabled={personalizationEnabled}
+                    onNotice={(m) => {
+                      setNoticeMessage(m);
+                      setTimeout(() => setNoticeMessage(null), 3000);
+                    }}
+                    onTriggerHumanReview={handleTriggerHumanReview}
+                    onReportIncorrect={handleReportIncorrect}
+                  />
                 </div>
               )}
             </div>
@@ -1956,7 +2406,18 @@ export const AiSearchView: React.FC<AiSearchViewProps> = ({
                     </span>
                   </div>
                   <p className="text-[11px] text-slate-300 leading-relaxed">{fraudAnalysis.recommendation}</p>
-                  {renderExplainabilityFooter(undefined, 'AI Fraud Risk Analysis Engine')}
+                  <AIExplainabilityFooter
+                    fallbackProvider="AI Fraud Risk Analysis Engine"
+                    activeProvider={activeProvider}
+                    providerConfigs={providerConfigs}
+                    personalizationEnabled={personalizationEnabled}
+                    onNotice={(m) => {
+                      setNoticeMessage(m);
+                      setTimeout(() => setNoticeMessage(null), 3000);
+                    }}
+                    onTriggerHumanReview={handleTriggerHumanReview}
+                    onReportIncorrect={handleReportIncorrect}
+                  />
                 </div>
               )}
             </div>
@@ -2009,7 +2470,18 @@ export const AiSearchView: React.FC<AiSearchViewProps> = ({
               <div className="p-4 rounded-2xl bg-purple-500/10 border border-purple-500/20 text-purple-900 dark:text-purple-200 text-xs font-semibold space-y-1">
                 <span className="text-[10px] text-purple-600 dark:text-purple-400 font-bold uppercase tracking-wider block">AI Translated Output ({targetLang.toUpperCase()}):</span>
                 <p className="leading-relaxed font-sans">{translatedResult}</p>
-                {renderExplainabilityFooter(undefined, 'AI Multilingual Neural Translator')}
+                <AIExplainabilityFooter
+                  fallbackProvider="AI Multilingual Neural Translator"
+                  activeProvider={activeProvider}
+                  providerConfigs={providerConfigs}
+                  personalizationEnabled={personalizationEnabled}
+                  onNotice={(m) => {
+                    setNoticeMessage(m);
+                    setTimeout(() => setNoticeMessage(null), 3000);
+                  }}
+                  onTriggerHumanReview={handleTriggerHumanReview}
+                  onReportIncorrect={handleReportIncorrect}
+                />
               </div>
             )}
           </div>
@@ -2020,48 +2492,73 @@ export const AiSearchView: React.FC<AiSearchViewProps> = ({
       {/* TAB 5: AI MODEL GOVERNANCE */}
       {/* ==================================================== */}
       {activeTab === 'model_governance' && (
-        <AiModelGovernanceTab
-          onAddAuditLog={(user, role, provider, action, prompt, resp, status) => {
-            addAuditLogEntry(
-              user,
-              role,
-              provider,
-              action,
-              prompt,
-              resp,
-              status as any
-            );
-          }}
-          setNoticeMessage={setNoticeMessage}
-        />
+        <div id="ai-model-governance-workspace" className="space-y-6 scroll-mt-24">
+          <WorkspaceHeader
+            title="AI Model Governance & Risk Management Dashboard"
+            subtitle="Autonomous model version tracking, approval workflows, staged rollout monitors, and compliance verification."
+            icon={ShieldCheck}
+            serviceNumber="Service 6"
+            actionName="Model Governance"
+          />
+          <AiModelGovernanceTab
+            onAddAuditLog={(user, role, provider, action, prompt, resp, status) => {
+              addAuditLogEntry(
+                user,
+                role,
+                provider,
+                action,
+                prompt,
+                resp,
+                status as any
+              );
+            }}
+            setNoticeMessage={setNoticeMessage}
+          />
+        </div>
       )}
 
       {/* ==================================================== */}
       {/* TAB 6: AI PRIVACY GOVERNANCE */}
       {/* ==================================================== */}
       {activeTab === 'privacy_governance' && (
-        <AiPrivacyGovernanceTab
-          onAddAuditLog={(user, role, provider, action, prompt, resp, status) => {
-            addAuditLogEntry(
-              user,
-              role,
-              provider,
-              action,
-              prompt,
-              resp,
-              status as any
-            );
-          }}
-          setNoticeMessage={setNoticeMessage}
-        />
+        <div id="ai-privacy-governance-workspace" className="space-y-6 scroll-mt-24">
+          <WorkspaceHeader
+            title="AI Privacy Governance & Compliance Management"
+            subtitle="Consent tracking, automated PII redaction, cryptographic retention boundaries, and Pi ecosystem privacy compliance."
+            icon={Lock}
+            serviceNumber="Service 7"
+            actionName="Privacy Governance"
+          />
+          <AiPrivacyGovernanceTab
+            onAddAuditLog={(user, role, provider, action, prompt, resp, status) => {
+              addAuditLogEntry(
+                user,
+                role,
+                provider,
+                action,
+                prompt,
+                resp,
+                status as any
+              );
+            }}
+            setNoticeMessage={setNoticeMessage}
+          />
+        </div>
       )}
 
       {/* ==================================================== */}
       {/* TAB 7: PROVIDER REGISTRY & HEALTH DASHBOARD */}
       {/* ==================================================== */}
       {activeTab === 'architecture_governance' && (
-        <div className="space-y-6">
-          
+        <div id="ai-provider-registry-workspace" className="space-y-6 scroll-mt-24">
+          <WorkspaceHeader
+            title="AI Provider Registry, Adapters & Health Dashboard"
+            subtitle="Multi-provider runtime switcher, live SLA metrics, dynamic prompt template library, and automatic failover engine."
+            icon={Cpu}
+            serviceNumber="Service 8"
+            actionName="Provider Registry"
+          />
+
           {/* AI Provider Health & Failover Monitoring Card */}
           <div className="p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -2491,17 +2988,30 @@ export const AiSearchView: React.FC<AiSearchViewProps> = ({
       )}
 
       {/* ==================================================== */}
-      {/* TAB 6: USAGE METRICS & AUDIT LOGS */}
+      {/* TAB 8: USAGE METRICS & AUDIT LOGS */}
       {/* ==================================================== */}
       {activeTab === 'audit_monitoring' && (
-        <div className="space-y-6">
+        <div id="ai-usage-analytics-workspace" className="space-y-6 scroll-mt-24">
+          <WorkspaceHeader
+            title="AI Usage Metrics, Analytics & Audit Trail"
+            subtitle="Transparent token consumption metrics, query latency benchmarks, and append-only governance audit trails."
+            icon={Activity}
+            serviceNumber="Service 9"
+            actionName="AI Usage & Analytics"
+          />
+
           <div className="p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
-                <h3 className="font-black text-sm text-slate-900 dark:text-white flex items-center gap-2">
-                  <Activity className="w-5 h-5 text-purple-600" /> AI Resource Usage Monitoring & Governance Audit Trail
-                </h3>
-                <p className="text-xs text-slate-500">
+                <div className="flex items-center gap-2">
+                  <span className="px-2 py-0.5 rounded-md bg-purple-600 text-white text-[10px] font-black uppercase">
+                    Service 9
+                  </span>
+                  <h3 className="font-black text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                    <Activity className="w-5 h-5 text-purple-600" /> AI Resource Usage Monitoring & Governance Audit Trail
+                  </h3>
+                </div>
+                <p className="text-xs text-slate-500 mt-1">
                   Real-time token metrics, query latency tracking, and transparent audit logs for all AI operations.
                 </p>
               </div>

@@ -17,14 +17,15 @@ import {
   Clock,
   Flame,
   ChevronRight,
-  Store
+  Store,
+  AlertTriangle
 } from 'lucide-react';
 
 import { Product, Order, OrderItem, Vendor, Review, Coupon, Notification, Message, PiUser, ProductCategory, PstpOrderStatus, UserRole } from './types';
 import { INITIAL_PRODUCTS, MOCK_VENDORS, MOCK_REVIEWS, MOCK_COUPONS, SAMPLE_ORDERS } from './data/mockData';
 import { initAndAuthenticateProactively, subscribePiSdkState } from './lib/piSdk';
 
-import { MainSection, MarketplaceCategory, UtilityCategory, BreadcrumbItem, VisitedCategory } from './types/navigation';
+import { MainSection, MarketplaceCategory, UtilityCategory, BreadcrumbItem, VisitedCategory, AiHubSubTab } from './types/navigation';
 import { MARKETPLACE_CATEGORIES, UTILITY_CATEGORIES } from './data/categoryData';
 
 import { FullScreenNavHeader } from './components/navigation/FullScreenNavHeader';
@@ -163,6 +164,7 @@ function MainAppContent() {
   const [activeChatOrderId, setActiveChatOrderId] = useState<string | undefined>();
   const [selectedTrackingOrderId, setSelectedTrackingOrderId] = useState<string | undefined>();
   const [selectedTrackingSubTab, setSelectedTrackingSubTab] = useState<'details' | 'tracking' | 'digital' | 'receipt' | 'return' | 'dispute'>('tracking');
+  const [selectedAiSubTab, setSelectedAiSubTab] = useState<AiHubSubTab>('shopping_assistant');
 
   // Persistence Sync Side Effects
   useEffect(() => {
@@ -257,20 +259,75 @@ function MainAppContent() {
     setIsUniversalSearchOpen(true);
   };
 
-  // Navigate to Section Handler with Stack Push
-  const handleNavigateSection = (newSection: MainSection, newCategory: MarketplaceCategory | string = 'all') => {
-    setActiveSection(newSection);
-    if (newSection === 'marketplace') {
+  // Canonical Mapping Dictionary for all 9 AI Services
+  const AI_CANONICAL_SUBTAB_MAP: Record<string, AiHubSubTab> = {
+    'ai-concierge': 'shopping_assistant',
+    'ai_concierge': 'shopping_assistant',
+    'concierge': 'shopping_assistant',
+    'ai_search': 'shopping_assistant',
+    'shopping_assistant': 'shopping_assistant',
+    'ai-smart-search': 'shopping_assistant',
+    'ai_smart_search': 'shopping_assistant',
+    'smart_search': 'shopping_assistant',
+    'ai-merchant-marketing': 'merchant_assistant',
+    'ai_merchant_marketing': 'merchant_assistant',
+    'merchant_assistant': 'merchant_assistant',
+    'ai-inventory-intelligence': 'inventory_intelligence',
+    'ai_inventory_intelligence': 'inventory_intelligence',
+    'inventory_intelligence': 'inventory_intelligence',
+    'fraud-detection-translation': 'smart_automation',
+    'fraud_detection_translation': 'smart_automation',
+    'smart_automation': 'smart_automation',
+    'ai-model-governance': 'model_governance',
+    'ai_model_governance': 'model_governance',
+    'model_governance': 'model_governance',
+    'ai-privacy-governance': 'privacy_governance',
+    'ai_privacy_governance': 'privacy_governance',
+    'privacy_governance': 'privacy_governance',
+    'provider-registry-health': 'architecture_governance',
+    'provider_registry_health': 'architecture_governance',
+    'architecture_governance': 'architecture_governance',
+    'ai-analytics-usage': 'audit_monitoring',
+    'ai_analytics_usage': 'audit_monitoring',
+    'audit_monitoring': 'audit_monitoring'
+  };
+
+  // Navigate to Section Handler with Stack Push & Canonical AI Resolver
+  const handleNavigateSection = (newSection: MainSection | string, newCategory: MarketplaceCategory | string = 'all') => {
+    let targetSection: MainSection = 'home';
+    let targetSubTab: AiHubSubTab | null = null;
+
+    // Check if the requested destination is one of the 9 AI canonical services or aliases
+    if (typeof newSection === 'string' && newSection in AI_CANONICAL_SUBTAB_MAP) {
+      targetSection = 'ai_search';
+      targetSubTab = (newCategory && newCategory !== 'all' && newCategory in AI_CANONICAL_SUBTAB_MAP)
+        ? AI_CANONICAL_SUBTAB_MAP[newCategory]
+        : AI_CANONICAL_SUBTAB_MAP[newSection];
+    } else if (newSection === 'ai_search') {
+      targetSection = 'ai_search';
+      if (newCategory && newCategory !== 'all' && newCategory in AI_CANONICAL_SUBTAB_MAP) {
+        targetSubTab = AI_CANONICAL_SUBTAB_MAP[newCategory];
+      }
+    } else {
+      targetSection = newSection as MainSection;
+    }
+
+    if (targetSubTab) {
+      setSelectedAiSubTab(targetSubTab);
+    }
+
+    setActiveSection(targetSection);
+    if (targetSection === 'marketplace') {
       setSelectedMarketplaceCategory(newCategory as MarketplaceCategory);
-    } else if (newSection === 'utilities') {
+    } else if (targetSection === 'utilities') {
       setSelectedUtilityCategory((newCategory && newCategory !== 'all' ? newCategory : 'airtime') as string);
     }
     
     // Push onto navigation history stack if distinct
     setNavigationStack((prev) => {
       const top = prev[prev.length - 1];
-      if (top && top.section === newSection && top.category === newCategory) return prev;
-      return [...prev, { section: newSection, category: newCategory }];
+      if (top && top.section === targetSection && top.category === newCategory) return prev;
+      return [...prev, { section: targetSection, category: newCategory }];
     });
 
     try {
@@ -585,8 +642,24 @@ function MainAppContent() {
       }
       case 'services':
         return [{ label: 'Services', section: 'services' }];
-      case 'ai_search':
-        return [{ label: 'AI Concierge', section: 'ai_search' }];
+      case 'ai_search': {
+        const AI_SUBTAB_TITLES: Record<AiHubSubTab, string> = {
+          shopping_assistant: 'AI Concierge & Smart Search',
+          merchant_assistant: 'AI Merchant & Marketing Studio',
+          inventory_intelligence: 'AI Inventory Intelligence',
+          smart_automation: 'Fraud Detection & Translation',
+          model_governance: 'AI Model Governance',
+          privacy_governance: 'AI Privacy Governance',
+          architecture_governance: 'Provider Registry & Health',
+          audit_monitoring: 'AI Analytics & Usage Metrics'
+        };
+        return [
+          { label: 'AI Concierge', section: 'ai_search' },
+          ...(selectedAiSubTab !== 'shopping_assistant'
+            ? [{ label: AI_SUBTAB_TITLES[selectedAiSubTab] || 'AI Service', section: 'ai_search' as MainSection }]
+            : [])
+        ];
+      }
       case 'cart':
         return [
           { label: 'Marketplace', section: 'marketplace' },
@@ -836,6 +909,8 @@ function MainAppContent() {
             onNavigateSection={handleNavigateSection}
             onOpenStorefront={handleOpenStorefrontByName}
             onOpenUniversalSearch={handleOpenUniversalSearch}
+            initialTab={selectedAiSubTab}
+            onTabChange={(tab) => setSelectedAiSubTab(tab)}
           />
         )}
 
@@ -965,6 +1040,54 @@ function MainAppContent() {
             onNavigateSection={handleNavigateSection}
             onOpenPstpShield={() => setIsPstpShieldOpen(true)}
           />
+        )}
+
+        {/* Safe Portal Fallback for Unrecognized Destinations */}
+        {![
+          'home',
+          'marketplace',
+          'utilities',
+          'services',
+          'ai_search',
+          'cart',
+          'orders',
+          'community',
+          'profile',
+          'seller_studio',
+          'finance_analytics',
+          'admin_governance',
+          'security_trust',
+          'developer_platform',
+          'future_services'
+        ].includes(activeSection) && (
+          <div className="max-w-2xl mx-auto px-4 py-16 text-center space-y-6 animate-fade-in">
+            <div className="w-16 h-16 rounded-3xl bg-purple-500/10 text-purple-500 border border-purple-500/20 flex items-center justify-center mx-auto shadow-lg">
+              <AlertTriangle className="w-8 h-8 text-amber-500" />
+            </div>
+            <div className="space-y-2">
+              <h2 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
+                Destination Not Found / Safe Portal Active
+              </h2>
+              <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 max-w-md mx-auto leading-relaxed">
+                The requested internal destination is currently not available. You remain safely inside PiNova Global Hub.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+              <button
+                onClick={() => handleNavigateSection('ai_search')}
+                className="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold transition-all shadow-md flex items-center gap-2 active:scale-95"
+              >
+                <Sparkles className="w-4 h-4 text-amber-300" />
+                <span>Back to AI Concierge</span>
+              </button>
+              <button
+                onClick={() => handleNavigateSection('home')}
+                className="px-5 py-2.5 rounded-xl bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold transition-all active:scale-95"
+              >
+                <span>Back to Global Hub</span>
+              </button>
+            </div>
+          </div>
         )}
 
       </main>

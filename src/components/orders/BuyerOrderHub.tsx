@@ -256,30 +256,6 @@ export const BuyerOrderHub: React.FC<BuyerOrderHubProps> = ({
     setDisputeDesc('');
   };
 
-  // If no orders at all exist in the entire system
-  if (!activeOrder && orders.length === 0) {
-    return (
-      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xl p-8 sm:p-12 text-center max-w-4xl mx-auto my-4 space-y-4">
-        <div className="w-16 h-16 rounded-3xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center mx-auto">
-          <Package className="w-8 h-8" />
-        </div>
-        <h3 className="text-xl font-black text-slate-800 dark:text-slate-100">No Orders Found</h3>
-        <p className="text-sm text-slate-500 max-w-md mx-auto">
-          You haven't placed any marketplace or utility orders yet. Explore our verified stores to start shopping with Pi!
-        </p>
-        {onExploreMarketplace && (
-          <button
-            onClick={onExploreMarketplace}
-            className="px-6 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-purple-600/30 transition-all inline-flex items-center gap-2"
-          >
-            <ShoppingBag className="w-4 h-4" />
-            <span>Explore Marketplace</span>
-          </button>
-        )}
-      </div>
-    );
-  }
-
   // Dynamic Milestones calculation
   const isPhysical = activeOrder?.items.some(i => i.product?.category === 'physical');
   const isDigitalOrUtility = activeOrder?.items.some(i => i.product?.category === 'digital' || i.product?.category === 'giftcard' || i.product?.category === 'utility' || i.product?.category === 'airtime');
@@ -386,6 +362,30 @@ export const BuyerOrderHub: React.FC<BuyerOrderHubProps> = ({
       }
     ];
   }, [activeOrder, isDigitalOrUtility]);
+
+  // If no orders at all exist in the entire system
+  if (!activeOrder && orders.length === 0) {
+    return (
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xl p-8 sm:p-12 text-center max-w-4xl mx-auto my-4 space-y-4">
+        <div className="w-16 h-16 rounded-3xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center mx-auto">
+          <Package className="w-8 h-8" />
+        </div>
+        <h3 className="text-xl font-black text-slate-800 dark:text-slate-100">No Orders Found</h3>
+        <p className="text-sm text-slate-500 max-w-md mx-auto">
+          You haven't placed any marketplace or utility orders yet. Explore our verified stores to start shopping with Pi!
+        </p>
+        {onExploreMarketplace && (
+          <button
+            onClick={onExploreMarketplace}
+            className="px-6 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-purple-600/30 transition-all inline-flex items-center gap-2"
+          >
+            <ShoppingBag className="w-4 h-4" />
+            <span>Explore Marketplace</span>
+          </button>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden max-w-6xl w-full mx-auto my-4 flex flex-col">

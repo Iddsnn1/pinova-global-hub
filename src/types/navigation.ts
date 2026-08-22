@@ -13,7 +13,46 @@ export type MainSection =
   | 'cart'
   | 'orders'
   | 'community'
-  | 'profile';
+  | 'profile'
+  | 'ai-concierge'
+  | 'ai-smart-search'
+  | 'ai-merchant-marketing'
+  | 'ai-inventory-intelligence'
+  | 'fraud-detection-translation'
+  | 'ai-model-governance'
+  | 'ai-privacy-governance'
+  | 'provider-registry-health'
+  | 'ai-analytics-usage';
+
+export type AiHubSubTab = 
+  | 'shopping_assistant'
+  | 'merchant_assistant'
+  | 'inventory_intelligence'
+  | 'smart_automation'
+  | 'model_governance'
+  | 'privacy_governance'
+  | 'architecture_governance'
+  | 'audit_monitoring';
+
+export type AiCanonicalService =
+  | 'ai-concierge'
+  | 'ai_concierge'
+  | 'ai-smart-search'
+  | 'ai_smart_search'
+  | 'ai-merchant-marketing'
+  | 'ai_merchant_marketing'
+  | 'ai-inventory-intelligence'
+  | 'ai_inventory_intelligence'
+  | 'fraud-detection-translation'
+  | 'fraud_detection_translation'
+  | 'ai-model-governance'
+  | 'ai_model_governance'
+  | 'ai-privacy-governance'
+  | 'ai_privacy_governance'
+  | 'provider-registry-health'
+  | 'provider_registry_health'
+  | 'ai-analytics-usage'
+  | 'ai_analytics_usage';
 
 export type MarketplaceCategory = 
   | 'phones_mobile'

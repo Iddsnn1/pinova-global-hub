@@ -26,7 +26,8 @@ import {
   UtilityServiceProvider, 
   TransportSearchCriteria, 
   TransportSearchResultItem, 
-  PiConversionConfig 
+  PiConversionConfig,
+  UtilityTransactionReceipt 
 } from '../../../types/utility';
 import { 
   resolveTransportRoute,
@@ -48,6 +49,7 @@ interface TransportDiscoveryProps {
   piConversionConfig: PiConversionConfig;
   userBalancePi?: number;
   buyerUsername?: string;
+  onTransactionSuccess?: (receipt: UtilityTransactionReceipt) => void;
   onSelectOption: (
     provider: UtilityServiceProvider,
     routeMeta: {
@@ -85,6 +87,7 @@ export const TransportDiscovery: React.FC<TransportDiscoveryProps> = ({
   piConversionConfig,
   userBalancePi = 1250.00,
   buyerUsername = 'Pioneer_User',
+  onTransactionSuccess,
   onSelectOption
 }) => {
   // 1. Initial State: No transport mode selected initially on clean landing
@@ -474,6 +477,30 @@ export const TransportDiscovery: React.FC<TransportDiscoveryProps> = ({
           buyerUsername={buyerUsername}
           initialOrigin={originInput || 'KAN'}
           initialDestination={destinationInput || 'JED'}
+          onBookingSuccess={(booking) => {
+            if (onTransactionSuccess) {
+              onTransactionSuccess({
+                transactionId: booking.bookingId || `TX-FLIGHT-${Date.now()}`,
+                piPaymentId: booking.payment?.piPaymentId || `PI-PAY-${Date.now()}`,
+                piTxid: booking.payment?.piTxid,
+                category: 'transport',
+                providerId: `flight-${booking.flightSummary?.airline?.toLowerCase().replace(/[^a-z0-9]/g, '-') || 'airline'}`,
+                providerName: booking.flightSummary?.airline || 'Airline Carrier',
+                accountNumber: booking.pnr || booking.bookingReference || `PNR-${Date.now()}`,
+                accountName: booking.passenger ? `${booking.passenger.givenName} ${booking.passenger.familyName}` : 'Passenger',
+                fiatAmount: booking.payment?.fiatAmount || 0,
+                fiatCurrency: booking.payment?.fiatCurrency || 'USD',
+                appliedPiRateUsd: booking.payment?.piRateApplied || piConversionConfig.piRateUsd,
+                piAmount: booking.payment?.piAmount || 0,
+                packageName: `${booking.flightSummary?.airline || 'Flight'} ${booking.flightSummary?.flightNumber || ''} (${booking.flightSummary?.originCode || ''} ➔ ${booking.flightSummary?.destinationCode || ''})`,
+                tokenOrCode: booking.pnr || booking.bookingReference || booking.ticketNumber,
+                status: 'SUCCESS',
+                timestamp: booking.issuedAt || new Date().toISOString(),
+                orderProtectionGuaranteed: true,
+                buyerUsername
+              });
+            }
+          }}
           onSelectOptionForUtility={(provider, routeMeta) => {
             const safeFiat = typeof routeMeta.fiatFare === 'number' && Number.isFinite(routeMeta.fiatFare) && routeMeta.fiatFare > 0
               ? Number(routeMeta.fiatFare.toFixed(2))

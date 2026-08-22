@@ -30,7 +30,7 @@ import { LanguageSelectorDropdown } from '../i18n/LanguageSelectorDropdown';
 
 interface FullScreenNavHeaderProps {
   activeSection: MainSection;
-  onNavigateSection: (section: MainSection) => void;
+  onNavigateSection: (section: MainSection, category?: any) => void;
   breadcrumbs: BreadcrumbItem[];
   canGoBack: boolean;
   onGoBack: () => void;

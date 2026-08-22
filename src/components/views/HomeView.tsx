@@ -177,7 +177,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
           </span>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-7 gap-2.5 sm:gap-3.5">
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2.5 sm:gap-3.5">
           
           {/* Module 1: Marketplace */}
           <div
@@ -247,7 +247,24 @@ export const HomeView: React.FC<HomeViewProps> = ({
             </div>
           </div>
 
-          {/* Module 5: PSTP Security */}
+          {/* Module 5: AI Concierge */}
+          <div
+            id="hub-module-ai-concierge"
+            onClick={() => onNavigateSection('ai_search')}
+            className="p-3.5 sm:p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-amber-500 dark:hover:border-amber-500 transition-all cursor-pointer group shadow-sm flex flex-col items-center text-center space-y-2 hover:-translate-y-0.5 hover:shadow-md"
+          >
+            <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-amber-500/10 text-amber-500 dark:text-amber-400 flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
+              <Sparkles className="w-5 h-5 sm:w-6 sm:h-6" />
+            </div>
+            <div>
+              <h3 className="text-xs sm:text-sm font-black text-slate-900 dark:text-slate-100 group-hover:text-amber-500 transition-colors">
+                AI Concierge
+              </h3>
+              <p className="text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Intelligence & Chat</p>
+            </div>
+          </div>
+
+          {/* Module 6: PSTP Security */}
           <div
             id="hub-module-pstp-security"
             onClick={onOpenPstpShield}
@@ -264,7 +281,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             </div>
           </div>
 
-          {/* Module 6: Developer SDK */}
+          {/* Module 7: Developer SDK */}
           <div
             id="hub-module-developer"
             onClick={() => onNavigateSection('developer_platform' as any)}
@@ -281,7 +298,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             </div>
           </div>
 
-          {/* Module 7: Future Services */}
+          {/* Module 8: Future Services */}
           <div
             id="hub-module-future-services"
             onClick={() => onNavigateSection('future_services')}
