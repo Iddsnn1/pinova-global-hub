@@ -560,14 +560,14 @@ export function matchesTransportRoute(
   // If destination is specified, the route MUST serve this destination station/city/alias or corridor stop.
   const destQuery = criteria.destinationCode?.trim();
   if (destQuery && destQuery.length > 0) {
-    const destStation = resolveTransitStation(destQuery);
-    const destAliases = destStation?.aliases || [];
+    const routeDestStation = resolveTransitStation(route.destinationCode);
+    const routeDestAliases = routeDestStation?.aliases || [];
     const isDestMatch = matchesStationOrCity(
       destQuery,
       route.destinationCode,
       route.destinationCity,
       route.destinationName,
-      destAliases,
+      routeDestAliases,
       route.stops
     );
 
@@ -580,14 +580,14 @@ export function matchesTransportRoute(
   // If origin is specified, the route MUST originate from or serve this origin station/city/alias or corridor stop.
   const origQuery = criteria.originCode?.trim();
   if (origQuery && origQuery.length > 0) {
-    const origStation = resolveTransitStation(origQuery);
-    const origAliases = origStation?.aliases || [];
+    const routeOrigStation = resolveTransitStation(route.originCode);
+    const routeOrigAliases = routeOrigStation?.aliases || [];
     const isOrigMatch = matchesStationOrCity(
       origQuery,
       route.originCode,
       route.originCity,
       route.originName,
-      origAliases,
+      routeOrigAliases,
       route.stops
     );
 

@@ -20,6 +20,7 @@ import {
 import { Product, Vendor, Order } from '../types';
 import { MainSection } from '../types/navigation';
 import { MARKETPLACE_CATEGORIES, UTILITY_CATEGORIES } from '../data/categoryData';
+import { SAMPLE_UTILITY_PROVIDERS } from '../data/utilityData';
 
 interface UniversalSearchModalProps {
   isOpen: boolean;
@@ -118,22 +119,36 @@ export const UniversalSearchModal: React.FC<UniversalSearchModalProps> = ({
     return [...mpCats, ...utilCats];
   }, [trimmed]);
 
-  // Search Utilities
-  const sampleUtilities = [
-    { id: 'util-1', name: 'Instant Airtime Topup (Global)', network: 'MTN, Airtel, Vodacom, Orange, AT&T', category: 'airtime', priceRange: '1 - 100 π' },
-    { id: 'util-2', name: 'High-Speed Mobile Data Bundle', network: '4G/5G Enterprise Connectivity', category: 'mobile_data', priceRange: '2 - 50 π' },
-    { id: 'util-3', name: 'Electricity Utility Token Payment', network: 'Prepaid Smart Meter Pay', category: 'electricity', priceRange: '5 - 500 π' },
-    { id: 'util-4', name: 'Water & Sanitation Bill Settle', network: 'Municipal Water Board', category: 'water_bills', priceRange: '3 - 200 π' },
-    { id: 'util-5', name: 'Cable TV Subscription Renewal', network: 'DStv, GOtv, StarTimes', category: 'cable_tv', priceRange: '8 - 80 π' }
-  ];
-
+  // Search Utilities from canonical dataset
   const filteredUtilities = useMemo(() => {
-    if (!trimmed) return sampleUtilities;
-    return sampleUtilities.filter(u => 
-      (u.name || '').toLowerCase().includes(trimmed) ||
-      (u.network || '').toLowerCase().includes(trimmed) ||
-      (u.category || '').toLowerCase().includes(trimmed)
-    );
+    if (!trimmed) {
+      return SAMPLE_UTILITY_PROVIDERS.slice(0, 8).map(p => ({
+        id: p.id,
+        name: p.name,
+        network: `${p.country || 'Global'}${p.state ? ` • ${p.state}` : ''} • ${p.category.toUpperCase()}`,
+        category: p.category,
+        logo: p.logo,
+        country: p.country,
+        state: p.state
+      }));
+    }
+    return SAMPLE_UTILITY_PROVIDERS.filter(p => {
+      const nameMatch = (p.name || '').toLowerCase().includes(trimmed);
+      const catMatch = (p.category || '').toLowerCase().includes(trimmed);
+      const countryMatch = (p.country || '').toLowerCase().includes(trimmed) || (p.countryCode || '').toLowerCase().includes(trimmed);
+      const stateMatch = (p.state || '').toLowerCase().includes(trimmed);
+      const desigMatch = Array.isArray(p.designations) && p.designations.some(d => d.toLowerCase().includes(trimmed));
+      const pkgMatch = Array.isArray(p.packages) && p.packages.some(pkg => (pkg.name || '').toLowerCase().includes(trimmed));
+      return nameMatch || catMatch || countryMatch || stateMatch || desigMatch || pkgMatch;
+    }).slice(0, 16).map(p => ({
+      id: p.id,
+      name: p.name,
+      network: `${p.country || 'Global'}${p.state ? ` • ${p.state}` : ''} • ${p.category.toUpperCase()}`,
+      category: p.category,
+      logo: p.logo,
+      country: p.country,
+      state: p.state
+    }));
   }, [trimmed]);
 
   // Search Services
@@ -559,8 +574,12 @@ export const UniversalSearchModal: React.FC<UniversalSearchModalProps> = ({
                     className="p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-emerald-500 transition-all cursor-pointer flex items-center justify-between gap-3 shadow-sm"
                   >
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center font-bold">
-                        <Zap className="w-5 h-5" />
+                      <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center font-bold overflow-hidden shrink-0">
+                        {util.logo ? (
+                          <img src={util.logo} alt={util.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                        ) : (
+                          <Zap className="w-5 h-5" />
+                        )}
                       </div>
                       <div>
                         <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100">{util.name}</h4>

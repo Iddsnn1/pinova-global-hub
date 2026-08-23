@@ -22,5 +22,20 @@
     "createdAt": "2026-08-21T09:26:26.495Z",
     "updatedAt": "2026-08-21T09:26:26.517Z",
     "metadata": {}
+  },
+  {
+    "paymentId": "pay_123",
+    "orderId": "ORD-99",
+    "amountPi": 5,
+    "status": "APPROVED",
+    "approvalStatus": "APPROVED",
+    "completionStatus": "PENDING",
+    "timestamp": 1787487355937,
+    "createdAt": "2026-08-23T12:15:55.937Z",
+    "updatedAt": "2026-08-23T12:15:55.937Z",
+    "metadata": {
+      "orderId": "ORD-99",
+      "amountPi": 5
+    }
   }
 ]

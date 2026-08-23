@@ -1,5 +1,27 @@
 [
   {
+    "id": "LOG-UUID-1787487355937-a6o1",
+    "orderId": "ORD-99",
+    "actor": "audit_tester",
+    "actorRole": "system",
+    "action": "TEST",
+    "details": "audit test log",
+    "ipAddress": "127.0.0.1",
+    "deviceInfo": "Pi Browser Web",
+    "timestamp": "2026-08-23T12:15:55.937Z"
+  },
+  {
+    "id": "LOG-UUID-1787484700223-mkl5",
+    "orderId": "ORD-123",
+    "actor": "buyer_test",
+    "actorRole": "buyer",
+    "action": "ORDER_CREATED",
+    "details": "Order created for 10 PI with PSTP escrow.",
+    "ipAddress": "127.0.0.1",
+    "deviceInfo": "Pi Browser Web",
+    "timestamp": "2026-08-23T11:31:40.223Z"
+  },
+  {
     "id": "LOG-UUID-1787305019730-6snt",
     "orderId": "ORD-AUDIT-001",
     "actor": "pioneer_alice",

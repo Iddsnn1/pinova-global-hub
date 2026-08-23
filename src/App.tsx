@@ -123,10 +123,16 @@ function MainAppContent() {
       const saved = localStorage.getItem('pinova_user_orders') || localStorage.getItem('pinova_orders_cache');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const validated = parsed.filter(
+            (o): o is Order =>
+              Boolean(o && typeof o === 'object' && typeof o.id === 'string' && typeof o.totalPi === 'number' && (o.pstpStatus || o.status))
+          );
+          if (validated.length > 0) return validated;
+        }
       }
     } catch (e) {
-      // fallback
+      console.warn('Failed to parse cached orders, falling back to sample orders:', e);
     }
     return SAMPLE_ORDERS;
   });

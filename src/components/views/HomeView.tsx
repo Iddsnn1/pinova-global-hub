@@ -173,7 +173,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             </p>
           </div>
           <span className="hidden sm:inline-block text-xs text-purple-400 font-bold bg-purple-500/10 px-3 py-1 rounded-full border border-purple-500/20">
-            7 Core Portals
+            8 Core Portals
           </span>
         </div>
 

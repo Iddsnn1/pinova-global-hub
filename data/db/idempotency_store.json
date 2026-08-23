@@ -1,0 +1,19 @@
+[
+  {
+    "key": "test-idemp-key-12345",
+    "result": {
+      "orderId": "ORD-123",
+      "amount": 10
+    },
+    "createdAt": "2026-08-23T11:31:33.142Z",
+    "expiresAt": 1787571093142
+  },
+  {
+    "key": "k1",
+    "result": {
+      "value": "hello"
+    },
+    "createdAt": "2026-08-23T12:15:55.936Z",
+    "expiresAt": 1787573755936
+  }
+]
