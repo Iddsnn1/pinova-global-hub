@@ -171,7 +171,12 @@ export function getPiSdkDiagnosticState(): PiSdkDiagnosticState {
 
   const hasPi = typeof window !== 'undefined' && Boolean(window.Pi);
   const currentOrigin = typeof window !== 'undefined' ? window.location.origin : '';
-  const isIframe = typeof window !== 'undefined' ? window.self !== window.top : false;
+  let isIframe = false;
+  try {
+    isIframe = typeof window !== 'undefined' ? window.self !== window.top : false;
+  } catch {
+    isIframe = true;
+  }
   const isSandbox = isSandboxMode();
 
   const isSdkReady = sdkInitialized && hasPi;
@@ -427,7 +432,13 @@ export async function authenticatePiUser(
   console.log('[PI DIAGNOSTIC] window.location.origin:', currentOrigin);
   console.log('[PI DIAGNOSTIC] window.location.hostname:', typeof window !== 'undefined' ? window.location.hostname : '');
   console.log('[PI DIAGNOSTIC] document.readyState:', typeof document !== 'undefined' ? document.readyState : '');
-  console.log('[PI DIAGNOSTIC] window.self === window.top:', typeof window !== 'undefined' ? window.self === window.top : true);
+  let isTopFrame = true;
+  try {
+    isTopFrame = typeof window !== 'undefined' ? window.self === window.top : true;
+  } catch {
+    isTopFrame = false;
+  }
+  console.log('[PI DIAGNOSTIC] window.self === window.top:', isTopFrame);
   console.log('[PI DIAGNOSTIC] build commit:', BUILD_COMMIT);
 
   const inPiBrowser = isPiBrowser();

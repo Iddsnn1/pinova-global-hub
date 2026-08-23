@@ -34,6 +34,7 @@ interface UniversalSearchModalProps {
   onAddToCart: (product: Product) => void;
   onInstantBuy: (product: Product) => void;
   onSelectOrder?: (orderId: string) => void;
+  onAskAiConcierge?: (query: string) => void;
 }
 
 type SearchTab = 'all' | 'products' | 'utilities' | 'services' | 'sellers' | 'categories' | 'orders';
@@ -50,16 +51,22 @@ export const UniversalSearchModal: React.FC<UniversalSearchModalProps> = ({
   onNavigateSection,
   onAddToCart,
   onInstantBuy,
-  onSelectOrder
+  onSelectOrder,
+  onAskAiConcierge
 }) => {
-  const [query, setQuery] = useState(initialQuery);
+  const [query, setQuery] = useState(typeof initialQuery === 'string' ? initialQuery : '');
   const [activeTab, setActiveTab] = useState<SearchTab>('all');
 
   useEffect(() => {
-    setQuery(initialQuery);
+    if (typeof initialQuery === 'string') {
+      setQuery(initialQuery);
+    } else {
+      setQuery('');
+    }
   }, [initialQuery]);
 
-  const trimmed = query.trim().toLowerCase();
+  const safeQuery = typeof query === 'string' ? query : '';
+  const trimmed = safeQuery.trim().toLowerCase();
 
   // Search Products
   const filteredProducts = useMemo(() => {
@@ -326,20 +333,26 @@ export const UniversalSearchModal: React.FC<UniversalSearchModalProps> = ({
         <div className="p-4 sm:p-6 overflow-y-auto space-y-6 flex-1 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
           
           {/* Quick AI Suggestion Prompt if query is present */}
-          {query && (
+          {safeQuery && (
             <div className="p-4 rounded-2xl bg-gradient-to-r from-purple-950/80 via-indigo-950/80 to-slate-900 border border-purple-800/60 text-white flex flex-wrap items-center justify-between gap-3 shadow-lg">
               <div className="flex items-center gap-2 text-xs">
                 <Sparkles className="w-4 h-4 text-amber-300 animate-spin" />
-                <span>Looking for intelligent recommendations for <strong>"{query}"</strong>?</span>
+                <span>Looking for conversational buying guidance for <strong>"{safeQuery}"</strong>?</span>
               </div>
               <button
+                type="button"
                 onClick={() => {
                   onClose();
-                  onNavigateSection('ai_search');
+                  if (onAskAiConcierge) {
+                    onAskAiConcierge(safeQuery);
+                  } else {
+                    onNavigateSection('ai_search', 'shopping_assistant');
+                  }
                 }}
-                className="px-3.5 py-1.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs rounded-xl shadow flex items-center gap-1"
+                className="px-3.5 py-1.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs rounded-xl shadow flex items-center gap-1.5 transition-transform active:scale-95 shrink-0"
               >
-                <span>Ask AI Concierge</span>
+                <Sparkles className="w-3.5 h-3.5 text-purple-900" />
+                <span>Ask PiNova AI / Refine with AI</span>
                 <ChevronRight className="w-4 h-4" />
               </button>
             </div>
@@ -680,14 +693,35 @@ export const UniversalSearchModal: React.FC<UniversalSearchModalProps> = ({
 
           {/* Empty state */}
           {totalResultsCount === 0 && (
-            <div className="text-center py-12 space-y-3">
+            <div className="text-center py-12 space-y-4">
               <div className="w-12 h-12 rounded-2xl bg-slate-200 dark:bg-slate-800 text-slate-500 mx-auto flex items-center justify-center">
                 <Search className="w-6 h-6" />
               </div>
-              <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200">No results found for "{query}"</h3>
-              <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                Try searching for general keywords like "smartphones", "laptops", "airtime", "electricity", or "freelance".
-              </p>
+              <div className="space-y-1">
+                <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200">
+                  {safeQuery ? `No results found for "${safeQuery}"` : 'No items match your search'}
+                </h3>
+                <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                  Try searching for general keywords like "smartphones", "laptops", "airtime", "electricity", or "freelance".
+                </p>
+              </div>
+              {safeQuery && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    if (onAskAiConcierge) {
+                      onAskAiConcierge(safeQuery);
+                    } else {
+                      onNavigateSection('ai_search', 'shopping_assistant');
+                    }
+                  }}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold shadow-md transition-all active:scale-95"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                  <span>Refine with AI Concierge</span>
+                </button>
+              )}
             </div>
           )}
 

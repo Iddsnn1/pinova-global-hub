@@ -27,7 +27,8 @@ import {
   ShieldCheck,
   Lock,
   Sparkles,
-  Clock
+  Layers,
+  ArrowUpRight
 } from 'lucide-react';
 import { UtilityCategory } from '../../types/navigation';
 import { UTILITY_CATEGORIES, UtilityCategoryDef } from '../../data/categoryData';
@@ -50,11 +51,74 @@ const getMappedCategoryType = (utilityId: string | null): UtilityCategoryType =>
   return utilityId as UtilityCategoryType;
 };
 
+// Logical Service Families for the 18 Global Utilities
+interface UtilityFamily {
+  id: string;
+  name: string;
+  shortName: string;
+  description: string;
+  icon: React.ComponentType<{ className?: string }>;
+  accentColor: string;
+  serviceIds: string[];
+}
+
+const UTILITY_FAMILIES: UtilityFamily[] = [
+  {
+    id: 'connectivity',
+    name: 'Everyday Connectivity & Telecom',
+    shortName: 'Connectivity',
+    description: 'Instant mobile talktime top-ups, 4G/5G data packages, satellite internet & digital streaming passes.',
+    icon: Wifi,
+    accentColor: 'indigo',
+    serviceIds: ['airtime', 'mobile_data', 'internet_services', 'cable_tv', 'streaming']
+  },
+  {
+    id: 'essential_bills',
+    name: 'Essential Municipal & Household Bills',
+    shortName: 'Essential Bills',
+    description: 'Prepaid electricity tokens, municipal water utilities, civic tax levies and protection policies.',
+    icon: Zap,
+    accentColor: 'amber',
+    serviceIds: ['electricity', 'water_bills', 'government_services', 'insurance']
+  },
+  {
+    id: 'travel_events',
+    name: 'Travel, Mobility & Live Events',
+    shortName: 'Travel & Events',
+    description: 'Book transit metro passes, interstate bus tickets, ride credits and verified VIP event passes.',
+    icon: Car,
+    accentColor: 'purple',
+    serviceIds: ['transport', 'event_tickets']
+  },
+  {
+    id: 'digital_gaming',
+    name: 'Digital Vouchers, Gaming & Store Credit',
+    shortName: 'Digital & Gaming',
+    description: 'Global eGift cards, retail shopping vouchers, ecommerce credits, game currencies and sports balances.',
+    icon: Gift,
+    accentColor: 'rose',
+    serviceIds: ['gift_cards', 'vouchers', 'ecommerce', 'gaming', 'betting']
+  },
+  {
+    id: 'education_exams',
+    name: 'Education & Examination Portals',
+    shortName: 'Education & Exams',
+    description: 'Official examination result checker scratch cards, test registration PINs, and school tuition portals.',
+    icon: GraduationCap,
+    accentColor: 'pink',
+    serviceIds: ['exam_cards', 'education_payments']
+  }
+];
+
+// High-demand popular services for quick access strip
+const POPULAR_SERVICE_IDS = ['electricity', 'airtime', 'mobile_data', 'cable_tv', 'internet_services', 'transport'];
+
 interface UtilitiesViewProps {
   selectedUtilityCategory?: string;
   utilityConfig: PiConversionConfig;
   userBalancePi: number;
   buyerUsername: string;
+  onSelectCategory?: (category: string) => void;
   onTransactionSuccess: (receipt: {
     providerName: string;
     accountNumber: string;
@@ -73,6 +137,7 @@ export const UtilitiesView: React.FC<UtilitiesViewProps> = ({
   utilityConfig,
   userBalancePi,
   buyerUsername,
+  onSelectCategory,
   onTransactionSuccess
 }) => {
   // Navigation & Category Selection
@@ -82,6 +147,9 @@ export const UtilitiesView: React.FC<UtilitiesViewProps> = ({
     }
     return null;
   });
+
+  // Category Family Filter Tab (all | connectivity | essential_bills | etc.)
+  const [activeFamilyFilter, setActiveFamilyFilter] = useState<string>('all');
 
   // Universal Service Search Input
   const [serviceSearchQuery, setServiceSearchQuery] = useState<string>('');
@@ -100,6 +168,8 @@ export const UtilitiesView: React.FC<UtilitiesViewProps> = ({
   React.useEffect(() => {
     if (selectedUtilityCategory && selectedUtilityCategory !== 'all') {
       setSelectedUtility(selectedUtilityCategory as UtilityCategory);
+    } else {
+      setSelectedUtility(null);
     }
   }, [selectedUtilityCategory]);
 
@@ -132,32 +202,50 @@ export const UtilitiesView: React.FC<UtilitiesViewProps> = ({
   const handleOpenUtility = (def: UtilityCategoryDef) => {
     setSelectedUtility(def.id);
     setPurchaseReceipt(null);
+    if (onSelectCategory) {
+      onSelectCategory(def.id);
+    }
+  };
+
+  const handleBackToEcosystem = () => {
+    setSelectedUtility(null);
+    setPurchaseReceipt(null);
+    if (onSelectCategory) {
+      onSelectCategory('all');
+    }
   };
 
   // Modernized Fintech Card Clean Descriptions
   const getCleanDescription = (catId: string, defaultDesc: string): string => {
     switch (catId) {
-      case 'airtime': return 'Recharge your mobile line or buy talktime credit.';
-      case 'mobile_data': return 'High-speed 4G & 5G internet data packages.';
-      case 'electricity': return 'Pay electricity bills and prepaid meter tokens securely with Pi.';
-      case 'water_bills': return 'Pay municipal water and utility bills.';
-      case 'cable_tv': return 'Manage TV subscriptions and digital entertainment services.';
-      case 'internet_services': return 'Buy broadband, fiber, and connectivity packages.';
-      case 'exam_cards': return 'Purchase WAEC, NECO, and JAMB result checker PINs.';
-      case 'education_payments': return 'Access exam services, tuition and digital education products.';
-      case 'gift_cards': return 'Purchase supported digital gift cards with Pi.';
-      case 'gaming': return 'Buy in-game credits and digital gaming cards.';
-      case 'streaming': return 'Manage subscriptions and streaming passes.';
-      case 'government_services': return 'Settle government levies, taxes and official fees.';
-      case 'insurance': return 'Pay health, auto and protection insurance policy premiums.';
-      case 'transport': return 'Book flight vouchers and transit passes.';
-      case 'event_tickets': return 'Purchase event tickets and VIP access passes.';
-      case 'vouchers': return 'Get retail vouchers and store credits.';
-      case 'betting': return 'Top up gaming and sports wallet balances.';
-      case 'ecommerce': return 'Load store credit for online shopping.';
+      case 'airtime': return 'Instant mobile talktime credit recharge across 140+ global telecom operators.';
+      case 'mobile_data': return 'High-speed 4G & 5G internet data bundles directly credited to any line.';
+      case 'electricity': return 'Pay electricity bills and generate instant prepaid meter tokens.';
+      case 'water_bills': return 'Settle municipal water utility balances with verified ledger receipts.';
+      case 'cable_tv': return 'Renew digital satellite & decoder subscriptions directly in Pi Coin.';
+      case 'internet_services': return 'Pay fiber optic broadband, Starlink, and ISP monthly subscription invoices.';
+      case 'exam_cards': return 'Purchase WAEC, NECO, and JAMB result checker scratch card PINs.';
+      case 'education_payments': return 'Pay university tuition deposits, cert fees and digital course passes.';
+      case 'gift_cards': return 'Purchase international eGift cards for Apple, Amazon, Steam & Google Play.';
+      case 'gaming': return 'Top up in-game currencies, battle passes, PUBG UC, Free Fire & Robux.';
+      case 'streaming': return 'Manage subscriptions for Netflix, Spotify, YouTube Premium & Disney+.';
+      case 'government_services': return 'Settle civic taxes, passport fees, identity verification and permits.';
+      case 'insurance': return 'Pay health, auto and protection micro-insurance policy premiums.';
+      case 'transport': return 'Book transit metro cards, interstate bus passes and ride-hailing credits.';
+      case 'event_tickets': return 'Purchase verified digital entry tickets and VIP access passes.';
+      case 'vouchers': return 'Purchase digital retail, supermarket and dining discount vouchers.';
+      case 'betting': return 'Instant wallet deposit to licensed sportsbooks and gaming accounts.';
+      case 'ecommerce': return 'Load store credit for online shopping and merchant checkouts.';
       default: return defaultDesc;
     }
   };
+
+  // Map of service definition by id for quick lookup
+  const utilityMap = useMemo(() => {
+    const map = new Map<string, UtilityCategoryDef>();
+    UTILITY_CATEGORIES.forEach(cat => map.set(cat.id, cat));
+    return map;
+  }, []);
 
   // Filter category by search
   const filteredCategories = useMemo(() => {
@@ -171,49 +259,86 @@ export const UtilitiesView: React.FC<UtilitiesViewProps> = ({
     );
   }, [serviceSearchQuery]);
 
+  // Filtered families based on active filter and search
+  const visibleFamilies = useMemo(() => {
+    const searchActive = serviceSearchQuery.trim().length > 0;
+    const matchingIds = new Set(filteredCategories.map(c => c.id));
+
+    return UTILITY_FAMILIES.map(family => {
+      const services = family.serviceIds
+        .map(id => utilityMap.get(id))
+        .filter((cat): cat is UtilityCategoryDef => Boolean(cat) && (!searchActive || matchingIds.has(cat.id)));
+      
+      return {
+        ...family,
+        services
+      };
+    }).filter(family => {
+      if (activeFamilyFilter !== 'all' && family.id !== activeFamilyFilter) {
+        return false;
+      }
+      return family.services.length > 0;
+    });
+  }, [filteredCategories, activeFamilyFilter, serviceSearchQuery, utilityMap]);
+
+  // High-demand popular services list
+  const popularServices = useMemo(() => {
+    return POPULAR_SERVICE_IDS
+      .map(id => utilityMap.get(id))
+      .filter((c): c is UtilityCategoryDef => Boolean(c));
+  }, [utilityMap]);
+
   return (
     <div className="space-y-6 pb-20">
       
       {!selectedUtility ? (
         /* MAIN GLOBAL UTILITIES DESTINATION LANDING */
-        <div className="space-y-6 max-w-7xl mx-auto px-4 sm:px-6">
+        <div className="space-y-8 max-w-7xl mx-auto px-4 sm:px-6">
           
-          {/* HEADER BANNER */}
+          {/* ==================================================== */}
+          {/* 1. GLOBAL UTILITIES HERO & VALUE PROPOSITION */}
+          {/* ==================================================== */}
           <div className="bg-gradient-to-r from-slate-950 via-purple-950 to-slate-900 text-white p-6 sm:p-8 rounded-3xl border border-purple-900/40 shadow-2xl relative overflow-hidden">
             <div className="absolute -top-16 -right-16 w-80 h-80 bg-purple-600/20 rounded-full blur-3xl pointer-events-none" />
             <div className="absolute bottom-0 right-1/4 w-60 h-60 bg-amber-500/10 rounded-full blur-2xl pointer-events-none" />
 
-            <div className="relative z-10 space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="relative z-10 space-y-5">
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                 
-                <div className="space-y-1.5">
-                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-900/60 border border-purple-700/50 text-amber-300 text-xs font-black uppercase tracking-wider">
+                <div className="space-y-2">
+                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-900/60 border border-purple-700/50 text-amber-300 text-xs font-black uppercase tracking-wider shadow-sm">
                     <Globe2 className="w-3.5 h-3.5 text-amber-400" />
-                    <span>GLOBAL UTILITIES</span>
+                    <span>GLOBAL UTILITIES ECOSYSTEM</span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                    <span className="text-[11px] font-bold text-purple-200 lowercase">18 verified services</span>
                   </div>
                   
                   <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-white">
                     Global services, powered by Pi.
                   </h1>
                   
-                  <p className="text-sm text-slate-300 max-w-2xl font-medium">
-                    Recharge, pay bills and access digital services wherever you are.
+                  <p className="text-sm text-slate-300 max-w-2xl font-medium leading-relaxed">
+                    Discover and access everyday digital, financial, travel, communication, and essential utility services across supported locations worldwide.
                   </p>
                 </div>
 
-                {/* Conversion Badges */}
-                <div className="flex flex-col items-start sm:items-end gap-2 shrink-0">
-                  <div className="px-3.5 py-1.5 rounded-2xl bg-slate-900/90 border border-amber-500/40 text-amber-300 text-xs font-black shadow-lg">
-                    Configured Pi Rate: 1 π = ${utilityConfig.piRateUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD
+                {/* Conversion & Wallet Indicators */}
+                <div className="flex flex-row lg:flex-col items-start sm:items-center lg:items-end gap-2.5 shrink-0 flex-wrap">
+                  <div className="px-3.5 py-1.5 rounded-2xl bg-slate-900/90 border border-amber-500/40 text-amber-300 text-xs font-black shadow-lg flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                    <span>Rate: 1 π = ${utilityConfig.piRateUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD</span>
                   </div>
-                  <div className="px-3.5 py-1.5 rounded-2xl bg-slate-900/90 border border-purple-500/40 text-purple-300 text-xs font-bold">
-                    Wallet: {userBalancePi.toFixed(2)} π
+                  <div className="px-3.5 py-1.5 rounded-2xl bg-slate-900/90 border border-purple-500/40 text-purple-300 text-xs font-bold flex items-center gap-1.5">
+                    <Coins className="w-3.5 h-3.5 text-purple-400" />
+                    <span>Wallet Balance: <strong className="text-white">{userBalancePi.toFixed(2)} π</strong></span>
                   </div>
                 </div>
 
               </div>
 
-              {/* UNIVERSAL SERVICE SEARCH BAR */}
+              {/* ==================================================== */}
+              {/* 2. UNIVERSAL UTILITY DISCOVERY / SEARCH BAR */}
+              {/* ==================================================== */}
               <div className="pt-2">
                 <div className="relative flex items-center">
                   <Search className="w-4 h-4 text-purple-400 absolute left-3.5 pointer-events-none" />
@@ -221,75 +346,244 @@ export const UtilitiesView: React.FC<UtilitiesViewProps> = ({
                     type="text"
                     value={serviceSearchQuery}
                     onChange={(e) => setServiceSearchQuery(e.target.value)}
-                    placeholder="Search utility or service (e.g., Airtime, Electricity, WAEC, DStv, KEDCO)..."
-                    className="w-full pl-10 pr-10 py-3 bg-slate-900/90 border border-purple-500/30 rounded-2xl text-xs text-white placeholder-slate-400 focus:outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-400/30 transition-all shadow-inner"
+                    placeholder="Search utilities, providers or services (e.g., Airtime, Electricity, Starlink, WAEC, DStv, KEDCO, Uber)..."
+                    className="w-full pl-10 pr-10 py-3.5 bg-slate-900/90 border border-purple-500/30 rounded-2xl text-xs sm:text-sm text-white placeholder-slate-400 focus:outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-400/30 transition-all shadow-inner"
                   />
                   {serviceSearchQuery && (
                     <button
                       onClick={() => setServiceSearchQuery('')}
-                      className="absolute right-3 p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white"
+                      className="absolute right-3 p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
+                      title="Clear search"
                     >
                       <X className="w-4 h-4" />
                     </button>
                   )}
                 </div>
+
+                {serviceSearchQuery.trim() && (
+                  <div className="mt-2.5 flex items-center justify-between text-xs text-purple-200 px-1">
+                    <span>
+                      Found <strong className="text-amber-300 font-bold">{filteredCategories.length}</strong> {filteredCategories.length === 1 ? 'service' : 'services'} matching &ldquo;{serviceSearchQuery}&rdquo;
+                    </span>
+                    <button
+                      onClick={() => setServiceSearchQuery('')}
+                      className="text-amber-400 hover:underline font-bold text-xs"
+                    >
+                      Reset filter
+                    </button>
+                  </div>
+                )}
               </div>
 
             </div>
           </div>
 
-          {/* EXPLORE SERVICES SECTION */}
-          <div className="space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 border-b border-slate-200 dark:border-slate-800 pb-3">
-              <div>
-                <h2 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-slate-100">
-                  Explore Services
-                </h2>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                  Choose a service category to get started.
-                </p>
+          {/* ==================================================== */}
+          {/* 3. FEATURED / HIGH-DEMAND POPULAR UTILITIES (Quick Strip) */}
+          {/* ==================================================== */}
+          {!serviceSearchQuery && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between px-1">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-amber-500" />
+                  <h2 className="text-sm font-extrabold uppercase tracking-wider text-slate-900 dark:text-slate-200">
+                    High-Demand Services
+                  </h2>
+                </div>
+                <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">
+                  Instant 1-click launch
+                </span>
               </div>
-              <span className="text-xs text-slate-500 dark:text-slate-400 font-bold self-start sm:self-auto mt-1 sm:mt-0">
-                {filteredCategories.length} Categories
-              </span>
-            </div>
 
-            {/* SERVICE CATEGORY CARDS */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {filteredCategories.map((cat) => (
-                <button
-                  key={cat.id}
-                  onClick={() => handleOpenUtility(cat)}
-                  className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-purple-500 transition-all text-left flex flex-col justify-between space-y-3 group shadow-sm hover:shadow-md hover:-translate-y-0.5"
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="w-11 h-11 rounded-2xl bg-purple-50 dark:bg-purple-950/60 border border-purple-200 dark:border-purple-800 flex items-center justify-center group-hover:scale-105 transition-transform">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+                {popularServices.map((cat) => (
+                  <button
+                    key={`popular-${cat.id}`}
+                    onClick={() => handleOpenUtility(cat)}
+                    className="p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-purple-500 dark:hover:border-purple-500 hover:shadow-md transition-all text-left flex flex-col items-start gap-2.5 group active:scale-[0.98]"
+                  >
+                    <div className="w-9 h-9 rounded-xl bg-purple-50 dark:bg-purple-950/70 border border-purple-200/80 dark:border-purple-800/80 flex items-center justify-center group-hover:scale-110 transition-transform">
                       {getUtilityIcon(cat.iconName)}
                     </div>
-                    <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
-                      {cat.badgeText}
-                    </span>
-                  </div>
-
-                  <div>
-                    <h3 className="font-extrabold text-sm text-slate-900 dark:text-slate-100 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
-                      {cat.name}
-                    </h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 mt-1">
-                      {getCleanDescription(cat.id, cat.description)}
-                    </p>
-                  </div>
-
-                  <div className="text-purple-600 dark:text-purple-400 text-xs font-bold flex items-center gap-1 group-hover:translate-x-1 transition-transform pt-1 border-t border-slate-100 dark:border-slate-800/80">
-                    <span>Pay with Pi</span>
-                    <ChevronRight className="w-4 h-4" />
-                  </div>
-                </button>
-              ))}
+                    <div className="w-full">
+                      <div className="text-xs font-black text-slate-900 dark:text-slate-100 truncate group-hover:text-purple-600 dark:group-hover:text-purple-400">
+                        {cat.name}
+                      </div>
+                      <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
+                        {cat.badgeText}
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
             </div>
+          )}
+
+          {/* ==================================================== */}
+          {/* 4. SERVICE CATEGORIES FILTER TABS */}
+          {/* ==================================================== */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3 flex-wrap gap-2">
+              <div>
+                <h2 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                  <Layers className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                  <span>Service Families &amp; Categories</span>
+                </h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Organized by domain for fast discovery and global fulfillment.
+                </p>
+              </div>
+
+              {/* Filter Pills */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 max-w-full no-scrollbar">
+                <button
+                  onClick={() => setActiveFamilyFilter('all')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
+                    activeFamilyFilter === 'all'
+                      ? 'bg-purple-600 text-white shadow-sm'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                  }`}
+                >
+                  <span>All Families</span>
+                  <span className={`px-1.5 py-0.2 rounded-md text-[10px] ${
+                    activeFamilyFilter === 'all' ? 'bg-purple-700 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                  }`}>
+                    18
+                  </span>
+                </button>
+
+                {UTILITY_FAMILIES.map((family) => {
+                  const Icon = family.icon;
+                  const isActive = activeFamilyFilter === family.id;
+                  return (
+                    <button
+                      key={family.id}
+                      onClick={() => setActiveFamilyFilter(family.id)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
+                        isActive
+                          ? 'bg-purple-600 text-white shadow-sm'
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                      }`}
+                    >
+                      <Icon className="w-3.5 h-3.5" />
+                      <span>{family.shortName}</span>
+                      <span className={`px-1.5 py-0.2 rounded-md text-[10px] ${
+                        isActive ? 'bg-purple-700 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                      }`}>
+                        {family.serviceIds.length}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* ==================================================== */}
+            {/* 5. STRUCTURED CATEGORY SECTIONS (18 Services) */}
+            {/* ==================================================== */}
+            {visibleFamilies.length === 0 ? (
+              /* No Search Match Empty State */
+              <div className="p-12 text-center rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-3">
+                <div className="w-12 h-12 rounded-2xl bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 mx-auto flex items-center justify-center">
+                  <Search className="w-6 h-6" />
+                </div>
+                <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">
+                  No utility services found matching &ldquo;{serviceSearchQuery}&rdquo;
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto">
+                  Try searching for general keywords such as Airtime, Electricity, Data, WAEC, Starlink, TV, or Transport.
+                </p>
+                <button
+                  onClick={() => {
+                    setServiceSearchQuery('');
+                    setActiveFamilyFilter('all');
+                  }}
+                  className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold shadow transition-all"
+                >
+                  View All 18 Services
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-8">
+                {visibleFamilies.map((family) => {
+                  const FamilyIcon = family.icon;
+                  return (
+                    <div
+                      key={family.id}
+                      className="p-5 sm:p-6 rounded-3xl bg-slate-50/70 dark:bg-slate-900/40 border border-slate-200/80 dark:border-slate-800/80 space-y-4 shadow-sm"
+                    >
+                      {/* Family Header */}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200/60 dark:border-slate-800/60 pb-3">
+                        <div className="space-y-0.5">
+                          <div className="flex items-center gap-2">
+                            <div className="w-7 h-7 rounded-lg bg-purple-100 dark:bg-purple-950/80 text-purple-700 dark:text-purple-300 flex items-center justify-center">
+                              <FamilyIcon className="w-4 h-4" />
+                            </div>
+                            <h3 className="font-black text-sm sm:text-base text-slate-900 dark:text-slate-100">
+                              {family.name}
+                            </h3>
+                          </div>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 pl-9">
+                            {family.description}
+                          </p>
+                        </div>
+                        <span className="text-[11px] font-black px-2.5 py-1 rounded-full bg-white dark:bg-slate-800 text-purple-700 dark:text-purple-300 border border-slate-200 dark:border-slate-700 self-start sm:self-auto shrink-0">
+                          {family.services.length} {family.services.length === 1 ? 'Service' : 'Services'}
+                        </span>
+                      </div>
+
+                      {/* Service Grid for this Family */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                        {family.services.map((cat) => (
+                          <button
+                            key={cat.id}
+                            onClick={() => handleOpenUtility(cat)}
+                            className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 hover:border-purple-500 dark:hover:border-purple-500 transition-all text-left flex flex-col justify-between space-y-3 group shadow-xs hover:shadow-md hover:-translate-y-0.5 active:scale-[0.99]"
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="w-11 h-11 rounded-2xl bg-purple-50 dark:bg-purple-950/60 border border-purple-200/70 dark:border-purple-800/70 flex items-center justify-center group-hover:scale-105 transition-transform">
+                                {getUtilityIcon(cat.iconName)}
+                              </div>
+                              <span className="text-[10px] font-black px-2.5 py-0.5 rounded-full bg-purple-50 dark:bg-purple-950/80 text-purple-700 dark:text-purple-300 border border-purple-200/80 dark:border-purple-800/80">
+                                {cat.badgeText}
+                              </span>
+                            </div>
+
+                            <div className="space-y-1">
+                              <h4 className="font-extrabold text-sm text-slate-900 dark:text-slate-100 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors flex items-center justify-between">
+                                <span>{cat.name}</span>
+                                <ArrowUpRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-purple-600 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all opacity-0 group-hover:opacity-100" />
+                              </h4>
+                              <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed">
+                                {getCleanDescription(cat.id, cat.description)}
+                              </p>
+                            </div>
+
+                            {/* Providers preview & CTA */}
+                            <div className="pt-2 border-t border-slate-100 dark:border-slate-800/80 space-y-2">
+                              {cat.popularProviders && cat.popularProviders.length > 0 && (
+                                <div className="text-[10px] text-slate-400 dark:text-slate-500 truncate">
+                                  <span className="font-bold text-slate-500 dark:text-slate-400">Providers:</span> {cat.popularProviders.slice(0, 3).join(', ')}...
+                                </div>
+                              )}
+                              <div className="text-purple-600 dark:text-purple-400 text-xs font-black flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+                                <span>Open Service</span>
+                                <ChevronRight className="w-3.5 h-3.5" />
+                              </div>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
-          {/* TRUST INDICATORS & PLATFORM BENEFITS */}
+          {/* ==================================================== */}
+          {/* 6. GLOBAL AVAILABILITY & TRUST INDICATORS */}
+          {/* ==================================================== */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-2">
             <div className="p-4 rounded-2xl bg-white dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800 flex items-start gap-3">
               <div className="w-9 h-9 rounded-xl bg-purple-50 dark:bg-purple-950/80 border border-purple-200 dark:border-purple-800 flex items-center justify-center shrink-0">
@@ -327,7 +621,7 @@ export const UtilitiesView: React.FC<UtilitiesViewProps> = ({
               </div>
               <div className="space-y-0.5">
                 <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100">Secure Receipts</h4>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">Instant digital token tokens, PINs and audit references.</p>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">Instant digital meter tokens, PINs and audit references.</p>
               </div>
             </div>
           </div>
@@ -338,11 +632,11 @@ export const UtilitiesView: React.FC<UtilitiesViewProps> = ({
         <div className="max-w-4xl mx-auto px-4 sm:px-6 space-y-6">
           
           <button
-            onClick={() => setSelectedUtility(null)}
+            onClick={handleBackToEcosystem}
             className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-2xl bg-slate-800 text-amber-300 hover:bg-slate-700 text-xs font-bold transition-colors shadow-sm"
           >
             <ArrowLeft className="w-4 h-4" />
-            <span>Back to Global Services</span>
+            <span>Back to Global Services Ecosystem</span>
           </button>
 
           <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xl overflow-hidden p-6 space-y-6">
@@ -392,7 +686,7 @@ export const UtilitiesView: React.FC<UtilitiesViewProps> = ({
                     Copy Code
                   </button>
                   <button
-                    onClick={() => setSelectedUtility(null)}
+                    onClick={handleBackToEcosystem}
                     className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl"
                   >
                     Done
@@ -408,7 +702,7 @@ export const UtilitiesView: React.FC<UtilitiesViewProps> = ({
                 piConversionConfig={utilityConfig}
                 userBalancePi={userBalancePi}
                 buyerUsername={buyerUsername}
-                onClose={() => setSelectedUtility(null)}
+                onClose={handleBackToEcosystem}
                 onTransactionSuccess={(receipt) => {
                   onTransactionSuccess({
                     providerName: receipt.providerName,
@@ -421,7 +715,7 @@ export const UtilitiesView: React.FC<UtilitiesViewProps> = ({
                     piPaymentId: receipt.piPaymentId,
                     piTxid: receipt.piTxid
                   });
-                  setSelectedUtility(null);
+                  handleBackToEcosystem();
                 }}
               />
             )}
@@ -434,3 +728,4 @@ export const UtilitiesView: React.FC<UtilitiesViewProps> = ({
     </div>
   );
 };
+

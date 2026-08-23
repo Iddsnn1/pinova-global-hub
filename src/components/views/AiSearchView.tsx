@@ -81,7 +81,7 @@ interface AiSearchViewProps {
   wishlistProductIds: string[];
   onNavigateSection?: (section: MainSection, cat?: any) => void;
   onOpenStorefront?: (sellerName: string) => void;
-  onOpenUniversalSearch?: () => void;
+  onOpenUniversalSearch?: (query?: string) => void;
   initialTab?: AiHubSubTab;
   onTabChange?: (tab: AiHubSubTab) => void;
 }
@@ -1584,8 +1584,10 @@ export const AiSearchView: React.FC<AiSearchViewProps> = ({
 
                 {onOpenUniversalSearch && (
                   <button
-                    onClick={onOpenUniversalSearch}
-                    className="px-3 py-1 bg-amber-400 hover:bg-amber-300 text-slate-950 text-[11px] font-black rounded-xl shadow flex items-center gap-1 shrink-0"
+                    type="button"
+                    onClick={() => onOpenUniversalSearch(query || '')}
+                    className="px-3 py-1 bg-amber-400 hover:bg-amber-300 text-slate-950 text-[11px] font-black rounded-xl shadow flex items-center gap-1.5 shrink-0 transition-transform active:scale-95"
+                    title="Open platform-wide Universal Search"
                   >
                     <Search className="w-3 h-3" />
                     <span>Open Universal Search</span>

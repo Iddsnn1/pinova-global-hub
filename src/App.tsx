@@ -74,7 +74,7 @@ function MainAppContent() {
   // Full-Screen Navigation Section State (Default to 'home' as central command center)
   const [activeSection, setActiveSection] = useState<MainSection>('home');
   const [selectedMarketplaceCategory, setSelectedMarketplaceCategory] = useState<MarketplaceCategory>('all');
-  const [selectedUtilityCategory, setSelectedUtilityCategory] = useState<string>('airtime');
+  const [selectedUtilityCategory, setSelectedUtilityCategory] = useState<string>('all');
   
   // Back navigation stack & History tracking
   const [navigationStack, setNavigationStack] = useState<{ section: MainSection; category: MarketplaceCategory }[]>([
@@ -254,8 +254,9 @@ function MainAppContent() {
   }, []);
 
   // Open Universal Search Modal
-  const handleOpenUniversalSearch = (query?: string) => {
-    setUniversalSearchInitialQuery(query || searchQuery || '');
+  const handleOpenUniversalSearch = (query?: string | unknown) => {
+    const validQuery = typeof query === 'string' ? query : (typeof searchQuery === 'string' ? searchQuery : '');
+    setUniversalSearchInitialQuery(validQuery);
     setIsUniversalSearchOpen(true);
   };
 
@@ -320,7 +321,7 @@ function MainAppContent() {
     if (targetSection === 'marketplace') {
       setSelectedMarketplaceCategory(newCategory as MarketplaceCategory);
     } else if (targetSection === 'utilities') {
-      setSelectedUtilityCategory((newCategory && newCategory !== 'all' ? newCategory : 'airtime') as string);
+      setSelectedUtilityCategory((newCategory && newCategory !== 'all' ? newCategory : 'all') as string);
     }
     
     // Push onto navigation history stack if distinct
@@ -378,7 +379,11 @@ function MainAppContent() {
     setNavigationStack(newStack);
     if (previous) {
       setActiveSection(previous.section);
-      setSelectedMarketplaceCategory(previous.category);
+      if (previous.section === 'marketplace') {
+        setSelectedMarketplaceCategory(previous.category as MarketplaceCategory);
+      } else if (previous.section === 'utilities') {
+        setSelectedUtilityCategory((previous.category && (previous.category as string) !== 'all' ? (previous.category as string) : 'all'));
+      }
       try {
         window.scrollTo({ top: 0, behavior: 'instant' });
       } catch {
@@ -629,8 +634,8 @@ function MainAppContent() {
         return items;
       }
       case 'utilities': {
-        const items: BreadcrumbItem[] = [{ label: 'Utilities', section: 'utilities' }];
-        if (selectedUtilityCategory) {
+        const items: BreadcrumbItem[] = [{ label: 'Global Utilities', section: 'utilities', category: 'all' as any }];
+        if (selectedUtilityCategory && selectedUtilityCategory !== 'all') {
           const utilDef = UTILITY_CATEGORIES.find((u) => u.id === selectedUtilityCategory);
           items.push({
             label: utilDef?.name || selectedUtilityCategory,
@@ -769,6 +774,7 @@ function MainAppContent() {
             utilityConfig={utilityConfig}
             userBalancePi={userBalancePi}
             buyerUsername={user.username}
+            onSelectCategory={(cat) => setSelectedUtilityCategory(cat)}
             onTransactionSuccess={(receipt) => {
               const transactionId = receipt.transactionId || `UTIL-TX-${Date.now()}`;
               const orderId = transactionId.startsWith('ORD-') ? transactionId : `ORD-${transactionId}`;
@@ -1121,6 +1127,11 @@ function MainAppContent() {
         onAddToCart={(p) => handleAddToCart(p, 1)}
         onInstantBuy={(p) => handleInstantBuy(p, 1)}
         onSelectOrder={handleTrackOrder}
+        onAskAiConcierge={(q) => {
+          setIsUniversalSearchOpen(false);
+          setSelectedAiSubTab('shopping_assistant');
+          handleNavigateSection('ai_search', 'shopping_assistant');
+        }}
       />
 
       {/* Modals & Overlays */}
