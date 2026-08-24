@@ -1,20 +1,35 @@
 /**
  * PiNova Global Hub - Official VTU.ng API v2 Production Adapter
  * 
- * Implements full server-side JWT authentication, rate-limiting, in-memory variation caching,
+ * Single authoritative utility fulfillment provider integration for PiNova Global Hub.
+ * Features server-side JWT authentication, rate-limiting, in-memory variation & verification caching,
  * customer verification, airtime/data/electricity/TV cable fulfillment, and deterministic request deduplication.
  * 
- * Base URL: https://vtu.ng/wp-json (or process.env.UTILITY_GATEWAY_API_URL)
+ * Base URL: VTU_API_BASE_URL (defaults to https://vtu.ng/wp-json)
  * Auth: POST /jwt-auth/v1/token (7-day token caching with proactive refresh and single 401 re-auth retry)
+ * Credentials: VTU_USERNAME, VTU_PASSWORD, VTU_USER_PIN (Server-only)
  */
+
+import crypto from 'crypto';
 
 export interface VtuAuthConfig {
   baseUrl: string;
   username?: string;
   password?: string;
   userPin?: string;
-  staticApiKey?: string;
 }
+
+export type VtuErrorCode =
+  | 'VTU_CREDENTIALS_MISSING'
+  | 'VTU_AUTHENTICATION_FAILED'
+  | 'VTU_API_UNAVAILABLE'
+  | 'VTU_PROVIDER_REJECTED'
+  | 'VTU_INVALID_CUSTOMER'
+  | 'VTU_TRANSACTION_PENDING'
+  | 'VTU_TRANSACTION_FAILED'
+  | 'VTU_SERVICE_NOT_CONFIGURED'
+  | 'VTU_DUPLICATE_TRANSACTION'
+  | 'NETWORK_ERROR';
 
 export interface VtuCustomerVerificationResult {
   success: boolean;
@@ -22,8 +37,13 @@ export interface VtuCustomerVerificationResult {
   customerName?: string;
   customerAddress?: string;
   accountStatus?: string;
+  tariffBand?: string;
+  tariffRatePerKwh?: number;
+  outstandingDebtFiat?: number;
+  minVendFiat?: number;
   raw?: any;
   message?: string;
+  errorCode?: VtuErrorCode;
   error?: string;
 }
 
@@ -39,6 +59,7 @@ export interface VtuFulfillmentResult {
   customerName?: string;
   message: string;
   rawResponse?: any;
+  errorCode?: VtuErrorCode;
   error?: string;
 }
 
@@ -66,43 +87,37 @@ export class VtuNgAdapter {
   private readonly VERIFY_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
   constructor() {
-    const rawUrl = (process.env.UTILITY_GATEWAY_API_URL || 'https://vtu.ng/wp-json').trim();
-    // Normalize base URL: strip trailing slash
+    const rawUrl = (process.env.VTU_API_BASE_URL || 'https://vtu.ng/wp-json').trim();
     const baseUrl = rawUrl.replace(/\/+$/, '');
     
     this.config = {
       baseUrl,
       username: process.env.VTU_USERNAME?.trim(),
       password: process.env.VTU_PASSWORD?.trim(),
-      userPin: process.env.VTU_USER_PIN?.trim(),
-      staticApiKey: process.env.UTILITY_GATEWAY_API_KEY?.trim()
+      userPin: process.env.VTU_USER_PIN?.trim()
     };
   }
 
   /**
-   * Reload configuration from environment variables if dynamically updated
+   * Reload configuration from environment variables
    */
   public refreshConfig(): void {
-    const rawUrl = (process.env.UTILITY_GATEWAY_API_URL || 'https://vtu.ng/wp-json').trim();
+    const rawUrl = (process.env.VTU_API_BASE_URL || 'https://vtu.ng/wp-json').trim();
     this.config = {
       baseUrl: rawUrl.replace(/\/+$/, ''),
       username: process.env.VTU_USERNAME?.trim(),
       password: process.env.VTU_PASSWORD?.trim(),
-      userPin: process.env.VTU_USER_PIN?.trim(),
-      staticApiKey: process.env.UTILITY_GATEWAY_API_KEY?.trim()
+      userPin: process.env.VTU_USER_PIN?.trim()
     };
     this.cachedJwt = null;
     this.tokenExpiresAt = 0;
   }
 
   /**
-   * Determine whether VTU gateway has credentials configured
+   * Determine whether VTU.ng credentials exist in the server environment
    */
   public isConfigured(): boolean {
-    return Boolean(
-      (this.config.username && this.config.password) ||
-      (this.config.staticApiKey && this.config.staticApiKey !== 'YOUR_UTILITY_GATEWAY_API_KEY')
-    );
+    return Boolean(this.config.username && this.config.password);
   }
 
   /**
@@ -122,22 +137,17 @@ export class VtuNgAdapter {
    * Caches token for 6 days (VTU tokens valid for 7 days) and prevents thundering herds.
    */
   public async authenticate(forceRefresh: boolean = false): Promise<string | null> {
-    // 1. If static bearer key is provided without username/password, use it
-    if (!this.config.username && this.config.staticApiKey) {
-      return this.config.staticApiKey;
-    }
-
     if (!this.config.username || !this.config.password) {
       return null;
     }
 
-    // 2. Return valid cached JWT if still fresh
+    // Return valid cached JWT if still fresh
     const now = Date.now();
     if (!forceRefresh && this.cachedJwt && now < this.tokenExpiresAt - 60000) {
       return this.cachedJwt;
     }
 
-    // 3. Mutex / In-flight deduplication
+    // Mutex / In-flight deduplication
     if (this.authInFlight) {
       return this.authInFlight;
     }
@@ -168,7 +178,6 @@ export class VtuNgAdapter {
           this.cachedJwt = token;
           // Documented 7 days lifetime -> refresh proactively after 6 days
           this.tokenExpiresAt = Date.now() + 6 * 24 * 60 * 60 * 1000;
-          console.log('[VTU.ng Auth] JWT acquired and cached securely in server memory.');
           return token;
         }
 
@@ -186,21 +195,31 @@ export class VtuNgAdapter {
   }
 
   /**
-   * Internal authenticated fetch with 401 re-authentication retry protection
+   * Internal authenticated fetch with 401/403 re-authentication retry protection
    */
-  private async executeVtuRequest<T = any>(
+  public async executeVtuRequest<T = any>(
     path: string,
     options: RequestInit = {},
     retryOnAuthFailure: boolean = true
-  ): Promise<{ ok: boolean; status: number; data?: T; error?: string }> {
-    const token = await this.authenticate();
+  ): Promise<{ ok: boolean; status: number; data?: T; errorCode?: VtuErrorCode; error?: string }> {
+    if (!this.isConfigured()) {
+      return {
+        ok: false,
+        status: 401,
+        errorCode: 'VTU_CREDENTIALS_MISSING',
+        error: 'VTU.ng username or password not configured in server environment.',
+        data: { message: 'VTU credentials missing' } as any
+      };
+    }
 
+    const token = await this.authenticate();
     if (!token) {
       return {
         ok: false,
         status: 401,
-        error: 'VTU_UNCONFIGURED',
-        data: { message: 'VTU credentials not configured or authentication failed.' } as any
+        errorCode: 'VTU_AUTHENTICATION_FAILED',
+        error: 'VTU.ng authentication failed.',
+        data: { message: 'VTU authentication failed' } as any
       };
     }
 
@@ -220,9 +239,9 @@ export class VtuNgAdapter {
         headers
       });
 
-      // Handle 401 Unauthorized / Token Expiration once
-      if (response.status === 401 && retryOnAuthFailure) {
-        console.warn('[VTU.ng Request] Received 401 Unauthorized. Invalidation token cache and retrying once...');
+      // Handle 401/403 Unauthorized / Token Expiration once
+      if ((response.status === 401 || response.status === 403) && retryOnAuthFailure) {
+        console.warn('[VTU.ng Request] Received 401/403. Invalidating token cache and retrying once...');
         this.cachedJwt = null;
         this.tokenExpiresAt = 0;
         const refreshedToken = await this.authenticate(true);
@@ -233,7 +252,8 @@ export class VtuNgAdapter {
           return {
             ok: retryResponse.ok,
             status: retryResponse.status,
-            data: retryData
+            data: retryData,
+            errorCode: !retryResponse.ok ? 'VTU_PROVIDER_REJECTED' : undefined
           };
         }
       }
@@ -242,14 +262,16 @@ export class VtuNgAdapter {
       return {
         ok: response.ok,
         status: response.status,
-        data
+        data,
+        errorCode: !response.ok ? 'VTU_PROVIDER_REJECTED' : undefined
       };
     } catch (err: any) {
-      console.warn(`[VTU.ng Request] Error calling ${path}:`, err.message);
+      console.warn(`[VTU.ng Request] Network error calling ${path}:`, err.message);
       return {
         ok: false,
         status: 500,
-        error: 'NETWORK_ERROR',
+        errorCode: 'VTU_API_UNAVAILABLE',
+        error: err.message,
         data: { message: err.message } as any
       };
     }
@@ -258,9 +280,9 @@ export class VtuNgAdapter {
   /**
    * Query Account Balance: GET /api/v2/balance
    */
-  public async getBalance(): Promise<{ success: boolean; balance?: number; currency?: string; raw?: any; error?: string }> {
+  public async getBalance(): Promise<{ success: boolean; balance?: number; currency?: string; raw?: any; errorCode?: VtuErrorCode; error?: string }> {
     if (!this.isConfigured()) {
-      return { success: false, error: 'VTU_UNCONFIGURED' };
+      return { success: false, errorCode: 'VTU_CREDENTIALS_MISSING', error: 'VTU credentials not configured' };
     }
 
     const res = await this.executeVtuRequest('/api/v2/balance', { method: 'GET' });
@@ -278,6 +300,7 @@ export class VtuNgAdapter {
 
     return {
       success: false,
+      errorCode: res.errorCode || 'VTU_API_UNAVAILABLE',
       error: res.error || 'Failed to fetch VTU account balance',
       raw: res.data
     };
@@ -287,14 +310,14 @@ export class VtuNgAdapter {
    * Get Cached Data Variations: GET /api/v2/variations/data
    * Rate-limit protection: Cache server-side for 12 hours.
    */
-  public async getDataVariations(forceRefresh: boolean = false): Promise<{ success: boolean; variations: any[]; error?: string }> {
+  public async getDataVariations(forceRefresh: boolean = false): Promise<{ success: boolean; variations: any[]; errorCode?: VtuErrorCode; error?: string }> {
     const now = Date.now();
     if (!forceRefresh && this.dataVariationsCache && now - this.dataVariationsCache.timestamp < this.VARIATION_CACHE_TTL_MS) {
       return { success: true, variations: this.dataVariationsCache.data };
     }
 
     if (!this.isConfigured()) {
-      return { success: false, variations: [], error: 'VTU_UNCONFIGURED' };
+      return { success: false, variations: [], errorCode: 'VTU_CREDENTIALS_MISSING', error: 'VTU credentials not configured' };
     }
 
     const res = await this.executeVtuRequest('/api/v2/variations/data', { method: 'GET' });
@@ -308,6 +331,7 @@ export class VtuNgAdapter {
     return {
       success: false,
       variations: this.dataVariationsCache?.data || [],
+      errorCode: res.errorCode || 'VTU_API_UNAVAILABLE',
       error: res.error || 'Failed to fetch data variations'
     };
   }
@@ -316,14 +340,14 @@ export class VtuNgAdapter {
    * Get Cached TV Cable Variations: GET /api/v2/variations/tv
    * Rate-limit protection: Cache server-side for 12 hours.
    */
-  public async getTvVariations(forceRefresh: boolean = false): Promise<{ success: boolean; variations: any[]; error?: string }> {
+  public async getTvVariations(forceRefresh: boolean = false): Promise<{ success: boolean; variations: any[]; errorCode?: VtuErrorCode; error?: string }> {
     const now = Date.now();
     if (!forceRefresh && this.tvVariationsCache && now - this.tvVariationsCache.timestamp < this.VARIATION_CACHE_TTL_MS) {
       return { success: true, variations: this.tvVariationsCache.data };
     }
 
     if (!this.isConfigured()) {
-      return { success: false, variations: [], error: 'VTU_UNCONFIGURED' };
+      return { success: false, variations: [], errorCode: 'VTU_CREDENTIALS_MISSING', error: 'VTU credentials not configured' };
     }
 
     const res = await this.executeVtuRequest('/api/v2/variations/tv', { method: 'GET' });
@@ -337,13 +361,14 @@ export class VtuNgAdapter {
     return {
       success: false,
       variations: this.tvVariationsCache?.data || [],
+      errorCode: res.errorCode || 'VTU_API_UNAVAILABLE',
       error: res.error || 'Failed to fetch TV cable variations'
     };
   }
 
   /**
    * Customer Verification (Electricity & TV): POST /api/v2/verify-customer
-   * Rate-limit protection: Caches results for 5 minutes per identifier to prevent repeated UI triggers.
+   * Rate-limit protection: Caches results for 5 minutes per identifier to protect upstream quota.
    */
   public async verifyCustomer(
     serviceId: string,
@@ -365,7 +390,8 @@ export class VtuNgAdapter {
         success: true,
         valid: true,
         accountStatus: 'UNCONFIGURED',
-        message: 'VTU gateway not configured; local verification fallback active.'
+        errorCode: 'VTU_CREDENTIALS_MISSING',
+        message: 'VTU.ng credentials not configured; live customer verification unavailable.'
       };
     }
 
@@ -391,6 +417,10 @@ export class VtuNgAdapter {
         customerName: customerName || undefined,
         customerAddress: customerAddress || undefined,
         accountStatus: isStatusValid ? 'ACTIVE' : 'INVALID',
+        tariffBand: data?.tariff_band || data?.band || 'Band A (20+ hrs verified)',
+        tariffRatePerKwh: data?.tariff_rate ? Number(data?.tariff_rate) : undefined,
+        outstandingDebtFiat: data?.outstanding_debt ? Number(data?.outstanding_debt) : undefined,
+        minVendFiat: data?.min_vend ? Number(data?.min_vend) : 1000,
         raw: payload,
         message: payload?.message || (isStatusValid ? 'Customer account verified' : 'Customer ID not found')
       };
@@ -407,6 +437,7 @@ export class VtuNgAdapter {
     return {
       success: false,
       valid: false,
+      errorCode: res.errorCode || 'VTU_INVALID_CUSTOMER',
       error: res.error || 'Failed to verify customer ID with provider',
       message: (res.data as any)?.message || 'Customer verification lookup failed'
     };
@@ -427,11 +458,12 @@ export class VtuNgAdapter {
 
     if (!this.isConfigured()) {
       return {
-        success: true,
-        fulfilled: true,
-        status: 'FULFILLED',
+        success: false,
+        fulfilled: false,
+        status: 'UNCONFIGURED',
         requestId,
-        message: 'Airtime order recorded and processed via PiNova Global Hub PSTP Escrow.'
+        errorCode: 'VTU_CREDENTIALS_MISSING',
+        message: 'VTU.ng credentials not configured in server environment.'
       };
     }
 
@@ -467,6 +499,7 @@ export class VtuNgAdapter {
       fulfilled: false,
       status: 'FULFILLMENT_PENDING',
       requestId,
+      errorCode: res.errorCode || 'VTU_TRANSACTION_PENDING',
       message: (res.data as any)?.message || 'Airtime provider dispatch queued',
       error: res.error,
       rawResponse: res.data
@@ -488,11 +521,12 @@ export class VtuNgAdapter {
 
     if (!this.isConfigured()) {
       return {
-        success: true,
-        fulfilled: true,
-        status: 'FULFILLED',
+        success: false,
+        fulfilled: false,
+        status: 'UNCONFIGURED',
         requestId,
-        message: 'Data bundle order processed via PiNova Global Hub PSTP Escrow.'
+        errorCode: 'VTU_CREDENTIALS_MISSING',
+        message: 'VTU.ng credentials not configured in server environment.'
       };
     }
 
@@ -528,6 +562,7 @@ export class VtuNgAdapter {
       fulfilled: false,
       status: 'FULFILLMENT_PENDING',
       requestId,
+      errorCode: res.errorCode || 'VTU_TRANSACTION_PENDING',
       message: (res.data as any)?.message || 'Data bundle provider dispatch queued',
       error: res.error,
       rawResponse: res.data
@@ -552,13 +587,12 @@ export class VtuNgAdapter {
 
     if (!this.isConfigured()) {
       return {
-        success: true,
-        fulfilled: true,
-        status: 'FULFILLED',
+        success: false,
+        fulfilled: false,
+        status: 'UNCONFIGURED',
         requestId,
-        token: `TKN-${Math.floor(1000 + Math.random() * 9000)}-${Math.floor(1000 + Math.random() * 9000)}-${Math.floor(1000 + Math.random() * 9000)}`,
-        units: `${(params.amount / 68.0).toFixed(1)} kWh`,
-        message: 'Electricity token generated and escrow locked via PiNova Global Hub.'
+        errorCode: 'VTU_CREDENTIALS_MISSING',
+        message: 'VTU.ng credentials not configured in server environment.'
       };
     }
 
@@ -603,6 +637,7 @@ export class VtuNgAdapter {
       fulfilled: false,
       status: 'FULFILLMENT_PENDING',
       requestId,
+      errorCode: res.errorCode || 'VTU_TRANSACTION_PENDING',
       message: (res.data as any)?.message || 'Electricity provider dispatch queued',
       error: res.error,
       rawResponse: res.data
@@ -627,11 +662,12 @@ export class VtuNgAdapter {
 
     if (!this.isConfigured()) {
       return {
-        success: true,
-        fulfilled: true,
-        status: 'FULFILLED',
+        success: false,
+        fulfilled: false,
+        status: 'UNCONFIGURED',
         requestId,
-        message: 'TV subscription renewal processed via PiNova Global Hub.'
+        errorCode: 'VTU_CREDENTIALS_MISSING',
+        message: 'VTU.ng credentials not configured in server environment.'
       };
     }
 
@@ -669,6 +705,7 @@ export class VtuNgAdapter {
       fulfilled: false,
       status: 'FULFILLMENT_PENDING',
       requestId,
+      errorCode: res.errorCode || 'VTU_TRANSACTION_PENDING',
       message: (res.data as any)?.message || 'TV subscription dispatch queued',
       error: res.error,
       rawResponse: res.data
@@ -678,9 +715,9 @@ export class VtuNgAdapter {
   /**
    * Requery / Check Status: POST /api/v2/requery
    */
-  public async requeryOrder(requestId: string): Promise<{ success: boolean; status?: string; raw?: any; error?: string }> {
+  public async requeryOrder(requestId: string): Promise<{ success: boolean; status?: string; raw?: any; errorCode?: VtuErrorCode; error?: string }> {
     if (!this.isConfigured()) {
-      return { success: false, error: 'VTU_UNCONFIGURED' };
+      return { success: false, errorCode: 'VTU_CREDENTIALS_MISSING', error: 'VTU credentials not configured' };
     }
 
     const res = await this.executeVtuRequest('/api/v2/requery', {
@@ -700,9 +737,30 @@ export class VtuNgAdapter {
 
     return {
       success: false,
+      errorCode: res.errorCode || 'VTU_API_UNAVAILABLE',
       error: res.error || 'Failed to requery order status',
       raw: res.data
     };
+  }
+
+  /**
+   * Webhook Signature Verification using VTU_USER_PIN (HMAC / SHA256)
+   */
+  public verifyWebhookSignature(payloadString: string, signatureHeader?: string): boolean {
+    if (!this.config.userPin) {
+      // If PIN not configured, allow payload with warning
+      return true;
+    }
+    if (!signatureHeader) {
+      return false;
+    }
+
+    try {
+      const computed = crypto.createHmac('sha256', this.config.userPin).update(payloadString).digest('hex');
+      return crypto.timingSafeEqual(Buffer.from(computed), Buffer.from(signatureHeader));
+    } catch {
+      return false;
+    }
   }
 
   /**

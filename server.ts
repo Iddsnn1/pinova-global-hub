@@ -754,7 +754,7 @@ const handleUtilityValidate = async (req: express.Request, res: express.Response
 // Electricity Real Meter / Provider Verification API Endpoint
 const handleElectricityVerify = async (req: express.Request, res: express.Response) => {
   try {
-    const { meterNumber, meterType = 'prepaid', providerId, countryCode = 'NG', serviceAreaId } = req.body || {};
+    const { meterNumber, meterType = 'prepaid', providerId, countryCode = 'NG' } = req.body || {};
     if (!meterNumber || typeof meterNumber !== 'string' || meterNumber.trim().length < 5) {
       res.status(400).json({
         success: false,
@@ -768,7 +768,7 @@ const handleElectricityVerify = async (req: express.Request, res: express.Respon
 
     const cleanMeter = meterNumber.replace(/[^a-zA-Z0-9]/g, '').trim();
 
-    // 1. Check if official VTU.ng v2 Adapter is configured (Primary for NG DisCos)
+    // 1. Authoritative VTU.ng v2 Adapter Verification (Primary for NG DisCos)
     if (vtuNgAdapter.isConfigured() && (countryCode === 'NG' || !countryCode)) {
       try {
         const vtuServiceId = vtuNgAdapter.mapServiceId(providerId || 'ikeja-electric');
@@ -784,13 +784,15 @@ const handleElectricityVerify = async (req: express.Request, res: express.Respon
             customerName: vtuResult.customerName || undefined,
             customerAddress: vtuResult.customerAddress || undefined,
             accountStatus: vtuResult.accountStatus || 'ACTIVE',
-            tariffBand: 'Band A (20+ hrs verified)',
-            minVendFiat: 1000,
+            tariffBand: vtuResult.tariffBand || 'Band A (20+ hrs verified)',
+            tariffRatePerKwh: vtuResult.tariffRatePerKwh,
+            outstandingDebtFiat: vtuResult.outstandingDebtFiat,
+            minVendFiat: vtuResult.minVendFiat || 1000,
             resolvedProviderId: providerId || vtuServiceId,
             resolvedProviderName: providerId || 'Electricity Distribution Provider',
-            verificationMethod: 'LIVE_PROVIDER_API',
+            verificationMethod: 'VTU_NG_LIVE_API',
             statusTitle: 'Meter verified ✓',
-            message: 'Customer details confirmed by electricity distribution provider.'
+            message: 'Customer details confirmed by electricity distribution provider via VTU.ng.'
           });
           return;
         } else if (vtuResult.success && !vtuResult.valid) {
@@ -805,57 +807,6 @@ const handleElectricityVerify = async (req: express.Request, res: express.Respon
         }
       } catch (vtuErr: any) {
         console.warn('[Electricity Verification] VTU.ng provider gateway call notice:', vtuErr.message);
-      }
-    }
-
-    // 2. Check if legacy custom Electricity Gateway API is configured in environment
-    const electricityApiUrl = process.env.ELECTRICITY_API_URL;
-    const electricityApiKey = process.env.ELECTRICITY_API_KEY;
-    const isLiveApiConfigured = Boolean(electricityApiUrl && electricityApiKey);
-
-    if (isLiveApiConfigured) {
-      try {
-        const response = await fetch(`${electricityApiUrl}/electricity/verify`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${electricityApiKey}`
-          },
-          body: JSON.stringify({
-            meterNumber: cleanMeter,
-            meterType,
-            providerId,
-            countryCode,
-            serviceAreaId
-          })
-        });
-
-        if (response.ok) {
-          const providerData = (await response.json()) as any;
-          res.json({
-            success: true,
-            valid: true,
-            apiConfigured: true,
-            status: 'VERIFIED',
-            isCustomerVerified: true,
-            customerName: providerData.customerName || undefined,
-            customerAddress: providerData.customerAddress || undefined,
-            accountStatus: providerData.accountStatus || 'ACTIVE',
-            tariffBand: providerData.tariffBand || undefined,
-            tariffRatePerKwh: providerData.tariffRatePerKwh ? Number(providerData.tariffRatePerKwh) : undefined,
-            outstandingDebtFiat: providerData.outstandingDebtFiat ? Number(providerData.outstandingDebtFiat) : undefined,
-            minVendFiat: providerData.minVendFiat ? Number(providerData.minVendFiat) : undefined,
-            unitsPurchasable: providerData.unitsPurchasable ? Number(providerData.unitsPurchasable) : undefined,
-            resolvedProviderId: providerData.resolvedProviderId || providerId,
-            resolvedProviderName: providerData.resolvedProviderName || 'Electricity Distribution Provider',
-            verificationMethod: 'LIVE_PROVIDER_API',
-            statusTitle: 'Meter verified ✓',
-            message: 'Customer details confirmed by electricity distribution provider.'
-          });
-          return;
-        }
-      } catch (liveErr: any) {
-        console.warn('[Electricity Verification] Live provider gateway call failed, falling back to unconfigured state:', liveErr.message);
       }
     }
 
@@ -1425,6 +1376,16 @@ app.post('/api/v2/utility/fulfill', async (req, res) => {
 });
 
 // VTU.ng v2 Dedicated Auxiliary Endpoints
+app.get(['/api/v2/utility/config', '/api/utility/provider-config'], (req, res) => {
+  res.json({
+    success: true,
+    provider: 'VTU.ng',
+    configured: vtuNgAdapter.isConfigured(),
+    authentication: 'JWT',
+    mode: process.env.PI_SANDBOX_MODE === 'false' ? 'live' : 'sandbox'
+  });
+});
+
 app.get('/api/v2/utility/vtu/balance', async (req, res) => {
   const balanceResult = await vtuNgAdapter.getBalance();
   res.json(balanceResult);
@@ -1448,6 +1409,49 @@ app.post('/api/v2/utility/vtu/requery', async (req, res) => {
   }
   const requeryResult = await vtuNgAdapter.requeryOrder(requestId);
   res.json(requeryResult);
+});
+
+// VTU.ng Webhook / Status Callback Endpoint with Signature Verification
+app.post('/api/v2/utility/vtu/webhook', (req, res) => {
+  try {
+    const rawSignature = (req.headers['x-vtu-signature'] || req.headers['signature'] || req.headers['x-signature']) as string | undefined;
+    const rawBody = JSON.stringify(req.body || {});
+    
+    // Validate signature using VTU_USER_PIN if configured
+    const isSignatureValid = vtuNgAdapter.verifyWebhookSignature(rawBody, rawSignature);
+    if (!isSignatureValid) {
+      console.warn('[VTU.ng Webhook] Rejected incoming webhook with invalid signature');
+      res.status(401).json({ success: false, error: 'INVALID_WEBHOOK_SIGNATURE' });
+      return;
+    }
+
+    const { request_id, order_id, status, token, units } = req.body || {};
+    if (request_id) {
+      // Find and idempotently update transaction status if registered
+      const existing = utilityFulfillmentRepo.findByKey(request_id);
+      if (existing) {
+        const normalizedStatus = String(status || '').toUpperCase();
+        const updatedStatus = normalizedStatus === 'SUCCESS' || normalizedStatus === 'COMPLETED' ? 'FULFILLED' : (normalizedStatus === 'FAILED' ? 'FAILED' : 'FULFILLMENT_PENDING');
+        
+        utilityFulfillmentRepo.recordTransaction(request_id, {
+          ...existing,
+          status: updatedStatus as any,
+          providerReference: order_id ? String(order_id) : existing.providerReference,
+          metadata: {
+            ...(existing.metadata || {}),
+            token: token || existing.metadata?.token,
+            units: units || existing.metadata?.units,
+            webhookReceivedAt: new Date().toISOString()
+          }
+        });
+      }
+    }
+
+    res.json({ success: true, received: true });
+  } catch (err: any) {
+    console.warn('[VTU.ng Webhook] Processing error:', err.message);
+    res.status(500).json({ success: false, error: 'WEBHOOK_PROCESSING_ERROR' });
+  }
 });
 
 // AI Search Endpoint using Gemini 3.6 Flash
