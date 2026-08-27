@@ -82,6 +82,9 @@ export interface FlightFulfillmentEntity {
   passengerName: string;
   timestamp: string;
   idempotencyKey?: string;
+  bookingMode?: 'LIVE_DUFFEL' | 'VERIFIED_CARRIER';
+  isLiveBooking?: boolean;
+  message?: string;
   metadata?: Record<string, any>;
 }
 

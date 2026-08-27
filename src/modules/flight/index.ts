@@ -155,16 +155,16 @@ export async function revalidateFlightOffer(
       valid: Boolean(data.valid),
       priceChanged: Boolean(data.priceChanged),
       newFareFiat: typeof data.newFareFiat === 'number' ? data.newFareFiat : expectedFareFiat,
-      seatsAvailable: typeof data.seatsAvailable === 'number' ? data.seatsAvailable : 5,
-      message: data.message || 'Fare revalidated.'
+      seatsAvailable: typeof data.seatsAvailable === 'number' ? data.seatsAvailable : 0,
+      message: data.message || (data.valid ? 'Fare revalidated.' : 'Live offer revalidation unavailable.')
     };
-  } catch (err) {
+  } catch (err: any) {
     return {
-      valid: true,
+      valid: false,
       priceChanged: false,
       newFareFiat: expectedFareFiat,
-      seatsAvailable: 5,
-      message: 'Rate verified.'
+      seatsAvailable: 0,
+      message: 'Unable to connect to flight revalidation service.'
     };
   }
 }

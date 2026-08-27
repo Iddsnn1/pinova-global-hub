@@ -1266,10 +1266,17 @@ app.post('/api/v2/utility/fulfill', async (req, res) => {
     return;
   }
 
+  const recordedPayment = paymentLedgerRepo.findByPaymentId(paymentId);
+  const verifiedTxid =
+    verification.paymentData?.transaction?.txid ||
+    recordedPayment?.txid ||
+    txid ||
+    '';
+
   // Execute VTU.ng v2 Adapter or Global Escrow Fallback
   let fulfillmentStatus: 'FULFILLED' | 'FULFILLMENT_PENDING' = 'FULFILLMENT_PENDING';
-  let fulfillmentMessage = 'Payment Received — Fulfillment Pending';
-  let providerRef: string | undefined = undefined;
+  let fulfillmentMessage = 'Payment verified successfully. Fulfillment is pending provider configuration or operator confirmation.';
+  let providerRef: string = vtuNgAdapter.generateRequestId(paymentId, 'PEND');
   let fulfillmentMetadata: Record<string, any> | undefined = undefined;
 
   const normalizedCategory = String(category || 'utility').toLowerCase();
@@ -1285,8 +1292,10 @@ app.post('/api/v2/utility/fulfill', async (req, res) => {
           amount: numericFiatAmount
         });
         fulfillmentStatus = result.fulfilled ? 'FULFILLED' : 'FULFILLMENT_PENDING';
-        fulfillmentMessage = result.message;
-        providerRef = result.providerReference || result.orderId;
+        fulfillmentMessage = result.fulfilled
+          ? (result.message || 'Airtime credited successfully via VTU.ng.')
+          : (result.message || 'Payment verified successfully. Fulfillment is pending provider configuration or operator confirmation.');
+        providerRef = result.providerReference || result.orderId || vtuNgAdapter.generateRequestId(paymentId, result.fulfilled ? 'AIRT' : 'PEND');
         fulfillmentMetadata = { requestId: result.requestId, raw: result.rawResponse };
       } else if (normalizedCategory === 'mobile_data' || normalizedCategory === 'data') {
         const result = await vtuNgAdapter.purchaseData({
@@ -1296,8 +1305,10 @@ app.post('/api/v2/utility/fulfill', async (req, res) => {
           variationId: req.body.variationId || req.body.packageId || 'data-default'
         });
         fulfillmentStatus = result.fulfilled ? 'FULFILLED' : 'FULFILLMENT_PENDING';
-        fulfillmentMessage = result.message;
-        providerRef = result.providerReference || result.orderId;
+        fulfillmentMessage = result.fulfilled
+          ? (result.message || 'Data bundle activated successfully via VTU.ng.')
+          : (result.message || 'Payment verified successfully. Fulfillment is pending provider configuration or operator confirmation.');
+        providerRef = result.providerReference || result.orderId || vtuNgAdapter.generateRequestId(paymentId, result.fulfilled ? 'DATA' : 'PEND');
         fulfillmentMetadata = { requestId: result.requestId, raw: result.rawResponse };
       } else if (normalizedCategory === 'electricity' || normalizedCategory === 'power') {
         const result = await vtuNgAdapter.purchaseElectricity({
@@ -1309,8 +1320,10 @@ app.post('/api/v2/utility/fulfill', async (req, res) => {
           amount: numericFiatAmount
         });
         fulfillmentStatus = result.fulfilled ? 'FULFILLED' : 'FULFILLMENT_PENDING';
-        fulfillmentMessage = result.message;
-        providerRef = result.providerReference || result.orderId;
+        fulfillmentMessage = result.fulfilled
+          ? (result.message || 'Electricity token generated successfully via VTU.ng.')
+          : (result.message || 'Payment verified successfully. Fulfillment is pending provider configuration or operator confirmation.');
+        providerRef = result.providerReference || result.orderId || vtuNgAdapter.generateRequestId(paymentId, result.fulfilled ? 'ELEC' : 'PEND');
         fulfillmentMetadata = {
           requestId: result.requestId,
           token: result.token,
@@ -1328,32 +1341,34 @@ app.post('/api/v2/utility/fulfill', async (req, res) => {
           amount: numericFiatAmount
         });
         fulfillmentStatus = result.fulfilled ? 'FULFILLED' : 'FULFILLMENT_PENDING';
-        fulfillmentMessage = result.message;
-        providerRef = result.providerReference || result.orderId;
+        fulfillmentMessage = result.fulfilled
+          ? (result.message || 'Cable TV subscription renewed successfully via VTU.ng.')
+          : (result.message || 'Payment verified successfully. Fulfillment is pending provider configuration or operator confirmation.');
+        providerRef = result.providerReference || result.orderId || vtuNgAdapter.generateRequestId(paymentId, result.fulfilled ? 'CABL' : 'PEND');
         fulfillmentMetadata = { requestId: result.requestId, raw: result.rawResponse };
       } else {
-        // Fallback for generic Nigerian utilities
-        fulfillmentStatus = 'FULFILLED';
-        fulfillmentMessage = 'Utility Transaction Processed & Verified via PiNova Escrow';
-        providerRef = vtuNgAdapter.generateRequestId(paymentId, 'UTIL');
+        // Unmapped Nigerian category - Safe Pending State
+        fulfillmentStatus = 'FULFILLMENT_PENDING';
+        fulfillmentMessage = 'Payment verified successfully. Fulfillment is pending provider configuration or operator confirmation.';
+        providerRef = vtuNgAdapter.generateRequestId(paymentId, 'PEND');
       }
     } catch (vtuErr: any) {
       console.warn('[VTU.ng Adapter] Transaction dispatch error:', vtuErr.message);
       fulfillmentStatus = 'FULFILLMENT_PENDING';
-      fulfillmentMessage = 'Utility Transaction Queued — Operator Confirmation Pending';
+      fulfillmentMessage = 'Payment verified successfully. Fulfillment is pending provider configuration or operator confirmation.';
+      providerRef = vtuNgAdapter.generateRequestId(paymentId, 'PEND');
     }
   } else {
-    // Unconfigured or International Provider Mode: Verified via Pi PSTP Escrow Ledger
-    fulfillmentStatus = 'FULFILLED';
-    fulfillmentMessage = 'Utility Transaction Verified & Escrow Locked — Processed via PiNova Global Hub';
-    providerRef = vtuNgAdapter.generateRequestId(paymentId, 'GLOB');
+    // Unconfigured or International Provider Mode: Safe Pending State with Escrow Lock
+    fulfillmentStatus = 'FULFILLMENT_PENDING';
+    fulfillmentMessage = 'Payment verified successfully. Fulfillment is pending provider configuration or operator confirmation.';
+    providerRef = vtuNgAdapter.generateRequestId(paymentId, 'PEND');
   }
 
-  const recordedPayment = paymentLedgerRepo.findByPaymentId(paymentId);
   const resultRecord = {
     transactionId: `UTIL-TX-${Date.now()}`,
     paymentId,
-    txid: txid || verification.paymentData?.transaction?.txid || recordedPayment?.txid || '',
+    txid: verifiedTxid,
     status: fulfillmentStatus,
     message: fulfillmentMessage,
     category: category || 'utility',
@@ -1742,19 +1757,19 @@ const handleFlightSearch = async (req: express.Request, res: express.Response) =
       const mappedLiveResults = offers.map((off: any, idx: number) => ({
         offerId: off.id || `live_off_${Date.now()}_${idx}`,
         airline: off.owner?.name || 'Partner Airline',
-        flightNumber: off.slices?.[0]?.segments?.[0]?.marketing_flight_number || `FL-${100 + idx}`,
+        flightNumber: off.slices?.[0]?.segments?.[0]?.marketing_flight_number || (off.slices?.[0]?.segments?.[0]?.operating_carrier_flight_number ? `${off.slices[0].segments[0].operating_carrier?.iata_code || ''} ${off.slices[0].segments[0].operating_carrier_flight_number}`.trim() : 'Scheduled Flight'),
         originCode: off.slices?.[0]?.origin?.iata_code || originCode,
         destinationCode: off.slices?.[0]?.destination?.iata_code || destinationCode,
-        departureTime: off.slices?.[0]?.segments?.[0]?.departing_at || `${safeDepartureDate}T10:00:00Z`,
-        arrivalTime: off.slices?.[0]?.segments?.[0]?.arriving_at || `${safeDepartureDate}T16:30:00Z`,
-        duration: off.slices?.[0]?.duration || '6h 30m',
+        departureTime: off.slices?.[0]?.segments?.[0]?.departing_at || safeDepartureDate,
+        arrivalTime: off.slices?.[0]?.segments?.[0]?.arriving_at || safeDepartureDate,
+        duration: off.slices?.[0]?.duration || 'Scheduled',
         stops: off.slices?.[0]?.segments?.length > 1 ? off.slices[0].segments.length - 1 : 0,
-        aircraft: off.slices?.[0]?.segments?.[0]?.aircraft?.name || 'Boeing 787',
+        aircraft: off.slices?.[0]?.segments?.[0]?.aircraft?.name || 'Commercial Aircraft',
         cabinClass: safeCabin,
-        baggageAllowance: '1 x 23kg Checked',
-        fareAmountFiat: parseFloat(off.total_amount) || 450.00,
+        baggageAllowance: off.slices?.[0]?.segments?.[0]?.passengers?.[0]?.baggages?.length ? `${off.slices[0].segments[0].passengers[0].baggages.length} Checked Bag(s)` : 'Standard Allowance',
+        fareAmountFiat: parseFloat(off.total_amount) || 0,
         currency: off.total_currency || 'USD',
-        seatsAvailable: off.available_seats || 7,
+        seatsAvailable: typeof off.available_seats === 'number' ? off.available_seats : 1,
         fareConditions: 'Live Duffel Tariff. Changeable subject to airline rules.',
         isLive: true
       }));
@@ -1801,11 +1816,12 @@ const handleFlightRevalidate = async (req: express.Request, res: express.Respons
     if (!configured) {
       res.json({
         success: true,
-        valid: true,
+        valid: false,
         priceChanged: false,
         newFareFiat: Number(expectedFareFiat) || 0,
-        seatsAvailable: 9,
-        message: 'Verified carrier rate confirmed.',
+        seatsAvailable: 0,
+        verificationMode: 'verified-carrier',
+        message: 'Live offer revalidation is unavailable. This is not a live airline offer.',
         reqId
       });
       return;
@@ -1829,6 +1845,7 @@ const handleFlightRevalidate = async (req: express.Request, res: express.Respons
           valid: false,
           priceChanged: false,
           seatsAvailable: 0,
+          verificationMode: 'live-duffel',
           message: 'Selected flight offer has expired or is no longer available on Duffel.',
           reqId
         });
@@ -1847,21 +1864,20 @@ const handleFlightRevalidate = async (req: express.Request, res: express.Respons
         priceChanged,
         newFareFiat: currentPrice,
         seatsAvailable: offerData?.data?.available_seats || 5,
+        verificationMode: 'live-duffel',
         message: priceChanged ? 'Fare has been updated by carrier.' : 'Live Duffel fare revalidated successfully.',
         reqId
       });
     } catch (err: any) {
       console.error(`[Flight Lifecycle] flight.offer.revalidate.exception reqId=${reqId}:`, err.message);
-      const fallbackFare = (typeof expectedFareFiat === 'number' && Number.isFinite(expectedFareFiat) && expectedFareFiat > 0)
-        ? expectedFareFiat
-        : (parseFloat(String(expectedFareFiat || '')) || 100.0);
       res.json({
         success: true,
-        valid: true,
+        valid: false,
         priceChanged: false,
-        newFareFiat: Number(fallbackFare.toFixed(2)),
-        seatsAvailable: 5,
-        message: 'Live fare revalidated.',
+        newFareFiat: Number(expectedFareFiat) || 0,
+        seatsAvailable: 0,
+        verificationMode: 'verified-carrier',
+        message: 'Live offer revalidation is unavailable. This is not a live airline offer.',
         reqId
       });
     }
@@ -1911,6 +1927,13 @@ const handleFlightBook = async (req: express.Request, res: express.Response) => 
 
     console.log(`[Flight Lifecycle] flight.payment.verified reqId=${reqId} paymentId=${cleanPaymentId}`);
 
+    const recordedPayment = paymentLedgerRepo.findByPaymentId(cleanPaymentId);
+    const verifiedTxid =
+      verification.paymentData?.transaction?.txid ||
+      recordedPayment?.txid ||
+      txid ||
+      '';
+
     const configured = isFlightApiConfigured();
 
     if (configured) {
@@ -1959,6 +1982,9 @@ const handleFlightBook = async (req: express.Request, res: express.Response) => 
             ticketNumber,
             bookingStatus: 'TICKET_ISSUED' as const,
             provider: 'duffel',
+            bookingMode: 'LIVE_DUFFEL' as const,
+            isLiveBooking: true,
+            message: 'Live airline ticket issued successfully via Duffel.',
             passengerName: `${passengerDetails?.givenName || 'Pioneer'} ${passengerDetails?.familyName || 'Traveler'}`,
             timestamp: new Date().toISOString()
           };
@@ -2009,6 +2035,9 @@ const handleFlightBook = async (req: express.Request, res: express.Response) => 
         ticketNumber,
         bookingStatus: 'VERIFIED_CARRIER_VOUCHER_ISSUED' as const,
         provider: 'Verified Transport Carrier Gateway',
+        bookingMode: 'VERIFIED_CARRIER' as const,
+        isLiveBooking: false,
+        message: 'Verified carrier voucher issued. Not an airline-issued ticket.',
         passengerName: fullName,
         timestamp: new Date().toISOString()
       };
