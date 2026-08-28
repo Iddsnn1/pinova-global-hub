@@ -55,36 +55,38 @@ export async function searchFlights(
     if (data.success && data.apiConfigured && Array.isArray(data.liveResults) && data.liveResults.length > 0) {
       // Map live results from Duffel API
       const liveOffers: FlightOffer[] = data.liveResults.map((off: any) => {
-        const fiat = Number(off.fareAmountFiat) || 450;
+        const fiat = typeof off.fareAmountFiat === 'number' ? off.fareAmountFiat : parseFloat(off.fareAmountFiat) || 0;
         const taxes = Math.round(fiat * 0.14);
-        const base = fiat - taxes;
+        const base = Math.max(0, fiat - taxes);
         const pi = piRateUsd > 0 ? Number((fiat / piRateUsd).toFixed(4)) : 0;
 
         return {
           offerId: off.offerId,
-          airline: off.airline,
-          flightNumber: off.flightNumber,
-          aircraft: off.aircraft || 'Boeing 787',
+          airline: off.airline || 'Partner Airline',
+          flightNumber: off.flightNumber || 'Scheduled Flight',
+          aircraft: off.aircraft || undefined,
           originCode: off.originCode,
           destinationCode: off.destinationCode,
           departureTime: off.departureTime,
           arrivalTime: off.arrivalTime,
-          duration: off.duration || '6h 30m',
-          stops: off.stops || 0,
+          duration: off.duration || 'Direct',
+          stops: typeof off.stops === 'number' ? off.stops : 0,
           cabinClass: criteria.cabinClass,
           baggage: {
             cabinBaggage: '1 x 7kg Carry-on',
-            checkedBaggage: off.baggageAllowance || '1 x 23kg Checked'
+            checkedBaggage: off.baggageAllowance || 'Standard Allowance'
           },
           fareAmountFiat: fiat,
           baseFareFiat: base,
           taxesAndFeesFiat: taxes,
           fareCurrency: off.currency || 'USD',
           fareAmountPi: pi,
-          seatsAvailable: off.seatsAvailable || 5,
-          fareConditions: off.fareConditions || 'Live Duffel Carrier Tariff.',
+          seatsAvailable: typeof off.seatsAvailable === 'number' ? off.seatsAvailable : 1,
+          fareConditions: off.fareConditions || 'Live Duffel Carrier Tariff. Changeable subject to airline rules.',
           refundable: true,
           isLive: true,
+          bookingMode: 'LIVE_DUFFEL' as const,
+          isLiveBooking: true,
           providerName: 'Duffel Live GDS'
         };
       });
@@ -93,7 +95,7 @@ export async function searchFlights(
         offers: liveOffers,
         isLive: true,
         apiConfigured: true,
-        message: data.message || 'Live flights retrieved from global GDS.',
+        message: data.message || 'Live flight results retrieved directly from Duffel API.',
         reqId: data.reqId
       };
     }
@@ -111,7 +113,7 @@ export async function searchFlights(
       offers: fallbackOffers,
       isLive: false,
       apiConfigured: Boolean(data.apiConfigured),
-      message: data.message || 'Live GDS credential pending. Showing verified carrier flight schedules.',
+      message: data.message || 'Showing verified carrier flight schedules.',
       reqId: data.reqId
     };
   } catch (err: any) {
@@ -137,10 +139,13 @@ export async function revalidateFlightOffer(
   offerId: string,
   expectedFareFiat: number
 ): Promise<{
+  success: boolean;
   valid: boolean;
   priceChanged: boolean;
   newFareFiat: number;
   seatsAvailable: number;
+  verificationMode: 'LIVE_DUFFEL' | 'verified-carrier';
+  offerId?: string;
   message: string;
 }> {
   try {
@@ -152,19 +157,25 @@ export async function revalidateFlightOffer(
 
     const data = await res.json();
     return {
+      success: Boolean(data.success),
       valid: Boolean(data.valid),
       priceChanged: Boolean(data.priceChanged),
       newFareFiat: typeof data.newFareFiat === 'number' ? data.newFareFiat : expectedFareFiat,
       seatsAvailable: typeof data.seatsAvailable === 'number' ? data.seatsAvailable : 0,
-      message: data.message || (data.valid ? 'Fare revalidated.' : 'Live offer revalidation unavailable.')
+      verificationMode: data.verificationMode || (data.valid ? 'LIVE_DUFFEL' : 'verified-carrier'),
+      offerId: data.offerId || offerId,
+      message: data.message || (data.valid ? 'Live Duffel fare revalidated successfully.' : 'Live Duffel offer could not be revalidated. Please search again.')
     };
   } catch (err: any) {
     return {
+      success: false,
       valid: false,
       priceChanged: false,
       newFareFiat: expectedFareFiat,
       seatsAvailable: 0,
-      message: 'Unable to connect to flight revalidation service.'
+      verificationMode: 'LIVE_DUFFEL',
+      offerId,
+      message: 'Live Duffel offer could not be revalidated. Please search again.'
     };
   }
 }

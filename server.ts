@@ -1745,6 +1745,7 @@ const handleFlightSearch = async (req: express.Request, res: express.Response) =
           apiConfigured: true,
           providerName: process.env.FLIGHT_API_PROVIDER || 'duffel',
           liveResults: [],
+          verificationMode: 'verified-carrier',
           message: `Duffel API returned status ${apiRes.status}. Fallback to verified carrier catalog.`,
           reqId
         });
@@ -1753,33 +1754,52 @@ const handleFlightSearch = async (req: express.Request, res: express.Response) =
 
       const rawData = await apiRes.json();
       const offers = rawData?.data?.offers || [];
+      const validDuffelOffers = Array.isArray(offers)
+        ? offers.filter((off: any, idx: number) => {
+            const rawOfferId = typeof off?.id === 'string' ? off.id.trim() : '';
+            if (!/^off_[A-Za-z0-9]+$/.test(rawOfferId)) {
+              console.warn(`[Flight Lifecycle] Invalid Duffel offer ID reqId=${reqId} index=${idx}`);
+              return false;
+            }
+            return true;
+          })
+        : [];
 
-      const mappedLiveResults = offers.map((off: any, idx: number) => ({
-        offerId: off.id || `live_off_${Date.now()}_${idx}`,
-        airline: off.owner?.name || 'Partner Airline',
-        flightNumber: off.slices?.[0]?.segments?.[0]?.marketing_flight_number || (off.slices?.[0]?.segments?.[0]?.operating_carrier_flight_number ? `${off.slices[0].segments[0].operating_carrier?.iata_code || ''} ${off.slices[0].segments[0].operating_carrier_flight_number}`.trim() : 'Scheduled Flight'),
-        originCode: off.slices?.[0]?.origin?.iata_code || originCode,
-        destinationCode: off.slices?.[0]?.destination?.iata_code || destinationCode,
-        departureTime: off.slices?.[0]?.segments?.[0]?.departing_at || safeDepartureDate,
-        arrivalTime: off.slices?.[0]?.segments?.[0]?.arriving_at || safeDepartureDate,
-        duration: off.slices?.[0]?.duration || 'Scheduled',
-        stops: off.slices?.[0]?.segments?.length > 1 ? off.slices[0].segments.length - 1 : 0,
-        aircraft: off.slices?.[0]?.segments?.[0]?.aircraft?.name || 'Commercial Aircraft',
-        cabinClass: safeCabin,
-        baggageAllowance: off.slices?.[0]?.segments?.[0]?.passengers?.[0]?.baggages?.length ? `${off.slices[0].segments[0].passengers[0].baggages.length} Checked Bag(s)` : 'Standard Allowance',
-        fareAmountFiat: parseFloat(off.total_amount) || 0,
-        currency: off.total_currency || 'USD',
-        seatsAvailable: typeof off.available_seats === 'number' ? off.available_seats : 1,
-        fareConditions: 'Live Duffel Tariff. Changeable subject to airline rules.',
-        isLive: true
-      }));
+      const mappedLiveResults = validDuffelOffers.map((off: any) => {
+        const rawOfferId = off.id.trim();
+        console.log(`[Flight Lifecycle] live offer received reqId=${reqId} offerId=${rawOfferId} bookingMode=LIVE_DUFFEL isLive=true`);
+        return {
+          offerId: rawOfferId,
+          airline: off.owner?.name || 'Partner Airline',
+          flightNumber: off.slices?.[0]?.segments?.[0]?.marketing_flight_number || (off.slices?.[0]?.segments?.[0]?.operating_carrier_flight_number ? `${off.slices[0].segments[0].operating_carrier?.iata_code || ''} ${off.slices[0].segments[0].operating_carrier_flight_number}`.trim() : 'Scheduled Flight'),
+          originCode: off.slices?.[0]?.origin?.iata_code || originCode,
+          destinationCode: off.slices?.[0]?.destination?.iata_code || destinationCode,
+          departureTime: off.slices?.[0]?.segments?.[0]?.departing_at || safeDepartureDate,
+          arrivalTime: off.slices?.[0]?.segments?.[0]?.arriving_at || safeDepartureDate,
+          duration: off.slices?.[0]?.duration || 'Scheduled',
+          stops: off.slices?.[0]?.segments?.length > 1 ? off.slices[0].segments.length - 1 : 0,
+          aircraft: off.slices?.[0]?.segments?.[0]?.aircraft?.name || 'Commercial Aircraft',
+          cabinClass: safeCabin,
+          baggageAllowance: off.slices?.[0]?.segments?.[0]?.passengers?.[0]?.baggages?.length ? `${off.slices[0].segments[0].passengers[0].baggages.length} Checked Bag(s)` : 'Standard Allowance',
+          fareAmountFiat: parseFloat(off.total_amount) || 0,
+          currency: off.total_currency || 'USD',
+          seatsAvailable: typeof off.available_seats === 'number' ? off.available_seats : 1,
+          fareConditions: 'Live Duffel Tariff. Changeable subject to airline rules.',
+          isLive: true,
+          bookingMode: 'LIVE_DUFFEL' as const,
+          isLiveBooking: true
+        };
+      });
 
       res.json({
         success: true,
         apiConfigured: true,
         providerName: process.env.FLIGHT_API_PROVIDER || 'duffel',
         liveResults: mappedLiveResults,
-        message: 'Live flight results retrieved directly from Duffel API.',
+        verificationMode: mappedLiveResults.length > 0 ? 'live-duffel' : 'verified-carrier',
+        message: mappedLiveResults.length > 0 
+          ? 'Live flight results retrieved directly from Duffel API.' 
+          : 'Duffel API returned 0 live offers for this route. Fallback to verified carrier catalog.',
         reqId
       });
     } catch (fetchErr: any) {
@@ -1790,6 +1810,7 @@ const handleFlightSearch = async (req: express.Request, res: express.Response) =
         apiConfigured: true,
         providerName: process.env.FLIGHT_API_PROVIDER || 'duffel',
         liveResults: [],
+        verificationMode: 'verified-carrier',
         message: 'Duffel API endpoint timed out or failed to respond. Fallback to verified carrier catalog.',
         reqId
       });
@@ -1809,11 +1830,13 @@ const handleFlightRevalidate = async (req: express.Request, res: express.Respons
     }
 
     const cleanOfferId = offerId.trim();
-    console.log(`[Flight Lifecycle] flight.offer.revalidated.start reqId=${reqId} offerId=${cleanOfferId}`);
-
+    const isLiveOfferId = /^off_[A-Za-z0-9]+$/.test(cleanOfferId);
     const configured = isFlightApiConfigured();
+    const bookingMode = (configured && isLiveOfferId) ? 'LIVE_DUFFEL' : 'VERIFIED_CARRIER';
 
-    if (!configured) {
+    console.log(`[Flight Lifecycle] live offer revalidation reqId=${reqId} offerId=${cleanOfferId}`);
+
+    if (!configured || !isLiveOfferId) {
       res.json({
         success: true,
         valid: false,
@@ -1821,7 +1844,8 @@ const handleFlightRevalidate = async (req: express.Request, res: express.Respons
         newFareFiat: Number(expectedFareFiat) || 0,
         seatsAvailable: 0,
         verificationMode: 'verified-carrier',
-        message: 'Live offer revalidation is unavailable. This is not a live airline offer.',
+        offerId: cleanOfferId,
+        message: 'This selection is not a live Duffel offer.',
         reqId
       });
       return;
@@ -1834,19 +1858,23 @@ const handleFlightRevalidate = async (req: express.Request, res: express.Respons
       const apiRes = await fetch(`${baseUrl}/air/offers/${encodeURIComponent(cleanOfferId)}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
-          'Duffel-Version': 'v2'
+          'Duffel-Version': 'v2',
+          'Accept': 'application/json'
         }
       });
 
+      console.log(`[Flight Lifecycle] flight.offer.duffel_response reqId=${reqId} offerId=${cleanOfferId} status=${apiRes.status}`);
+
       if (!apiRes.ok) {
-        console.warn(`[Flight Lifecycle] flight.offer.expired reqId=${reqId} offerId=${cleanOfferId}`);
+        console.warn(`[Flight Lifecycle] flight.offer.expired reqId=${reqId} offerId=${cleanOfferId} status=${apiRes.status}`);
         res.json({
-          success: true,
+          success: false,
           valid: false,
           priceChanged: false,
           seatsAvailable: 0,
-          verificationMode: 'live-duffel',
-          message: 'Selected flight offer has expired or is no longer available on Duffel.',
+          verificationMode: 'LIVE_DUFFEL',
+          offerId: cleanOfferId,
+          message: 'Live Duffel offer could not be revalidated. Please search again.',
           reqId
         });
         return;
@@ -1863,21 +1891,23 @@ const handleFlightRevalidate = async (req: express.Request, res: express.Respons
         valid: true,
         priceChanged,
         newFareFiat: currentPrice,
-        seatsAvailable: offerData?.data?.available_seats || 5,
-        verificationMode: 'live-duffel',
+        seatsAvailable: typeof offerData?.data?.available_seats === 'number' ? offerData.data.available_seats : 1,
+        verificationMode: 'LIVE_DUFFEL',
+        offerId: cleanOfferId,
         message: priceChanged ? 'Fare has been updated by carrier.' : 'Live Duffel fare revalidated successfully.',
         reqId
       });
     } catch (err: any) {
       console.error(`[Flight Lifecycle] flight.offer.revalidate.exception reqId=${reqId}:`, err.message);
       res.json({
-        success: true,
+        success: false,
         valid: false,
         priceChanged: false,
         newFareFiat: Number(expectedFareFiat) || 0,
         seatsAvailable: 0,
-        verificationMode: 'verified-carrier',
-        message: 'Live offer revalidation is unavailable. This is not a live airline offer.',
+        verificationMode: 'LIVE_DUFFEL',
+        offerId: cleanOfferId,
+        message: 'Live Duffel offer could not be revalidated. Please search again.',
         reqId
       });
     }
@@ -1935,12 +1965,17 @@ const handleFlightBook = async (req: express.Request, res: express.Response) => 
       '';
 
     const configured = isFlightApiConfigured();
+    const cleanOfferId = typeof offerId === 'string' ? offerId.trim() : '';
+    const isLiveOfferId = /^off_[A-Za-z0-9]+$/.test(cleanOfferId);
+    const isLiveDuffelBooking = configured && isLiveOfferId;
+    const bookingMode = isLiveDuffelBooking ? 'LIVE_DUFFEL' : 'VERIFIED_CARRIER';
 
-    if (configured) {
+    // Safe diagnostic log without sensitive tokens
+    console.log(`[Flight Lifecycle] live Duffel booking dispatch reqId=${reqId} offerId=${cleanOfferId}`);
+
+    if (isLiveDuffelBooking) {
       const baseUrl = process.env.FLIGHT_API_BASE_URL || 'https://api.duffel.com';
       const token = process.env.FLIGHT_API_ACCESS_TOKEN;
-
-      console.log(`[Flight Lifecycle] flight.booking.dispatched reqId=${reqId} offerId=${offerId}`);
 
       try {
         const orderRes = await fetch(`${baseUrl}/air/orders`, {
@@ -1952,7 +1987,7 @@ const handleFlightBook = async (req: express.Request, res: express.Response) => 
           },
           body: JSON.stringify({
             data: {
-              selected_offers: [offerId],
+              selected_offers: [cleanOfferId],
               passengers: [
                 {
                   id: passengerDetails?.id || 'pas_1',
@@ -1976,6 +2011,7 @@ const handleFlightBook = async (req: express.Request, res: express.Response) => 
           console.log(`[Flight Lifecycle] flight.booking.succeeded reqId=${reqId} duffelOrderId=${duffelOrderId} pnr=${pnr || 'N/A'}`);
 
           const bookingRecord = {
+            bookingId: `BK-DUFFEL-${cleanPaymentId.slice(-6).toUpperCase()}`,
             paymentId: cleanPaymentId,
             pnr,
             bookingReference: duffelOrderId,
@@ -1995,6 +2031,21 @@ const handleFlightBook = async (req: express.Request, res: express.Response) => 
         } else {
           const errorText = await orderRes.text();
           console.error(`[Flight Lifecycle] flight.booking.failed reqId=${reqId}:`, errorText.substring(0, 150));
+          const failedBookingRecord = {
+            bookingId: `BK-FAILED-${cleanPaymentId.slice(-6).toUpperCase()}`,
+            paymentId: cleanPaymentId,
+            pnr: null,
+            bookingReference: `ESCROW-${cleanPaymentId.slice(-8).toUpperCase()}`,
+            ticketNumber: null,
+            bookingStatus: 'BOOKING_FAILED_HELD_FOR_REFUND' as const,
+            provider: 'duffel',
+            bookingMode: 'LIVE_DUFFEL' as const,
+            isLiveBooking: false,
+            message: 'Payment completed on Pi Network. Airline seat allocation failed at carrier gateway. Funds held safely in Escrow for instant refund/retry.',
+            passengerName: `${passengerDetails?.givenName || 'Pioneer'} ${passengerDetails?.familyName || 'Traveler'}`,
+            timestamp: new Date().toISOString()
+          };
+          flightFulfillmentRepo.recordBooking(key, failedBookingRecord);
           res.status(502).json({
             success: false,
             status: 'BOOKING_FAILED_HELD_FOR_REFUND',
@@ -2006,6 +2057,21 @@ const handleFlightBook = async (req: express.Request, res: express.Response) => 
         }
       } catch (err: any) {
         console.error(`[Flight Lifecycle] flight.booking.exception reqId=${reqId}:`, err.message);
+        const failedBookingRecord = {
+          bookingId: `BK-FAILED-${cleanPaymentId.slice(-6).toUpperCase()}`,
+          paymentId: cleanPaymentId,
+          pnr: null,
+          bookingReference: `ESCROW-${cleanPaymentId.slice(-8).toUpperCase()}`,
+          ticketNumber: null,
+          bookingStatus: 'BOOKING_FAILED_HELD_FOR_REFUND' as const,
+          provider: 'duffel',
+          bookingMode: 'LIVE_DUFFEL' as const,
+          isLiveBooking: false,
+          message: 'Payment verified on Pi Network. Airline gateway timed out. Escrow active for refund/retry.',
+          passengerName: `${passengerDetails?.givenName || 'Pioneer'} ${passengerDetails?.familyName || 'Traveler'}`,
+          timestamp: new Date().toISOString()
+        };
+        flightFulfillmentRepo.recordBooking(key, failedBookingRecord);
         res.status(502).json({
           success: false,
           status: 'BOOKING_FAILED_HELD_FOR_REFUND',
@@ -2016,7 +2082,7 @@ const handleFlightBook = async (req: express.Request, res: express.Response) => 
         return;
       }
     } else {
-      // Verified carrier voucher issuance when live Duffel token is absent
+      // Verified carrier voucher issuance when live Duffel offer is not used
       const pnr = `PNR-VOUCHER-${cleanPaymentId.slice(-6).toUpperCase()}`;
       const bookingReference = `REF-CARRIER-${Date.now()}`;
       const ticketNumber = `TKT-CARRIER-${Math.floor(1000000000 + Math.random() * 9000000000)}`;
@@ -2029,6 +2095,7 @@ const handleFlightBook = async (req: express.Request, res: express.Response) => 
       const fullName = safeGiven ? `${safeTitle ? safeTitle + ' ' : ''}${safeGiven} ${safeFamily}`.trim() : 'Verified Pioneer Passenger';
 
       const bookingRecord = {
+        bookingId: `BK-CARRIER-${cleanPaymentId.slice(-6).toUpperCase()}`,
         paymentId: cleanPaymentId,
         pnr,
         bookingReference,

@@ -178,6 +178,15 @@ export const FlightResultsList: React.FC<FlightResultsListProps> = ({
                     <span className="text-xs font-mono text-purple-300 bg-purple-950/60 px-2 py-0.5 rounded-md border border-purple-800/40">
                       {offer.flightNumber}
                     </span>
+                    {offer.bookingMode === 'LIVE_DUFFEL' && offer.isLive === true ? (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400">
+                        LIVE DUFFEL GDS
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300">
+                        VERIFIED CARRIER
+                      </span>
+                    )}
                     {offer.aircraft && (
                       <span className="text-[11px] text-slate-400 hidden sm:inline">
                         • {offer.aircraft}

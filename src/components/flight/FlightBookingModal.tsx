@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   X, 
   Plane, 
@@ -71,6 +71,25 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
   const canonicalPiAmount = Number((currentFareFiat / effectivePiRate).toFixed(4));
   const formattedPi = canonicalPiAmount < 0.0001 ? canonicalPiAmount.toFixed(6) : canonicalPiAmount.toFixed(4);
 
+  const isLiveDuffelOffer = Boolean(
+    offer.bookingMode === 'LIVE_DUFFEL' &&
+    offer.isLive === true &&
+    typeof offer.offerId === 'string' &&
+    /^off_[A-Za-z0-9]+$/.test(offer.offerId)
+  );
+
+  useEffect(() => {
+    if (isLiveDuffelOffer) {
+      console.log(
+        `[Flight Lifecycle] checkout offer selected offerId=${offer.offerId} bookingMode=LIVE_DUFFEL isLive=true`
+      );
+    } else {
+      console.log(
+        `[Flight Lifecycle] checkout offer selected offerId=${offer.offerId} bookingMode=VERIFIED_CARRIER isLive=false`
+      );
+    }
+  }, [offer.offerId, isLiveDuffelOffer]);
+
   const handleProceedToPayment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!givenName.trim() || !familyName.trim()) {
@@ -83,24 +102,30 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
     }
 
     setErrorMessage(null);
-    setIsProcessing(true);
 
-    try {
-      // Revalidate offer with backend before proceeding
-      const reval = await revalidateFlightOffer(offer.offerId, currentFareFiat);
-      if (!reval.valid) {
-        setErrorMessage(reval.message || 'Fare has expired or is no longer available. Please select another flight.');
+    // Only revalidate with live Duffel API if this is an authentic live offer
+    if (isLiveDuffelOffer) {
+      setIsProcessing(true);
+      try {
+        console.log(`[Flight Lifecycle] live offer revalidation offerId=${offer.offerId}`);
+        const reval = await revalidateFlightOffer(offer.offerId, currentFareFiat);
+        if (!reval.valid) {
+          setErrorMessage(reval.message || 'Live Duffel offer could not be revalidated. Please search again.');
+          setIsProcessing(false);
+          return;
+        }
+        if (typeof reval.newFareFiat === 'number' && Number.isFinite(reval.newFareFiat) && reval.newFareFiat > 0) {
+          setCurrentFareFiat(Number(reval.newFareFiat.toFixed(2)));
+        }
+        setStep('payment');
+      } catch (err: any) {
+        setErrorMessage('Live Duffel offer could not be revalidated. Please search again.');
+      } finally {
         setIsProcessing(false);
-        return;
       }
-      if (typeof reval.newFareFiat === 'number' && Number.isFinite(reval.newFareFiat) && reval.newFareFiat > 0) {
-        setCurrentFareFiat(Number(reval.newFareFiat.toFixed(2)));
-      }
+    } else {
+      // Verified Carrier fallback flights proceed directly to payment without calling live Duffel revalidation
       setStep('payment');
-    } catch (err: any) {
-      setStep('payment');
-    } finally {
-      setIsProcessing(false);
     }
   };
 
@@ -175,13 +200,13 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
           setStep('confirmed');
           onBookingSuccess(bookResponse.booking);
         } else {
-          // Fallback confirmation record
-          const fallbackRecord: FlightBookingRecord = {
-            bookingId: `BK-${Date.now().toString().slice(-6)}`,
-            pnr: `PSTP-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
-            bookingReference: `PI-FLIGHT-${Math.floor(100000 + Math.random() * 900000)}`,
-            ticketNumber: `086-${Math.floor(1000000000 + Math.random() * 9000000000)}`,
-            bookingStatus: 'VERIFIED_CARRIER_VOUCHER_ISSUED',
+          // If booking failed or allocation failed, hold funds in Escrow safely
+          const failedRecord: FlightBookingRecord = {
+            bookingId: `BK-${isLiveDuffelOffer ? 'DUFFEL' : 'CARRIER'}-${Date.now().toString().slice(-6)}`,
+            pnr: null,
+            bookingReference: `ESCROW-${paymentResult.paymentId?.slice(-8).toUpperCase() || Date.now().toString().slice(-8)}`,
+            ticketNumber: null,
+            bookingStatus: 'BOOKING_FAILED_HELD_FOR_REFUND',
             flightSummary: {
               airline: offer.airline,
               flightNumber: offer.flightNumber,
@@ -201,14 +226,16 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
               piRateApplied: effectivePiRate,
               escrowProtected: true
             },
-            provider: offer.isLive ? 'Duffel Live GDS' : 'Verified Partner Airline Gateway',
+            provider: isLiveDuffelOffer ? 'Duffel Live GDS' : 'Verified Transport Carrier Gateway',
+            bookingMode: isLiveDuffelOffer ? 'LIVE_DUFFEL' : 'VERIFIED_CARRIER',
+            isLiveBooking: isLiveDuffelOffer,
             issuedAt: new Date().toISOString(),
-            notice: 'Escrow confirmed. E-ticket voucher issued and stored securely.'
+            notice: bookResponse.message || 'Payment confirmed on Pi Network. Carrier gateway allocation failed. Funds held safely in Escrow for instant refund/retry.'
           };
 
-          setConfirmedBooking(fallbackRecord);
+          setConfirmedBooking(failedRecord);
           setStep('confirmed');
-          onBookingSuccess(fallbackRecord);
+          onBookingSuccess(failedRecord);
         }
       } else {
         setErrorMessage(paymentResult?.message || 'Pi payment could not be completed.');
@@ -260,6 +287,15 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
                   {offer.flightNumber}
                 </span>
                 <span className="text-xs text-slate-400 capitalize">• {offer.cabinClass.replace('_', ' ')}</span>
+                {isLiveDuffelOffer ? (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400">
+                    LIVE DUFFEL GDS
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300">
+                    VERIFIED CARRIER
+                  </span>
+                )}
               </div>
               <div className="text-right">
                 <span className="text-base font-black text-amber-300 font-mono">{formattedPi} π</span>

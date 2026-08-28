@@ -72,11 +72,14 @@ export interface FlightOffer {
   fareConditions?: string;
   refundable?: boolean;
   isLive: boolean;
+  bookingMode?: 'LIVE_DUFFEL' | 'VERIFIED_CARRIER';
+  isLiveBooking?: boolean;
   providerName?: string;
   segments?: FlightSegment[];
 }
 
 export interface FlightPassengerDetails {
+  id?: string;
   title?: 'Mr' | 'Mrs' | 'Ms' | 'Dr' | 'Alh.' | 'Hjy.';
   givenName: string;
   familyName: string;
@@ -94,7 +97,9 @@ export interface FlightBookingRecord {
   pnr: string | null;
   bookingReference: string;
   ticketNumber: string | null;
-  bookingStatus: 'TICKET_ISSUED' | 'VERIFIED_CARRIER_VOUCHER_ISSUED' | 'HELD_IN_ESCROW' | 'CANCELLED';
+  bookingStatus: 'TICKET_ISSUED' | 'VERIFIED_CARRIER_VOUCHER_ISSUED' | 'HELD_IN_ESCROW' | 'CANCELLED' | 'BOOKING_FAILED_HELD_FOR_REFUND';
+  bookingMode?: 'LIVE_DUFFEL' | 'VERIFIED_CARRIER';
+  isLiveBooking?: boolean;
   flightSummary: {
     airline: string;
     flightNumber: string;

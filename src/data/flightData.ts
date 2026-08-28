@@ -269,6 +269,8 @@ export function generateVerifiedCarrierOffers(
       fareConditions: tpl.refundable ? 'Flexible Ticket. Changeable before departure.' : 'Non-refundable discount promotional fare.',
       refundable: tpl.refundable,
       isLive: false,
+      bookingMode: 'VERIFIED_CARRIER' as const,
+      isLiveBooking: false,
       providerName: 'Verified Partner Airline Gateway'
     };
   });
