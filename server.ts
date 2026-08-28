@@ -1594,8 +1594,8 @@ const flightRateLimiter = (maxRequests: number) => {
 };
 
 const isFlightApiConfigured = (): boolean => {
-  const provider = (process.env.FLIGHT_API_PROVIDER || '').trim().toLowerCase();
-  const baseUrl = (process.env.FLIGHT_API_BASE_URL || '').trim();
+  const provider = (process.env.FLIGHT_API_PROVIDER || 'duffel').trim().toLowerCase();
+  const baseUrl = (process.env.FLIGHT_API_BASE_URL || 'https://api.duffel.com').trim();
   const token = (process.env.FLIGHT_API_ACCESS_TOKEN || '').trim();
   return Boolean(provider === 'duffel' && baseUrl.length > 0 && token.length > 0);
 };
@@ -1606,7 +1606,7 @@ const handleFlightConfig = (req: express.Request, res: express.Response) => {
   res.json({
     success: true,
     apiConfigured: configured,
-    provider: process.env.FLIGHT_API_PROVIDER || 'duffel',
+    provider: (process.env.FLIGHT_API_PROVIDER || 'duffel').trim().toLowerCase(),
     mode: configured ? 'live-duffel' : 'verified-carrier',
     baseUrl: process.env.FLIGHT_API_BASE_URL || 'https://api.duffel.com',
     message: configured
@@ -1767,11 +1767,17 @@ const handleFlightSearch = async (req: express.Request, res: express.Response) =
 
       const mappedLiveResults = validDuffelOffers.map((off: any) => {
         const rawOfferId = off.id.trim();
-        console.log(`[Flight Lifecycle] live offer received reqId=${reqId} offerId=${rawOfferId} bookingMode=LIVE_DUFFEL isLive=true`);
+        const airline = off.owner?.name || 'Partner Airline';
+        const flightNumber = off.slices?.[0]?.segments?.[0]?.marketing_flight_number || (off.slices?.[0]?.segments?.[0]?.operating_carrier_flight_number ? `${off.slices[0].segments[0].operating_carrier?.iata_code || ''} ${off.slices[0].segments[0].operating_carrier_flight_number}`.trim() : 'Scheduled Flight');
+        const total_amount = off.total_amount || '0';
+        const total_currency = off.total_currency || 'USD';
+
+        console.log(`[Flight Lifecycle] live offer received reqId=${reqId} offerId=${rawOfferId} bookingMode=LIVE_DUFFEL isLive=true isLiveBooking=true airline=${airline} flightNumber=${flightNumber} total_amount=${total_amount} total_currency=${total_currency}`);
+
         return {
           offerId: rawOfferId,
-          airline: off.owner?.name || 'Partner Airline',
-          flightNumber: off.slices?.[0]?.segments?.[0]?.marketing_flight_number || (off.slices?.[0]?.segments?.[0]?.operating_carrier_flight_number ? `${off.slices[0].segments[0].operating_carrier?.iata_code || ''} ${off.slices[0].segments[0].operating_carrier_flight_number}`.trim() : 'Scheduled Flight'),
+          airline,
+          flightNumber,
           originCode: off.slices?.[0]?.origin?.iata_code || originCode,
           destinationCode: off.slices?.[0]?.destination?.iata_code || destinationCode,
           departureTime: off.slices?.[0]?.segments?.[0]?.departing_at || safeDepartureDate,
@@ -1781,8 +1787,8 @@ const handleFlightSearch = async (req: express.Request, res: express.Response) =
           aircraft: off.slices?.[0]?.segments?.[0]?.aircraft?.name || 'Commercial Aircraft',
           cabinClass: safeCabin,
           baggageAllowance: off.slices?.[0]?.segments?.[0]?.passengers?.[0]?.baggages?.length ? `${off.slices[0].segments[0].passengers[0].baggages.length} Checked Bag(s)` : 'Standard Allowance',
-          fareAmountFiat: parseFloat(off.total_amount) || 0,
-          currency: off.total_currency || 'USD',
+          fareAmountFiat: parseFloat(total_amount) || 0,
+          currency: total_currency,
           seatsAvailable: typeof off.available_seats === 'number' ? off.available_seats : 1,
           fareConditions: 'Live Duffel Tariff. Changeable subject to airline rules.',
           isLive: true,

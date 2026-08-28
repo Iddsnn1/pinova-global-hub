@@ -37,7 +37,7 @@ export const FlightSearchForm: React.FC<FlightSearchFormProps> = ({
   const nextWeekObj = new Date(Date.now() + 7 * 86400000);
   const nextWeekStr = nextWeekObj.toISOString().split('T')[0];
 
-  const [departureDate, setDepartureDate] = useState<string>(initialCriteria?.departureDate || todayStr);
+  const [departureDate, setDepartureDate] = useState<string>(initialCriteria?.departureDate || '2026-08-31');
   const [returnDate, setReturnDate] = useState<string>(initialCriteria?.returnDate || nextWeekStr);
 
   const [adults, setAdults] = useState<number>(initialCriteria?.passengers?.adults || 1);

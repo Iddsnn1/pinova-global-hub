@@ -156,7 +156,9 @@ export const FlightResultsList: React.FC<FlightResultsListProps> = ({
       {offers.map((offer) => {
         const airlineMeta = AIRLINE_INFO[offer.airline];
         const piCalculated = piRateUsd > 0 ? (offer.fareAmountFiat / piRateUsd) : 0;
-        const formattedPi = piCalculated < 0.0001 ? piCalculated.toFixed(6) : piCalculated.toFixed(4);
+        const formattedPi = piCalculated < 0.0001 
+          ? piCalculated.toFixed(6) 
+          : piCalculated.toFixed(6).replace(/0+$/, '').replace(/\.$/, '');
 
         return (
           <div

@@ -34,6 +34,7 @@ interface FlightServicesHubProps {
   ) => void;
   initialOrigin?: string;
   initialDestination?: string;
+  initialDepartureDate?: string;
 }
 
 export const FlightServicesHub: React.FC<FlightServicesHubProps> = ({
@@ -43,7 +44,8 @@ export const FlightServicesHub: React.FC<FlightServicesHubProps> = ({
   onBookingSuccess,
   onSelectOptionForUtility,
   initialOrigin = 'KAN',
-  initialDestination = 'JED'
+  initialDestination = 'JED',
+  initialDepartureDate = '2026-08-31'
 }) => {
   // Backend config status
   const [flightConfig, setFlightConfig] = useState<FlightConfigStatus>({
@@ -59,7 +61,7 @@ export const FlightServicesHub: React.FC<FlightServicesHubProps> = ({
     origin: initialOrigin,
     destination: initialDestination,
     tripType: 'one_way',
-    departureDate: new Date().toISOString().split('T')[0],
+    departureDate: initialDepartureDate,
     passengers: { adults: 1, children: 0, infants: 0 },
     cabinClass: 'economy'
   });

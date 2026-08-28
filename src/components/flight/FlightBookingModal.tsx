@@ -66,10 +66,12 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
   })();
   const [currentFareFiat, setCurrentFareFiat] = useState<number>(initialFareNum);
 
-  // Calculate Pi amount deterministically from canonical fare
+  // Calculate Pi amount deterministically from canonical fare with high precision
   const effectivePiRate = piRateUsd > 0 ? piRateUsd : 10.0;
-  const canonicalPiAmount = Number((currentFareFiat / effectivePiRate).toFixed(4));
-  const formattedPi = canonicalPiAmount < 0.0001 ? canonicalPiAmount.toFixed(6) : canonicalPiAmount.toFixed(4);
+  const canonicalPiAmount = Number((currentFareFiat / effectivePiRate).toFixed(7));
+  const formattedPi = canonicalPiAmount < 0.0001 
+    ? canonicalPiAmount.toFixed(6) 
+    : canonicalPiAmount.toFixed(6).replace(/0+$/, '').replace(/\.$/, '');
 
   const isLiveDuffelOffer = Boolean(
     offer.bookingMode === 'LIVE_DUFFEL' &&
@@ -79,16 +81,10 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
   );
 
   useEffect(() => {
-    if (isLiveDuffelOffer) {
-      console.log(
-        `[Flight Lifecycle] checkout offer selected offerId=${offer.offerId} bookingMode=LIVE_DUFFEL isLive=true`
-      );
-    } else {
-      console.log(
-        `[Flight Lifecycle] checkout offer selected offerId=${offer.offerId} bookingMode=VERIFIED_CARRIER isLive=false`
-      );
-    }
-  }, [offer.offerId, isLiveDuffelOffer]);
+    console.log(
+      `[Flight UI] CHECKOUT_SELECTED_OFFER offerId=${offer.offerId} bookingMode=${offer.bookingMode} isLive=${offer.isLive} isLiveBooking=${offer.isLiveBooking} airline=${offer.airline} flightNumber=${offer.flightNumber}`
+    );
+  }, [offer.offerId, offer.bookingMode, offer.isLive, offer.isLiveBooking, offer.airline, offer.flightNumber]);
 
   const handleProceedToPayment = async (e: React.FormEvent) => {
     e.preventDefault();
