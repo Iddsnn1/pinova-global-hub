@@ -280,9 +280,22 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
       errorMessage.toLowerCase().includes('retry pi authentication') ||
       errorMessage.toLowerCase().includes('browser required') ||
       errorMessage.toLowerCase().includes('permission') ||
+      errorMessage.toLowerCase().includes('category_a') ||
+      errorMessage.toLowerCase().includes('category_b') ||
+      errorMessage.toLowerCase().includes('category_c') ||
+      errorMessage.toLowerCase().includes('category_d') ||
+      errorMessage.toLowerCase().includes('category_e') ||
       errorMessage.includes('AUTH_TIMEOUT') ||
       errorMessage.includes('AUTHENTICATE_UNAVAILABLE') ||
       !hasPaymentCreated
+    )
+  );
+
+  const isCategoryCExternalBrowser = Boolean(
+    errorMessage && (
+      errorMessage.toLowerCase().includes('external browser') ||
+      errorMessage.toLowerCase().includes('pi browser required') ||
+      errorMessage.includes('CATEGORY_C')
     )
   );
 

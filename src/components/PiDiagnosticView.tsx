@@ -282,7 +282,12 @@ export const PiDiagnosticView: React.FC<PiDiagnosticViewProps> = ({ onBackToApp 
           <div className="text-sm">
             <span className="font-semibold text-amber-900">Current Authentication Notice: </span>
             <span className="text-amber-800">{diagState.error}</span>
-            {diagState.lastErrorCode && (
+            {diagState.diagnosticCategory && (
+              <span className="ml-2 font-mono text-xs bg-rose-200/80 px-1.5 py-0.5 rounded text-rose-950 font-bold">
+                {diagState.diagnosticCategory}
+              </span>
+            )}
+            {diagState.lastErrorCode && !diagState.diagnosticCategory && (
               <span className="ml-2 font-mono text-xs bg-amber-200/60 px-1.5 py-0.5 rounded text-amber-900">
                 Code: {diagState.lastErrorCode}
               </span>
