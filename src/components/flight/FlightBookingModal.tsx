@@ -73,12 +73,11 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
     ? canonicalPiAmount.toFixed(6) 
     : canonicalPiAmount.toFixed(6).replace(/0+$/, '').replace(/\.$/, '');
 
-  const isLiveDuffelOffer = Boolean(
-    offer.bookingMode === 'LIVE_DUFFEL' &&
-    offer.isLive === true &&
+  const isLiveDuffelOffer =
     typeof offer.offerId === 'string' &&
-    /^off_[A-Za-z0-9]+$/.test(offer.offerId)
-  );
+    /^off_[A-Za-z0-9]+$/.test(offer.offerId) &&
+    offer.bookingMode === 'LIVE_DUFFEL' &&
+    offer.isLive === true;
 
   useEffect(() => {
     console.log(

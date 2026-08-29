@@ -1706,7 +1706,7 @@ const handleFlightSearch = async (req: express.Request, res: express.Response) =
     const token = process.env.FLIGHT_API_ACCESS_TOKEN;
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 12000);
+    const timeoutId = setTimeout(() => controller.abort(), 25000);
 
     try {
       const passengerSlices = [
@@ -1715,12 +1715,13 @@ const handleFlightSearch = async (req: express.Request, res: express.Response) =
         ...Array.from({ length: infants }, () => ({ type: 'infant_without_seat' }))
       ];
 
-      const apiRes = await fetch(`${baseUrl}/air/offer_requests`, {
+      const apiRes = await fetch(`${baseUrl}/air/offer_requests?return_offers=true`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
-          'Duffel-Version': 'v2'
+          'Duffel-Version': 'v2',
+          'Accept': 'application/json'
         },
         body: JSON.stringify({
           data: {
