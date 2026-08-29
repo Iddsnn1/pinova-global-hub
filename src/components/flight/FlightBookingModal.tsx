@@ -55,8 +55,10 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
 
   // Payment & Processing state
   const [isProcessing, setIsProcessing] = useState(false);
+  const [paymentStatusText, setPaymentStatusText] = useState<string>('Authorizing Pi Escrow Payment...');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [confirmedBooking, setConfirmedBooking] = useState<FlightBookingRecord | null>(null);
+  const checkoutAttemptKeyRef = React.useRef<string>(`idem_flt_${offer.offerId}_${Date.now()}`);
 
   // Canonical numeric fare state - guaranteed to be a valid positive JavaScript number
   const initialFareNum = (() => {
@@ -101,6 +103,7 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
     // Only revalidate with live Duffel API if this is an authentic live offer
     if (isLiveDuffelOffer) {
       setIsProcessing(true);
+      setPaymentStatusText('Revalidating live Duffel airfare...');
       try {
         console.log(`[Flight Lifecycle] live offer revalidation offerId=${offer.offerId}`);
         const reval = await revalidateFlightOffer(offer.offerId, currentFareFiat);
@@ -127,19 +130,21 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
   const handleRetryAuth = async () => {
     setErrorMessage(null);
     setIsProcessing(true);
+    setPaymentStatusText('Authenticating with Pi Browser...');
     resetPiAuthState();
     try {
       await authenticatePiUser(undefined, true);
-      // After clean reauth, automatically proceed with payment execution
-      await handleExecutePiPayment();
+      setErrorMessage(null);
     } catch (err: any) {
-      setErrorMessage(err?.message || 'Pi authentication failed. Please tap Retry Pi Authentication.');
+      setErrorMessage(err?.message || 'Pi Browser did not respond to the authentication request. Please tap Retry Pi Authentication.');
     } finally {
       setIsProcessing(false);
     }
   };
 
   const handleExecutePiPayment = async () => {
+    if (isProcessing) return;
+
     if (!Number.isFinite(currentFareFiat) || currentFareFiat <= 0) {
       setErrorMessage('Validation Error: Flight fare must be a valid positive number greater than 0.');
       return;
@@ -147,6 +152,7 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
 
     setErrorMessage(null);
     setIsProcessing(true);
+    setPaymentStatusText('Connecting Pi Network Wallet...');
 
     const passengerDetails: FlightPassengerDetails = {
       title,
@@ -169,6 +175,10 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
       const paymentResult = await createPiPayment({
         amountPi: finalPiNumber,
         memo,
+        idempotencyKey: checkoutAttemptKeyRef.current,
+        onStatusUpdate: (msg) => {
+          setPaymentStatusText(msg);
+        },
         metadata: {
           serviceType: 'FLIGHT_TICKET',
           category: 'transport',
@@ -196,13 +206,14 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
       });
 
       if (paymentResult && paymentResult.success) {
+        setPaymentStatusText('Securing ticket with carrier...');
         // 2. Book with backend flight service
         const bookResponse = await bookFlightTicket({
           paymentId: paymentResult.paymentId || `pi_flight_${Date.now()}`,
           txid: paymentResult.txid,
           offerId: offer.offerId,
           passengerDetails,
-          idempotencyKey: `idem_${offer.offerId}_${Date.now()}`
+          idempotencyKey: checkoutAttemptKeyRef.current
         });
 
         if (bookResponse.success && bookResponse.booking) {
@@ -331,20 +342,33 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
 
           {/* Error Banner */}
           {errorMessage && (
-            <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-rose-300">
-              <div className="flex items-center gap-2.5">
-                <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
-                <span>{errorMessage}</span>
+            <div className="p-3.5 bg-rose-500/10 border border-rose-500/30 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-rose-300">
+              <div className="flex items-start sm:items-center gap-2.5">
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-400 mt-0.5 sm:mt-0" />
+                <span className="leading-relaxed">{errorMessage}</span>
               </div>
-              <button
-                type="button"
-                onClick={handleRetryAuth}
-                disabled={isProcessing}
-                className="self-start sm:self-auto px-3 py-1.5 bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 text-rose-200 font-bold rounded-xl text-[11px] flex items-center gap-1.5 transition-colors"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${isProcessing ? 'animate-spin' : ''}`} />
-                <span>Retry Pi Authentication</span>
-              </button>
+              <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
+                {step === 'payment' && (
+                  <button
+                    type="button"
+                    onClick={handleExecutePiPayment}
+                    disabled={isProcessing}
+                    className="px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-200 font-bold rounded-xl text-[11px] flex items-center gap-1.5 transition-colors disabled:opacity-50"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isProcessing ? 'animate-spin' : ''}`} />
+                    <span>Retry Payment</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={handleRetryAuth}
+                  disabled={isProcessing}
+                  className="px-3 py-1.5 bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 text-rose-200 font-bold rounded-xl text-[11px] flex items-center gap-1.5 transition-colors disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isProcessing ? 'animate-spin' : ''}`} />
+                  <span>Retry Pi Authentication</span>
+                </button>
+              </div>
             </div>
           )}
 
@@ -595,7 +619,7 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
                   {isProcessing ? (
                     <>
                       <RefreshCw className="w-4 h-4 animate-spin text-slate-950" />
-                      <span>Authorizing Pi Escrow Payment...</span>
+                      <span>{paymentStatusText || 'Authorizing Pi Escrow Payment...'}</span>
                     </>
                   ) : (
                     <>

@@ -21,6 +21,7 @@ declare global {
       ) => void;
     };
     __PI_DIAGNOSTICS__?: PiSdkDiagnosticState;
+    __PI_SDK_MANAGER__?: any;
   }
 }
 
@@ -57,7 +58,23 @@ export interface PiPaymentCallbacks {
   onError: (error: Error, payment?: PiPayment) => void;
 }
 
-export const BUILD_COMMIT = 'ab540d7c08480fe396633aece64ba373b64b5332';
+export const BUILD_COMMIT = 'b89f21cd99e230aa7782ce477ba6190f10c5580a';
+
+// State Machine States
+export type PiPaymentStage =
+  | 'IDLE'
+  | 'INITIALIZING_PI'
+  | 'AUTHENTICATING'
+  | 'AUTHENTICATED'
+  | 'CREATING_PAYMENT'
+  | 'WAITING_FOR_PI_APPROVAL'
+  | 'WAITING_FOR_PI_COMPLETION'
+  | 'SERVER_VERIFICATION'
+  | 'ESCROW_FULFILLMENT'
+  | 'COMPLETED'
+  | 'CANCELLED'
+  | 'FAILED'
+  | 'TIMEOUT';
 
 export type NativeBridgeState =
   | 'idle'
@@ -75,6 +92,7 @@ export type PiAuthState =
   | 'AUTH_SUCCESS'
   | 'AUTH_DENIED'
   | 'AUTH_ERROR'
+  | 'AUTH_TIMEOUT'
   | 'AUTH_NATIVE_PENDING'
   | 'PI_AUTHENTICATE_UNAVAILABLE';
 
@@ -86,23 +104,9 @@ export type PiAuthErrorType =
   | 'PI_AUTHENTICATE_UNAVAILABLE'
   | null;
 
-export type PiPaymentStage =
-  | 'IDLE'
-  | 'SDK_LOADING'
-  | 'SDK_READY'
-  | 'PI_AUTHENTICATING'
-  | 'PI_AUTHENTICATED'
-  | 'PAYMENT_CREATING'
-  | 'PAYMENT_APPROVAL'
-  | 'PAYMENT_COMPLETION'
-  | 'SERVER_VERIFICATION'
-  | 'ESCROW_FULFILLMENT'
-  | 'COMPLETED'
-  | 'FAILED';
-
 export interface PiSdkDiagnosticState {
   sdkScriptState: 'loaded' | 'not_loaded';
-  piInitState: 'success' | 'failed' | 'not_called';
+  piInitState: 'success' | 'failed' | 'not_called' | 'initializing';
   piAuthApiState: 'available' | 'unavailable';
   authenticateInvocation: 'called' | 'not_called';
   authenticateInvocationCount: number;
@@ -141,31 +145,7 @@ export interface PiSdkDiagnosticState {
   isIframe?: boolean;
 }
 
-// Explicit Internal State Tracking
-let sdkLoaded = false;
-let sdkInitialized = false;
-let piInitState: 'success' | 'failed' | 'not_called' = 'not_called';
-let piAuthApiState: 'available' | 'unavailable' = 'unavailable';
-let authenticateInvocation: 'called' | 'not_called' = 'not_called';
-let authInvocationCount = 0;
-let authAttemptCount = 0;
-let lastAuthAttemptId: string | null = null;
-let nativeBridgeState: NativeBridgeState = 'idle';
-let authLifecycleState: PiAuthState = 'AUTH_NOT_STARTED';
-let authErrorType: PiAuthErrorType = null;
-let authenticated = false;
-let paymentScopeGranted = false;
-let authenticatedUser: PiUser | null = null;
-let authenticationError: string | null = null;
-let apiConfigState: 'configured' | 'missing' = 'configured';
-let serverConfigSynced = false;
-let serverConfiguredSandbox: boolean | null = null;
-let currentPaymentStage: PiPaymentStage = 'IDLE';
-let lastErrorCode: string | null = null;
-let configuredAppUrl = 'https://iddsnn.com';
-const expectedProductionOrigin = 'https://iddsnn.com';
-
-// In-Memory Diagnostic Log Stream Buffer (Accessible for isolated /pi-diagnostic view)
+// In-Memory Diagnostic Log Stream Buffer
 const diagnosticLogBuffer: { timestamp: string; message: string; type: 'info' | 'warn' | 'error' }[] = [];
 type LogListener = (logs: { timestamp: string; message: string; type: 'info' | 'warn' | 'error' }[]) => void;
 const logListeners: Set<LogListener> = new Set();
@@ -180,7 +160,7 @@ export function logPiTrace(message: string, type: 'info' | 'warn' | 'error' = 'i
     console.log(message);
   }
   diagnosticLogBuffer.push({ timestamp, message, type });
-  if (diagnosticLogBuffer.length > 150) {
+  if (diagnosticLogBuffer.length > 200) {
     diagnosticLogBuffer.shift();
   }
   logListeners.forEach((listener) => {
@@ -204,14 +184,6 @@ export function subscribePiDiagnosticLogs(listener: LogListener): () => void {
   };
 }
 
-// Singleton Locks
-let piInitPromise: Promise<boolean> | null = null;
-let piAuthPromise: Promise<PiUser> | null = null;
-
-// Diagnostic Listeners
-type DiagnosticListener = (state: PiSdkDiagnosticState) => void;
-const diagnosticListeners: Set<DiagnosticListener> = new Set();
-
 function generateReqId(prefix: string = 'pi'): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 6)}`;
 }
@@ -225,131 +197,9 @@ export function getSafeRuntimeContext() {
   return { origin, hostname, protocol, sdkAvailable, environment };
 }
 
-export async function fetchApiConfiguration(): Promise<'configured' | 'missing'> {
-  try {
-    const res = await safeFetchJson('/api/v2/payments/config');
-    if (res.ok && res.data) {
-      if (res.data.apiConfiguration) {
-        apiConfigState = res.data.apiConfiguration as 'configured' | 'missing';
-      }
-      if (typeof res.data.sandbox === 'boolean') {
-        serverConfiguredSandbox = res.data.sandbox;
-        serverConfigSynced = true;
-      }
-      if (res.data.configuredAppUrl) {
-        configuredAppUrl = res.data.configuredAppUrl;
-      }
-    }
-  } catch {
-    // Keep fallback defaults
-  }
-  notifyDiagnosticStateChange();
-  return apiConfigState;
-}
-
-export function getPiSdkDiagnosticState(): PiSdkDiagnosticState {
-  let sdkState: PiSdkDiagnosticState['sdkState'] = 'not_loaded';
-  if (sdkInitialized && typeof window !== 'undefined' && window.Pi) {
-    sdkState = 'ready';
-  } else if (piInitPromise) {
-    sdkState = 'initializing';
-  } else if (sdkLoaded || (typeof window !== 'undefined' && Boolean(window.Pi))) {
-    sdkState = 'loaded';
-  }
-
-  const hasPi = typeof window !== 'undefined' && Boolean(window.Pi);
-  const currentOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://iddsnn.com';
-  let isIframe = false;
-  try {
-    isIframe = typeof window !== 'undefined' ? window.self !== window.top : false;
-  } catch {
-    isIframe = true;
-  }
-  const isSandbox = isSandboxMode();
-  const isSdkReady = sdkInitialized && hasPi;
-
-  const authStateSummary: 'success' | 'pending' | 'failed' =
-    authenticated && authenticatedUser
-      ? 'success'
-      : (authLifecycleState === 'AUTH_CALL_STARTED' ||
-          authLifecycleState === 'AUTH_PROMISE_RETURNED' ||
-          authLifecycleState === 'AUTH_NATIVE_PENDING' ||
-          Boolean(piAuthPromise))
-      ? 'pending'
-      : authLifecycleState === 'AUTH_DENIED' ||
-        authLifecycleState === 'AUTH_ERROR' ||
-        authLifecycleState === 'PI_AUTHENTICATE_UNAVAILABLE'
-      ? 'failed'
-      : 'pending';
-
-  return {
-    sdkScriptState: hasPi || sdkLoaded ? 'loaded' : 'not_loaded',
-    piInitState,
-    piAuthApiState: typeof window !== 'undefined' && window.Pi && typeof window.Pi.authenticate === 'function' ? 'available' : piAuthApiState,
-    authenticateInvocation,
-    authenticateInvocationCount: authInvocationCount,
-    authAttemptId: lastAuthAttemptId,
-    activeAuthRequest: Boolean(piAuthPromise),
-    hasActiveAuthPromise: Boolean(piAuthPromise),
-    nativeBridgeState,
-    piEnvDetected: isPiBrowser(),
-    productionOrigin: currentOrigin,
-    sandbox: isSandbox,
-    sdkReadyState: isSdkReady ? 'ready' : 'not_ready',
-    network: isSandbox ? 'SANDBOX' : 'MAINNET',
-    piAuthenticationState: authStateSummary,
-    paymentScopeState: paymentScopeGranted ? 'granted' : 'not_granted',
-    apiConfiguration: apiConfigState,
-    buildCommit: BUILD_COMMIT,
-    sdkState,
-    authState: authLifecycleState,
-    authErrorType,
-    paymentScope: paymentScopeGranted ? 'granted' : 'not_granted',
-    userState: authenticated && authenticatedUser ? 'authenticated' : 'not_authenticated',
-    username: authenticatedUser?.username || null,
-    error: authenticationError,
-    isPiBrowser: isPiBrowser(),
-    currentPaymentStage,
-    lastErrorCode,
-    configuredAppUrl,
-    expectedProductionOrigin,
-    runtimeCheck: {
-      hasPi,
-      initType: typeof window !== 'undefined' && window.Pi ? typeof window.Pi.init : 'undefined',
-      authType: typeof window !== 'undefined' && window.Pi ? typeof window.Pi.authenticate : 'undefined',
-      createPaymentType: typeof window !== 'undefined' && window.Pi ? typeof window.Pi.createPayment : 'undefined'
-    },
-    currentOrigin,
-    isIframe
-  };
-}
-
-export function subscribePiSdkState(listener: DiagnosticListener): () => void {
-  diagnosticListeners.add(listener);
-  listener(getPiSdkDiagnosticState());
-  return () => {
-    diagnosticListeners.delete(listener);
-  };
-}
-
-function notifyDiagnosticStateChange() {
-  const currentState = getPiSdkDiagnosticState();
-  if (typeof window !== 'undefined') {
-    (window as any).__PI_DIAGNOSTICS__ = currentState;
-  }
-  diagnosticListeners.forEach((listener) => {
-    try {
-      listener(currentState);
-    } catch (e) {
-      console.error('[Pi SDK] Listener execution error:', e);
-    }
-  });
-}
-
 export function isSandboxMode(): boolean {
   if (typeof window === 'undefined') return true;
 
-  // 1. Check user override from localStorage
   try {
     const override = localStorage.getItem('pi_sandbox_override');
     if (override === 'true') return true;
@@ -358,7 +208,6 @@ export function isSandboxMode(): boolean {
     // Ignore storage errors
   }
 
-  // 2. Check URL query params (?sandbox=true / ?sandbox=false / ?env=sandbox / ?env=mainnet)
   const search = window.location.search || '';
   if (search.includes('sandbox=true') || search.includes('sandbox=1') || search.includes('env=sandbox')) {
     return true;
@@ -367,7 +216,6 @@ export function isSandboxMode(): boolean {
     return false;
   }
 
-  // 3. Check VITE_PI_SANDBOX or VITE_PI_ENV
   const metaEnv = (import.meta as any).env;
   if (metaEnv) {
     if (metaEnv.VITE_PI_SANDBOX === 'false' || metaEnv.VITE_PI_ENV === 'mainnet') {
@@ -378,26 +226,7 @@ export function isSandboxMode(): boolean {
     }
   }
 
-  // 4. Check synchronized backend configuration if received
-  if (serverConfigSynced && serverConfiguredSandbox !== null) {
-    return serverConfiguredSandbox;
-  }
-
-  // Default to true (SANDBOX / TESTNET) to match Developer Portal Sandbox setup
   return true;
-}
-
-export function setCustomSandboxMode(sandbox: boolean) {
-  if (typeof window !== 'undefined') {
-    try {
-      localStorage.setItem('pi_sandbox_override', sandbox ? 'true' : 'false');
-    } catch (e) {
-      console.warn('Could not save sandbox override to localStorage', e);
-    }
-  }
-  sdkInitialized = false;
-  piInitPromise = null;
-  initPiSdk(sandbox);
 }
 
 export function isPiBrowser(): boolean {
@@ -410,398 +239,1069 @@ export function isPiBrowser(): boolean {
   return isPiUa || hasPiNative || hasUrlParam || hasPiObject;
 }
 
-export function isPiSdkInitialized(): boolean {
-  return sdkInitialized && typeof window !== 'undefined' && Boolean(window.Pi);
-}
+/**
+ * Single Centralized Client-Side Pi SDK Service: PiSdkManager
+ */
+class PiSdkManagerService {
+  private sdkLoaded = false;
+  private sdkInitialized = false;
+  private piInitState: 'success' | 'failed' | 'not_called' | 'initializing' = 'not_called';
+  private piAuthApiState: 'available' | 'unavailable' = 'unavailable';
+  private authenticateInvocation: 'called' | 'not_called' = 'not_called';
+  private authInvocationCount = 0;
+  private authAttemptCount = 0;
+  private lastAuthAttemptId: string | null = null;
+  private nativeBridgeState: NativeBridgeState = 'idle';
+  private authLifecycleState: PiAuthState = 'AUTH_NOT_STARTED';
+  private authErrorType: PiAuthErrorType = null;
+  private authenticated = false;
+  private paymentScopeGranted = false;
+  private authenticatedUser: PiUser | null = null;
+  private authenticationError: string | null = null;
+  private apiConfigState: 'configured' | 'missing' = 'configured';
+  private currentPaymentStage: PiPaymentStage = 'IDLE';
+  private lastErrorCode: string | null = null;
+  private configuredAppUrl = 'https://iddsnn.com';
+  private readonly expectedProductionOrigin = 'https://iddsnn.com';
 
-export function isPaymentScopeReady(): boolean {
-  return paymentScopeGranted && Boolean(authenticatedUser) && authenticated;
-}
+  // Singleton Promises
+  private piInitPromise: Promise<boolean> | null = null;
+  private piAuthPromise: Promise<PiUser> | null = null;
+  private activePaymentId: string | null = null;
+  private activePaymentInFlight = false;
 
-export async function loadPiSdkScript(): Promise<boolean> {
-  if (typeof window === 'undefined') return false;
-  if (window.Pi) {
-    sdkLoaded = true;
-    notifyDiagnosticStateChange();
-    return true;
+  private diagnosticListeners: Set<(state: PiSdkDiagnosticState) => void> = new Set();
+
+  constructor() {
+    if (typeof window !== 'undefined') {
+      window.__PI_SDK_MANAGER__ = this;
+    }
   }
 
-  return new Promise((resolve) => {
-    const existingScript = document.querySelector('script[src*="sdk.minepi.com/pi-sdk.js"]');
-    if (existingScript) {
-      let attempts = 0;
-      const interval = setInterval(() => {
-        attempts++;
-        if (window.Pi) {
-          clearInterval(interval);
-          sdkLoaded = true;
-          notifyDiagnosticStateChange();
-          resolve(true);
-        } else if (attempts >= 60) {
-          // 6 seconds max wait for pre-existing script tag
-          clearInterval(interval);
-          sdkLoaded = Boolean(window.Pi);
-          resolve(sdkLoaded);
+  public subscribeDiagnostic(listener: (state: PiSdkDiagnosticState) => void): () => void {
+    this.diagnosticListeners.add(listener);
+    listener(this.getDiagnosticState());
+    return () => {
+      this.diagnosticListeners.delete(listener);
+    };
+  }
+
+  private notifyDiagnosticStateChange() {
+    const currentState = this.getDiagnosticState();
+    if (typeof window !== 'undefined') {
+      (window as any).__PI_DIAGNOSTICS__ = currentState;
+    }
+    this.diagnosticListeners.forEach((listener) => {
+      try {
+        listener(currentState);
+      } catch (e) {
+        console.error('[Pi SDK] Listener execution error:', e);
+      }
+    });
+  }
+
+  public getDiagnosticState(): PiSdkDiagnosticState {
+    let sdkState: PiSdkDiagnosticState['sdkState'] = 'not_loaded';
+    if (this.sdkInitialized && typeof window !== 'undefined' && window.Pi) {
+      sdkState = 'ready';
+    } else if (this.piInitPromise || this.piInitState === 'initializing') {
+      sdkState = 'initializing';
+    } else if (this.sdkLoaded || (typeof window !== 'undefined' && Boolean(window.Pi))) {
+      sdkState = 'loaded';
+    }
+
+    const hasPi = typeof window !== 'undefined' && Boolean(window.Pi);
+    const currentOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://iddsnn.com';
+    let isIframe = false;
+    try {
+      isIframe = typeof window !== 'undefined' ? window.self !== window.top : false;
+    } catch {
+      isIframe = true;
+    }
+    const isSandbox = isSandboxMode();
+    const isSdkReady = this.sdkInitialized && hasPi;
+
+    const authStateSummary: 'success' | 'pending' | 'failed' =
+      this.authenticated && this.authenticatedUser
+        ? 'success'
+        : this.authLifecycleState === 'AUTH_CALL_STARTED' ||
+          this.authLifecycleState === 'AUTH_PROMISE_RETURNED' ||
+          this.authLifecycleState === 'AUTH_NATIVE_PENDING' ||
+          Boolean(this.piAuthPromise)
+        ? 'pending'
+        : this.authLifecycleState === 'AUTH_DENIED' ||
+          this.authLifecycleState === 'AUTH_ERROR' ||
+          this.authLifecycleState === 'AUTH_TIMEOUT' ||
+          this.authLifecycleState === 'PI_AUTHENTICATE_UNAVAILABLE'
+        ? 'failed'
+        : 'pending';
+
+    return {
+      sdkScriptState: hasPi || this.sdkLoaded ? 'loaded' : 'not_loaded',
+      piInitState: this.piInitState,
+      piAuthApiState: typeof window !== 'undefined' && window.Pi && typeof window.Pi.authenticate === 'function' ? 'available' : this.piAuthApiState,
+      authenticateInvocation: this.authenticateInvocation,
+      authenticateInvocationCount: this.authInvocationCount,
+      authAttemptId: this.lastAuthAttemptId,
+      activeAuthRequest: Boolean(this.piAuthPromise),
+      hasActiveAuthPromise: Boolean(this.piAuthPromise),
+      nativeBridgeState: this.nativeBridgeState,
+      piEnvDetected: isPiBrowser(),
+      productionOrigin: currentOrigin,
+      sandbox: isSandbox,
+      sdkReadyState: isSdkReady ? 'ready' : 'not_ready',
+      network: isSandbox ? 'SANDBOX' : 'MAINNET',
+      piAuthenticationState: authStateSummary,
+      paymentScopeState: this.paymentScopeGranted ? 'granted' : 'not_granted',
+      apiConfiguration: this.apiConfigState,
+      buildCommit: BUILD_COMMIT,
+      sdkState,
+      authState: this.authLifecycleState,
+      authErrorType: this.authErrorType,
+      paymentScope: this.paymentScopeGranted ? 'granted' : 'not_granted',
+      userState: this.authenticated && this.authenticatedUser ? 'authenticated' : 'not_authenticated',
+      username: this.authenticatedUser?.username || null,
+      error: this.authenticationError,
+      isPiBrowser: isPiBrowser(),
+      currentPaymentStage: this.currentPaymentStage,
+      lastErrorCode: this.lastErrorCode,
+      configuredAppUrl: this.configuredAppUrl,
+      expectedProductionOrigin: this.expectedProductionOrigin,
+      runtimeCheck: {
+        hasPi,
+        initType: typeof window !== 'undefined' && window.Pi ? typeof window.Pi.init : 'undefined',
+        authType: typeof window !== 'undefined' && window.Pi ? typeof window.Pi.authenticate : 'undefined',
+        createPaymentType: typeof window !== 'undefined' && window.Pi ? typeof window.Pi.createPayment : 'undefined'
+      },
+      currentOrigin,
+      isIframe
+    };
+  }
+
+  public isReady(): boolean {
+    return this.sdkInitialized && typeof window !== 'undefined' && Boolean(window.Pi);
+  }
+
+  public isPaymentScopeReady(): boolean {
+    return this.paymentScopeGranted && Boolean(this.authenticatedUser) && this.authenticated;
+  }
+
+  public getAuthenticatedUser(): PiUser | null {
+    return this.authenticatedUser;
+  }
+
+  public getPaymentStage(): PiPaymentStage {
+    return this.currentPaymentStage;
+  }
+
+  public setPaymentStage(stage: PiPaymentStage) {
+    this.currentPaymentStage = stage;
+    this.notifyDiagnosticStateChange();
+  }
+
+  public setCustomSandboxMode(sandbox: boolean) {
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('pi_sandbox_override', sandbox ? 'true' : 'false');
+      } catch (e) {
+        console.warn('Could not save sandbox override to localStorage', e);
+      }
+    }
+    this.sdkInitialized = false;
+    this.piInitPromise = null;
+    this.initialize(sandbox);
+  }
+
+  public async fetchApiConfiguration(): Promise<'configured' | 'missing'> {
+    try {
+      const res = await safeFetchJson('/api/v2/payments/config');
+      if (res.ok && res.data) {
+        if (res.data.apiConfiguration) {
+          this.apiConfigState = res.data.apiConfiguration as 'configured' | 'missing';
         }
-      }, 100);
+        if (res.data.configuredAppUrl) {
+          this.configuredAppUrl = res.data.configuredAppUrl;
+        }
+      }
+    } catch {
+      // Keep fallback
+    }
+    this.notifyDiagnosticStateChange();
+    return this.apiConfigState;
+  }
+
+  /**
+   * Script Loading with Duplicate Injection Guard and Timeout
+   */
+  public async loadScript(): Promise<boolean> {
+    if (typeof window === 'undefined') return false;
+    if (window.Pi) {
+      this.sdkLoaded = true;
+      this.notifyDiagnosticStateChange();
+      return true;
+    }
+
+    return new Promise((resolve) => {
+      const existingScript = document.querySelector('script[src*="sdk.minepi.com/pi-sdk.js"]');
+      if (existingScript) {
+        let attempts = 0;
+        const interval = setInterval(() => {
+          attempts++;
+          if (window.Pi) {
+            clearInterval(interval);
+            this.sdkLoaded = true;
+            this.notifyDiagnosticStateChange();
+            resolve(true);
+          } else if (attempts >= 50) {
+            clearInterval(interval);
+            this.sdkLoaded = Boolean(window.Pi);
+            resolve(this.sdkLoaded);
+          }
+        }, 100);
+        return;
+      }
+
+      const script = document.createElement('script');
+      script.src = 'https://sdk.minepi.com/pi-sdk.js';
+      script.async = true;
+      let settled = false;
+
+      const timeoutId = setTimeout(() => {
+        if (!settled) {
+          settled = true;
+          this.sdkLoaded = Boolean(window.Pi);
+          this.notifyDiagnosticStateChange();
+          resolve(this.sdkLoaded);
+        }
+      }, 6000);
+
+      script.onload = () => {
+        let attempts = 0;
+        const interval = setInterval(() => {
+          attempts++;
+          if (window.Pi) {
+            clearInterval(interval);
+            clearTimeout(timeoutId);
+            if (!settled) {
+              settled = true;
+              this.sdkLoaded = true;
+              this.notifyDiagnosticStateChange();
+              resolve(true);
+            }
+          } else if (attempts >= 30) {
+            clearInterval(interval);
+            clearTimeout(timeoutId);
+            if (!settled) {
+              settled = true;
+              this.sdkLoaded = Boolean(window.Pi);
+              this.notifyDiagnosticStateChange();
+              resolve(this.sdkLoaded);
+            }
+          }
+        }, 100);
+      };
+
+      script.onerror = () => {
+        clearTimeout(timeoutId);
+        if (!settled) {
+          settled = true;
+          logPiTrace('[Pi SDK] SCRIPT_LOAD_FAILED CDN script failed to load', 'warn');
+          this.sdkLoaded = false;
+          this.notifyDiagnosticStateChange();
+          resolve(false);
+        }
+      };
+
+      document.head.appendChild(script);
+    });
+  }
+
+  /**
+   * Initialize Pi SDK exactly once per session with Hard Timeout
+   */
+  public async initialize(sandbox: boolean = isSandboxMode()): Promise<boolean> {
+    if (this.sdkInitialized && typeof window !== 'undefined' && window.Pi) {
+      this.piInitState = 'success';
+      return true;
+    }
+
+    if (this.piInitPromise) {
+      return this.piInitPromise;
+    }
+
+    const reqId = generateReqId('init');
+    const ctx = getSafeRuntimeContext();
+
+    logPiTrace(
+      `[Pi SDK] INITIALIZE_START reqId=${reqId} sandbox=${sandbox} runtimeOrigin=${ctx.origin} hostname=${ctx.hostname} isPiBrowser=${isPiBrowser()}`
+    );
+
+    this.piInitState = 'initializing';
+    this.currentPaymentStage = 'INITIALIZING_PI';
+    this.notifyDiagnosticStateChange();
+
+    this.piInitPromise = (async () => {
+      if (typeof window === 'undefined') return false;
+
+      void this.fetchApiConfiguration();
+
+      if (!window.Pi) {
+        await this.loadScript();
+      }
+
+      if (window.Pi) {
+        this.sdkLoaded = true;
+        try {
+          window.Pi.init({ version: '2.0', sandbox });
+          this.sdkInitialized = true;
+          this.piInitState = 'success';
+          this.lastErrorCode = null;
+          logPiTrace(`[Pi SDK] INITIALIZE_SUCCESS reqId=${reqId} version=2.0 sandbox=${sandbox}`);
+          this.notifyDiagnosticStateChange();
+          return true;
+        } catch (err: any) {
+          const errMsg = String(err?.message || err);
+          if (errMsg.toLowerCase().includes('initialized')) {
+            this.sdkInitialized = true;
+            this.piInitState = 'success';
+            this.lastErrorCode = null;
+            logPiTrace(`[Pi SDK] INITIALIZE_SUCCESS reqId=${reqId} (already initialized)`);
+            this.notifyDiagnosticStateChange();
+            return true;
+          }
+          logPiTrace(`[Pi SDK] INITIALIZE_ERROR reqId=${reqId} error=${errMsg}`, 'warn');
+          this.piInitState = 'failed';
+          this.lastErrorCode = 'SDK_INIT_FAILED';
+        }
+      } else {
+        logPiTrace(`[Pi SDK] INITIALIZE_TIMEOUT reqId=${reqId} error=SCRIPT_UNAVAILABLE`, 'warn');
+        this.piInitState = 'failed';
+        this.lastErrorCode = 'SDK_NOT_LOADED';
+      }
+
+      this.notifyDiagnosticStateChange();
+      return this.sdkInitialized;
+    })();
+
+    const result = await this.piInitPromise;
+    if (!result) {
+      this.piInitPromise = null;
+    }
+    return result;
+  }
+
+  /**
+   * Reset authentication state and clear active locks
+   */
+  public resetAuthenticationState(): void {
+    this.piAuthPromise = null;
+    this.authLifecycleState = 'AUTH_NOT_STARTED';
+    this.authErrorType = null;
+    this.nativeBridgeState = 'idle';
+    this.authenticationError = null;
+    this.lastErrorCode = null;
+    this.currentPaymentStage = 'IDLE';
+    this.activePaymentInFlight = false;
+    this.activePaymentId = null;
+    logPiTrace('[Pi SDK] AUTH_RESET cleared locks and reset lifecycle state');
+    this.notifyDiagnosticStateChange();
+  }
+
+  /**
+   * Authenticate Pi User with Hard Timeout (12-15s) and Safe Error States
+   */
+  public async authenticate(
+    scopes: string[] = ['payments', 'username'],
+    onIncompletePaymentFound?: (payment: PiPayment) => void,
+    forceReauth: boolean = false
+  ): Promise<PiUser> {
+    this.authAttemptCount++;
+    const authAttemptId = `auth_${this.authAttemptCount}_${Date.now().toString(36)}`;
+    this.lastAuthAttemptId = authAttemptId;
+    const inPi = isPiBrowser();
+
+    logPiTrace(
+      `[Pi SDK] AUTH_START attemptId=${authAttemptId} isPiBrowser=${inPi} forceReauth=${forceReauth} scopes=${JSON.stringify(scopes)}`
+    );
+
+    // Unsupported Browser Guard
+    if (!inPi) {
+      this.sdkLoaded = false;
+      this.sdkInitialized = false;
+      this.authenticated = false;
+      this.paymentScopeGranted = false;
+      this.authenticatedUser = null;
+      this.authLifecycleState = 'PI_AUTHENTICATE_UNAVAILABLE';
+      this.authErrorType = 'PI_AUTHENTICATE_UNAVAILABLE';
+      this.lastErrorCode = 'PI_SDK_NOT_AVAILABLE';
+      this.authenticationError = 'Pi payments require Pi Browser for this environment. Please open PiNova Global Hub in Pi Browser.';
+      this.currentPaymentStage = 'FAILED';
+      logPiTrace(`[Pi SDK] AUTH_ERROR attemptId=${authAttemptId} error=NON_PI_BROWSER`, 'warn');
+      this.notifyDiagnosticStateChange();
+      throw new Error(this.authenticationError);
+    }
+
+    // Reuse existing session if authenticated and not forced
+    if (!forceReauth && this.paymentScopeGranted && this.authenticatedUser && this.authenticated) {
+      this.authLifecycleState = 'AUTH_SUCCESS';
+      logPiTrace(`[Pi SDK] AUTH_SUCCESS attemptId=${authAttemptId} REUSING_SESSION username=${this.authenticatedUser.username}`);
+      this.notifyDiagnosticStateChange();
+      return this.authenticatedUser;
+    }
+
+    if (forceReauth) {
+      this.piAuthPromise = null;
+    }
+
+    // Deduplicate in-flight auth promise
+    if (this.piAuthPromise) {
+      logPiTrace(`[Pi SDK] AUTH_DEDUPLICATED attemptId=${authAttemptId} - returning active in-flight promise`);
+      return this.piAuthPromise;
+    }
+
+    this.piAuthPromise = (async () => {
+      this.authLifecycleState = 'AUTH_CALL_STARTED';
+      this.authErrorType = null;
+      this.authenticationError = null;
+      this.currentPaymentStage = 'AUTHENTICATING';
+      this.notifyDiagnosticStateChange();
+
+      try {
+        // Step 1: Ensure initialized
+        const hasSdk = await this.initialize();
+        if (!hasSdk || typeof window === 'undefined' || !window.Pi) {
+          this.authLifecycleState = 'PI_AUTHENTICATE_UNAVAILABLE';
+          this.authErrorType = 'PI_AUTHENTICATE_UNAVAILABLE';
+          this.piAuthApiState = 'unavailable';
+          this.lastErrorCode = 'SDK_INIT_FAILED';
+          this.currentPaymentStage = 'FAILED';
+          this.authenticationError = 'Pi Network SDK could not be initialized. Please reopen this page in Pi Browser and try again.';
+          logPiTrace(`[Pi SDK] AUTH_ERROR attemptId=${authAttemptId} error=SDK_INIT_FAILED`, 'warn');
+          this.notifyDiagnosticStateChange();
+          throw new Error(this.authenticationError);
+        }
+
+        if (typeof window.Pi.authenticate !== 'function') {
+          this.authLifecycleState = 'PI_AUTHENTICATE_UNAVAILABLE';
+          this.authErrorType = 'PI_AUTHENTICATE_UNAVAILABLE';
+          this.piAuthApiState = 'unavailable';
+          this.lastErrorCode = 'PI_SDK_NOT_AVAILABLE';
+          this.currentPaymentStage = 'FAILED';
+          this.authenticationError = 'Pi authenticate API is unavailable in this environment.';
+          logPiTrace(`[Pi SDK] AUTH_ERROR attemptId=${authAttemptId} error=AUTHENTICATE_UNAVAILABLE`, 'warn');
+          this.notifyDiagnosticStateChange();
+          throw new Error(this.authenticationError);
+        }
+
+        this.piAuthApiState = 'available';
+        this.authenticateInvocation = 'called';
+        this.authInvocationCount++;
+        this.nativeBridgeState = 'calling_invocation';
+        this.notifyDiagnosticStateChange();
+
+        const handleIncomplete = (payment: PiPayment) => {
+          logPiTrace(`[Pi SDK] INCOMPLETE_PAYMENT_FOUND attemptId=${authAttemptId} paymentId=${payment?.identifier}`);
+          if (onIncompletePaymentFound) {
+            try {
+              onIncompletePaymentFound(payment);
+            } catch (cbErr) {
+              console.error('[Pi SDK] Incomplete payment callback error:', cbErr);
+            }
+          }
+        };
+
+        // Step 2: Invoke Pi.authenticate() with Hard 12-Second Timeout Race
+        let rawAuthPromise: Promise<any>;
+        try {
+          rawAuthPromise = window.Pi.authenticate(scopes, handleIncomplete);
+          this.nativeBridgeState = 'promise_returned';
+          this.authLifecycleState = 'AUTH_PROMISE_RETURNED';
+          this.notifyDiagnosticStateChange();
+        } catch (syncErr: any) {
+          this.nativeBridgeState = 'call_blocked';
+          this.authLifecycleState = 'AUTH_ERROR';
+          this.authErrorType = 'AUTH_BRIDGE_REJECTED';
+          this.lastErrorCode = 'PI_AUTH_REJECTED';
+          this.currentPaymentStage = 'FAILED';
+          this.authenticationError = syncErr?.message || 'Authentication call was blocked by Pi Browser bridge.';
+          logPiTrace(`[Pi SDK] AUTH_ERROR attemptId=${authAttemptId} syncError=${this.authenticationError}`, 'warn');
+          this.notifyDiagnosticStateChange();
+          throw syncErr;
+        }
+
+        const AUTH_TIMEOUT_MS = 14000;
+        let timeoutHandle: any;
+        const timeoutPromise = new Promise((_, reject) => {
+          timeoutHandle = setTimeout(() => {
+            const timeoutErr = new Error('Pi Browser did not respond to the authentication request. Please tap Retry Pi Authentication.');
+            (timeoutErr as any).code = 'AUTH_TIMEOUT';
+            reject(timeoutErr);
+          }, AUTH_TIMEOUT_MS);
+        });
+
+        const auth: any = await Promise.race([rawAuthPromise, timeoutPromise]).finally(() => {
+          clearTimeout(timeoutHandle);
+        });
+
+        this.nativeBridgeState = 'promise_resolved';
+
+        if (auth && auth.user && auth.accessToken && auth.user.uid && auth.user.username) {
+          this.authenticated = true;
+          this.paymentScopeGranted = true;
+          this.authLifecycleState = 'AUTH_SUCCESS';
+          this.authErrorType = null;
+          this.authenticationError = null;
+          this.currentPaymentStage = 'AUTHENTICATED';
+          this.lastErrorCode = null;
+
+          this.authenticatedUser = {
+            username: auth.user.username,
+            uid: auth.user.uid,
+            accessToken: auth.accessToken,
+            authenticated: true,
+            role: auth.user.username === 'admin' ? 'admin' : 'buyer'
+          };
+
+          logPiTrace(`[Pi SDK] AUTH_SUCCESS attemptId=${authAttemptId} username=${auth.user.username}`);
+          this.notifyDiagnosticStateChange();
+          return this.authenticatedUser;
+        } else {
+          logPiTrace(`[Pi SDK] AUTH_ERROR attemptId=${authAttemptId} error=MISSING_CREDENTIALS`, 'warn');
+          throw new Error('Pi authentication returned incomplete user credentials.');
+        }
+      } catch (err: any) {
+        if (this.nativeBridgeState !== 'call_blocked') {
+          this.nativeBridgeState = 'promise_rejected';
+        }
+        this.authenticated = false;
+        this.paymentScopeGranted = false;
+        this.authenticatedUser = null;
+        this.currentPaymentStage = 'FAILED';
+
+        let rawMsg = '';
+        if (typeof err === 'string') {
+          rawMsg = err;
+        } else if (err && typeof err === 'object') {
+          rawMsg = err.message || err.error || err.description || JSON.stringify(err);
+        }
+
+        const isTimeout = err?.code === 'AUTH_TIMEOUT' || rawMsg.includes('did not respond') || rawMsg.includes('timed out');
+        const isCancelled =
+          rawMsg.toLowerCase().includes('cancel') ||
+          rawMsg.toLowerCase().includes('denied') ||
+          rawMsg.toLowerCase().includes('dismiss') ||
+          rawMsg.toLowerCase().includes('user_cancelled');
+        const isUnavailable =
+          rawMsg === 'PI_SDK_NOT_AVAILABLE' ||
+          rawMsg.includes('unavailable') ||
+          rawMsg.includes('not available');
+
+        if (isTimeout) {
+          this.authLifecycleState = 'AUTH_TIMEOUT';
+          this.authErrorType = 'AUTH_BRIDGE_TIMEOUT';
+          this.lastErrorCode = 'AUTH_TIMEOUT';
+          this.currentPaymentStage = 'TIMEOUT';
+          this.authenticationError = 'Pi Browser did not respond to the authentication request. Please tap Retry Pi Authentication.';
+          logPiTrace(`[Pi SDK] AUTH_TIMEOUT attemptId=${authAttemptId}`, 'warn');
+        } else if (isCancelled) {
+          this.authLifecycleState = 'AUTH_DENIED';
+          this.authErrorType = 'AUTH_USER_CANCELLED';
+          this.lastErrorCode = 'PI_AUTH_CANCELLED';
+          this.currentPaymentStage = 'CANCELLED';
+          this.authenticationError = 'Pi authentication was cancelled in Pi Browser.';
+          logPiTrace(`[Pi SDK] AUTH_ERROR attemptId=${authAttemptId} reason=CANCELLED`, 'warn');
+        } else if (isUnavailable) {
+          this.authLifecycleState = 'PI_AUTHENTICATE_UNAVAILABLE';
+          this.authErrorType = 'PI_AUTHENTICATE_UNAVAILABLE';
+          this.lastErrorCode = 'PI_SDK_NOT_AVAILABLE';
+          this.currentPaymentStage = 'FAILED';
+          this.authenticationError = 'Pi Network SDK is unavailable. Please open PiNova Global Hub in Pi Browser.';
+          logPiTrace(`[Pi SDK] AUTH_ERROR attemptId=${authAttemptId} reason=SDK_UNAVAILABLE`, 'warn');
+        } else {
+          this.authLifecycleState = 'AUTH_ERROR';
+          this.authErrorType = 'AUTH_BRIDGE_REJECTED';
+          this.lastErrorCode = 'PI_AUTH_REJECTED';
+          this.currentPaymentStage = 'FAILED';
+          this.authenticationError = 'Pi authentication was not completed.';
+          logPiTrace(`[Pi SDK] AUTH_ERROR attemptId=${authAttemptId} error=${rawMsg}`, 'warn');
+        }
+
+        this.notifyDiagnosticStateChange();
+        throw new Error(this.authenticationError);
+      } finally {
+        this.piAuthPromise = null;
+        this.notifyDiagnosticStateChange();
+      }
+    })();
+
+    return this.piAuthPromise;
+  }
+
+  /**
+   * Execute Pi Payment with Bridge Response Hard Timeout (25s) and Robust State Machine
+   */
+  public executePayment(
+    paymentData: PiPaymentData,
+    callbacks: {
+      onSuccess: (paymentId: string, txid: string) => void;
+      onCancel: (paymentId: string) => void;
+      onError: (error: Error, payment?: PiPayment) => void;
+      onStatusUpdate?: (statusMessage: string) => void;
+      onIncompletePaymentFound?: (payment: PiPayment) => void;
+      idempotencyKey?: string;
+    }
+  ): void {
+    const reqId = generateReqId('pay');
+    const inPi = isPiBrowser();
+    const idemKey = callbacks.idempotencyKey || `idem_${Date.now()}`;
+
+    const updateStatus = (msg: string) => {
+      if (callbacks.onStatusUpdate) callbacks.onStatusUpdate(msg);
+    };
+
+    logPiTrace(
+      `[Pi SDK] PAYMENT_START reqId=${reqId} amount=${paymentData.amount} memo="${paymentData.memo}" idempotencyKey=${idemKey}`
+    );
+
+    if (!inPi || typeof window === 'undefined' || !window.Pi) {
+      this.currentPaymentStage = 'FAILED';
+      this.lastErrorCode = 'SDK_NOT_LOADED';
+      this.notifyDiagnosticStateChange();
+      updateStatus('Official Pi Browser required');
+      logPiTrace(`[Pi SDK] PAYMENT_ERROR reqId=${reqId} error=NON_PI_BROWSER`, 'warn');
+      callbacks.onError(new Error('Pi Network SDK is not available. Please open this app in Pi Browser and try again.'));
       return;
     }
 
-    const script = document.createElement('script');
-    script.src = 'https://sdk.minepi.com/pi-sdk.js';
-    script.async = true;
-    script.onload = () => {
-      let attempts = 0;
-      const interval = setInterval(() => {
-        attempts++;
-        if (window.Pi) {
-          clearInterval(interval);
-          sdkLoaded = true;
-          notifyDiagnosticStateChange();
-          resolve(true);
-        } else if (attempts >= 30) {
-          clearInterval(interval);
-          sdkLoaded = Boolean(window.Pi);
-          notifyDiagnosticStateChange();
-          resolve(sdkLoaded);
-        }
-      }, 100);
-    };
-    script.onerror = () => {
-      logPiTrace('[Pi SDK] SCRIPT_LOAD_FAILED CDN script failed to load', 'warn');
-      sdkLoaded = false;
-      notifyDiagnosticStateChange();
-      resolve(false);
-    };
-    document.head.appendChild(script);
-  });
-}
-
-export async function initPiSdk(sandbox: boolean = isSandboxMode()): Promise<boolean> {
-  if (sdkInitialized && typeof window !== 'undefined' && window.Pi) {
-    piInitState = 'success';
-    return true;
-  }
-  if (piInitPromise) {
-    return piInitPromise;
-  }
-
-  const reqId = generateReqId('init');
-  const ctx = getSafeRuntimeContext();
-
-  logPiTrace(
-    `[Pi INIT TRACE] start sandbox=${sandbox} reqId=${reqId} runtimeOrigin=${ctx.origin} hostname=${ctx.hostname} protocol=${ctx.protocol} sdkAvailable=${ctx.sdkAvailable} initialized=${sdkInitialized} environment=${ctx.environment}`
-  );
-
-  notifyDiagnosticStateChange();
-
-  piInitPromise = (async () => {
-    if (typeof window === 'undefined') return false;
-
-    // Fetch API config status concurrently
-    void fetchApiConfiguration();
-
-    if (!window.Pi) {
-      await loadPiSdkScript();
+    if (this.activePaymentInFlight) {
+      logPiTrace(`[Pi SDK] PAYMENT_ERROR reqId=${reqId} error=CONCURRENT_PAYMENT_BLOCKED`, 'warn');
+      callbacks.onError(new Error('A payment authorization request is already active in Pi Browser. Please complete or cancel it first.'));
+      return;
     }
 
-    const sdkAvail = Boolean(window.Pi);
-    const initAvail = Boolean(window.Pi && typeof window.Pi.init === 'function');
-    const authAvail = Boolean(window.Pi && typeof window.Pi.authenticate === 'function');
-    const payAvail = Boolean(window.Pi && typeof window.Pi.createPayment === 'function');
+    this.activePaymentInFlight = true;
+    let hasHandledResponse = false;
+    let bridgeTimeoutTimer: any = null;
+    let signingTimeoutTimer: any = null;
 
-    logPiTrace(
-      `[Pi SDK] sdkAvailable=${sdkAvail} initAvailable=${initAvail} authenticateAvailable=${authAvail} createPaymentAvailable=${payAvail}`
-    );
+    const cleanupTimers = () => {
+      if (bridgeTimeoutTimer) clearTimeout(bridgeTimeoutTimer);
+      if (signingTimeoutTimer) clearTimeout(signingTimeoutTimer);
+    };
 
-    if (window.Pi) {
-      sdkLoaded = true;
+    const finishPaymentFlow = () => {
+      cleanupTimers();
+      this.activePaymentInFlight = false;
+    };
+
+    const runFlow = async () => {
       try {
-        window.Pi.init({ version: '2.0', sandbox });
-        sdkInitialized = true;
-        piInitState = 'success';
-        logPiTrace(
-          `[Pi INIT TRACE] resolved version=2.0 sandbox=${sandbox} runtimeOrigin=${ctx.origin} environment=${sandbox ? 'SANDBOX' : 'MAINNET'}`
-        );
-        notifyDiagnosticStateChange();
-        return true;
-      } catch (err: any) {
-        const errMsg = String(err?.message || err);
-        if (errMsg.toLowerCase().includes('initialized')) {
-          sdkInitialized = true;
-          piInitState = 'success';
-          logPiTrace(`[Pi INIT TRACE] resolved version=2.0 (already initialized)`);
-          notifyDiagnosticStateChange();
-          return true;
+        // Step 1: Ensure initialized and authenticated
+        this.currentPaymentStage = 'AUTHENTICATING';
+        this.notifyDiagnosticStateChange();
+        updateStatus('Connecting Pi Network Wallet…');
+
+        await this.authenticate(['payments', 'username'], callbacks.onIncompletePaymentFound, false);
+
+        if (!this.paymentScopeGranted || !this.authenticatedUser) {
+          this.currentPaymentStage = 'FAILED';
+          this.lastErrorCode = 'PI_AUTH_REQUIRED';
+          this.notifyDiagnosticStateChange();
+          throw new Error('Pi authentication is required before payment. Permissions were not granted.');
         }
-        logPiTrace(`[Pi INIT TRACE] rejected error=${errMsg}`, 'warn');
-        piInitState = 'failed';
-        lastErrorCode = 'SDK_INIT_FAILED';
+
+        // Step 2: Transition to CREATING_PAYMENT
+        this.currentPaymentStage = 'CREATING_PAYMENT';
+        this.notifyDiagnosticStateChange();
+        updateStatus('Awaiting Pi Wallet authorization dialog…');
+
+        // Hard Timeout: 25 seconds for Pi Browser native UI to invoke first callback
+        const BRIDGE_TIMEOUT_MS = 25000;
+        bridgeTimeoutTimer = setTimeout(() => {
+          if (!hasHandledResponse) {
+            hasHandledResponse = true;
+            finishPaymentFlow();
+            this.currentPaymentStage = 'TIMEOUT';
+            this.lastErrorCode = 'PAYMENT_BRIDGE_TIMEOUT';
+            this.notifyDiagnosticStateChange();
+            logPiTrace(`[Pi SDK] PAYMENT_TIMEOUT reqId=${reqId} (bridge did not respond within ${BRIDGE_TIMEOUT_MS / 1000}s)`, 'warn');
+            updateStatus('Pi Browser did not respond');
+            callbacks.onError(new Error('Pi Browser did not respond to the payment authorization request. Please retry.'));
+          }
+        }, BRIDGE_TIMEOUT_MS);
+
+        // Step 3: Trigger native window.Pi.createPayment
+        window.Pi!.createPayment(paymentData, {
+          onReadyForServerApproval: async (paymentId: string) => {
+            cleanupTimers();
+            this.activePaymentId = paymentId;
+            this.currentPaymentStage = 'WAITING_FOR_PI_APPROVAL';
+            this.notifyDiagnosticStateChange();
+            logPiTrace(`[Pi SDK] PAYMENT_APPROVAL_START reqId=${reqId} paymentId=${paymentId}`);
+            updateStatus('Waiting for server approval...');
+
+            try {
+              const res = await safeFetchJson('/api/v2/payments/approve', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ paymentId, idempotencyKey: idemKey })
+              });
+              const data = res.data || {};
+              if (!res.ok || !data.success) {
+                throw new Error(data.message || data.error || res.error || 'Server approval failed');
+              }
+              logPiTrace(`[Pi SDK] PAYMENT_APPROVAL_SUCCESS reqId=${reqId} paymentId=${paymentId}`);
+              this.currentPaymentStage = 'WAITING_FOR_PI_COMPLETION';
+              this.notifyDiagnosticStateChange();
+              updateStatus('Payment approved by server. Please confirm transaction in Pi Wallet...');
+
+              // Set a generous 60s timer for user blockchain signing
+              signingTimeoutTimer = setTimeout(() => {
+                if (!hasHandledResponse) {
+                  logPiTrace(`[Pi SDK] PAYMENT_SIGNING_WAITING reqId=${reqId} paymentId=${paymentId} (awaiting user blockchain confirmation)`);
+                  updateStatus('Awaiting blockchain signature in Pi Wallet...');
+                }
+              }, 30000);
+            } catch (err: any) {
+              logPiTrace(`[Pi SDK] PAYMENT_APPROVAL_FAILURE reqId=${reqId} paymentId=${paymentId} error=${err.message}`, 'warn');
+              this.currentPaymentStage = 'FAILED';
+              this.lastErrorCode = 'PAYMENT_APPROVAL_FAILED';
+              this.notifyDiagnosticStateChange();
+              if (!hasHandledResponse) {
+                hasHandledResponse = true;
+                finishPaymentFlow();
+                updateStatus('Payment approval failed');
+                callbacks.onError(err);
+              }
+            }
+          },
+
+          onReadyForServerCompletion: async (paymentId: string, txid: string) => {
+            cleanupTimers();
+            this.currentPaymentStage = 'SERVER_VERIFICATION';
+            this.notifyDiagnosticStateChange();
+            logPiTrace(`[Pi SDK] PAYMENT_COMPLETION_START reqId=${reqId} paymentId=${paymentId} txid=${txid}`);
+            updateStatus('Payment broadcast to Pi blockchain. Completing on server...');
+
+            try {
+              const res = await safeFetchJson('/api/v2/payments/complete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ paymentId, txid, idempotencyKey: idemKey })
+              });
+              const data = res.data || {};
+              if (!res.ok || !data.success) {
+                throw new Error(data.message || data.error || res.error || 'Server completion failed');
+              }
+              logPiTrace(`[Pi SDK] PAYMENT_COMPLETED reqId=${reqId} paymentId=${paymentId} txid=${txid}`);
+              this.currentPaymentStage = 'COMPLETED';
+              this.lastErrorCode = null;
+              this.notifyDiagnosticStateChange();
+
+              if (!hasHandledResponse) {
+                hasHandledResponse = true;
+                finishPaymentFlow();
+                updateStatus('Payment verified successfully!');
+                callbacks.onSuccess(paymentId, txid);
+              }
+            } catch (err: any) {
+              logPiTrace(`[Pi SDK] PAYMENT_COMPLETION_FAILURE reqId=${reqId} paymentId=${paymentId} error=${err.message}`, 'warn');
+              this.currentPaymentStage = 'FAILED';
+              this.lastErrorCode = 'PAYMENT_COMPLETION_FAILED';
+              this.notifyDiagnosticStateChange();
+              if (!hasHandledResponse) {
+                hasHandledResponse = true;
+                finishPaymentFlow();
+                updateStatus('Payment completion failed');
+                callbacks.onError(err);
+              }
+            }
+          },
+
+          onCancel: (paymentId: string) => {
+            cleanupTimers();
+            this.currentPaymentStage = 'CANCELLED';
+            this.lastErrorCode = 'PAYMENT_CANCELLED';
+            this.notifyDiagnosticStateChange();
+            logPiTrace(`[Pi SDK] PAYMENT_CANCELLED reqId=${reqId} paymentId=${paymentId}`);
+            if (!hasHandledResponse) {
+              hasHandledResponse = true;
+              finishPaymentFlow();
+              updateStatus('Payment cancelled');
+              callbacks.onCancel(paymentId);
+            }
+          },
+
+          onError: (error: Error, payment?: PiPayment) => {
+            cleanupTimers();
+            this.currentPaymentStage = 'FAILED';
+            this.lastErrorCode = 'PAYMENT_ERROR';
+            this.notifyDiagnosticStateChange();
+            logPiTrace(`[Pi SDK] PAYMENT_ERROR reqId=${reqId} error=${error?.message || 'Transaction error'}`, 'warn');
+            if (!hasHandledResponse) {
+              hasHandledResponse = true;
+              finishPaymentFlow();
+              updateStatus('Payment error: ' + (error?.message || 'Transaction error'));
+              callbacks.onError(error || new Error('Pi payment error occurred.'), payment);
+            }
+          }
+        });
+      } catch (err: any) {
+        if (!hasHandledResponse) {
+          hasHandledResponse = true;
+          finishPaymentFlow();
+          const errMsg = err?.message || String(err);
+          this.currentPaymentStage = 'FAILED';
+          this.notifyDiagnosticStateChange();
+          logPiTrace(`[Pi SDK] PAYMENT_ERROR reqId=${reqId} error=${errMsg}`, 'warn');
+          updateStatus('Payment execution failed');
+          callbacks.onError(err || new Error('Pi payment could not be created.'));
+        }
       }
-    } else {
-      logPiTrace(`[Pi INIT TRACE] rejected error=SCRIPT_UNAVAILABLE`, 'warn');
-      piInitState = 'failed';
-      lastErrorCode = 'SDK_NOT_LOADED';
+    };
+
+    runFlow();
+  }
+
+  /**
+   * Async Promise Wrapper for Utility & Flight Checkout Flows
+   */
+  public async createPayment(params: {
+    amountPi: number;
+    memo: string;
+    metadata?: Record<string, any>;
+    onStatusUpdate?: (statusMessage: string) => void;
+    onIncompletePaymentFound?: (payment: PiPayment) => void;
+    idempotencyKey?: string;
+  }): Promise<{
+    success: boolean;
+    paymentId?: string;
+    txid?: string;
+    fulfillmentStatus?: 'FULFILLED' | 'FULFILLMENT_PENDING' | 'FAILED';
+    message?: string;
+    data?: any;
+    errorType?: 'TIMEOUT' | 'AUTH_ERROR' | 'CANCELLED' | 'ERROR';
+  }> {
+    const reqId = generateReqId('pay');
+    const inPi = isPiBrowser();
+    const idemKey = params.idempotencyKey || `idem_${Date.now()}`;
+
+    if (!inPi) {
+      this.currentPaymentStage = 'FAILED';
+      this.lastErrorCode = 'SDK_NOT_LOADED';
+      this.notifyDiagnosticStateChange();
+      if (params.onStatusUpdate) params.onStatusUpdate('Pi Browser required');
+      return {
+        success: false,
+        message: 'Pi Network SDK is not available. Please open this app in Pi Browser and try again.',
+        errorType: 'AUTH_ERROR'
+      };
     }
 
-    notifyDiagnosticStateChange();
-    return sdkInitialized;
-  })();
+    return new Promise((resolve) => {
+      this.executePayment(
+        {
+          amount: params.amountPi,
+          memo: params.memo,
+          metadata: params.metadata || {}
+        },
+        {
+          idempotencyKey: idemKey,
+          onStatusUpdate: params.onStatusUpdate,
+          onIncompletePaymentFound: params.onIncompletePaymentFound,
 
-  const result = await piInitPromise;
-  if (!result) {
-    piInitPromise = null;
+          onSuccess: async (paymentId, txid) => {
+            // If flight ticket, return success immediately for flight order creation
+            if (params.metadata?.serviceType === 'FLIGHT_TICKET') {
+              this.currentPaymentStage = 'COMPLETED';
+              this.notifyDiagnosticStateChange();
+              resolve({
+                success: true,
+                paymentId,
+                txid,
+                fulfillmentStatus: 'FULFILLED',
+                message: 'Payment verified on Pi ledger.'
+              });
+              return;
+            }
+
+            // General utility fulfillment
+            this.currentPaymentStage = 'SERVER_VERIFICATION';
+            this.notifyDiagnosticStateChange();
+            if (params.onStatusUpdate) params.onStatusUpdate('Payment verified on Pi ledger. Processing fulfillment...');
+
+            try {
+              const rawFiat = params.metadata?.fiatAmount ?? params.metadata?.fiatFare;
+              const cleanFiat =
+                typeof rawFiat === 'number'
+                  ? rawFiat
+                  : typeof rawFiat === 'string'
+                  ? parseFloat(rawFiat.replace(/[^0-9.]/g, ''))
+                  : NaN;
+              const appliedRate =
+                typeof params.metadata?.piRateApplied === 'number' && params.metadata.piRateApplied > 0
+                  ? params.metadata.piRateApplied
+                  : 10.0;
+              const validFiat =
+                Number.isFinite(cleanFiat) && cleanFiat > 0
+                  ? Number(cleanFiat.toFixed(2))
+                  : params.amountPi > 0
+                  ? Number((params.amountPi * appliedRate).toFixed(2))
+                  : 10.0;
+
+              this.currentPaymentStage = 'ESCROW_FULFILLMENT';
+              this.notifyDiagnosticStateChange();
+
+              const fulfillResult = await safeFetchJson('/api/v2/utility/fulfill', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  paymentId,
+                  txid,
+                  category: params.metadata?.category || 'transport',
+                  country: params.metadata?.country || 'Global',
+                  countryCode: params.metadata?.countryCode || 'GLOBAL',
+                  providerId: params.metadata?.providerId || 'unknown',
+                  accountNumber:
+                    params.metadata?.accountNumber ||
+                    params.metadata?.passportNumber ||
+                    params.metadata?.passengerEmail ||
+                    '',
+                  fiatAmount: validFiat,
+                  piAmount: Number(params.amountPi),
+                  packageName: params.metadata?.packageName || params.metadata?.route || 'Travel Pass',
+                  idempotencyKey: paymentId
+                })
+              });
+
+              const fulfillData = fulfillResult.data || {};
+              if (fulfillResult.ok && fulfillData.success) {
+                this.currentPaymentStage = 'COMPLETED';
+                this.notifyDiagnosticStateChange();
+                const status = fulfillData.data?.status;
+                if (params.onStatusUpdate) {
+                  params.onStatusUpdate(status === 'FULFILLED' ? 'Fulfilled successfully!' : 'Fulfillment pending');
+                }
+                resolve({
+                  success: true,
+                  paymentId,
+                  txid,
+                  fulfillmentStatus: status || 'FULFILLMENT_PENDING',
+                  message: fulfillData.data?.message || 'Payment Received — Order Processed Successfully',
+                  data: fulfillData.data
+                });
+              } else {
+                this.currentPaymentStage = 'FAILED';
+                this.lastErrorCode = 'SERVER_VERIFICATION_FAILED';
+                this.notifyDiagnosticStateChange();
+                if (params.onStatusUpdate) params.onStatusUpdate('Fulfillment verification failed');
+                resolve({
+                  success: false,
+                  paymentId,
+                  txid,
+                  fulfillmentStatus: 'FAILED',
+                  message: fulfillData.message || 'Server-side payment verification failed.',
+                  errorType: 'ERROR'
+                });
+              }
+            } catch (err: any) {
+              this.currentPaymentStage = 'FAILED';
+              this.lastErrorCode = 'SERVER_VERIFICATION_FAILED';
+              this.notifyDiagnosticStateChange();
+              if (params.onStatusUpdate) params.onStatusUpdate('Fulfillment error');
+              resolve({
+                success: false,
+                paymentId,
+                txid,
+                fulfillmentStatus: 'FAILED',
+                message: `Fulfillment error: ${err.message || 'Failed to reach fulfillment endpoint'}`,
+                errorType: 'ERROR'
+              });
+            }
+          },
+
+          onCancel: (paymentId) => {
+            this.currentPaymentStage = 'CANCELLED';
+            this.lastErrorCode = 'PAYMENT_CANCELLED';
+            this.notifyDiagnosticStateChange();
+            if (params.onStatusUpdate) params.onStatusUpdate('Payment cancelled in Pi Wallet');
+            resolve({
+              success: false,
+              paymentId,
+              message: 'Payment was cancelled in Pi Wallet.',
+              errorType: 'CANCELLED'
+            });
+          },
+
+          onError: (err) => {
+            const isTimeout = err?.message?.includes('did not respond') || this.currentPaymentStage === 'TIMEOUT';
+            this.currentPaymentStage = isTimeout ? 'TIMEOUT' : 'FAILED';
+            this.notifyDiagnosticStateChange();
+            if (params.onStatusUpdate) params.onStatusUpdate(err.message || 'Payment error encountered');
+            resolve({
+              success: false,
+              message: err.message || 'Pi payment could not be created.',
+              errorType: isTimeout ? 'TIMEOUT' : 'ERROR'
+            });
+          }
+        }
+      );
+    });
   }
-  return result;
 }
 
-export function resetPiAuthState(): void {
-  piAuthPromise = null;
-  authLifecycleState = 'AUTH_NOT_STARTED';
-  authErrorType = null;
-  nativeBridgeState = 'idle';
-  authenticationError = null;
-  lastErrorCode = null;
-  logPiTrace('[Pi AUTH TRACE] auth_state_reset cleared singleton lock');
-  notifyDiagnosticStateChange();
+// Singleton Export
+export const PiSdkManager = new PiSdkManagerService();
+
+// Standalone function exports preserving full backward compatibility
+export async function initPiSdk(sandbox?: boolean): Promise<boolean> {
+  return PiSdkManager.initialize(sandbox);
 }
 
 export async function authenticatePiUser(
   onIncompletePaymentFound?: (payment: PiPayment) => void,
   forceReauth: boolean = false
 ): Promise<PiUser> {
-  authAttemptCount++;
-  const authAttemptId = `att_${authAttemptCount}_${Date.now().toString(36)}`;
-  lastAuthAttemptId = authAttemptId;
-  const ctx = getSafeRuntimeContext();
-  const inPi = isPiBrowser();
-  const activeAuthRequest = Boolean(piAuthPromise);
+  return PiSdkManager.authenticate(['payments', 'username'], onIncompletePaymentFound, forceReauth);
+}
 
-  logPiTrace(
-    `[Pi AUTH TRACE] attempt=${authAttemptId} START activeAuthRequest=${activeAuthRequest} runtimeOrigin=${ctx.origin} hostname=${ctx.hostname} isPiBrowser=${inPi} sdkAvailable=${ctx.sdkAvailable} sdkInitialized=${sdkInitialized} forceReauth=${forceReauth}`
-  );
+export function resetPiAuthState(): void {
+  PiSdkManager.resetAuthenticationState();
+}
 
-  // Non-Pi Browser Environment check
-  if (!inPi) {
-    sdkLoaded = false;
-    sdkInitialized = false;
-    authenticated = false;
-    paymentScopeGranted = false;
-    authenticatedUser = null;
-    authLifecycleState = 'AUTH_ERROR';
-    authErrorType = 'PI_AUTHENTICATE_UNAVAILABLE';
-    lastErrorCode = 'PI_SDK_NOT_AVAILABLE';
-    authenticationError = 'Pi payments require Pi Browser for this environment. Please open PiNova Global Hub in Pi Browser.';
-    logPiTrace(`[Pi AUTH TRACE] attempt=${authAttemptId} REJECTED error=NON_PI_BROWSER`, 'warn');
-    notifyDiagnosticStateChange();
-    throw new Error('Pi payments require Pi Browser for this environment. Please open PiNova Global Hub in Pi Browser.');
-  }
+export function isPiSdkInitialized(): boolean {
+  return PiSdkManager.isReady();
+}
 
-  // Inside Pi Browser: Return active session if already authenticated and not forced
-  if (!forceReauth && paymentScopeGranted && authenticatedUser && authenticated) {
-    authLifecycleState = 'AUTH_SUCCESS';
-    logPiTrace(`[Pi AUTH TRACE] attempt=${authAttemptId} REUSING_SESSION username=${authenticatedUser.username}`);
-    notifyDiagnosticStateChange();
-    return authenticatedUser;
-  }
+export function isPaymentScopeReady(): boolean {
+  return PiSdkManager.isPaymentScopeReady();
+}
 
-  // If forceReauth requested, clear existing lock to initiate fresh flight
-  if (forceReauth) {
-    piAuthPromise = null;
-  }
+export function getPiSdkDiagnosticState(): PiSdkDiagnosticState {
+  return PiSdkManager.getDiagnosticState();
+}
 
-  // Singleton Single-Flight Authentication Lock
-  if (piAuthPromise) {
-    logPiTrace(`[Pi AUTH TRACE] attempt=${authAttemptId} DEDUPLICATED - returning active auth request`);
-    return piAuthPromise;
-  }
+export function subscribePiSdkState(listener: (state: PiSdkDiagnosticState) => void): () => void {
+  return PiSdkManager.subscribeDiagnostic(listener);
+}
 
-  piAuthPromise = (async () => {
-    authLifecycleState = 'AUTH_CALL_STARTED';
-    authErrorType = null;
-    authenticationError = null;
-    notifyDiagnosticStateChange();
+export function setCustomSandboxMode(sandbox: boolean): void {
+  PiSdkManager.setCustomSandboxMode(sandbox);
+}
 
-    const watchdogTimers: any[] = [];
-
-    try {
-      const sandbox = isSandboxMode();
-      const hasSdk = await initPiSdk(sandbox);
-      if (!hasSdk || typeof window === 'undefined' || !window.Pi) {
-        authLifecycleState = 'PI_AUTHENTICATE_UNAVAILABLE';
-        authErrorType = 'PI_AUTHENTICATE_UNAVAILABLE';
-        piAuthApiState = 'unavailable';
-        lastErrorCode = 'PI_SDK_INIT_FAILED';
-        logPiTrace(`[Pi AUTH TRACE] attempt=${authAttemptId} REJECTED error=SDK_INIT_FAILED`, 'warn');
-        notifyDiagnosticStateChange();
-        throw new Error('Pi Network SDK could not initialize. Please verify the Pi App domain configuration.');
-      }
-
-      if (typeof window.Pi.authenticate !== 'function') {
-        authLifecycleState = 'PI_AUTHENTICATE_UNAVAILABLE';
-        authErrorType = 'PI_AUTHENTICATE_UNAVAILABLE';
-        piAuthApiState = 'unavailable';
-        lastErrorCode = 'PI_SDK_NOT_AVAILABLE';
-        authenticationError = 'Pi authenticate API is unavailable in this environment.';
-        logPiTrace(`[Pi AUTH TRACE] attempt=${authAttemptId} REJECTED error=AUTHENTICATE_UNAVAILABLE`, 'warn');
-        notifyDiagnosticStateChange();
-        throw new Error('Pi Network SDK is unavailable. Please open PiNova Global Hub in Pi Browser.');
-      }
-
-      piAuthApiState = 'available';
-      authenticateInvocation = 'called';
-      authInvocationCount++;
-      nativeBridgeState = 'calling_invocation';
-      notifyDiagnosticStateChange();
-
-      const requestedScopes = ['payments', 'username'];
-      logPiTrace(
-        `[Pi AUTH TRACE] authenticate_call_start attempt=${authAttemptId} scopes=${JSON.stringify(requestedScopes)}`
-      );
-
-      const handleIncompletePayment = (payment: PiPayment) => {
-        logPiTrace(`[Pi SDK] INCOMPLETE_PAYMENT_FOUND attempt=${authAttemptId} paymentId=${payment?.identifier}`);
-        void Promise.resolve()
-          .then(() => {
-            if (onIncompletePaymentFound) {
-              onIncompletePaymentFound(payment);
-            }
-          })
-          .catch((cbErr) => {
-            console.error('[Pi SDK] Incomplete payment callback error:', cbErr);
-          });
-      };
-
-      // Set up non-rejecting diagnostic progress observation intervals to trace bridge response
-      [15, 30, 60, 90].forEach((sec) => {
-        const timer = setTimeout(() => {
-          if (authLifecycleState !== 'AUTH_SUCCESS' && authLifecycleState !== 'AUTH_DENIED' && authLifecycleState !== 'AUTH_ERROR') {
-            logPiTrace(
-              `[Pi AUTH TRACE] authenticate_no_callback attempt=${authAttemptId} elapsed=${sec}s (native bridge pending user approval/interaction)`
-            );
-            authLifecycleState = 'AUTH_NATIVE_PENDING';
-            nativeBridgeState = 'promise_pending';
-            notifyDiagnosticStateChange();
-          }
-        }, sec * 1000);
-        watchdogTimers.push(timer);
-      });
-
-      let authPromise: Promise<any>;
-      try {
-        authPromise = window.Pi.authenticate(requestedScopes, handleIncompletePayment);
-        nativeBridgeState = 'promise_returned';
-        authLifecycleState = 'AUTH_PROMISE_RETURNED';
-        logPiTrace(`[Pi AUTH TRACE] authenticateStarted attempt=${authAttemptId}`);
-        notifyDiagnosticStateChange();
-      } catch (syncErr: any) {
-        nativeBridgeState = 'call_blocked';
-        authLifecycleState = 'AUTH_ERROR';
-        authErrorType = 'AUTH_BRIDGE_REJECTED';
-        lastErrorCode = 'PI_AUTH_REJECTED';
-        authenticationError = syncErr?.message || 'Authentication call was blocked by Pi Browser bridge.';
-        logPiTrace(`[Pi AUTH TRACE] authenticate_call_rejected attempt=${authAttemptId} syncError=${authenticationError}`, 'warn');
-        notifyDiagnosticStateChange();
-        throw syncErr;
-      }
-
-      // Allow the native bridge to resolve naturally without false application-level race timeouts
-      const auth = await authPromise;
-
-      nativeBridgeState = 'promise_resolved';
-
-      if (auth && auth.user && auth.accessToken && auth.user.uid && auth.user.username) {
-        authenticated = true;
-        paymentScopeGranted = true;
-        authLifecycleState = 'AUTH_SUCCESS';
-        authErrorType = null;
-        authenticationError = null;
-        logPiTrace(
-          `[Pi AUTH TRACE] authenticate_call_resolved attempt=${authAttemptId} username=${auth.user.username}`
-        );
-        authenticatedUser = {
-          username: auth.user.username,
-          uid: auth.user.uid,
-          accessToken: auth.accessToken,
-          authenticated: true,
-          role: auth.user.username === 'admin' ? 'admin' : 'buyer'
-        };
-        notifyDiagnosticStateChange();
-        return authenticatedUser;
-      } else {
-        logPiTrace(`[Pi AUTH TRACE] authenticate_call_rejected attempt=${authAttemptId} error=MISSING_CREDENTIALS`, 'warn');
-        throw new Error('PI_AUTH_REJECTED');
-      }
-    } catch (err: any) {
-      if (nativeBridgeState !== 'call_blocked') {
-        nativeBridgeState = 'promise_rejected';
-      }
-      authenticated = false;
-      paymentScopeGranted = false;
-      authenticatedUser = null;
-
-      let rawMsg = '';
-      if (typeof err === 'string') {
-        rawMsg = err;
-      } else if (err && typeof err === 'object') {
-        rawMsg = err.message || err.error || err.description || JSON.stringify(err);
-      }
-
-      const isCancelled =
-        rawMsg.toLowerCase().includes('cancel') ||
-        rawMsg.toLowerCase().includes('denied') ||
-        rawMsg.toLowerCase().includes('dismiss') ||
-        rawMsg.toLowerCase().includes('user_cancelled');
-      const isUnavailable =
-        rawMsg === 'PI_SDK_NOT_AVAILABLE' ||
-        rawMsg.includes('unavailable') ||
-        rawMsg.includes('not available');
-
-      if (isCancelled) {
-        authLifecycleState = 'AUTH_DENIED';
-        authErrorType = 'AUTH_USER_CANCELLED';
-        lastErrorCode = 'PI_AUTH_CANCELLED';
-        authenticationError = 'Pi authentication was cancelled in Pi Browser.';
-        logPiTrace(`[Pi AUTH TRACE] authenticate_call_rejected attempt=${authAttemptId} reason=CANCELLED`, 'warn');
-      } else if (isUnavailable) {
-        authLifecycleState = 'PI_AUTHENTICATE_UNAVAILABLE';
-        authErrorType = 'PI_AUTHENTICATE_UNAVAILABLE';
-        lastErrorCode = 'PI_SDK_NOT_AVAILABLE';
-        authenticationError = 'Pi Network SDK is unavailable. Please open PiNova Global Hub in Pi Browser.';
-        logPiTrace(`[Pi AUTH TRACE] authenticate_call_rejected attempt=${authAttemptId} reason=SDK_UNAVAILABLE`, 'warn');
-      } else {
-        authLifecycleState = 'AUTH_ERROR';
-        authErrorType = 'AUTH_BRIDGE_REJECTED';
-        lastErrorCode = 'PI_AUTH_REJECTED';
-        authenticationError = 'Pi authentication was not completed.';
-        logPiTrace(`[Pi AUTH TRACE] authenticate_call_rejected attempt=${authAttemptId} rawMsg=${rawMsg}`, 'warn');
-      }
-
-      notifyDiagnosticStateChange();
-      throw new Error(authenticationError);
-    } finally {
-      watchdogTimers.forEach((t) => clearTimeout(t));
-      piAuthPromise = null;
-      notifyDiagnosticStateChange();
-    }
-  })();
-
-  return piAuthPromise;
+export async function fetchApiConfiguration(): Promise<'configured' | 'missing'> {
+  return PiSdkManager.fetchApiConfiguration();
 }
 
 export async function initAndAuthenticateProactively(
   onIncompletePaymentFound?: (payment: PiPayment) => void
 ): Promise<PiUser | null> {
   const inPi = isPiBrowser();
-  if (!inPi) {
-    return null;
-  }
+  if (!inPi) return null;
 
   try {
-    const sdkReady = await initPiSdk();
-    if (!sdkReady) {
-      return null;
-    }
+    const ready = await PiSdkManager.initialize();
+    if (!ready) return null;
 
     if (typeof document !== 'undefined' && document.readyState !== 'complete') {
       await new Promise((resolve) => {
@@ -811,9 +1311,9 @@ export async function initAndAuthenticateProactively(
     }
 
     await new Promise((r) => setTimeout(r, 600));
-    return await authenticatePiUser(onIncompletePaymentFound, false);
+    return await PiSdkManager.authenticate(['payments', 'username'], onIncompletePaymentFound, false);
   } catch (err: any) {
-    console.warn('[Pi SDK] Proactive auth notice (handled safely):', err?.message || err);
+    console.warn('[Pi SDK] Proactive auth notice:', err?.message || err);
     return null;
   }
 }
@@ -821,48 +1321,35 @@ export async function initAndAuthenticateProactively(
 export async function ensurePaymentScopeReady(
   onIncompletePaymentFound?: (payment: PiPayment) => void
 ): Promise<boolean> {
-  currentPaymentStage = 'SDK_LOADING';
-  notifyDiagnosticStateChange();
-
   const inPi = isPiBrowser();
   if (!inPi) {
-    currentPaymentStage = 'FAILED';
-    lastErrorCode = 'SDK_NOT_LOADED';
-    notifyDiagnosticStateChange();
     throw new Error('Pi Network SDK is not available. Please open this app in Pi Browser and try again.');
   }
 
-  const sdkReady = await initPiSdk();
-  if (!sdkReady || !window.Pi) {
-    currentPaymentStage = 'FAILED';
-    lastErrorCode = 'SDK_INIT_FAILED';
-    notifyDiagnosticStateChange();
-    throw new Error('Pi Network SDK could not initialize. Please verify the Pi App domain configuration.');
+  const ready = await PiSdkManager.initialize();
+  if (!ready) {
+    throw new Error('Pi Network SDK could not be initialized. Please verify the Pi App domain configuration.');
   }
 
-  currentPaymentStage = 'SDK_READY';
-  notifyDiagnosticStateChange();
-
-  if (paymentScopeGranted && authenticatedUser && authenticated) {
-    currentPaymentStage = 'PI_AUTHENTICATED';
-    notifyDiagnosticStateChange();
-    return true;
-  }
-
-  currentPaymentStage = 'PI_AUTHENTICATING';
-  notifyDiagnosticStateChange();
-
-  const user = await authenticatePiUser(onIncompletePaymentFound, false);
-  if (!paymentScopeGranted || !user) {
-    currentPaymentStage = 'FAILED';
-    lastErrorCode = 'PI_AUTH_FAILED';
-    notifyDiagnosticStateChange();
+  const user = await PiSdkManager.authenticate(['payments', 'username'], onIncompletePaymentFound, false);
+  if (!user) {
     throw new Error('Pi authentication is required before payment. Permissions were not granted.');
   }
-
-  currentPaymentStage = 'PI_AUTHENTICATED';
-  notifyDiagnosticStateChange();
   return true;
+}
+
+export function executePiPayment(
+  paymentData: PiPaymentData,
+  callbacks: {
+    onSuccess: (paymentId: string, txid: string) => void;
+    onCancel: (paymentId: string) => void;
+    onError: (error: Error, payment?: PiPayment) => void;
+    onStatusUpdate?: (statusMessage: string) => void;
+    onIncompletePaymentFound?: (payment: PiPayment) => void;
+    idempotencyKey?: string;
+  }
+): void {
+  PiSdkManager.executePayment(paymentData, callbacks);
 }
 
 export async function createPiPayment(params: {
@@ -871,319 +1358,7 @@ export async function createPiPayment(params: {
   metadata?: Record<string, any>;
   onStatusUpdate?: (statusMessage: string) => void;
   onIncompletePaymentFound?: (payment: PiPayment) => void;
-}): Promise<{
-  success: boolean;
-  paymentId?: string;
-  txid?: string;
-  fulfillmentStatus?: 'FULFILLED' | 'FULFILLMENT_PENDING' | 'FAILED';
-  message?: string;
-  data?: any;
-}> {
-  const reqId = generateReqId('pay');
-  const ctx = getSafeRuntimeContext();
-
-  console.log(
-    `[Pi SDK] PAYMENT_CREATE_START reqId=${reqId} runtimeOrigin=${ctx.origin} hostname=${ctx.hostname} amountPi=${params.amountPi} memo=${params.memo}`
-  );
-
-  const inPi = isPiBrowser();
-  if (!inPi) {
-    currentPaymentStage = 'FAILED';
-    lastErrorCode = 'SDK_NOT_LOADED';
-    notifyDiagnosticStateChange();
-    if (params.onStatusUpdate) params.onStatusUpdate('Pi Browser required');
-    return {
-      success: false,
-      message: 'Pi Network SDK is not available. Please open this app in Pi Browser and try again.'
-    };
-  }
-
-  try {
-    if (params.onStatusUpdate) params.onStatusUpdate('Connecting Pi Network Wallet...');
-    await ensurePaymentScopeReady(params.onIncompletePaymentFound);
-  } catch (authErr: any) {
-    const errMsg = authErr?.message || String(authErr);
-    console.warn(`[Pi SDK] PAYMENT_CREATE_FAILURE reqId=${reqId} stage=${currentPaymentStage} error=${errMsg}`);
-    if (params.onStatusUpdate) params.onStatusUpdate('Authorization failed');
-    return {
-      success: false,
-      message: errMsg
-    };
-  }
-
-  return new Promise((resolve) => {
-    executePiPayment(
-      {
-        amount: params.amountPi,
-        memo: params.memo,
-        metadata: params.metadata || {}
-      },
-      {
-        onStatusUpdate: params.onStatusUpdate,
-        onIncompletePaymentFound: params.onIncompletePaymentFound,
-        onSuccess: async (paymentId, txid) => {
-          currentPaymentStage = 'SERVER_VERIFICATION';
-          notifyDiagnosticStateChange();
-          if (params.onStatusUpdate) params.onStatusUpdate('Payment verified on Pi ledger. Processing fulfillment...');
-
-          try {
-            const rawFiat = params.metadata?.fiatAmount ?? params.metadata?.fiatFare;
-            const cleanFiat =
-              typeof rawFiat === 'number'
-                ? rawFiat
-                : typeof rawFiat === 'string'
-                ? parseFloat(rawFiat.replace(/[^0-9.]/g, ''))
-                : NaN;
-            const appliedRate =
-              typeof params.metadata?.piRateApplied === 'number' && params.metadata.piRateApplied > 0
-                ? params.metadata.piRateApplied
-                : 10.0;
-            const validFiat =
-              Number.isFinite(cleanFiat) && cleanFiat > 0
-                ? Number(cleanFiat.toFixed(2))
-                : params.amountPi > 0
-                ? Number((params.amountPi * appliedRate).toFixed(2))
-                : 10.0;
-
-            currentPaymentStage = 'ESCROW_FULFILLMENT';
-            notifyDiagnosticStateChange();
-
-            const fulfillResult = await safeFetchJson('/api/v2/utility/fulfill', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                paymentId,
-                txid,
-                category: params.metadata?.category || 'transport',
-                country: params.metadata?.country || 'Global',
-                countryCode: params.metadata?.countryCode || 'GLOBAL',
-                providerId: params.metadata?.providerId || 'unknown',
-                accountNumber:
-                  params.metadata?.accountNumber ||
-                  params.metadata?.passportNumber ||
-                  params.metadata?.passengerEmail ||
-                  '',
-                fiatAmount: validFiat,
-                piAmount: Number(params.amountPi),
-                packageName: params.metadata?.packageName || params.metadata?.route || 'Travel Pass',
-                idempotencyKey: paymentId
-              })
-            });
-
-            const fulfillData = fulfillResult.data || {};
-            if (fulfillResult.ok && fulfillData.success) {
-              currentPaymentStage = 'COMPLETED';
-              notifyDiagnosticStateChange();
-              const status = fulfillData.data?.status;
-              if (params.onStatusUpdate) {
-                params.onStatusUpdate(status === 'FULFILLED' ? 'Fulfilled successfully!' : 'Fulfillment pending');
-              }
-              resolve({
-                success: true,
-                paymentId,
-                txid,
-                fulfillmentStatus: status || 'FULFILLMENT_PENDING',
-                message: fulfillData.data?.message || 'Payment Received — Order Processed Successfully',
-                data: fulfillData.data
-              });
-            } else {
-              currentPaymentStage = 'FAILED';
-              lastErrorCode = 'SERVER_VERIFICATION_FAILED';
-              notifyDiagnosticStateChange();
-              if (params.onStatusUpdate) params.onStatusUpdate('Fulfillment verification failed');
-              resolve({
-                success: false,
-                paymentId,
-                txid,
-                fulfillmentStatus: 'FAILED',
-                message: fulfillData.message || 'Server-side payment verification failed.'
-              });
-            }
-          } catch (err: any) {
-            currentPaymentStage = 'FAILED';
-            lastErrorCode = 'SERVER_VERIFICATION_FAILED';
-            notifyDiagnosticStateChange();
-            if (params.onStatusUpdate) params.onStatusUpdate('Fulfillment error');
-            resolve({
-              success: false,
-              paymentId,
-              txid,
-              fulfillmentStatus: 'FAILED',
-              message: `Fulfillment error: ${err.message || 'Failed to reach fulfillment endpoint'}`
-            });
-          }
-        },
-        onCancel: (paymentId) => {
-          currentPaymentStage = 'FAILED';
-          lastErrorCode = 'PAYMENT_CREATE_FAILED';
-          notifyDiagnosticStateChange();
-          if (params.onStatusUpdate) params.onStatusUpdate('Payment cancelled in Pi Wallet');
-          resolve({
-            success: false,
-            paymentId,
-            message: 'Payment was cancelled in Pi Wallet.'
-          });
-        },
-        onError: (err) => {
-          currentPaymentStage = 'FAILED';
-          notifyDiagnosticStateChange();
-          if (params.onStatusUpdate) params.onStatusUpdate('Payment error encountered');
-          resolve({
-            success: false,
-            message: err.message || 'Pi payment could not be created.'
-          });
-        }
-      }
-    );
-  });
-}
-
-export function executePiPayment(
-  paymentData: PiPaymentData,
-  callbacks: {
-    onSuccess: (paymentId: string, txid: string) => void;
-    onCancel: (paymentId: string) => void;
-    onError: (error: Error) => void;
-    onStatusUpdate?: (statusMessage: string) => void;
-    onIncompletePaymentFound?: (payment: PiPayment) => void;
-  }
-): void {
-  let hasHandledResponse = false;
-  const updateStatus = (msg: string) => {
-    if (callbacks.onStatusUpdate) callbacks.onStatusUpdate(msg);
-  };
-
-  const inPi = isPiBrowser();
-  if (!inPi || typeof window === 'undefined' || !window.Pi) {
-    updateStatus('Official Pi Browser required');
-    if (!hasHandledResponse) {
-      hasHandledResponse = true;
-      callbacks.onError(new Error('Pi Network SDK is not available. Please open this app in Pi Browser and try again.'));
-    }
-    return;
-  }
-
-  const runPaymentFlow = async () => {
-    try {
-      currentPaymentStage = 'PI_AUTHENTICATING';
-      updateStatus('Waiting for Pi Browser authorization…');
-      await ensurePaymentScopeReady(callbacks.onIncompletePaymentFound);
-
-      if (!paymentScopeGranted) {
-        currentPaymentStage = 'FAILED';
-        lastErrorCode = 'PI_AUTH_REQUIRED';
-        throw new Error('Pi authentication is required before payment.');
-      }
-
-      currentPaymentStage = 'PAYMENT_CREATING';
-      notifyDiagnosticStateChange();
-      updateStatus('Connecting to Pi Network Wallet...');
-
-      const statusWarningTimer = setTimeout(() => {
-        if (!hasHandledResponse) {
-          updateStatus('Awaiting transaction confirmation in Pi Wallet...');
-        }
-      }, 15000);
-
-      window.Pi!.createPayment(paymentData, {
-        onReadyForServerApproval: async (paymentId: string) => {
-          clearTimeout(statusWarningTimer);
-          currentPaymentStage = 'PAYMENT_APPROVAL';
-          notifyDiagnosticStateChange();
-          console.log(`[Pi SDK] PAYMENT_APPROVAL_START paymentId=${paymentId}`);
-          updateStatus('Waiting for server approval...');
-          try {
-            const res = await safeFetchJson('/api/v2/payments/approve', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ paymentId })
-            });
-            const data = res.data || {};
-            if (!res.ok || !data.success) {
-              throw new Error(data.message || data.error || res.error || 'Server approval failed');
-            }
-            console.log(`[Pi SDK] PAYMENT_APPROVAL_SUCCESS paymentId=${paymentId}`);
-            updateStatus('Payment approved by server. Please confirm transaction in Pi Wallet...');
-          } catch (err: any) {
-            console.warn(`[Pi SDK] PAYMENT_APPROVAL_FAILURE paymentId=${paymentId} error=${err.message}`);
-            currentPaymentStage = 'FAILED';
-            lastErrorCode = 'PAYMENT_APPROVAL_FAILED';
-            notifyDiagnosticStateChange();
-            if (!hasHandledResponse) {
-              hasHandledResponse = true;
-              updateStatus('Payment approval failed');
-              callbacks.onError(err);
-            }
-          }
-        },
-        onReadyForServerCompletion: async (paymentId: string, txid: string) => {
-          clearTimeout(statusWarningTimer);
-          currentPaymentStage = 'PAYMENT_COMPLETION';
-          notifyDiagnosticStateChange();
-          console.log(`[Pi SDK] PAYMENT_COMPLETION_START paymentId=${paymentId} txid=${txid}`);
-          updateStatus('Payment submitted to Pi blockchain. Completing on server...');
-          try {
-            const res = await safeFetchJson('/api/v2/payments/complete', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ paymentId, txid })
-            });
-            const data = res.data || {};
-            if (!res.ok || !data.success) {
-              throw new Error(data.message || data.error || res.error || 'Server completion failed');
-            }
-            console.log(`[Pi SDK] PAYMENT_CREATE_SUCCESS paymentId=${paymentId} txid=${txid}`);
-            if (!hasHandledResponse) {
-              hasHandledResponse = true;
-              updateStatus('Payment verified successfully!');
-              callbacks.onSuccess(paymentId, txid);
-            }
-          } catch (err: any) {
-            console.warn(`[Pi SDK] PAYMENT_COMPLETION_FAILURE paymentId=${paymentId} error=${err.message}`);
-            currentPaymentStage = 'FAILED';
-            lastErrorCode = 'PAYMENT_COMPLETION_FAILED';
-            notifyDiagnosticStateChange();
-            if (!hasHandledResponse) {
-              hasHandledResponse = true;
-              updateStatus('Payment completion failed');
-              callbacks.onError(err);
-            }
-          }
-        },
-        onCancel: (paymentId: string) => {
-          clearTimeout(statusWarningTimer);
-          currentPaymentStage = 'FAILED';
-          lastErrorCode = 'PAYMENT_CREATE_FAILED';
-          notifyDiagnosticStateChange();
-          if (!hasHandledResponse) {
-            hasHandledResponse = true;
-            updateStatus('Payment cancelled');
-            callbacks.onCancel(paymentId);
-          }
-        },
-        onError: (error: Error) => {
-          clearTimeout(statusWarningTimer);
-          currentPaymentStage = 'FAILED';
-          lastErrorCode = 'PAYMENT_CREATE_FAILED';
-          notifyDiagnosticStateChange();
-          if (!hasHandledResponse) {
-            hasHandledResponse = true;
-            console.warn(`[Pi SDK] PAYMENT_CREATE_FAILURE error=${error?.message || 'Transaction rejected'}`);
-            updateStatus('Payment error: ' + (error?.message || 'Transaction rejected'));
-            callbacks.onError(error || new Error('Pi payment could not be created.'));
-          }
-        }
-      });
-    } catch (err: any) {
-      if (!hasHandledResponse) {
-        hasHandledResponse = true;
-        currentPaymentStage = 'FAILED';
-        notifyDiagnosticStateChange();
-        updateStatus('Payment execution failed');
-        callbacks.onError(err || new Error('Pi payment could not be created.'));
-      }
-    }
-  };
-
-  runPaymentFlow();
+  idempotencyKey?: string;
+}) {
+  return PiSdkManager.createPayment(params);
 }

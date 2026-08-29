@@ -40,6 +40,7 @@ export const PiBrowserBanner: React.FC<PiBrowserBannerProps> = ({
       case 'AUTH_PROMISE_RETURNED':
         return 'Waiting for Pi Browser authorization...';
       case 'AUTH_NATIVE_PENDING':
+      case 'AUTH_TIMEOUT':
         return 'Pi Browser authentication is not responding.';
       case 'PI_AUTHENTICATE_UNAVAILABLE':
         return 'Pi Authentication API unavailable';
