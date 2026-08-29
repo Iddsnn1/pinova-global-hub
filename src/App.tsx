@@ -49,6 +49,7 @@ import { FutureServicesView } from './components/views/FutureServicesView';
 
 import { UniversalSearchModal } from './components/UniversalSearchModal';
 import { PiBrowserBanner } from './components/PiBrowserBanner';
+import { isSandboxMode } from './lib/piSdk';
 import { Footer } from './components/Footer';
 import { ProductDetailModal } from './components/ProductDetailModal';
 import { QuickViewModal } from './components/QuickViewModal';
@@ -1039,7 +1040,7 @@ function MainAppContent() {
 
         {activeSection === 'developer_platform' && (
           <div className="space-y-4">
-            <PiBrowserBanner sandboxMode={true} userBalancePi={userBalancePi} />
+            <PiBrowserBanner sandboxMode={isSandboxMode()} userBalancePi={userBalancePi} />
             <DeveloperPlatformView
               userRole={user.role}
               onNavigateSection={handleNavigateSection}

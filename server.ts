@@ -1158,11 +1158,25 @@ const handleVerifyPayment = async (req: express.Request, res: express.Response) 
 const handleGetPaymentConfig = (req: express.Request, res: express.Response) => {
   const piApiKey = (process.env.PI_API_KEY || process.env.PI_SERVER_KEY || '').trim();
   const configured = Boolean(piApiKey && piApiKey !== 'YOUR_PI_PLATFORM_API_KEY' && piApiKey !== 'MY_PI_API_KEY');
+  const isSandbox = process.env.PI_SANDBOX_MODE === 'false' ? false : true;
+  const configuredAppUrl = process.env.APP_URL || process.env.VITE_APP_URL || 'https://iddsnn.com';
+  const runtimeHost = req.get('host') || 'iddsnn.com';
+  const runtimeProto = req.get('x-forwarded-proto') || req.protocol || 'https';
+  const runtimeOrigin = req.get('origin') || `${runtimeProto}://${runtimeHost}`;
+
+  console.log(`[Pi Server Diagnostic] runtimeOrigin=${runtimeOrigin} configuredAppUrl=${configuredAppUrl} sandbox=${isSandbox} piSdkAvailability=${configured ? 'configured' : 'missing'}`);
+
   res.json({
     success: true,
     apiConfiguration: configured ? 'configured' : 'missing',
-    network: isProduction ? 'MAINNET' : 'SANDBOX',
-    version: '2.0'
+    network: isSandbox ? 'SANDBOX' : 'MAINNET',
+    sandbox: isSandbox,
+    version: '2.0',
+    configuredAppUrl,
+    runtimeOrigin,
+    expectedProductionOrigin: 'https://iddsnn.com',
+    piSdkEnvironment: isSandbox ? 'SANDBOX' : 'MAINNET',
+    piSdkAvailability: configured ? 'configured' : 'missing'
   });
 };
 
@@ -1171,7 +1185,7 @@ app.post(['/api/v2/payments/complete', '/api/pi-payment/complete', '/api/v1/pi-p
 app.post(['/api/v2/payments/incomplete', '/api/pi-payment/incomplete', '/api/v1/pi-payment/incomplete'], handleIncompletePayment);
 app.post(['/api/v2/payments/cancel', '/api/pi-payment/cancel', '/api/v1/pi-payment/cancel'], handleCancelPayment);
 app.get(['/api/v2/payments/verify/:paymentId', '/api/pi-payment/verify/:paymentId', '/api/v2/pi/payments/verify', '/api/v2/payments/verify', '/api/pi-payment/verify'], handleVerifyPayment);
-app.get(['/api/v2/payments/config', '/api/pi-payment/config', '/api/v2/pi/config'], handleGetPaymentConfig);
+app.get(['/api/v2/payments/config', '/api/pi-payment/config', '/api/v2/pi/config', '/api/v2/pi/diagnostic', '/api/pi/diagnostic'], handleGetPaymentConfig);
 
 // Server-side Utility Fulfillment & Verification Endpoint
 app.post('/api/v2/utility/fulfill', async (req, res) => {
