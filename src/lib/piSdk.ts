@@ -502,6 +502,16 @@ export async function initPiSdk(sandbox: boolean = isSandboxMode()): Promise<boo
   return result;
 }
 
+export function resetPiAuthState(): void {
+  piAuthPromise = null;
+  authLifecycleState = 'AUTH_NOT_STARTED';
+  authErrorType = null;
+  nativeBridgeState = 'idle';
+  authenticationError = null;
+  lastErrorCode = null;
+  notifyDiagnosticStateChange();
+}
+
 export async function authenticatePiUser(
   onIncompletePaymentFound?: (payment: PiPayment) => void,
   forceReauth: boolean = false
@@ -511,7 +521,7 @@ export async function authenticatePiUser(
   const inPi = isPiBrowser();
 
   console.log(
-    `[Pi SDK] AUTH_START reqId=${reqId} runtimeOrigin=${ctx.origin} hostname=${ctx.hostname} inPiBrowser=${inPi} environment=${ctx.environment} requiredScopes=payments,username`
+    `[Pi Auth] START reqId=${reqId} runtimeOrigin=${ctx.origin} hostname=${ctx.hostname} isPiBrowser=${inPi} sdkAvailable=${ctx.sdkAvailable} sdkInitialized=${sdkInitialized} environment=${ctx.environment} forceReauth=${forceReauth}`
   );
 
   // Non-Pi Browser Environment check
@@ -523,22 +533,29 @@ export async function authenticatePiUser(
     authenticatedUser = null;
     authLifecycleState = 'AUTH_ERROR';
     authErrorType = 'PI_AUTHENTICATE_UNAVAILABLE';
-    lastErrorCode = 'PI_AUTH_REQUIRED';
-    authenticationError = 'Official Pi Browser is required for Pi Network payments. Please open this app inside Pi Browser.';
-    console.log(`[Pi SDK] AUTH_FAILURE reqId=${reqId} reason=NON_PI_BROWSER runtimeOrigin=${ctx.origin}`);
+    lastErrorCode = 'PI_SDK_NOT_AVAILABLE';
+    authenticationError = 'Pi payments require Pi Browser for this environment. Please open PiNova Global Hub in Pi Browser.';
+    console.log(`[Pi Auth] AUTH_FAILURE reqId=${reqId} reason=NON_PI_BROWSER runtimeOrigin=${ctx.origin}`);
     notifyDiagnosticStateChange();
-    throw new Error('Official Pi Browser is required to authenticate with Pi Network. Please open this app inside Pi Browser.');
+    throw new Error('Pi payments require Pi Browser for this environment. Please open PiNova Global Hub in Pi Browser.');
   }
 
-  // Inside Pi Browser: Return active session if already authenticated
+  // Inside Pi Browser: Return active session if already authenticated and not forced
   if (!forceReauth && paymentScopeGranted && authenticatedUser && authenticated) {
     authLifecycleState = 'AUTH_SUCCESS';
+    console.log(`[Pi Auth] REUSING_SESSION reqId=${reqId} username=${authenticatedUser.username}`);
     notifyDiagnosticStateChange();
     return authenticatedUser;
   }
 
-  // Singleton Authentication Lock
+  // If forceReauth requested, clear existing lock to initiate fresh flight
+  if (forceReauth) {
+    piAuthPromise = null;
+  }
+
+  // Singleton Single-Flight Authentication Lock
   if (piAuthPromise) {
+    console.log(`[Pi Auth] RETURNING_ACTIVE_PROMISE reqId=${reqId}`);
     return piAuthPromise;
   }
 
@@ -557,25 +574,28 @@ export async function authenticatePiUser(
         authLifecycleState = 'PI_AUTHENTICATE_UNAVAILABLE';
         authErrorType = 'PI_AUTHENTICATE_UNAVAILABLE';
         piAuthApiState = 'unavailable';
-        lastErrorCode = 'SDK_INIT_FAILED';
+        lastErrorCode = 'PI_SDK_INIT_FAILED';
         notifyDiagnosticStateChange();
         throw new Error('Pi Network SDK could not initialize. Please verify the Pi App domain configuration.');
       }
+
+      console.log(`[Pi Auth] SDK_READY reqId=${reqId}`);
 
       if (typeof window.Pi.authenticate !== 'function') {
         authLifecycleState = 'PI_AUTHENTICATE_UNAVAILABLE';
         authErrorType = 'PI_AUTHENTICATE_UNAVAILABLE';
         piAuthApiState = 'unavailable';
-        lastErrorCode = 'PI_AUTHENTICATE_UNAVAILABLE';
+        lastErrorCode = 'PI_SDK_NOT_AVAILABLE';
         authenticationError = 'Pi authenticate API is unavailable in this environment.';
         notifyDiagnosticStateChange();
-        throw new Error('Pi authenticate API is unavailable in this environment.');
+        throw new Error('Pi Network SDK is unavailable. Please open PiNova Global Hub in Pi Browser.');
       }
 
       piAuthApiState = 'available';
       authenticateInvocation = 'called';
       authInvocationCount++;
       nativeBridgeState = 'calling_invocation';
+      console.log(`[Pi Auth] AUTH_START reqId=${reqId}`);
       notifyDiagnosticStateChange();
 
       nativeWatchdogTimer = setTimeout(() => {
@@ -589,7 +609,7 @@ export async function authenticatePiUser(
       const requestedScopes = ['payments', 'username'];
 
       const handleIncompletePayment = (payment: PiPayment) => {
-        console.log(`[Pi SDK] INCOMPLETE_PAYMENT_FOUND paymentId=${payment?.identifier}`);
+        console.log(`[Pi SDK] INCOMPLETE_PAYMENT_FOUND reqId=${reqId} paymentId=${payment?.identifier}`);
         void Promise.resolve()
           .then(() => {
             if (onIncompletePaymentFound) {
@@ -606,24 +626,36 @@ export async function authenticatePiUser(
         authPromise = window.Pi.authenticate(requestedScopes, handleIncompletePayment);
         nativeBridgeState = 'promise_returned';
         authLifecycleState = 'AUTH_PROMISE_RETURNED';
+        console.log(`[Pi Auth] authenticateStarted reqId=${reqId}`);
         notifyDiagnosticStateChange();
       } catch (syncErr: any) {
         nativeBridgeState = 'call_blocked';
         authLifecycleState = 'AUTH_ERROR';
         authErrorType = 'AUTH_BRIDGE_REJECTED';
-        lastErrorCode = 'PI_AUTH_FAILED';
+        lastErrorCode = 'PI_AUTH_REJECTED';
         authenticationError = syncErr?.message || 'Authentication call was blocked by Pi Browser bridge.';
+        console.warn(`[Pi Auth] authenticateRejected reqId=${reqId} error=${authenticationError}`);
         notifyDiagnosticStateChange();
         throw syncErr;
       }
 
+      // Allow natural interactive authorization without premature 25s cutoff
+      // 120s timeout acts as an ultimate fail-safe watchdog only
+      let timeoutHandle: any;
       const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => {
-          reject(new Error('AUTH_BRIDGE_TIMEOUT: Pi Network authentication timed out waiting for Pi Browser bridge response.'));
-        }, 25000);
+        timeoutHandle = setTimeout(() => {
+          console.warn(`[Pi Auth] authenticateTimeout reqId=${reqId}`);
+          reject(new Error('PI_AUTH_BRIDGE_TIMEOUT'));
+        }, 120000);
       });
 
-      const auth = await Promise.race([authPromise, timeoutPromise]);
+      let auth: any;
+      try {
+        auth = await Promise.race([authPromise, timeoutPromise]);
+      } finally {
+        if (timeoutHandle) clearTimeout(timeoutHandle);
+      }
+
       nativeBridgeState = 'promise_resolved';
 
       if (auth && auth.user && auth.accessToken && auth.user.uid && auth.user.username) {
@@ -632,7 +664,8 @@ export async function authenticatePiUser(
         authLifecycleState = 'AUTH_SUCCESS';
         authErrorType = null;
         authenticationError = null;
-        console.log(`[Pi SDK] AUTH_SUCCESS reqId=${reqId} username=${auth.user.username} uid=${auth.user.uid}`);
+        console.log(`[Pi Auth] authenticateResolved reqId=${reqId} username=${auth.user.username}`);
+        console.log(`[Pi Auth] AUTH_SUCCESS reqId=${reqId}`);
         authenticatedUser = {
           username: auth.user.username,
           uid: auth.user.uid,
@@ -643,7 +676,7 @@ export async function authenticatePiUser(
         notifyDiagnosticStateChange();
         return authenticatedUser;
       } else {
-        throw new Error('Pi Authentication did not return user credentials or access token.');
+        throw new Error('PI_AUTH_REJECTED');
       }
     } catch (err: any) {
       if (nativeBridgeState !== 'call_blocked') {
@@ -653,44 +686,53 @@ export async function authenticatePiUser(
       paymentScopeGranted = false;
       authenticatedUser = null;
 
-      let rawMsg = 'Pi Network authentication failed';
+      let rawMsg = '';
       if (typeof err === 'string') {
         rawMsg = err;
       } else if (err && typeof err === 'object') {
         rawMsg = err.message || err.error || err.description || JSON.stringify(err);
       }
 
-      const isTimeout = rawMsg.includes('AUTH_BRIDGE_TIMEOUT') || rawMsg.toLowerCase().includes('timed out');
+      const isTimeout =
+        rawMsg.includes('PI_AUTH_BRIDGE_TIMEOUT') ||
+        rawMsg.includes('AUTH_BRIDGE_TIMEOUT') ||
+        rawMsg.toLowerCase().includes('timed out');
       const isCancelled =
         rawMsg.toLowerCase().includes('cancel') ||
         rawMsg.toLowerCase().includes('denied') ||
         rawMsg.toLowerCase().includes('dismiss') ||
         rawMsg.toLowerCase().includes('user_cancelled');
-      const isUnavailable = rawMsg === 'PI_AUTHENTICATE_UNAVAILABLE' || rawMsg.includes('unavailable');
+      const isUnavailable =
+        rawMsg === 'PI_SDK_NOT_AVAILABLE' ||
+        rawMsg.includes('unavailable') ||
+        rawMsg.includes('not available');
 
       if (isCancelled) {
         authLifecycleState = 'AUTH_DENIED';
         authErrorType = 'AUTH_USER_CANCELLED';
-        lastErrorCode = 'PI_AUTH_REQUIRED';
-        authenticationError = 'Pioneer cancelled or denied permissions in Pi Browser.';
+        lastErrorCode = 'PI_AUTH_CANCELLED';
+        authenticationError = 'Pi authentication was cancelled in Pi Browser.';
+        console.warn(`[Pi Auth] authenticateRejected reqId=${reqId} reason=CANCELLED`);
       } else if (isTimeout) {
         authLifecycleState = 'AUTH_ERROR';
         authErrorType = 'AUTH_BRIDGE_TIMEOUT';
-        lastErrorCode = 'PI_AUTH_FAILED';
-        authenticationError = 'Pi Browser bridge response timed out. Please tap "Retry Pi Authentication".';
+        lastErrorCode = 'PI_AUTH_BRIDGE_TIMEOUT';
+        authenticationError = 'Pi Browser did not respond to the authentication request. Please tap Retry Pi Authentication.';
+        console.warn(`[Pi Auth] AUTH_TIMEOUT reqId=${reqId}`);
       } else if (isUnavailable) {
         authLifecycleState = 'PI_AUTHENTICATE_UNAVAILABLE';
         authErrorType = 'PI_AUTHENTICATE_UNAVAILABLE';
-        lastErrorCode = 'PI_AUTHENTICATE_UNAVAILABLE';
-        authenticationError = 'Pi authenticate API is unavailable in this environment.';
+        lastErrorCode = 'PI_SDK_NOT_AVAILABLE';
+        authenticationError = 'Pi Network SDK is unavailable. Please open PiNova Global Hub in Pi Browser.';
+        console.warn(`[Pi Auth] AUTH_REJECTED reqId=${reqId} reason=SDK_UNAVAILABLE`);
       } else {
         authLifecycleState = 'AUTH_ERROR';
         authErrorType = 'AUTH_BRIDGE_REJECTED';
-        lastErrorCode = 'PI_AUTH_FAILED';
-        authenticationError = rawMsg;
+        lastErrorCode = 'PI_AUTH_REJECTED';
+        authenticationError = 'Pi authentication was not completed.';
+        console.warn(`[Pi Auth] AUTH_REJECTED reqId=${reqId} rawMsg=${rawMsg}`);
       }
 
-      console.warn(`[Pi SDK] AUTH_FAILURE reqId=${reqId} error=${authenticationError}`);
       notifyDiagnosticStateChange();
       throw new Error(authenticationError);
     } finally {

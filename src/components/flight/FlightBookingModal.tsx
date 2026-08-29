@@ -18,7 +18,7 @@ import {
   Share2
 } from 'lucide-react';
 import { FlightOffer, FlightPassengerDetails, FlightBookingRecord } from '../../types/flight';
-import { createPiPayment } from '../../lib/piSdk';
+import { createPiPayment, resetPiAuthState, authenticatePiUser } from '../../lib/piSdk';
 import { bookFlightTicket, revalidateFlightOffer } from '../../modules/flight';
 
 interface FlightBookingModalProps {
@@ -121,6 +121,21 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
     } else {
       // Verified Carrier fallback flights proceed directly to payment without calling live Duffel revalidation
       setStep('payment');
+    }
+  };
+
+  const handleRetryAuth = async () => {
+    setErrorMessage(null);
+    setIsProcessing(true);
+    resetPiAuthState();
+    try {
+      await authenticatePiUser(undefined, true);
+      // After clean reauth, automatically proceed with payment execution
+      await handleExecutePiPayment();
+    } catch (err: any) {
+      setErrorMessage(err?.message || 'Pi authentication failed. Please tap Retry Pi Authentication.');
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -316,9 +331,20 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
 
           {/* Error Banner */}
           {errorMessage && (
-            <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-2xl flex items-center gap-2.5 text-xs text-rose-300">
-              <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
-              <span>{errorMessage}</span>
+            <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-rose-300">
+              <div className="flex items-center gap-2.5">
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
+                <span>{errorMessage}</span>
+              </div>
+              <button
+                type="button"
+                onClick={handleRetryAuth}
+                disabled={isProcessing}
+                className="self-start sm:self-auto px-3 py-1.5 bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 text-rose-200 font-bold rounded-xl text-[11px] flex items-center gap-1.5 transition-colors"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isProcessing ? 'animate-spin' : ''}`} />
+                <span>Retry Pi Authentication</span>
+              </button>
             </div>
           )}
 

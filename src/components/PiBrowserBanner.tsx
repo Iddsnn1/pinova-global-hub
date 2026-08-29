@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ShieldCheck, Info, Sparkles, Terminal, ChevronDown, ChevronUp, RefreshCw } from 'lucide-react';
-import { isPiBrowser, subscribePiSdkState, getPiSdkDiagnosticState, authenticatePiUser, setCustomSandboxMode, PiSdkDiagnosticState } from '../lib/piSdk';
+import { isPiBrowser, subscribePiSdkState, getPiSdkDiagnosticState, authenticatePiUser, resetPiAuthState, setCustomSandboxMode, PiSdkDiagnosticState } from '../lib/piSdk';
 
 interface PiBrowserBannerProps {
   sandboxMode: boolean;
@@ -20,8 +20,8 @@ export const PiBrowserBanner: React.FC<PiBrowserBannerProps> = ({
   }, []);
 
   const handleRetryAuth = async () => {
-    if (diagState.hasActiveAuthPromise) return;
     setIsRetrying(true);
+    resetPiAuthState();
     try {
       await authenticatePiUser(undefined, true);
     } catch (err) {

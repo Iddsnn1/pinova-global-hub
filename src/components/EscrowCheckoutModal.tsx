@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { X, ShieldCheck, Lock, CheckCircle2, Loader2, AlertCircle, ArrowRight, Smartphone, MapPin, Truck } from 'lucide-react';
 import { OrderItem, CartItem, Coupon } from '../types';
-import { executePiPayment, authenticatePiUser } from '../lib/piSdk';
+import { executePiPayment, authenticatePiUser, resetPiAuthState } from '../lib/piSdk';
 
 interface EscrowCheckoutModalProps {
   cartItems: OrderItem[];
@@ -372,7 +372,10 @@ export const EscrowCheckoutModal: React.FC<EscrowCheckoutModalProps> = ({
               </div>
 
               <button
-                onClick={() => setPaymentStep('review')}
+                onClick={() => {
+                  resetPiAuthState();
+                  setPaymentStep('review');
+                }}
                 className="w-full py-3 rounded-2xl bg-slate-900 text-white font-bold text-xs"
               >
                 Try Again
