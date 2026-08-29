@@ -57,6 +57,7 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentStatusText, setPaymentStatusText] = useState<string>('Authorizing Pi Escrow Payment...');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [hasPaymentCreated, setHasPaymentCreated] = useState(false);
   const [confirmedBooking, setConfirmedBooking] = useState<FlightBookingRecord | null>(null);
   const checkoutAttemptKeyRef = React.useRef<string>(`idem_flt_${offer.offerId}_${Date.now()}`);
 
@@ -206,6 +207,7 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
       });
 
       if (paymentResult && paymentResult.success) {
+        setHasPaymentCreated(true);
         setPaymentStatusText('Securing ticket with carrier...');
         // 2. Book with backend flight service
         const bookResponse = await bookFlightTicket({
@@ -259,6 +261,9 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
           onBookingSuccess(failedRecord);
         }
       } else {
+        if (paymentResult?.paymentId) {
+          setHasPaymentCreated(true);
+        }
         setErrorMessage(paymentResult?.message || 'Pi payment could not be completed.');
       }
     } catch (err: any) {
@@ -267,6 +272,19 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
       setIsProcessing(false);
     }
   };
+
+  const isAuthTimeoutOrFailed = Boolean(
+    errorMessage && (
+      errorMessage.toLowerCase().includes('authentication') ||
+      errorMessage.toLowerCase().includes('did not respond') ||
+      errorMessage.toLowerCase().includes('retry pi authentication') ||
+      errorMessage.toLowerCase().includes('browser required') ||
+      errorMessage.toLowerCase().includes('permission') ||
+      errorMessage.includes('AUTH_TIMEOUT') ||
+      errorMessage.includes('AUTHENTICATE_UNAVAILABLE') ||
+      !hasPaymentCreated
+    )
+  );
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
@@ -348,7 +366,8 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
                 <span className="leading-relaxed">{errorMessage}</span>
               </div>
               <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
-                {step === 'payment' && (
+                {/* When authentication timed out or before payment creation, show ONLY Retry Pi Authentication */}
+                {!isAuthTimeoutOrFailed && hasPaymentCreated && (
                   <button
                     type="button"
                     onClick={handleExecutePiPayment}

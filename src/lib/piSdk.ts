@@ -533,7 +533,10 @@ class PiSdkManagerService {
     const ctx = getSafeRuntimeContext();
 
     logPiTrace(
-      `[Pi SDK] INITIALIZE_START reqId=${reqId} sandbox=${sandbox} runtimeOrigin=${ctx.origin} hostname=${ctx.hostname} isPiBrowser=${isPiBrowser()}`
+      `[Pi SDK TRACE] sdk_available=${typeof window !== 'undefined' && Boolean(window.Pi)} init_available=${typeof window !== 'undefined' && typeof window.Pi?.init === 'function'} authenticate_available=${typeof window !== 'undefined' && typeof window.Pi?.authenticate === 'function'} createPayment_available=${typeof window !== 'undefined' && typeof window.Pi?.createPayment === 'function'}`
+    );
+    logPiTrace(
+      `[Pi SDK] INIT_START reqId=${reqId} sandbox=${sandbox} initialOrigin=${ctx.origin} finalOrigin=${typeof window !== 'undefined' ? window.location.origin : ctx.origin} hostname=${ctx.hostname} isPiBrowser=${isPiBrowser()} userAgent=${typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown'}`
     );
 
     this.piInitState = 'initializing';
@@ -556,7 +559,7 @@ class PiSdkManagerService {
           this.sdkInitialized = true;
           this.piInitState = 'success';
           this.lastErrorCode = null;
-          logPiTrace(`[Pi SDK] INITIALIZE_SUCCESS reqId=${reqId} version=2.0 sandbox=${sandbox}`);
+          logPiTrace(`[Pi SDK] INIT_SUCCESS reqId=${reqId} version=2.0 sandbox=${sandbox}`);
           this.notifyDiagnosticStateChange();
           return true;
         } catch (err: any) {
@@ -565,16 +568,16 @@ class PiSdkManagerService {
             this.sdkInitialized = true;
             this.piInitState = 'success';
             this.lastErrorCode = null;
-            logPiTrace(`[Pi SDK] INITIALIZE_SUCCESS reqId=${reqId} (already initialized)`);
+            logPiTrace(`[Pi SDK] INIT_SUCCESS reqId=${reqId} (already initialized)`);
             this.notifyDiagnosticStateChange();
             return true;
           }
-          logPiTrace(`[Pi SDK] INITIALIZE_ERROR reqId=${reqId} error=${errMsg}`, 'warn');
+          logPiTrace(`[Pi SDK] INIT_ERROR reqId=${reqId} error=${errMsg}`, 'warn');
           this.piInitState = 'failed';
           this.lastErrorCode = 'SDK_INIT_FAILED';
         }
       } else {
-        logPiTrace(`[Pi SDK] INITIALIZE_TIMEOUT reqId=${reqId} error=SCRIPT_UNAVAILABLE`, 'warn');
+        logPiTrace(`[Pi SDK] INIT_TIMEOUT reqId=${reqId} error=SCRIPT_UNAVAILABLE`, 'warn');
         this.piInitState = 'failed';
         this.lastErrorCode = 'SDK_NOT_LOADED';
       }
@@ -623,6 +626,7 @@ class PiSdkManagerService {
     logPiTrace(
       `[Pi SDK] AUTH_START attemptId=${authAttemptId} isPiBrowser=${inPi} forceReauth=${forceReauth} scopes=${JSON.stringify(scopes)}`
     );
+    logPiTrace(`[Pi AUTH] START attempt=${authAttemptId} scopes=${JSON.stringify(scopes)}`);
 
     // Unsupported Browser Guard
     if (!inPi) {
@@ -637,6 +641,7 @@ class PiSdkManagerService {
       this.authenticationError = 'Pi payments require Pi Browser for this environment. Please open PiNova Global Hub in Pi Browser.';
       this.currentPaymentStage = 'FAILED';
       logPiTrace(`[Pi SDK] AUTH_ERROR attemptId=${authAttemptId} error=NON_PI_BROWSER`, 'warn');
+      logPiTrace(`[Pi AUTH] ERROR attempt=${authAttemptId} error=NON_PI_BROWSER`, 'warn');
       this.notifyDiagnosticStateChange();
       throw new Error(this.authenticationError);
     }
@@ -645,6 +650,7 @@ class PiSdkManagerService {
     if (!forceReauth && this.paymentScopeGranted && this.authenticatedUser && this.authenticated) {
       this.authLifecycleState = 'AUTH_SUCCESS';
       logPiTrace(`[Pi SDK] AUTH_SUCCESS attemptId=${authAttemptId} REUSING_SESSION username=${this.authenticatedUser.username}`);
+      logPiTrace(`[Pi AUTH] SUCCESS attempt=${authAttemptId}`);
       this.notifyDiagnosticStateChange();
       return this.authenticatedUser;
     }
@@ -677,6 +683,7 @@ class PiSdkManagerService {
           this.currentPaymentStage = 'FAILED';
           this.authenticationError = 'Pi Network SDK could not be initialized. Please reopen this page in Pi Browser and try again.';
           logPiTrace(`[Pi SDK] AUTH_ERROR attemptId=${authAttemptId} error=SDK_INIT_FAILED`, 'warn');
+          logPiTrace(`[Pi AUTH] ERROR attempt=${authAttemptId} error=SDK_INIT_FAILED`, 'warn');
           this.notifyDiagnosticStateChange();
           throw new Error(this.authenticationError);
         }
@@ -689,6 +696,7 @@ class PiSdkManagerService {
           this.currentPaymentStage = 'FAILED';
           this.authenticationError = 'Pi authenticate API is unavailable in this environment.';
           logPiTrace(`[Pi SDK] AUTH_ERROR attemptId=${authAttemptId} error=AUTHENTICATE_UNAVAILABLE`, 'warn');
+          logPiTrace(`[Pi AUTH] ERROR attempt=${authAttemptId} error=AUTHENTICATE_UNAVAILABLE`, 'warn');
           this.notifyDiagnosticStateChange();
           throw new Error(this.authenticationError);
         }
@@ -710,7 +718,7 @@ class PiSdkManagerService {
           }
         };
 
-        // Step 2: Invoke Pi.authenticate() with Hard 12-Second Timeout Race
+        // Step 2: Invoke Pi.authenticate() with Hard 14-Second Timeout Race
         let rawAuthPromise: Promise<any>;
         try {
           rawAuthPromise = window.Pi.authenticate(scopes, handleIncomplete);
@@ -725,6 +733,7 @@ class PiSdkManagerService {
           this.currentPaymentStage = 'FAILED';
           this.authenticationError = syncErr?.message || 'Authentication call was blocked by Pi Browser bridge.';
           logPiTrace(`[Pi SDK] AUTH_ERROR attemptId=${authAttemptId} syncError=${this.authenticationError}`, 'warn');
+          logPiTrace(`[Pi AUTH] ERROR attempt=${authAttemptId} error=${this.authenticationError}`, 'warn');
           this.notifyDiagnosticStateChange();
           throw syncErr;
         }
@@ -763,10 +772,12 @@ class PiSdkManagerService {
           };
 
           logPiTrace(`[Pi SDK] AUTH_SUCCESS attemptId=${authAttemptId} username=${auth.user.username}`);
+          logPiTrace(`[Pi AUTH] SUCCESS attempt=${authAttemptId}`);
           this.notifyDiagnosticStateChange();
           return this.authenticatedUser;
         } else {
           logPiTrace(`[Pi SDK] AUTH_ERROR attemptId=${authAttemptId} error=MISSING_CREDENTIALS`, 'warn');
+          logPiTrace(`[Pi AUTH] ERROR attempt=${authAttemptId} error=MISSING_CREDENTIALS`, 'warn');
           throw new Error('Pi authentication returned incomplete user credentials.');
         }
       } catch (err: any) {
@@ -803,6 +814,7 @@ class PiSdkManagerService {
           this.currentPaymentStage = 'TIMEOUT';
           this.authenticationError = 'Pi Browser did not respond to the authentication request. Please tap Retry Pi Authentication.';
           logPiTrace(`[Pi SDK] AUTH_TIMEOUT attemptId=${authAttemptId}`, 'warn');
+          logPiTrace(`[Pi AUTH] NO_RESPONSE attempt=${authAttemptId}`, 'warn');
         } else if (isCancelled) {
           this.authLifecycleState = 'AUTH_DENIED';
           this.authErrorType = 'AUTH_USER_CANCELLED';
@@ -810,6 +822,7 @@ class PiSdkManagerService {
           this.currentPaymentStage = 'CANCELLED';
           this.authenticationError = 'Pi authentication was cancelled in Pi Browser.';
           logPiTrace(`[Pi SDK] AUTH_ERROR attemptId=${authAttemptId} reason=CANCELLED`, 'warn');
+          logPiTrace(`[Pi AUTH] ERROR attempt=${authAttemptId} reason=CANCELLED`, 'warn');
         } else if (isUnavailable) {
           this.authLifecycleState = 'PI_AUTHENTICATE_UNAVAILABLE';
           this.authErrorType = 'PI_AUTHENTICATE_UNAVAILABLE';
@@ -817,6 +830,7 @@ class PiSdkManagerService {
           this.currentPaymentStage = 'FAILED';
           this.authenticationError = 'Pi Network SDK is unavailable. Please open PiNova Global Hub in Pi Browser.';
           logPiTrace(`[Pi SDK] AUTH_ERROR attemptId=${authAttemptId} reason=SDK_UNAVAILABLE`, 'warn');
+          logPiTrace(`[Pi AUTH] ERROR attempt=${authAttemptId} reason=SDK_UNAVAILABLE`, 'warn');
         } else {
           this.authLifecycleState = 'AUTH_ERROR';
           this.authErrorType = 'AUTH_BRIDGE_REJECTED';
@@ -824,6 +838,7 @@ class PiSdkManagerService {
           this.currentPaymentStage = 'FAILED';
           this.authenticationError = 'Pi authentication was not completed.';
           logPiTrace(`[Pi SDK] AUTH_ERROR attemptId=${authAttemptId} error=${rawMsg}`, 'warn');
+          logPiTrace(`[Pi AUTH] ERROR attempt=${authAttemptId} error=${rawMsg}`, 'warn');
         }
 
         this.notifyDiagnosticStateChange();
