@@ -5,10 +5,12 @@ import { isPiBrowser, subscribePiSdkState, getPiSdkDiagnosticState, authenticate
 interface PiBrowserBannerProps {
   sandboxMode: boolean;
   userBalancePi: number;
+  onOpenDiagnostics?: () => void;
 }
 
 export const PiBrowserBanner: React.FC<PiBrowserBannerProps> = ({
-  sandboxMode
+  sandboxMode,
+  onOpenDiagnostics
 }) => {
   const inPiBrowser = isPiBrowser();
   const [diagState, setDiagState] = useState<PiSdkDiagnosticState>(getPiSdkDiagnosticState());
@@ -204,6 +206,17 @@ export const PiBrowserBanner: React.FC<PiBrowserBannerProps> = ({
                 <div><span className="text-slate-500">Build commit:</span> <strong className="text-emerald-300 font-bold">{diagState.buildCommit}</strong></div>
               </div>
             </div>
+            {onOpenDiagnostics && (
+              <div className="pt-2 border-t border-purple-900/40 flex justify-end">
+                <button
+                  id="pi-banner-open-diag-btn"
+                  onClick={onOpenDiagnostics}
+                  className="px-3 py-1 bg-indigo-700 hover:bg-indigo-600 text-white rounded text-[11px] font-sans font-semibold transition"
+                >
+                  Launch Isolated Pi Diagnostic Suite (/pi-diagnostic) →
+                </button>
+              </div>
+            )}
           </div>
           {diagState.error && (
             <div className="mt-2 text-rose-300 bg-rose-950/40 border border-rose-800/40 p-1.5 rounded flex items-center justify-between gap-2">

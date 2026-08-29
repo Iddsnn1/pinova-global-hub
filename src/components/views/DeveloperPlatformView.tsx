@@ -315,6 +315,15 @@ export const DeveloperPlatformView: React.FC<DeveloperPlatformViewProps> = ({
           </div>
 
           <button
+            onClick={() => onNavigateSection && onNavigateSection('pi-diagnostic')}
+            className="px-3 py-1.5 rounded-xl bg-indigo-900/80 hover:bg-indigo-800 border border-indigo-600 text-indigo-200 text-xs font-bold transition-all flex items-center gap-1.5"
+            title="Launch Isolated Pi SDK & Authentication Diagnostic Tool"
+          >
+            <Terminal className="w-3.5 h-3.5 text-indigo-300" />
+            <span>Pi SDK Diagnostics</span>
+          </button>
+
+          <button
             onClick={() => onNavigateSection && onNavigateSection('admin_governance')}
             className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-amber-400 text-xs font-bold transition-all flex items-center gap-1.5"
           >

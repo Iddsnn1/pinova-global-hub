@@ -14,6 +14,7 @@ export type MainSection =
   | 'orders'
   | 'community'
   | 'profile'
+  | 'pi-diagnostic'
   | 'ai-concierge'
   | 'ai-smart-search'
   | 'ai-merchant-marketing'

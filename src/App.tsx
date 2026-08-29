@@ -46,6 +46,7 @@ import { PlatformAdminView } from './components/views/PlatformAdminView';
 import { EnterpriseSecurityView } from './components/views/EnterpriseSecurityView';
 import { DeveloperPlatformView } from './components/views/DeveloperPlatformView';
 import { FutureServicesView } from './components/views/FutureServicesView';
+import { PiDiagnosticView } from './components/PiDiagnosticView';
 
 import { UniversalSearchModal } from './components/UniversalSearchModal';
 import { PiBrowserBanner } from './components/PiBrowserBanner';
@@ -233,6 +234,14 @@ function MainAppContent() {
   // Proactive Pi Browser Authentication on Application Load (Controlled Lifecycle)
   useEffect(() => {
     let active = true;
+
+    if (typeof window !== 'undefined') {
+      const search = window.location.search || '';
+      const path = window.location.pathname || '';
+      if (search.includes('tab=pi-diagnostic') || search.includes('view=pi-diagnostic') || path.includes('/pi-diagnostic')) {
+        setActiveSection('pi-diagnostic');
+      }
+    }
 
     initAndAuthenticateProactively().then((piUser) => {
       if (active && piUser) {
@@ -695,6 +704,8 @@ function MainAppContent() {
         return [{ label: 'Developer Platform', section: 'developer_platform' }];
       case 'future_services':
         return [{ label: 'Future Services', section: 'future_services' }];
+      case 'pi-diagnostic':
+        return [{ label: 'Pi SDK Diagnostics', section: 'pi-diagnostic' }];
       default:
         return [{ label: String(activeSection), section: activeSection }];
     }
@@ -1040,7 +1051,11 @@ function MainAppContent() {
 
         {activeSection === 'developer_platform' && (
           <div className="space-y-4">
-            <PiBrowserBanner sandboxMode={isSandboxMode()} userBalancePi={userBalancePi} />
+            <PiBrowserBanner
+              sandboxMode={isSandboxMode()}
+              userBalancePi={userBalancePi}
+              onOpenDiagnostics={() => handleNavigateSection('pi-diagnostic')}
+            />
             <DeveloperPlatformView
               userRole={user.role}
               onNavigateSection={handleNavigateSection}
@@ -1052,6 +1067,12 @@ function MainAppContent() {
           <FutureServicesView
             onNavigateSection={handleNavigateSection}
             onOpenPstpShield={() => setIsPstpShieldOpen(true)}
+          />
+        )}
+
+        {activeSection === 'pi-diagnostic' && (
+          <PiDiagnosticView
+            onBackToApp={() => handleNavigateSection('home')}
           />
         )}
 
@@ -1071,7 +1092,8 @@ function MainAppContent() {
           'admin_governance',
           'security_trust',
           'developer_platform',
-          'future_services'
+          'future_services',
+          'pi-diagnostic'
         ].includes(activeSection) && (
           <div className="max-w-2xl mx-auto px-4 py-16 text-center space-y-6 animate-fade-in">
             <div className="w-16 h-16 rounded-3xl bg-purple-500/10 text-purple-500 border border-purple-500/20 flex items-center justify-center mx-auto shadow-lg">
