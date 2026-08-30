@@ -142,6 +142,38 @@ export interface PiRuntimePreflightResult {
   category?: PiDiagnosticCategory;
 }
 
+export type PiNetworkEnvironment = 'SANDBOX' | 'MAINNET';
+
+export interface PiEnvironmentDetails {
+  network: PiNetworkEnvironment;
+  sandbox: boolean;
+  source: 'LOCAL_STORAGE_OVERRIDE' | 'URL_OVERRIDE' | 'VITE_PI_ENV' | 'VITE_PI_SANDBOX' | 'DEFAULT_FALLBACK';
+  configuredEnv?: string;
+  configuredSandbox?: string;
+  hasConflict: boolean;
+  conflictWarning?: string;
+  overrideValue?: string;
+  environmentConsistency: 'CONSISTENT' | 'INVALID';
+  configuredNetwork: PiNetworkEnvironment;
+  effectiveSandbox: boolean;
+  environmentSource: string;
+}
+
+export interface PiNetworkConfig {
+  environment: 'sandbox' | 'mainnet';
+  network: PiNetworkEnvironment;
+  sandbox: boolean;
+  source: 'LOCAL_STORAGE_OVERRIDE' | 'URL_OVERRIDE' | 'VITE_PI_ENV' | 'VITE_PI_SANDBOX' | 'DEFAULT_FALLBACK';
+  hasConflict: boolean;
+  conflictWarning?: string;
+  configuredEnv?: string;
+  configuredSandbox?: string;
+  environmentConsistency: 'CONSISTENT' | 'INVALID';
+  configuredNetwork: PiNetworkEnvironment;
+  effectiveSandbox: boolean;
+  environmentSource: string;
+}
+
 export interface PiSdkDiagnosticState {
   sdkScriptState: 'loaded' | 'not_loaded';
   piInitState: 'success' | 'failed' | 'not_called' | 'initializing';
@@ -156,7 +188,13 @@ export interface PiSdkDiagnosticState {
   productionOrigin: string;
   sandbox: boolean;
   sdkReadyState: 'ready' | 'not_ready';
-  network: 'SANDBOX' | 'MAINNET';
+  network: PiNetworkEnvironment;
+  environmentDetails?: PiEnvironmentDetails;
+  conflictWarning?: string;
+  configuredNetwork?: PiNetworkEnvironment;
+  effectiveSandbox?: boolean;
+  environmentSource?: string;
+  environmentConsistency?: 'CONSISTENT' | 'INVALID';
   piAuthenticationState: 'success' | 'pending' | 'failed';
   paymentScopeState: 'granted' | 'not_granted';
   apiConfiguration: 'configured' | 'missing';
@@ -259,62 +297,252 @@ export function getDomainDiagnosticInfo() {
   };
 }
 
+export function getPiEnvironmentDetails(): PiEnvironmentDetails {
+  if (typeof window === 'undefined') {
+    // Safe SSR/build default.
+    return {
+      network: 'SANDBOX',
+      sandbox: true,
+      source: 'DEFAULT_FALLBACK',
+      hasConflict: false,
+      environmentConsistency: 'CONSISTENT',
+      configuredNetwork: 'SANDBOX',
+      effectiveSandbox: true,
+      environmentSource: 'DEFAULT_FALLBACK'
+    };
+  }
+
+  // ---------------------------------------------------------
+  // 1. Explicit local/session override (for development/testing)
+  // ---------------------------------------------------------
+  try {
+    const override = localStorage.getItem('pi_sandbox_override');
+
+    if (override === 'true') {
+      return {
+        network: 'SANDBOX',
+        sandbox: true,
+        source: 'LOCAL_STORAGE_OVERRIDE',
+        overrideValue: 'true',
+        hasConflict: false,
+        environmentConsistency: 'CONSISTENT',
+        configuredNetwork: 'SANDBOX',
+        effectiveSandbox: true,
+        environmentSource: 'LOCAL_STORAGE_OVERRIDE'
+      };
+    }
+
+    if (override === 'false') {
+      return {
+        network: 'MAINNET',
+        sandbox: false,
+        source: 'LOCAL_STORAGE_OVERRIDE',
+        overrideValue: 'false',
+        hasConflict: false,
+        environmentConsistency: 'CONSISTENT',
+        configuredNetwork: 'MAINNET',
+        effectiveSandbox: false,
+        environmentSource: 'LOCAL_STORAGE_OVERRIDE'
+      };
+    }
+  } catch {
+    // Ignore storage errors.
+  }
+
+  // ---------------------------------------------------------
+  // 2. Explicit URL override for controlled testing
+  // ---------------------------------------------------------
+  const search = window.location.search || '';
+
+  if (
+    /(?:[?&])(sandbox=true|sandbox=1|env=sandbox)(?:&|$)/i.test(search)
+  ) {
+    return {
+      network: 'SANDBOX',
+      sandbox: true,
+      source: 'URL_OVERRIDE',
+      overrideValue: 'sandbox',
+      hasConflict: false,
+      environmentConsistency: 'CONSISTENT',
+      configuredNetwork: 'SANDBOX',
+      effectiveSandbox: true,
+      environmentSource: 'URL_OVERRIDE'
+    };
+  }
+
+  if (
+    /(?:[?&])(sandbox=false|sandbox=0|env=mainnet)(?:&|$)/i.test(search)
+  ) {
+    return {
+      network: 'MAINNET',
+      sandbox: false,
+      source: 'URL_OVERRIDE',
+      overrideValue: 'mainnet',
+      hasConflict: false,
+      environmentConsistency: 'CONSISTENT',
+      configuredNetwork: 'MAINNET',
+      effectiveSandbox: false,
+      environmentSource: 'URL_OVERRIDE'
+    };
+  }
+
+  // ---------------------------------------------------------
+  // 3. Deployment environment variables are authoritative
+  // ---------------------------------------------------------
+  const metaEnv = (import.meta as any).env || {};
+  const rawEnv = metaEnv.VITE_PI_ENV !== undefined ? String(metaEnv.VITE_PI_ENV).trim().toLowerCase() : '';
+  const rawSandbox = metaEnv.VITE_PI_SANDBOX !== undefined ? String(metaEnv.VITE_PI_SANDBOX).trim().toLowerCase() : '';
+
+  let hasConflict = false;
+  let conflictWarning: string | undefined;
+
+  if (rawEnv && rawSandbox) {
+    const envWantsMainnet = rawEnv === 'mainnet';
+    const envWantsSandbox = rawEnv === 'sandbox';
+    const sandboxWantsMainnet = rawSandbox === 'false';
+    const sandboxWantsSandbox = rawSandbox === 'true';
+
+    if ((envWantsMainnet && sandboxWantsSandbox) || (envWantsSandbox && sandboxWantsMainnet)) {
+      hasConflict = true;
+      conflictWarning = `Conflicting Pi environment variables detected (VITE_PI_ENV="${metaEnv.VITE_PI_ENV}", VITE_PI_SANDBOX="${metaEnv.VITE_PI_SANDBOX}"). Configuration is INVALID and payments are blocked until consistent.`;
+    }
+  }
+
+  const consistency = hasConflict ? 'INVALID' : 'CONSISTENT';
+
+  if (rawEnv === 'mainnet') {
+    return {
+      network: 'MAINNET',
+      sandbox: false,
+      source: 'VITE_PI_ENV',
+      configuredEnv: metaEnv.VITE_PI_ENV,
+      configuredSandbox: metaEnv.VITE_PI_SANDBOX,
+      hasConflict,
+      conflictWarning,
+      environmentConsistency: consistency,
+      configuredNetwork: 'MAINNET',
+      effectiveSandbox: false,
+      environmentSource: `VITE_PI_ENV=${metaEnv.VITE_PI_ENV}`
+    };
+  }
+
+  if (rawEnv === 'sandbox') {
+    return {
+      network: 'SANDBOX',
+      sandbox: true,
+      source: 'VITE_PI_ENV',
+      configuredEnv: metaEnv.VITE_PI_ENV,
+      configuredSandbox: metaEnv.VITE_PI_SANDBOX,
+      hasConflict,
+      conflictWarning,
+      environmentConsistency: consistency,
+      configuredNetwork: 'SANDBOX',
+      effectiveSandbox: true,
+      environmentSource: `VITE_PI_ENV=${metaEnv.VITE_PI_ENV}`
+    };
+  }
+
+  if (rawSandbox === 'false') {
+    return {
+      network: 'MAINNET',
+      sandbox: false,
+      source: 'VITE_PI_SANDBOX',
+      configuredEnv: metaEnv.VITE_PI_ENV,
+      configuredSandbox: metaEnv.VITE_PI_SANDBOX,
+      hasConflict,
+      conflictWarning,
+      environmentConsistency: consistency,
+      configuredNetwork: 'MAINNET',
+      effectiveSandbox: false,
+      environmentSource: `VITE_PI_SANDBOX=${metaEnv.VITE_PI_SANDBOX}`
+    };
+  }
+
+  if (rawSandbox === 'true') {
+    return {
+      network: 'SANDBOX',
+      sandbox: true,
+      source: 'VITE_PI_SANDBOX',
+      configuredEnv: metaEnv.VITE_PI_ENV,
+      configuredSandbox: metaEnv.VITE_PI_SANDBOX,
+      hasConflict,
+      conflictWarning,
+      environmentConsistency: consistency,
+      configuredNetwork: 'SANDBOX',
+      effectiveSandbox: true,
+      environmentSource: `VITE_PI_SANDBOX=${metaEnv.VITE_PI_SANDBOX}`
+    };
+  }
+
+  // ---------------------------------------------------------
+  // 4. IMPORTANT SAFETY DEFAULT
+  // ---------------------------------------------------------
+  // Do NOT automatically force https://iddsnn.com to Mainnet.
+  //
+  // The current PiNova environment is being tested on Testnet.
+  // Mainnet must only be enabled explicitly through deployment
+  // configuration.
+  //
+  // Therefore, if no explicit environment is configured,
+  // default to Sandbox.
+  // ---------------------------------------------------------
+  return {
+    network: 'SANDBOX',
+    sandbox: true,
+    source: 'DEFAULT_FALLBACK',
+    hasConflict: false,
+    environmentConsistency: 'CONSISTENT',
+    configuredNetwork: 'SANDBOX',
+    effectiveSandbox: true,
+    environmentSource: 'DEFAULT_FALLBACK'
+  };
+}
+
+export function getPiNetworkConfig(): PiNetworkConfig {
+  const details = getPiEnvironmentDetails();
+  return {
+    environment: details.sandbox ? 'sandbox' : 'mainnet',
+    network: details.network,
+    sandbox: details.sandbox,
+    source: details.source,
+    hasConflict: details.hasConflict,
+    conflictWarning: details.conflictWarning,
+    configuredEnv: details.configuredEnv,
+    configuredSandbox: details.configuredSandbox,
+    environmentConsistency: details.environmentConsistency,
+    configuredNetwork: details.configuredNetwork,
+    effectiveSandbox: details.effectiveSandbox,
+    environmentSource: details.environmentSource
+  };
+}
+
+export function getPiNetworkEnvironment(): PiNetworkEnvironment {
+  return getPiEnvironmentDetails().network;
+}
+
+export function isSandboxMode(): boolean {
+  return getPiEnvironmentDetails().sandbox;
+}
+
+export function clearCustomSandboxOverride(): void {
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.removeItem('pi_sandbox_override');
+    } catch {
+      // Ignore
+    }
+  }
+}
+
 export function getSafeRuntimeContext() {
   const domainInfo = getDomainDiagnosticInfo();
   const origin = domainInfo.currentOrigin;
   const hostname = domainInfo.currentHostname;
   const protocol = typeof window !== 'undefined' ? window.location.protocol : 'https:';
   const sdkAvailable = typeof window !== 'undefined' && Boolean(window.Pi);
-  const environment = isSandboxMode() ? 'SANDBOX' : 'MAINNET';
-  return { origin, hostname, protocol, sdkAvailable, environment, domainInfo };
-}
-
-export function isSandboxMode(): boolean {
-  if (typeof window === 'undefined') return false;
-
-  try {
-    const override = localStorage.getItem('pi_sandbox_override');
-    if (override === 'true') return true;
-    if (override === 'false') return false;
-  } catch {
-    // Ignore storage errors
-  }
-
-  const search = window.location.search || '';
-  if (search.includes('sandbox=true') || search.includes('sandbox=1') || search.includes('env=sandbox')) {
-    return true;
-  }
-  if (search.includes('sandbox=false') || search.includes('sandbox=0') || search.includes('env=mainnet')) {
-    return false;
-  }
-
-  const hostname = window.location.hostname || '';
-  // Registered official Pi Developer Portal domain and production Vercel URLs default to MAINNET (false)
-  if (
-    hostname === 'iddsnn.com' ||
-    hostname.endsWith('.iddsnn.com') ||
-    hostname === 'pinova-global-hub.vercel.app' ||
-    hostname === 'pinova-global-marketplace.vercel.app'
-  ) {
-    return false;
-  }
-
-  const metaEnv = (import.meta as any).env;
-  if (metaEnv) {
-    if (metaEnv.VITE_PI_SANDBOX === 'false' || metaEnv.VITE_PI_ENV === 'mainnet') {
-      return false;
-    }
-    if (metaEnv.VITE_PI_SANDBOX === 'true' || metaEnv.VITE_PI_ENV === 'sandbox') {
-      return true;
-    }
-  }
-
-  // Local development fallback
-  if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname.includes('ais-dev-')) {
-    return true;
-  }
-
-  return false;
+  const envDetails = getPiEnvironmentDetails();
+  const environment = envDetails.network;
+  return { origin, hostname, protocol, sdkAvailable, environment, domainInfo, envDetails };
 }
 
 /**
@@ -510,7 +738,8 @@ class PiSdkManagerService {
     } catch {
       isIframe = true;
     }
-    const isSandbox = isSandboxMode();
+    const envDetails = getPiEnvironmentDetails();
+    const isSandbox = envDetails.sandbox;
     const isSdkReady = this.sdkInitialized && hasPi;
     const inPi = isPiBrowser();
     const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent || '' : '';
@@ -556,7 +785,13 @@ class PiSdkManagerService {
       productionOrigin: currentOrigin,
       sandbox: isSandbox,
       sdkReadyState: isSdkReady ? 'ready' : 'not_ready',
-      network: isSandbox ? 'SANDBOX' : 'MAINNET',
+      network: envDetails.network,
+      environmentDetails: envDetails,
+      conflictWarning: envDetails.conflictWarning,
+      configuredNetwork: envDetails.configuredNetwork,
+      effectiveSandbox: envDetails.effectiveSandbox,
+      environmentSource: envDetails.environmentSource,
+      environmentConsistency: envDetails.environmentConsistency,
       piAuthenticationState: authStateSummary,
       paymentScopeState: this.paymentScopeGranted ? 'granted' : 'not_granted',
       apiConfiguration: this.apiConfigState,
@@ -1200,6 +1435,16 @@ class PiSdkManagerService {
       updateStatus('Official Pi Browser required');
       logPiTrace(`[Pi SDK] PAYMENT_ERROR reqId=${reqId} error=NON_PI_BROWSER`, 'warn');
       callbacks.onError(new Error('Please open PiNova Global Hub in the official Pi Browser to authenticate and pay with Pi.'));
+      return;
+    }
+
+    const envConfig = getPiNetworkConfig();
+    if (envConfig.hasConflict) {
+      this.currentPaymentStage = 'FAILED';
+      this.lastErrorCode = 'INVALID_NETWORK_CONFIG';
+      this.notifyDiagnosticStateChange();
+      logPiTrace(`[Pi SDK] PAYMENT_BLOCKED reqId=${reqId} error=CONFLICTING_ENVIRONMENT_VARIABLES`, 'error');
+      callbacks.onError(new Error(envConfig.conflictWarning || 'Invalid Pi Network Configuration: Conflicting environment variables detected. Payment blocked until resolved.'));
       return;
     }
 

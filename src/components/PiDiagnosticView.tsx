@@ -20,6 +20,7 @@ import {
   authenticatePiUser, 
   resetPiAuthState, 
   setCustomSandboxMode,
+  clearCustomSandboxOverride,
   getPiDiagnosticLogs,
   subscribePiDiagnosticLogs,
   logPiTrace,
@@ -110,6 +111,12 @@ export const PiDiagnosticView: React.FC<PiDiagnosticViewProps> = ({ onBackToApp 
     setCustomSandboxMode(nextMode);
   };
 
+  const handleClearOverride = () => {
+    logPiTrace('[Pi DIAGNOSTIC UI] Clearing manual sandbox override from localStorage');
+    clearCustomSandboxOverride();
+    initPiSdk();
+  };
+
   const handleCopyLogs = () => {
     const text = logs.map((l) => `[${l.timestamp}] ${l.message}`).join('\n');
     navigator.clipboard.writeText(text);
@@ -125,6 +132,7 @@ export const PiDiagnosticView: React.FC<PiDiagnosticViewProps> = ({ onBackToApp 
   };
 
   const isOfficialOrigin = diagState.productionOrigin === 'https://iddsnn.com' || diagState.productionOrigin.includes('iddsnn.com');
+  const envDetails = diagState.environmentDetails;
 
   return (
     <div id="pi-diagnostic-container" className="max-w-6xl mx-auto px-4 py-8 space-y-6 text-slate-900 dark:text-slate-100">
@@ -148,6 +156,88 @@ export const PiDiagnosticView: React.FC<PiDiagnosticViewProps> = ({ onBackToApp 
           >
             ← Back to PiNova App
           </button>
+        )}
+      </div>
+
+      {/* Network Environment Resolver Inspection Card */}
+      <div className="bg-gradient-to-r from-slate-900 via-purple-950 to-slate-900 text-white rounded-2xl p-5 border border-purple-800/50 shadow-lg">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-purple-800/40">
+          <div className="flex items-center gap-2.5">
+            <Globe className="w-5 h-5 text-purple-400" />
+            <h2 className="font-semibold text-base">Pi Network Environment Resolution</h2>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className={`px-3 py-1 rounded-full text-xs font-mono font-bold uppercase tracking-wider ${
+              diagState.environmentConsistency === 'CONSISTENT'
+                ? 'bg-emerald-600/90 text-emerald-100 border border-emerald-400/60'
+                : 'bg-rose-600/90 text-rose-100 border border-rose-400/60'
+            }`}>
+              Configuration: {diagState.environmentConsistency || 'CONSISTENT'}
+            </span>
+            <span className={`px-3 py-1 rounded-full text-xs font-mono font-bold uppercase tracking-wider ${
+              diagState.network === 'SANDBOX'
+                ? 'bg-purple-600/90 text-purple-100 border border-purple-400/60'
+                : 'bg-amber-600/90 text-amber-100 border border-amber-400/60'
+            }`}>
+              Active Network: {diagState.network === 'SANDBOX' ? 'TESTNET' : 'MAINNET'} (sandbox={diagState.sandbox ? 'true' : 'false'})
+            </span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-3 text-xs">
+          <div className="space-y-1 bg-slate-950/60 p-3 rounded-xl border border-purple-900/40">
+            <span className="text-slate-400 block font-medium">Configured Network</span>
+            <span className="font-mono text-purple-300 font-bold">{diagState.configuredNetwork === 'SANDBOX' ? 'TESTNET' : 'MAINNET'}</span>
+            <div className="text-[11px] text-slate-400 pt-0.5">
+              effectiveSandbox: <strong className={diagState.effectiveSandbox ? 'text-purple-300' : 'text-amber-400'}>{String(diagState.effectiveSandbox)}</strong>
+            </div>
+          </div>
+
+          <div className="space-y-1 bg-slate-950/60 p-3 rounded-xl border border-purple-900/40">
+            <span className="text-slate-400 block font-medium">Environment Source</span>
+            <span className="font-mono text-purple-300 font-bold truncate block">{diagState.environmentSource || envDetails?.source || 'DEFAULT_FALLBACK'}</span>
+            <p className="text-[11px] text-slate-400 pt-0.5">
+              Domain <code className="text-slate-300">iddsnn.com</code> is decoupled from network resolution.
+            </p>
+          </div>
+
+          <div className="space-y-1 bg-slate-950/60 p-3 rounded-xl border border-purple-900/40">
+            <span className="text-slate-400 block font-medium">SDK Init Parameters</span>
+            <div className="font-mono text-[11px] text-slate-300 space-y-0.5">
+              <div>version: <strong className="text-emerald-400">"2.0"</strong></div>
+              <div>sandbox: <strong className={diagState.sandbox ? 'text-purple-300' : 'text-amber-400'}>{String(diagState.sandbox)}</strong></div>
+            </div>
+          </div>
+
+          <div className="flex flex-col justify-between bg-slate-950/60 p-3 rounded-xl border border-purple-900/40">
+            <span className="text-slate-400 block font-medium">Environment Controls</span>
+            <div className="flex items-center gap-2 pt-1">
+              <button
+                id="pi-diag-switch-network-btn"
+                onClick={handleToggleSandbox}
+                className="flex-1 py-1.5 px-2 bg-purple-700 hover:bg-purple-600 text-white rounded text-[11px] font-semibold transition"
+              >
+                Switch to {diagState.sandbox ? 'Mainnet' : 'Sandbox (Testnet)'}
+              </button>
+              {envDetails?.source === 'LOCAL_STORAGE_OVERRIDE' && (
+                <button
+                  id="pi-diag-clear-override-btn"
+                  onClick={handleClearOverride}
+                  title="Clear Local Storage Override"
+                  className="py-1.5 px-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-[11px] border border-slate-700 transition"
+                >
+                  Reset
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {diagState.conflictWarning && (
+          <div className="mt-3 p-2.5 bg-amber-500/20 border border-amber-500/50 rounded-xl text-amber-200 text-xs flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+            <span>{diagState.conflictWarning}</span>
+          </div>
         )}
       </div>
 
