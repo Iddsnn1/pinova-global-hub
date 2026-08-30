@@ -18,7 +18,8 @@ import {
 import {
   createPiPayment,
   resetPiAuthState,
-  authenticatePiUser
+  authenticatePiUser,
+  isPaymentScopeReady
 } from '../../lib/piSdk';
 import {
   bookFlightTicket,
@@ -387,7 +388,7 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
     setErrorMessage(null);
     setFlowState('authenticating');
     setPaymentStatusText(
-      'Authenticating with Pi Browser...'
+      'Connecting to Pi Browser Wallet…'
     );
 
     try {
@@ -408,13 +409,11 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
 
       /*
        * Authentication succeeded.
-       *
-       * Return to payment screen instead of pretending that
-       * payment has already been created.
+       * Return to payment screen with passenger details and flight selection preserved.
        */
       setFlowState('payment');
       setPaymentStatusText(
-        'Pi Browser authenticated. Ready to continue payment.'
+        'Pi Wallet authenticated. Ready to proceed with payment.'
       );
     } catch (err: any) {
       console.error(
@@ -427,7 +426,7 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
       setErrorMessage(
         getErrorMessage(
           err,
-          'Pi Browser did not respond to authentication. Please retry Pi Authentication.'
+          'Pi Browser did not complete wallet authentication. Please retry Pi Authentication.'
         )
       );
     }
@@ -464,9 +463,32 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
     }
 
     setErrorMessage(null);
+
+    // Step A: Explicitly ensure Pi authentication before payment creation
+    if (!isPaymentScopeReady()) {
+      setFlowState('authenticating');
+      setPaymentStatusText('Connecting to Pi Browser Wallet…');
+
+      try {
+        await authenticatePiUser();
+        setPaymentStatusText('Authentication successful. Preparing Pi payment…');
+        await new Promise((r) => setTimeout(r, 350));
+      } catch (authErr: any) {
+        console.error('[Pi Lifecycle] AUTH_CHECKOUT_FAILED', authErr);
+        setFlowState('auth_failed');
+        setErrorMessage(
+          getErrorMessage(
+            authErr,
+            'Pi Browser did not complete wallet authentication. Please retry Pi Authentication.'
+          )
+        );
+        return;
+      }
+    }
+
     setFlowState('creating_payment');
     setPaymentStatusText(
-      'Connecting Pi Network Wallet...'
+      'Waiting for Pi Wallet authorization…'
     );
 
     const passengerDetails =
@@ -1530,7 +1552,7 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
               <h4 className="text-base font-black text-white">
                 {flowState ===
                 'authenticating'
-                  ? 'Authenticating with Pi Browser'
+                  ? 'Authenticating with Pi Network'
                   : flowState ===
                       'creating_payment'
                     ? 'Processing Pi Payment'
@@ -1595,25 +1617,38 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
               </div>
 
               <h4 className="text-lg font-black text-white mt-4">
-                Pi Browser Authentication Required
+                Pi Authentication Required
               </h4>
 
               <p className="text-xs text-slate-400 mt-2 max-w-md mx-auto">
-                PiNova could not authenticate your Pi account. Please retry authentication inside Pi Browser before continuing payment.
+                Pi Browser did not complete wallet authentication.
               </p>
 
-              <button
-                id="flight-auth-failed-retry-btn"
-                type="button"
-                onClick={
-                  handleRetryAuth
-                }
-                disabled={isProcessing}
-                className="mt-5 px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl flex items-center gap-2 mx-auto disabled:opacity-50"
-              >
-                <RefreshCw className="w-4 h-4" />
-                Retry Pi Authentication
-              </button>
+              <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 max-w-md mx-auto mt-3 text-[11px] text-slate-400">
+                Your flight selection and passenger details are saved. No Pi payment was completed and no flight booking was created.
+              </div>
+
+              <div className="mt-5 flex items-center justify-center gap-3">
+                <button
+                  id="flight-auth-failed-return-btn"
+                  type="button"
+                  onClick={() => setFlowState('payment')}
+                  disabled={isProcessing}
+                  className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl disabled:opacity-50"
+                >
+                  Return to Payment
+                </button>
+                <button
+                  id="flight-auth-failed-retry-btn"
+                  type="button"
+                  onClick={handleRetryAuth}
+                  disabled={isProcessing}
+                  className="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl flex items-center gap-2 disabled:opacity-50"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  Retry Pi Authentication
+                </button>
+              </div>
 
             </div>
           )}
