@@ -22,6 +22,9 @@ declare global {
     };
     __PI_DIAGNOSTICS__?: PiSdkDiagnosticState;
     __PI_SDK_MANAGER__?: any;
+    PiNative?: any;
+    __PI_NATIVE__?: any;
+    ReactNativeWebView?: any;
   }
 }
 
@@ -92,7 +95,16 @@ export type PiAuthState =
   | 'AUTHENTICATED'
   | 'TIMEOUT'
   | 'REJECTED'
-  | 'FAILED';
+  | 'FAILED'
+  | 'AUTH_NOT_STARTED'
+  | 'AUTH_CALL_STARTED'
+  | 'AUTH_PROMISE_RETURNED'
+  | 'AUTH_NATIVE_PENDING'
+  | 'AUTH_TIMEOUT'
+  | 'AUTH_DENIED'
+  | 'AUTH_ERROR'
+  | 'AUTH_SUCCESS'
+  | 'PI_AUTHENTICATE_UNAVAILABLE';
 
 export type PiAuthErrorType =
   | 'AUTH_BRIDGE_TIMEOUT'
@@ -111,6 +123,24 @@ export type PiDiagnosticCategory =
   | 'CATEGORY_F_PAYMENT_CREATION_FAILED'
   | 'CATEGORY_G_PAYMENT_APPROVAL_FAILED'
   | 'CATEGORY_H_PAYMENT_COMPLETION_FAILED';
+
+export interface PiRuntimePreflightResult {
+  hasPiSdk: boolean;
+  hasAuthenticate: boolean;
+  hasCreatePayment: boolean;
+  hasNativeBridge: boolean;
+  isPiUserAgent: boolean;
+  isPiBrowser: boolean;
+  isRegisteredProductionDomain: boolean;
+  isOfficialDomain: boolean;
+  currentOrigin: string;
+  expectedProductionOrigin: string;
+  originMatches: boolean;
+  initialized: boolean;
+  canAttemptAuth: boolean;
+  failReason?: string;
+  category?: PiDiagnosticCategory;
+}
 
 export interface PiSdkDiagnosticState {
   sdkScriptState: 'loaded' | 'not_loaded';
@@ -140,6 +170,12 @@ export interface PiSdkDiagnosticState {
   username: string | null;
   error: string | null;
   isPiBrowser: boolean;
+  hasPiSdk: boolean;
+  hasNativeBridge: boolean;
+  isPiUserAgent: boolean;
+  isOfficialDomain: boolean;
+  originMatches: boolean;
+  isRegisteredProductionDomain: boolean;
   currentPaymentStage?: PiPaymentStage;
   lastErrorCode?: string | null;
   configuredAppUrl?: string;
@@ -281,53 +317,116 @@ export function isSandboxMode(): boolean {
   return false;
 }
 
+/**
+ * Reliable runtime classification using actual browser & native bridge signals.
+ * CRITICAL: The domain 'iddsnn.com', 'window.Pi', or Vercel URLs MUST NOT independently
+ * classify a browser as Pi Browser.
+ */
 export function isPiBrowser(): boolean {
   if (typeof window === 'undefined') return false;
   const userAgent = navigator.userAgent || '';
-  const isPiUa = /PiBrowser|Pi Network|minepi/i.test(userAgent);
+  const isPiUa = /PiBrowser|minepi/i.test(userAgent);
   const hasPiNative = Boolean(
     (window as any).PiNative ||
     (window as any).__PI_NATIVE__ ||
     (window as any).ReactNativeWebView ||
-    (window as any).webkit?.messageHandlers?.piBrowser ||
-    (window as any).webkit?.messageHandlers
+    (window as any).webkit?.messageHandlers?.piBrowser
   );
   const hasUrlParam = typeof window.location !== 'undefined' && /pi_browser=1|pi_browser=true|env=pi/i.test(window.location.search);
-  
+
   let isEmbeddedInPiApp = false;
   try {
     if (window.self !== window.top) {
       const ref = document.referrer || '';
-      if (/minepi\.com|pinetwork/i.test(ref) || !ref) {
+      if (/minepi\.com|pinetwork/i.test(ref)) {
         isEmbeddedInPiApp = true;
       }
     }
   } catch {
-    isEmbeddedInPiApp = true;
+    // Cross-origin restriction; do not falsely assume true
   }
 
-  const hostname = window.location.hostname || '';
-  const isRegisteredProductionDomain = hostname === 'iddsnn.com' || hostname.endsWith('.iddsnn.com');
-  const hasPiGlobal = Boolean((window as any).Pi);
-
-  return isPiUa || hasPiNative || hasUrlParam || isEmbeddedInPiApp || isRegisteredProductionDomain || hasPiGlobal;
+  return isPiUa || hasPiNative || hasUrlParam || isEmbeddedInPiApp;
 }
 
+/**
+ * Helper to detect standard external desktop / non-Pi mobile browsers
+ */
 export function isExternalBrowserNonPi(): boolean {
   if (typeof window === 'undefined') return false;
   const userAgent = navigator.userAgent || '';
-  const isDesktopBrowser =
-    /Chrome|Safari|Firefox|Edge/i.test(userAgent) &&
-    !/Mobile|Android|iPhone|iPad|PiBrowser|minepi/i.test(userAgent);
-  const hasNoPiBridge =
-    !(window as any).Pi &&
-    !(window as any).ReactNativeWebView &&
-    !(window as any).webkit?.messageHandlers &&
-    !(window as any).PiNative;
-  const isNotIddsnn = window.location.hostname !== 'iddsnn.com' && !window.location.hostname.endsWith('.iddsnn.com');
-  const noUrlParam = !/pi_browser=1|pi_browser=true|env=pi/i.test(window.location.search);
+  const inPi = isPiBrowser();
+  const hasBridge = Boolean(
+    (window as any).PiNative ||
+    (window as any).__PI_NATIVE__ ||
+    (window as any).ReactNativeWebView ||
+    (window as any).webkit?.messageHandlers?.piBrowser
+  );
+  const isStandardBrowser = /Chrome|Safari|Firefox|Edge/i.test(userAgent) && !/PiBrowser|minepi/i.test(userAgent);
 
-  return isDesktopBrowser && hasNoPiBridge && isNotIddsnn && noUrlParam;
+  return !inPi && !hasBridge && isStandardBrowser;
+}
+
+/**
+ * Pi Runtime Preflight: Lightweight diagnostic inspection performed before calling authenticate()
+ */
+export function getPiRuntimePreflight(): PiRuntimePreflightResult {
+  const hasPiSdk = typeof window !== 'undefined' && Boolean(window.Pi);
+  const hasAuthenticate = hasPiSdk && typeof window.Pi?.authenticate === 'function';
+  const hasCreatePayment = hasPiSdk && typeof window.Pi?.createPayment === 'function';
+  const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent || '' : '';
+  const isPiUserAgent = /PiBrowser|minepi/i.test(userAgent);
+  const hasNativeBridge = typeof window !== 'undefined' && Boolean(
+    (window as any).PiNative ||
+    (window as any).__PI_NATIVE__ ||
+    (window as any).ReactNativeWebView ||
+    (window as any).webkit?.messageHandlers?.piBrowser
+  );
+  const inPiBrowser = isPiBrowser();
+  const domainInfo = getDomainDiagnosticInfo();
+  const isRegisteredProductionDomain = domainInfo.matchesExpectedDomain;
+  const isOfficialDomain = domainInfo.matchesExpectedDomain;
+  const currentOrigin = domainInfo.currentOrigin;
+  const expectedProductionOrigin = domainInfo.expectedProductionOrigin;
+  const originMatches = currentOrigin === expectedProductionOrigin || domainInfo.classification === 'OFFICIAL_REGISTERED_DOMAIN';
+  const isExternal = isExternalBrowserNonPi();
+
+  let canAttemptAuth = true;
+  let failReason: string | undefined;
+  let category: PiDiagnosticCategory | undefined;
+
+  if (isExternal || (!inPiBrowser && !hasNativeBridge && !isPiUserAgent)) {
+    canAttemptAuth = false;
+    failReason = 'Please open PiNova Global Hub in the official Pi Browser to authenticate and pay with Pi.';
+    category = 'CATEGORY_C_BROWSER_BRIDGE_UNAVAILABLE';
+  } else if (!hasPiSdk) {
+    // SDK script may not be loaded yet
+    canAttemptAuth = false;
+    failReason = 'Pi SDK script is not available in window.Pi.';
+    category = 'CATEGORY_A_SDK_MISSING';
+  } else if (!hasAuthenticate) {
+    canAttemptAuth = false;
+    failReason = 'Pi.authenticate method is unavailable on window.Pi.';
+    category = 'CATEGORY_B_SDK_NOT_INITIALIZED';
+  }
+
+  return {
+    hasPiSdk,
+    hasAuthenticate,
+    hasCreatePayment,
+    hasNativeBridge,
+    isPiUserAgent,
+    isPiBrowser: inPiBrowser,
+    isRegisteredProductionDomain,
+    isOfficialDomain,
+    currentOrigin,
+    expectedProductionOrigin,
+    originMatches,
+    initialized: hasPiSdk && PiSdkManager.isReady(),
+    canAttemptAuth,
+    failReason,
+    category
+  };
 }
 
 /**
@@ -356,7 +455,7 @@ class PiSdkManagerService {
   private configuredAppUrl = 'https://iddsnn.com';
   private readonly expectedProductionOrigin = 'https://iddsnn.com';
 
-  // Singleton Promises & Locks
+  // Singleton Promises & Concurrency Locks
   private piInitPromise: Promise<boolean> | null = null;
   private piAuthPromise: Promise<PiUser> | null = null;
   private activePaymentId: string | null = null;
@@ -413,17 +512,33 @@ class PiSdkManagerService {
     }
     const isSandbox = isSandboxMode();
     const isSdkReady = this.sdkInitialized && hasPi;
+    const inPi = isPiBrowser();
+    const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent || '' : '';
+    const isPiUa = /PiBrowser|minepi/i.test(userAgent);
+    const hasBridge = typeof window !== 'undefined' && Boolean(
+      (window as any).PiNative ||
+      (window as any).__PI_NATIVE__ ||
+      (window as any).ReactNativeWebView ||
+      (window as any).webkit?.messageHandlers?.piBrowser
+    );
 
     const authStateSummary: 'success' | 'pending' | 'failed' =
       this.authenticated && this.authenticatedUser
         ? 'success'
         : this.authLifecycleState === 'AUTHENTICATING' ||
           this.authLifecycleState === 'INITIALIZING' ||
+          this.authLifecycleState === 'AUTH_CALL_STARTED' ||
+          this.authLifecycleState === 'AUTH_PROMISE_RETURNED' ||
+          this.authLifecycleState === 'AUTH_NATIVE_PENDING' ||
           Boolean(this.piAuthPromise)
         ? 'pending'
         : this.authLifecycleState === 'REJECTED' ||
           this.authLifecycleState === 'FAILED' ||
-          this.authLifecycleState === 'TIMEOUT'
+          this.authLifecycleState === 'TIMEOUT' ||
+          this.authLifecycleState === 'AUTH_TIMEOUT' ||
+          this.authLifecycleState === 'AUTH_DENIED' ||
+          this.authLifecycleState === 'AUTH_ERROR' ||
+          this.authLifecycleState === 'PI_AUTHENTICATE_UNAVAILABLE'
         ? 'failed'
         : 'pending';
 
@@ -437,7 +552,7 @@ class PiSdkManagerService {
       activeAuthRequest: Boolean(this.piAuthPromise),
       hasActiveAuthPromise: Boolean(this.piAuthPromise),
       nativeBridgeState: this.nativeBridgeState,
-      piEnvDetected: isPiBrowser(),
+      piEnvDetected: inPi,
       productionOrigin: currentOrigin,
       sandbox: isSandbox,
       sdkReadyState: isSdkReady ? 'ready' : 'not_ready',
@@ -454,7 +569,13 @@ class PiSdkManagerService {
       userState: this.authenticated && this.authenticatedUser ? 'authenticated' : 'not_authenticated',
       username: this.authenticatedUser?.username || null,
       error: this.authenticationError,
-      isPiBrowser: isPiBrowser(),
+      isPiBrowser: inPi,
+      hasPiSdk: hasPi,
+      hasNativeBridge: hasBridge,
+      isPiUserAgent: isPiUa,
+      isOfficialDomain: domainInfo.matchesExpectedDomain,
+      originMatches: domainInfo.matchesExpectedDomain || domainInfo.classification === 'OFFICIAL_REGISTERED_DOMAIN',
+      isRegisteredProductionDomain: domainInfo.matchesExpectedDomain,
       currentPaymentStage: this.currentPaymentStage,
       lastErrorCode: this.lastErrorCode,
       configuredAppUrl: this.configuredAppUrl,
@@ -610,7 +731,7 @@ class PiSdkManagerService {
   }
 
   /**
-   * Initialize Pi SDK exactly once per session with Hard Timeout
+   * Initialize Pi SDK exactly once per session
    */
   public async initialize(sandbox: boolean = isSandboxMode()): Promise<boolean> {
     if (this.sdkInitialized && typeof window !== 'undefined' && window.Pi) {
@@ -631,7 +752,7 @@ class PiSdkManagerService {
       `[Pi SDK] PI_OBJECT_AVAILABLE available=${hasPiObj} hasInit=${typeof window !== 'undefined' && typeof window.Pi?.init === 'function'} hasAuth=${typeof window !== 'undefined' && typeof window.Pi?.authenticate === 'function'} hasCreatePayment=${typeof window !== 'undefined' && typeof window.Pi?.createPayment === 'function'}`
     );
     logPiTrace(
-      `[Pi SDK] BROWSER_CONTEXT isPiBrowser=${inPi} originClassification=${ctx.domainInfo.classification} userAgent=${typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown'}`
+      `[Pi SDK] BROWSER_CONTEXT isPiBrowser=${inPi} originClassification=${ctx.domainInfo.classification} isRegisteredDomain=${ctx.domainInfo.matchesExpectedDomain} userAgent=${typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown'}`
     );
     logPiTrace(
       `[Pi SDK] INIT_START reqId=${reqId} sandbox=${sandbox} initialOrigin=${ctx.origin} targetOrigin=${this.expectedProductionOrigin}`
@@ -719,10 +840,10 @@ class PiSdkManagerService {
   }
 
   /**
-   * Authenticate Pi User with Hard Diagnostic Timeout (25s) and Strict Categories A-H
+   * Authenticate Pi User with Minimal Scopes ('username', 'payments'), Runtime Preflight & Hard Diagnostic Timeout (25s)
    */
   public async authenticate(
-    scopes: string[] = ['username', 'payments', 'wallet_address'],
+    scopes: string[] = ['username', 'payments'],
     onIncompletePaymentFound?: (payment: PiPayment) => void,
     forceReauth: boolean = false
   ): Promise<PiUser> {
@@ -730,27 +851,18 @@ class PiSdkManagerService {
     const authAttemptId = `auth_${this.authAttemptCount}_${Date.now().toString(36)}`;
     const authStartTime = Date.now();
     this.lastAuthAttemptId = authAttemptId;
-    const inPi = isPiBrowser();
     const domainInfo = getDomainDiagnosticInfo();
 
-    const authContext = {
-      piObjectAvailable: typeof window !== 'undefined' && Boolean(window.Pi),
-      sdkInitialized: this.sdkInitialized,
-      userAgentDetected: typeof navigator !== 'undefined' ? /PiBrowser|Pi Network|minepi/i.test(navigator.userAgent) : false,
-      piBrowserDetected: inPi,
-      currentOrigin: domainInfo.currentOrigin,
-      configuredAppDomain: this.configuredAppUrl,
-      originClassification: domainInfo.classification,
-      nativeBridgeAvailable: typeof window !== 'undefined' && Boolean((window as any).PiNative || (window as any).__PI_NATIVE__ || (window as any).ReactNativeWebView || (window as any).webkit?.messageHandlers || inPi)
-    };
+    // Step 0: Perform lightweight runtime preflight check
+    const preflight = getPiRuntimePreflight();
 
-    logPiTrace(`[Pi SDK] AUTH_CONTEXT ${JSON.stringify(authContext)}`);
+    logPiTrace(`[Pi SDK] AUTH_PREFLIGHT attemptId=${authAttemptId} preflight=${JSON.stringify(preflight)}`);
     logPiTrace(
-      `[Pi SDK] AUTH_START attemptId=${authAttemptId} isPiBrowser=${inPi} forceReauth=${forceReauth} scopes=${JSON.stringify(scopes)}`
+      `[Pi SDK] AUTH_START attemptId=${authAttemptId} isPiBrowser=${preflight.isPiBrowser} isRegisteredDomain=${preflight.isRegisteredProductionDomain} forceReauth=${forceReauth} scopes=${JSON.stringify(scopes)}`
     );
 
-    // Guard: Standard Desktop Chrome / External Browser (Category C)
-    if (isExternalBrowserNonPi()) {
+    // Fail IMMEDIATELY without waiting 25s if browser environment is external or lacks bridge
+    if (!preflight.canAttemptAuth && preflight.category === 'CATEGORY_C_BROWSER_BRIDGE_UNAVAILABLE') {
       this.sdkLoaded = false;
       this.sdkInitialized = false;
       this.authenticated = false;
@@ -761,14 +873,15 @@ class PiSdkManagerService {
       this.diagnosticCategory = 'CATEGORY_C_BROWSER_BRIDGE_UNAVAILABLE';
       this.lastErrorCode = 'CATEGORY_C_BROWSER_BRIDGE_UNAVAILABLE';
       this.authenticationError =
-        'Pi Browser required: You are currently running in an external browser (e.g. Chrome). Native Pi authentication and payments require the official Pi Browser. Please open PiNova in Pi Browser to authenticate and pay with Pi.';
+        'Please open PiNova Global Hub in the official Pi Browser to authenticate and pay with Pi.';
       this.currentPaymentStage = 'FAILED';
-      logPiTrace(`[Pi SDK] AUTH_ERROR attemptId=${authAttemptId} category=CATEGORY_C_BROWSER_BRIDGE_UNAVAILABLE error=NON_PI_BROWSER`, 'warn');
+      this.nativeBridgeState = 'idle';
+      logPiTrace(`[Pi SDK] AUTH_PREFLIGHT_FAIL attemptId=${authAttemptId} category=CATEGORY_C_BROWSER_BRIDGE_UNAVAILABLE`, 'warn');
       this.notifyDiagnosticStateChange();
       throw new Error(this.authenticationError);
     }
 
-    // Reuse existing valid session if not forced
+    // Reuse existing valid session if not forced and payment scope is ready
     if (!forceReauth && this.paymentScopeGranted && this.authenticatedUser && this.authenticated) {
       this.authLifecycleState = 'AUTHENTICATED';
       this.diagnosticCategory = null;
@@ -781,7 +894,7 @@ class PiSdkManagerService {
       this.piAuthPromise = null;
     }
 
-    // Deduplicate in-flight auth promise (prevents double taps & strict-mode double calls)
+    // Deduplicate in-flight auth promise (prevents duplicate Pi.authenticate calls on fast taps)
     if (this.piAuthPromise) {
       logPiTrace(`[Pi SDK] AUTH_DEDUPLICATED attemptId=${authAttemptId} - awaiting active in-flight promise`);
       return this.piAuthPromise;
@@ -793,10 +906,11 @@ class PiSdkManagerService {
       this.diagnosticCategory = null;
       this.authenticationError = null;
       this.currentPaymentStage = 'AUTHENTICATING';
+      this.nativeBridgeState = 'calling_invocation';
       this.notifyDiagnosticStateChange();
 
       try {
-        // Step 1: Ensure SDK initialized
+        // Step 1: Ensure SDK is initialized
         const hasSdk = await this.initialize();
         if (!hasSdk || typeof window === 'undefined' || !window.Pi) {
           this.authLifecycleState = 'FAILED';
@@ -805,6 +919,7 @@ class PiSdkManagerService {
           this.piAuthApiState = 'unavailable';
           this.lastErrorCode = 'CATEGORY_A_SDK_MISSING';
           this.currentPaymentStage = 'FAILED';
+          this.nativeBridgeState = 'idle';
           this.authenticationError = 'Pi SDK missing: The Pi Network JavaScript SDK could not be loaded from sdk.minepi.com. Please check your connection.';
           logPiTrace(`[Pi SDK] AUTH_ERROR attemptId=${authAttemptId} category=CATEGORY_A_SDK_MISSING error=SDK_INIT_FAILED`, 'warn');
           this.notifyDiagnosticStateChange();
@@ -818,6 +933,7 @@ class PiSdkManagerService {
           this.piAuthApiState = 'unavailable';
           this.lastErrorCode = 'CATEGORY_B_SDK_NOT_INITIALIZED';
           this.currentPaymentStage = 'FAILED';
+          this.nativeBridgeState = 'idle';
           this.authenticationError = 'Pi SDK initialization incomplete: Pi.authenticate method is unavailable.';
           logPiTrace(`[Pi SDK] AUTH_ERROR attemptId=${authAttemptId} category=CATEGORY_B_SDK_NOT_INITIALIZED error=AUTHENTICATE_UNAVAILABLE`, 'warn');
           this.notifyDiagnosticStateChange();
@@ -827,7 +943,7 @@ class PiSdkManagerService {
         this.piAuthApiState = 'available';
         this.authenticateInvocation = 'called';
         this.authInvocationCount++;
-        this.nativeBridgeState = 'calling_invocation';
+        this.nativeBridgeState = 'promise_pending';
         this.notifyDiagnosticStateChange();
 
         const handleIncomplete = (payment: PiPayment) => {
@@ -841,17 +957,17 @@ class PiSdkManagerService {
           }
         };
 
-        // Step 2: Invoke window.Pi.authenticate() with canonical scopes and fallback
+        // Step 2: Invoke window.Pi.authenticate() with minimal scopes ['username', 'payments']
         let rawAuthPromise: Promise<any>;
         try {
           rawAuthPromise = window.Pi.authenticate(scopes, handleIncomplete);
           this.nativeBridgeState = 'promise_returned';
           this.notifyDiagnosticStateChange();
         } catch (syncErr: any) {
-          // If wallet_address scope is rejected by an older bridge, fallback to standard scopes
-          if (scopes.includes('wallet_address')) {
+          // If custom scope failed, retry with canonical minimal payment scopes
+          if (scopes.length > 2 || scopes.includes('wallet_address')) {
             try {
-              logPiTrace(`[Pi SDK] Scope fallback to ['username', 'payments'] due to bridge constraint: ${syncErr?.message || syncErr}`);
+              logPiTrace(`[Pi SDK] Scope fallback to ['username', 'payments'] due to bridge rejection: ${syncErr?.message || syncErr}`);
               rawAuthPromise = window.Pi.authenticate(['username', 'payments'], handleIncomplete);
               this.nativeBridgeState = 'promise_returned';
               this.notifyDiagnosticStateChange();
@@ -881,7 +997,7 @@ class PiSdkManagerService {
           }
         }
 
-        // Bounded Safe Timeout (25 seconds) with diagnostic heartbeat
+        // Bounded Safe Timeout (25 seconds) with complete diagnostic preservation
         const AUTH_TIMEOUT_MS = 25000;
         let timeoutHandle: any;
         const timeoutPromise = new Promise((_, reject) => {
@@ -890,7 +1006,7 @@ class PiSdkManagerService {
             const timeoutContext = {
               piObjectAvailable: typeof window !== 'undefined' && Boolean(window.Pi),
               sdkInitialized: this.sdkInitialized,
-              userAgentDetected: typeof navigator !== 'undefined' ? /PiBrowser|Pi Network|minepi/i.test(navigator.userAgent) : false,
+              userAgentDetected: typeof navigator !== 'undefined' ? /PiBrowser|minepi/i.test(navigator.userAgent) : false,
               piBrowserDetected: isPiBrowser(),
               currentOrigin: domainInfo.currentOrigin,
               configuredAppDomain: this.configuredAppUrl,
@@ -899,7 +1015,7 @@ class PiSdkManagerService {
               elapsedMs: elapsed
             };
 
-            const timeoutErr = new Error('Pi Browser did not respond: The native Pi Wallet authentication dialog did not complete within 25 seconds. Please ensure Pi Browser has permissions and tap Retry Pi Authentication.');
+            const timeoutErr = new Error('Pi Browser did not respond to the authentication request. Please ensure PiNova is open in Pi Browser and tap Retry Pi Authentication.');
             (timeoutErr as any).code = 'AUTH_TIMEOUT';
             (timeoutErr as any).diagnosticContext = timeoutContext;
             reject(timeoutErr);
@@ -940,7 +1056,7 @@ class PiSdkManagerService {
           throw new Error('Pi authentication returned incomplete user credentials.');
         }
       } catch (err: any) {
-        if (this.nativeBridgeState !== 'call_blocked') {
+        if ((this.nativeBridgeState as string) !== 'call_blocked') {
           this.nativeBridgeState = 'promise_rejected';
         }
         this.authenticated = false;
@@ -962,13 +1078,14 @@ class PiSdkManagerService {
           rawMsg.toLowerCase().includes('user_cancelled');
         const isUnavailable =
           rawMsg === 'PI_SDK_NOT_AVAILABLE' ||
-          rawMsg.includes('external browser');
+          rawMsg.includes('external browser') ||
+          rawMsg.includes('official Pi Browser');
 
         if (isTimeout) {
           const timeoutContext = err?.diagnosticContext || {
             piObjectAvailable: typeof window !== 'undefined' && Boolean(window.Pi),
             sdkInitialized: this.sdkInitialized,
-            userAgentDetected: typeof navigator !== 'undefined' ? /PiBrowser|Pi Network|minepi/i.test(navigator.userAgent) : false,
+            userAgentDetected: typeof navigator !== 'undefined' ? /PiBrowser|minepi/i.test(navigator.userAgent) : false,
             piBrowserDetected: isPiBrowser(),
             currentOrigin: domainInfo.currentOrigin,
             configuredAppDomain: this.configuredAppUrl,
@@ -982,8 +1099,9 @@ class PiSdkManagerService {
           this.diagnosticCategory = 'CATEGORY_D_AUTH_NO_RESPONSE';
           this.lastErrorCode = 'CATEGORY_D_AUTH_NO_RESPONSE';
           this.currentPaymentStage = 'TIMEOUT';
+          this.nativeBridgeState = 'idle';
           this.authenticationError =
-            'Pi Browser did not respond: The native Pi Wallet authentication dialog did not complete within 25 seconds. Please ensure Pi Browser has permissions and tap Retry Pi Authentication.';
+            'Pi Browser did not respond to the authentication request. Please ensure PiNova is open in Pi Browser and tap Retry Pi Authentication.';
           logPiTrace(`[Pi SDK] AUTH_TIMEOUT attemptId=${authAttemptId} category=CATEGORY_D_AUTH_NO_RESPONSE context=${JSON.stringify(timeoutContext)}`, 'warn');
         } else if (isCancelled) {
           this.authLifecycleState = 'REJECTED';
@@ -991,7 +1109,8 @@ class PiSdkManagerService {
           this.diagnosticCategory = 'CATEGORY_E_AUTH_REJECTED';
           this.lastErrorCode = 'CATEGORY_E_AUTH_REJECTED';
           this.currentPaymentStage = 'CANCELLED';
-          this.authenticationError = 'Pi authentication cancelled: The authentication request was cancelled or dismissed in Pi Browser.';
+          this.nativeBridgeState = 'idle';
+          this.authenticationError = 'Pi authentication was cancelled. Tap Retry Pi Authentication to continue.';
           logPiTrace(`[Pi SDK] AUTH_ERROR attemptId=${authAttemptId} category=CATEGORY_E_AUTH_REJECTED error=USER_CANCELLED`, 'warn');
         } else if (isUnavailable) {
           this.authLifecycleState = 'FAILED';
@@ -999,8 +1118,9 @@ class PiSdkManagerService {
           this.diagnosticCategory = 'CATEGORY_C_BROWSER_BRIDGE_UNAVAILABLE';
           this.lastErrorCode = 'CATEGORY_C_BROWSER_BRIDGE_UNAVAILABLE';
           this.currentPaymentStage = 'FAILED';
+          this.nativeBridgeState = 'idle';
           this.authenticationError =
-            'Pi Browser required: You are currently running in an external browser (e.g. Chrome). Native Pi authentication and payments require the official Pi Browser. Please open PiNova in Pi Browser to authenticate and pay with Pi.';
+            'Please open PiNova Global Hub in the official Pi Browser to authenticate and pay with Pi.';
           logPiTrace(`[Pi SDK] AUTH_ERROR attemptId=${authAttemptId} category=CATEGORY_C_BROWSER_BRIDGE_UNAVAILABLE error=SDK_UNAVAILABLE`, 'warn');
         } else {
           this.authLifecycleState = 'FAILED';
@@ -1008,6 +1128,7 @@ class PiSdkManagerService {
           this.diagnosticCategory = 'CATEGORY_E_AUTH_REJECTED';
           this.lastErrorCode = 'CATEGORY_E_AUTH_REJECTED';
           this.currentPaymentStage = 'FAILED';
+          this.nativeBridgeState = 'idle';
           this.authenticationError = `Pi authentication error: ${rawMsg || 'Bridge rejection occurred'}`;
           logPiTrace(`[Pi SDK] AUTH_ERROR attemptId=${authAttemptId} category=CATEGORY_E_AUTH_REJECTED error=${rawMsg}`, 'warn');
         }
@@ -1015,6 +1136,7 @@ class PiSdkManagerService {
         this.notifyDiagnosticStateChange();
         throw new Error(this.authenticationError);
       } finally {
+        // Guarantee clean Promise and lock disposal
         this.piAuthPromise = null;
         this.notifyDiagnosticStateChange();
       }
@@ -1024,7 +1146,16 @@ class PiSdkManagerService {
   }
 
   /**
-   * Execute Pi Payment with Bridge Response Hard Timeout (25s) and Robust State Machine
+   * Explicit separate authentication flow for features requiring wallet_address scope
+   */
+  public async authenticateWithWalletAddress(
+    onIncompletePaymentFound?: (payment: PiPayment) => void
+  ): Promise<PiUser> {
+    return this.authenticate(['username', 'payments', 'wallet_address'], onIncompletePaymentFound, true);
+  }
+
+  /**
+   * Execute Pi Payment with Bridge Response Hard Timeout (25s), Strict Concurrency Protection & Callbacks
    */
   public executePayment(
     paymentData: PiPaymentData,
@@ -1052,17 +1183,17 @@ class PiSdkManagerService {
     if (!inPi || typeof window === 'undefined' || !window.Pi) {
       this.currentPaymentStage = 'FAILED';
       this.lastErrorCode = 'SDK_NOT_LOADED';
-      this.diagnosticCategory = 'CATEGORY_A_SDK_MISSING';
+      this.diagnosticCategory = 'CATEGORY_C_BROWSER_BRIDGE_UNAVAILABLE';
       this.notifyDiagnosticStateChange();
       updateStatus('Official Pi Browser required');
       logPiTrace(`[Pi SDK] PAYMENT_ERROR reqId=${reqId} error=NON_PI_BROWSER`, 'warn');
-      callbacks.onError(new Error('Pi Network SDK is not available. Please open this app in Pi Browser and try again.'));
+      callbacks.onError(new Error('Please open PiNova Global Hub in the official Pi Browser to authenticate and pay with Pi.'));
       return;
     }
 
     if (this.activePaymentInFlight) {
       logPiTrace(`[Pi SDK] PAYMENT_ERROR reqId=${reqId} error=CONCURRENT_PAYMENT_BLOCKED`, 'warn');
-      callbacks.onError(new Error('A payment authorization request is already active in Pi Browser. Please complete or cancel it first.'));
+      callbacks.onError(new Error('A Pi payment request is already active. Please complete or cancel the current request.'));
       return;
     }
 
@@ -1083,13 +1214,13 @@ class PiSdkManagerService {
 
     const runFlow = async () => {
       try {
-        // Step 1: Ensure initialized and authenticated before createPayment
+        // Step 1: Ensure payment scope is ready (no double authenticate if already granted)
         if (!this.paymentScopeGranted || !this.authenticatedUser || !this.authenticated) {
           this.currentPaymentStage = 'AUTHENTICATING';
           this.notifyDiagnosticStateChange();
           updateStatus('Connecting Pi Network Wallet…');
 
-          await this.authenticate(['username', 'payments', 'wallet_address'], callbacks.onIncompletePaymentFound, false);
+          await this.authenticate(['username', 'payments'], callbacks.onIncompletePaymentFound, false);
 
           if (!this.paymentScopeGranted || !this.authenticatedUser) {
             this.currentPaymentStage = 'FAILED';
@@ -1290,7 +1421,7 @@ class PiSdkManagerService {
       if (params.onStatusUpdate) params.onStatusUpdate('Pi Browser required');
       return {
         success: false,
-        message: 'Pi Network SDK is not available. Please open this app in Pi Browser and try again.',
+        message: 'Please open PiNova Global Hub in the official Pi Browser to authenticate and pay with Pi.',
         errorType: 'AUTH_ERROR'
       };
     }
@@ -1308,7 +1439,8 @@ class PiSdkManagerService {
           onIncompletePaymentFound: params.onIncompletePaymentFound,
 
           onSuccess: async (paymentId, txid) => {
-            // If flight ticket, return success immediately for flight order creation
+            // CRITICAL: For FLIGHT_TICKET, Pi payment verification returns FULFILLMENT_PENDING
+            // until the Duffel/carrier booking has actually been created and confirmed!
             if (params.metadata?.serviceType === 'FLIGHT_TICKET') {
               this.currentPaymentStage = 'COMPLETED';
               this.notifyDiagnosticStateChange();
@@ -1316,8 +1448,8 @@ class PiSdkManagerService {
                 success: true,
                 paymentId,
                 txid,
-                fulfillmentStatus: 'FULFILLED',
-                message: 'Payment verified on Pi ledger.'
+                fulfillmentStatus: 'FULFILLMENT_PENDING',
+                message: 'Pi payment verified on Pi ledger. Ready for flight booking creation.'
               });
               return;
             }
@@ -1457,9 +1589,10 @@ export async function initPiSdk(sandbox?: boolean): Promise<boolean> {
 
 export async function authenticatePiUser(
   onIncompletePaymentFound?: (payment: PiPayment) => void,
-  forceReauth: boolean = false
+  forceReauth: boolean = false,
+  scopes: string[] = ['username', 'payments']
 ): Promise<PiUser> {
-  return PiSdkManager.authenticate(['username', 'payments', 'wallet_address'], onIncompletePaymentFound, forceReauth);
+  return PiSdkManager.authenticate(scopes, onIncompletePaymentFound, forceReauth);
 }
 
 export function resetPiAuthState(): void {
@@ -1508,7 +1641,7 @@ export async function initAndAuthenticateProactively(
     }
 
     await new Promise((r) => setTimeout(r, 600));
-    return await PiSdkManager.authenticate(['username', 'payments', 'wallet_address'], onIncompletePaymentFound, false);
+    return await PiSdkManager.authenticate(['username', 'payments'], onIncompletePaymentFound, false);
   } catch (err: any) {
     console.warn('[Pi SDK] Proactive auth notice:', err?.message || err);
     return null;
@@ -1520,7 +1653,7 @@ export async function ensurePaymentScopeReady(
 ): Promise<boolean> {
   const inPi = isPiBrowser();
   if (!inPi) {
-    throw new Error('Pi Network SDK is not available. Please open this app in Pi Browser and try again.');
+    throw new Error('Please open PiNova Global Hub in the official Pi Browser to authenticate and pay with Pi.');
   }
 
   const ready = await PiSdkManager.initialize();
@@ -1528,7 +1661,7 @@ export async function ensurePaymentScopeReady(
     throw new Error('Pi Network SDK could not be initialized. Please verify the Pi App domain configuration.');
   }
 
-  const user = await PiSdkManager.authenticate(['username', 'payments', 'wallet_address'], onIncompletePaymentFound, false);
+  const user = await PiSdkManager.authenticate(['username', 'payments'], onIncompletePaymentFound, false);
   if (!user) {
     throw new Error('Pi authentication is required before payment. Permissions were not granted.');
   }
