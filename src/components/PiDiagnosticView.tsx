@@ -78,7 +78,7 @@ export const PiDiagnosticView: React.FC<PiDiagnosticViewProps> = ({ onBackToApp 
     setIsInitializing(true);
     logPiTrace('[Pi DIAGNOSTIC UI] Manual trigger: initPiSdk()');
     try {
-      const ok = await initPiSdk(diagState.sandbox);
+      const ok = await initPiSdk();
       logPiTrace(`[Pi DIAGNOSTIC UI] initPiSdk() completed with result=${ok}`);
     } catch (err: any) {
       logPiTrace(`[Pi DIAGNOSTIC UI] initPiSdk() exception: ${err?.message || err}`, 'error');
@@ -202,10 +202,12 @@ export const PiDiagnosticView: React.FC<PiDiagnosticViewProps> = ({ onBackToApp 
           </div>
 
           <div className="space-y-1 bg-slate-950/60 p-3 rounded-xl border border-purple-900/40">
-            <span className="text-slate-400 block font-medium">SDK Init Parameters</span>
+            <span className="text-slate-400 block font-medium">SDK Init Telemetry</span>
             <div className="font-mono text-[11px] text-slate-300 space-y-0.5">
               <div>version: <strong className="text-emerald-400">"2.0"</strong></div>
-              <div>sandbox: <strong className={diagState.sandbox ? 'text-purple-300' : 'text-amber-400'}>{String(diagState.sandbox)}</strong></div>
+              <div>effectiveSandbox: <strong className={diagState.effectiveSandbox ? 'text-purple-300' : 'text-amber-400'}>{String(diagState.effectiveSandbox)}</strong></div>
+              <div>sdkInitSandbox: <strong className={diagState.sdkInitSandbox === null || diagState.sdkInitSandbox === undefined ? 'text-slate-400' : diagState.sdkInitSandbox ? 'text-purple-300' : 'text-amber-400'}>{diagState.sdkInitSandbox === null || diagState.sdkInitSandbox === undefined ? 'not_invoked' : String(diagState.sdkInitSandbox)}</strong></div>
+              <div>initCount: <strong className="text-slate-200">{diagState.sdkInitializationCount ?? 0}</strong></div>
             </div>
           </div>
 

@@ -122,7 +122,8 @@ export type PiDiagnosticCategory =
   | 'CATEGORY_E_AUTH_REJECTED'
   | 'CATEGORY_F_PAYMENT_CREATION_FAILED'
   | 'CATEGORY_G_PAYMENT_APPROVAL_FAILED'
-  | 'CATEGORY_H_PAYMENT_COMPLETION_FAILED';
+  | 'CATEGORY_H_PAYMENT_COMPLETION_FAILED'
+  | 'ENVIRONMENT_CONFIGURATION_INVALID';
 
 export interface PiRuntimePreflightResult {
   hasPiSdk: boolean;
@@ -195,6 +196,9 @@ export interface PiSdkDiagnosticState {
   effectiveSandbox?: boolean;
   environmentSource?: string;
   environmentConsistency?: 'CONSISTENT' | 'INVALID';
+  sdkInitNetwork?: PiNetworkEnvironment | null;
+  sdkInitSandbox?: boolean | null;
+  sdkInitializationCount?: number;
   piAuthenticationState: 'success' | 'pending' | 'failed';
   paymentScopeState: 'granted' | 'not_granted';
   apiConfiguration: 'configured' | 'missing';
@@ -396,12 +400,12 @@ export function getPiEnvironmentDetails(): PiEnvironmentDetails {
   let hasConflict = false;
   let conflictWarning: string | undefined;
 
-  if (rawEnv && rawSandbox) {
-    const envWantsMainnet = rawEnv === 'mainnet';
-    const envWantsSandbox = rawEnv === 'sandbox';
-    const sandboxWantsMainnet = rawSandbox === 'false';
-    const sandboxWantsSandbox = rawSandbox === 'true';
+  const envWantsMainnet = rawEnv === 'mainnet';
+  const envWantsSandbox = rawEnv === 'sandbox' || rawEnv === 'testnet';
+  const sandboxWantsMainnet = rawSandbox === 'false' || rawSandbox === '0';
+  const sandboxWantsSandbox = rawSandbox === 'true' || rawSandbox === '1';
 
+  if (rawEnv && rawSandbox) {
     if ((envWantsMainnet && sandboxWantsSandbox) || (envWantsSandbox && sandboxWantsMainnet)) {
       hasConflict = true;
       conflictWarning = `Conflicting Pi environment variables detected (VITE_PI_ENV="${metaEnv.VITE_PI_ENV}", VITE_PI_SANDBOX="${metaEnv.VITE_PI_SANDBOX}"). Configuration is INVALID and payments are blocked until consistent.`;
@@ -410,7 +414,7 @@ export function getPiEnvironmentDetails(): PiEnvironmentDetails {
 
   const consistency = hasConflict ? 'INVALID' : 'CONSISTENT';
 
-  if (rawEnv === 'mainnet') {
+  if (envWantsMainnet) {
     return {
       network: 'MAINNET',
       sandbox: false,
@@ -426,7 +430,7 @@ export function getPiEnvironmentDetails(): PiEnvironmentDetails {
     };
   }
 
-  if (rawEnv === 'sandbox') {
+  if (envWantsSandbox) {
     return {
       network: 'SANDBOX',
       sandbox: true,
@@ -442,7 +446,7 @@ export function getPiEnvironmentDetails(): PiEnvironmentDetails {
     };
   }
 
-  if (rawSandbox === 'false') {
+  if (sandboxWantsMainnet) {
     return {
       network: 'MAINNET',
       sandbox: false,
@@ -458,7 +462,7 @@ export function getPiEnvironmentDetails(): PiEnvironmentDetails {
     };
   }
 
-  if (rawSandbox === 'true') {
+  if (sandboxWantsSandbox) {
     return {
       network: 'SANDBOX',
       sandbox: true,
@@ -663,6 +667,9 @@ export function getPiRuntimePreflight(): PiRuntimePreflightResult {
 class PiSdkManagerService {
   private sdkLoaded = false;
   private sdkInitialized = false;
+  private sdkInitNetwork: PiNetworkEnvironment | null = null;
+  private sdkInitSandbox: boolean | null = null;
+  private sdkInitializationCount = 0;
   private piInitState: 'success' | 'failed' | 'not_called' | 'initializing' = 'not_called';
   private piAuthApiState: 'available' | 'unavailable' = 'unavailable';
   private authenticateInvocation: 'called' | 'not_called' = 'not_called';
@@ -792,6 +799,9 @@ class PiSdkManagerService {
       effectiveSandbox: envDetails.effectiveSandbox,
       environmentSource: envDetails.environmentSource,
       environmentConsistency: envDetails.environmentConsistency,
+      sdkInitNetwork: this.sdkInitNetwork,
+      sdkInitSandbox: this.sdkInitSandbox,
+      sdkInitializationCount: this.sdkInitializationCount,
       piAuthenticationState: authStateSummary,
       paymentScopeState: this.paymentScopeGranted ? 'granted' : 'not_granted',
       apiConfiguration: this.apiConfigState,
@@ -848,6 +858,16 @@ class PiSdkManagerService {
     this.notifyDiagnosticStateChange();
   }
 
+  public resetInitializationState(): void {
+    this.sdkInitialized = false;
+    this.piInitState = 'not_called';
+    this.piInitPromise = null;
+    this.sdkInitNetwork = null;
+    this.sdkInitSandbox = null;
+    this.resetAuthenticationState();
+    this.notifyDiagnosticStateChange();
+  }
+
   public setCustomSandboxMode(sandbox: boolean) {
     if (typeof window !== 'undefined') {
       try {
@@ -856,9 +876,8 @@ class PiSdkManagerService {
         console.warn('Could not save sandbox override to localStorage', e);
       }
     }
-    this.sdkInitialized = false;
-    this.piInitPromise = null;
-    this.initialize(sandbox);
+    this.resetInitializationState();
+    void this.initialize(sandbox);
   }
 
   public async fetchApiConfiguration(): Promise<'configured' | 'missing'> {
@@ -966,12 +985,37 @@ class PiSdkManagerService {
   }
 
   /**
-   * Initialize Pi SDK exactly once per session
+   * Initialize Pi SDK exactly once per session using authoritative environment configuration
    */
-  public async initialize(sandbox: boolean = isSandboxMode()): Promise<boolean> {
-    if (this.sdkInitialized && typeof window !== 'undefined' && window.Pi) {
+  public async initialize(sandbox?: boolean): Promise<boolean> {
+    const envConfig = getPiNetworkConfig();
+    const resolvedSandbox = typeof sandbox === 'boolean' ? sandbox : envConfig.effectiveSandbox;
+    const resolvedNetwork: PiNetworkEnvironment = resolvedSandbox ? 'SANDBOX' : 'MAINNET';
+
+    // Inconsistent / conflicting environment validation guard
+    if (envConfig.environmentConsistency === 'INVALID' || envConfig.hasConflict) {
+      logPiTrace(
+        `[Pi SDK] INIT_BLOCKED error=ENVIRONMENT_CONFIGURATION_INVALID ${envConfig.conflictWarning || ''}`,
+        'error'
+      );
+      this.piInitState = 'failed';
+      this.diagnosticCategory = 'ENVIRONMENT_CONFIGURATION_INVALID';
+      this.lastErrorCode = 'ENVIRONMENT_CONFIGURATION_INVALID';
+      this.authLifecycleState = 'FAILED';
+      this.notifyDiagnosticStateChange();
+      return false;
+    }
+
+    // If already initialized for the EXACT resolved sandbox mode
+    if (this.sdkInitialized && typeof window !== 'undefined' && window.Pi && this.sdkInitSandbox === resolvedSandbox) {
       this.piInitState = 'success';
       return true;
+    }
+
+    // If SDK was previously initialized for a DIFFERENT network (e.g. toggled in UI), reset first
+    if (this.sdkInitialized && this.sdkInitSandbox !== null && this.sdkInitSandbox !== resolvedSandbox) {
+      logPiTrace(`[Pi SDK] Network environment changed from sandbox=${this.sdkInitSandbox} to sandbox=${resolvedSandbox}. Resetting SDK initialization.`);
+      this.resetInitializationState();
     }
 
     if (this.piInitPromise) {
@@ -983,6 +1027,10 @@ class PiSdkManagerService {
     const hasPiObj = typeof window !== 'undefined' && Boolean(window.Pi);
     const inPi = isPiBrowser();
 
+    this.sdkInitializationCount++;
+    this.sdkInitNetwork = resolvedNetwork;
+    this.sdkInitSandbox = resolvedSandbox;
+
     logPiTrace(
       `[Pi SDK] PI_OBJECT_AVAILABLE available=${hasPiObj} hasInit=${typeof window !== 'undefined' && typeof window.Pi?.init === 'function'} hasAuth=${typeof window !== 'undefined' && typeof window.Pi?.authenticate === 'function'} hasCreatePayment=${typeof window !== 'undefined' && typeof window.Pi?.createPayment === 'function'}`
     );
@@ -990,7 +1038,7 @@ class PiSdkManagerService {
       `[Pi SDK] BROWSER_CONTEXT isPiBrowser=${inPi} originClassification=${ctx.domainInfo.classification} isRegisteredDomain=${ctx.domainInfo.matchesExpectedDomain} userAgent=${typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown'}`
     );
     logPiTrace(
-      `[Pi SDK] INIT_START reqId=${reqId} sandbox=${sandbox} initialOrigin=${ctx.origin} targetOrigin=${this.expectedProductionOrigin}`
+      `[Pi SDK] INIT_START reqId=${reqId} network=${resolvedNetwork} sandbox=${resolvedSandbox} initCount=${this.sdkInitializationCount} initialOrigin=${ctx.origin} targetOrigin=${this.expectedProductionOrigin}`
     );
 
     this.piInitState = 'initializing';
@@ -1010,13 +1058,13 @@ class PiSdkManagerService {
       if (window.Pi) {
         this.sdkLoaded = true;
         try {
-          window.Pi.init({ version: '2.0', sandbox });
+          window.Pi.init({ version: '2.0', sandbox: resolvedSandbox });
           this.sdkInitialized = true;
           this.piInitState = 'success';
           this.diagnosticCategory = null;
           this.lastErrorCode = null;
           this.authLifecycleState = 'IDLE';
-          logPiTrace(`[Pi SDK] INIT_SUCCESS reqId=${reqId} version=2.0 sandbox=${sandbox}`);
+          logPiTrace(`[Pi SDK] INIT_SUCCESS reqId=${reqId} version=2.0 network=${resolvedNetwork} sandbox=${resolvedSandbox}`);
           this.notifyDiagnosticStateChange();
           return true;
         } catch (err: any) {
@@ -1027,7 +1075,7 @@ class PiSdkManagerService {
             this.diagnosticCategory = null;
             this.lastErrorCode = null;
             this.authLifecycleState = 'IDLE';
-            logPiTrace(`[Pi SDK] INIT_SUCCESS reqId=${reqId} (already initialized)`);
+            logPiTrace(`[Pi SDK] INIT_SUCCESS reqId=${reqId} (already initialized) version=2.0 network=${resolvedNetwork} sandbox=${resolvedSandbox}`);
             this.notifyDiagnosticStateChange();
             return true;
           }
