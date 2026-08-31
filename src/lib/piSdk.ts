@@ -120,6 +120,7 @@ export type PiDiagnosticCategory =
   | 'CATEGORY_C_BROWSER_BRIDGE_UNAVAILABLE'
   | 'CATEGORY_D_AUTH_NO_RESPONSE'
   | 'CATEGORY_E_AUTH_REJECTED'
+  | 'CATEGORY_E_AUTH_SCOPE_COMPATIBILITY'
   | 'CATEGORY_F_PAYMENT_CREATION_FAILED'
   | 'CATEGORY_G_PAYMENT_APPROVAL_FAILED'
   | 'CATEGORY_H_PAYMENT_COMPLETION_FAILED'
@@ -185,6 +186,14 @@ export interface PiSdkDiagnosticState {
   activeAuthRequest: boolean;
   hasActiveAuthPromise: boolean;
   nativeBridgeState: NativeBridgeState;
+  authScopesRequested: string[];
+  authInvocationCount: number;
+  authPromiseState: 'idle' | 'pending' | 'resolved' | 'rejected' | 'timed_out';
+  authTimeout: number;
+  authResolutionTimeMs: number | null;
+  authRejectionTimeMs: number | null;
+  standardScopesResult: 'resolved' | 'timed_out' | 'rejected' | null;
+  fullScopesResult: 'resolved' | 'timed_out' | 'rejected' | null;
   piEnvDetected: boolean;
   productionOrigin: string;
   sandbox: boolean;
@@ -677,6 +686,13 @@ class PiSdkManagerService {
   private authAttemptCount = 0;
   private lastAuthAttemptId: string | null = null;
   private nativeBridgeState: NativeBridgeState = 'idle';
+  private authScopesRequested: string[] = ['username', 'payments'];
+  private authPromiseState: 'idle' | 'pending' | 'resolved' | 'rejected' | 'timed_out' = 'idle';
+  private authTimeout = 25000;
+  private authResolutionTimeMs: number | null = null;
+  private authRejectionTimeMs: number | null = null;
+  private standardScopesResult: 'resolved' | 'timed_out' | 'rejected' | null = null;
+  private fullScopesResult: 'resolved' | 'timed_out' | 'rejected' | null = null;
   private authLifecycleState: PiAuthState = 'IDLE';
   private authErrorType: PiAuthErrorType = null;
   private diagnosticCategory: PiDiagnosticCategory | null = null;
@@ -788,6 +804,14 @@ class PiSdkManagerService {
       activeAuthRequest: Boolean(this.piAuthPromise),
       hasActiveAuthPromise: Boolean(this.piAuthPromise),
       nativeBridgeState: this.nativeBridgeState,
+      authScopesRequested: this.authScopesRequested,
+      authInvocationCount: this.authInvocationCount,
+      authPromiseState: this.authPromiseState,
+      authTimeout: this.authTimeout,
+      authResolutionTimeMs: this.authResolutionTimeMs,
+      authRejectionTimeMs: this.authRejectionTimeMs,
+      standardScopesResult: this.standardScopesResult,
+      fullScopesResult: this.fullScopesResult,
       piEnvDetected: inPi,
       productionOrigin: currentOrigin,
       sandbox: isSandbox,
@@ -1112,11 +1136,14 @@ class PiSdkManagerService {
     this.lastAuthAttemptId = `reset_${this.authAttemptCount}_${Date.now().toString(36)}`;
     this.piAuthPromise = null;
     this.authLifecycleState = 'IDLE';
+    this.authPromiseState = 'idle';
     this.authErrorType = null;
     this.diagnosticCategory = null;
     this.nativeBridgeState = 'idle';
     this.authenticationError = null;
     this.lastErrorCode = null;
+    this.authResolutionTimeMs = null;
+    this.authRejectionTimeMs = null;
     this.currentPaymentStage = 'IDLE';
     this.activePaymentInFlight = false;
     this.activePaymentId = null;
@@ -1125,10 +1152,10 @@ class PiSdkManagerService {
   }
 
   /**
-   * Authenticate Pi User with Canonical Scopes, Controlled Fallback, Generation Guard & 25s Diagnostic Timeout
+   * Authenticate Pi User with Canonical Scopes, Scope Diagnostics, Generation Guard & 25s Safe Timeout
    */
   public async authenticate(
-    scopes: string[] = ['username', 'payments', 'wallet_address'],
+    scopes: string[] = ['username', 'payments'],
     onIncompletePaymentFound?: (payment: PiPayment) => void,
     forceReauth: boolean = false
   ): Promise<PiUser> {
@@ -1138,6 +1165,10 @@ class PiSdkManagerService {
     this.lastAuthAttemptId = authAttemptId;
     const attemptId = authAttemptId;
     const domainInfo = getDomainDiagnosticInfo();
+    this.authScopesRequested = [...scopes];
+    this.authPromiseState = 'pending';
+    this.authResolutionTimeMs = null;
+    this.authRejectionTimeMs = null;
 
     // Step 0: Perform lightweight runtime preflight check
     const preflight = getPiRuntimePreflight();
@@ -1154,13 +1185,15 @@ class PiSdkManagerService {
       this.paymentScopeGranted = false;
       this.authenticatedUser = null;
       this.authLifecycleState = 'FAILED';
+      this.authPromiseState = 'rejected';
       this.authErrorType = 'PI_AUTHENTICATE_UNAVAILABLE';
       this.diagnosticCategory = 'CATEGORY_C_BROWSER_BRIDGE_UNAVAILABLE';
       this.lastErrorCode = 'CATEGORY_C_BROWSER_BRIDGE_UNAVAILABLE';
       this.authenticationError = 'Pi Network SDK is unavailable. Please open PiNova in the official Pi Browser.';
       this.currentPaymentStage = 'FAILED';
       this.nativeBridgeState = 'idle';
-      logPiTrace(`[Pi SDK] AUTH_REJECTED attemptId=${attemptId} category=CATEGORY_C_BROWSER_BRIDGE_UNAVAILABLE reason=SDK_UNAVAILABLE`, 'warn');
+      this.authRejectionTimeMs = Date.now() - authStartTime;
+      logPiTrace(`[Pi SDK] AUTH_PROMISE_REJECTED attemptId=${attemptId} category=CATEGORY_C_BROWSER_BRIDGE_UNAVAILABLE reason=SDK_UNAVAILABLE`, 'warn');
       this.notifyDiagnosticStateChange();
       throw new Error(this.authenticationError);
     }
@@ -1168,8 +1201,9 @@ class PiSdkManagerService {
     // Reuse existing valid session if not forced and payment scope is ready
     if (!forceReauth && this.paymentScopeGranted && this.authenticatedUser && this.authenticated) {
       this.authLifecycleState = 'AUTHENTICATED';
+      this.authPromiseState = 'resolved';
       this.diagnosticCategory = null;
-      logPiTrace(`[Pi SDK] AUTH_RESPONSE_SUCCESS attemptId=${attemptId} username=${this.authenticatedUser.username} uid=${this.authenticatedUser.uid} (session_cached)`);
+      logPiTrace(`[Pi SDK] AUTH_PROMISE_RESOLVED attemptId=${attemptId} username=${this.authenticatedUser.username} uid=${this.authenticatedUser.uid} (session_cached)`);
       this.notifyDiagnosticStateChange();
       return this.authenticatedUser;
     }
@@ -1186,6 +1220,7 @@ class PiSdkManagerService {
 
     this.piAuthPromise = (async () => {
       this.authLifecycleState = 'AUTHENTICATING';
+      this.authPromiseState = 'pending';
       this.authErrorType = null;
       this.diagnosticCategory = null;
       this.authenticationError = null;
@@ -1198,28 +1233,32 @@ class PiSdkManagerService {
         const hasSdk = await this.initialize();
         if (!hasSdk || typeof window === 'undefined' || !window.Pi) {
           this.authLifecycleState = 'FAILED';
+          this.authPromiseState = 'rejected';
           this.authErrorType = 'PI_AUTHENTICATE_UNAVAILABLE';
           this.diagnosticCategory = 'CATEGORY_A_SDK_MISSING';
           this.piAuthApiState = 'unavailable';
           this.lastErrorCode = 'CATEGORY_A_SDK_MISSING';
           this.currentPaymentStage = 'FAILED';
           this.nativeBridgeState = 'idle';
+          this.authRejectionTimeMs = Date.now() - authStartTime;
           this.authenticationError = 'Pi Network SDK is unavailable. Please open PiNova in the official Pi Browser.';
-          logPiTrace(`[Pi SDK] AUTH_REJECTED attemptId=${attemptId} category=CATEGORY_A_SDK_MISSING error=SDK_INIT_FAILED`, 'warn');
+          logPiTrace(`[Pi SDK] AUTH_PROMISE_REJECTED attemptId=${attemptId} category=CATEGORY_A_SDK_MISSING error=SDK_INIT_FAILED`, 'warn');
           this.notifyDiagnosticStateChange();
           throw new Error(this.authenticationError);
         }
 
         if (typeof window.Pi.authenticate !== 'function') {
           this.authLifecycleState = 'FAILED';
+          this.authPromiseState = 'rejected';
           this.authErrorType = 'PI_AUTHENTICATE_UNAVAILABLE';
           this.diagnosticCategory = 'CATEGORY_B_SDK_NOT_INITIALIZED';
           this.piAuthApiState = 'unavailable';
           this.lastErrorCode = 'CATEGORY_B_SDK_NOT_INITIALIZED';
           this.currentPaymentStage = 'FAILED';
           this.nativeBridgeState = 'idle';
+          this.authRejectionTimeMs = Date.now() - authStartTime;
           this.authenticationError = 'Pi Network SDK is unavailable. Please open PiNova in the official Pi Browser.';
-          logPiTrace(`[Pi SDK] AUTH_REJECTED attemptId=${attemptId} category=CATEGORY_B_SDK_NOT_INITIALIZED error=AUTHENTICATE_UNAVAILABLE`, 'warn');
+          logPiTrace(`[Pi SDK] AUTH_PROMISE_REJECTED attemptId=${attemptId} category=CATEGORY_B_SDK_NOT_INITIALIZED error=AUTHENTICATE_UNAVAILABLE`, 'warn');
           this.notifyDiagnosticStateChange();
           throw new Error(this.authenticationError);
         }
@@ -1243,43 +1282,49 @@ class PiSdkManagerService {
           }
         };
 
-        // Step 2: Invoke window.Pi.authenticate() with canonical scopes and controlled 1-time fallback
+        // Step 2: Invoke window.Pi.authenticate() with canonical requested scopes
         let rawAuthPromise: Promise<any>;
         try {
           rawAuthPromise = window.Pi.authenticate(scopes, handleIncomplete);
           this.nativeBridgeState = 'promise_pending';
+          this.authPromiseState = 'pending';
           this.notifyDiagnosticStateChange();
-          logPiTrace(`[Pi SDK] AUTH_BRIDGE_INVOKED attemptId=${attemptId} nativeBridgeState=promise_pending`);
+          logPiTrace(`[Pi SDK] AUTH_BRIDGE_INVOKED attemptId=${attemptId} scopes=${JSON.stringify(scopes)}`);
         } catch (syncErr: any) {
-          // If custom scope failed, retry once with canonical minimal payment scopes
+          // If synchronous rejection occurred on custom/extended scopes, test fallback once
           if (scopes.length > 2 || scopes.includes('wallet_address')) {
             try {
               logPiTrace(`[Pi SDK] Scope fallback to ['username', 'payments'] due to bridge rejection: ${syncErr?.message || syncErr}`);
               rawAuthPromise = window.Pi.authenticate(['username', 'payments'], handleIncomplete);
               this.nativeBridgeState = 'promise_pending';
+              this.authPromiseState = 'pending';
               this.notifyDiagnosticStateChange();
-              logPiTrace(`[Pi SDK] AUTH_BRIDGE_INVOKED attemptId=${attemptId} nativeBridgeState=promise_pending fallback=true`);
+              logPiTrace(`[Pi SDK] AUTH_BRIDGE_INVOKED attemptId=${attemptId} fallback=true scopes=["username","payments"]`);
             } catch (retryErr: any) {
               this.nativeBridgeState = 'call_blocked';
               this.authLifecycleState = 'REJECTED';
+              this.authPromiseState = 'rejected';
               this.authErrorType = 'AUTH_BRIDGE_REJECTED';
               this.diagnosticCategory = 'CATEGORY_E_AUTH_REJECTED';
               this.lastErrorCode = 'CATEGORY_E_AUTH_REJECTED';
               this.currentPaymentStage = 'FAILED';
+              this.authRejectionTimeMs = Date.now() - authStartTime;
               this.authenticationError = 'Pi Browser rejected the authentication request. Please retry Pi authentication.';
-              logPiTrace(`[Pi SDK] AUTH_REJECTED attemptId=${attemptId} category=CATEGORY_E_AUTH_REJECTED syncError=${retryErr?.message || retryErr}`, 'warn');
+              logPiTrace(`[Pi SDK] AUTH_PROMISE_REJECTED attemptId=${attemptId} category=CATEGORY_E_AUTH_REJECTED syncError=${retryErr?.message || retryErr}`, 'warn');
               this.notifyDiagnosticStateChange();
               throw retryErr;
             }
           } else {
             this.nativeBridgeState = 'call_blocked';
             this.authLifecycleState = 'REJECTED';
+            this.authPromiseState = 'rejected';
             this.authErrorType = 'AUTH_BRIDGE_REJECTED';
             this.diagnosticCategory = 'CATEGORY_E_AUTH_REJECTED';
             this.lastErrorCode = 'CATEGORY_E_AUTH_REJECTED';
             this.currentPaymentStage = 'FAILED';
+            this.authRejectionTimeMs = Date.now() - authStartTime;
             this.authenticationError = 'Pi Browser rejected the authentication request. Please retry Pi authentication.';
-            logPiTrace(`[Pi SDK] AUTH_REJECTED attemptId=${attemptId} category=CATEGORY_E_AUTH_REJECTED syncError=${syncErr?.message || syncErr}`, 'warn');
+            logPiTrace(`[Pi SDK] AUTH_PROMISE_REJECTED attemptId=${attemptId} category=CATEGORY_E_AUTH_REJECTED syncError=${syncErr?.message || syncErr}`, 'warn');
             this.notifyDiagnosticStateChange();
             throw syncErr;
           }
@@ -1304,6 +1349,7 @@ class PiSdkManagerService {
               originClassification: domainInfo.classification,
               authenticationStartedAt: new Date(authStartTime).toISOString(),
               elapsedMs: elapsed,
+              scopesRequested: scopes,
               nativeBridgeState: this.nativeBridgeState
             };
 
@@ -1326,7 +1372,16 @@ class PiSdkManagerService {
           return this.authenticatedUser || auth;
         }
 
+        const elapsed = Date.now() - authStartTime;
+        this.authResolutionTimeMs = elapsed;
+        this.authPromiseState = 'resolved';
         this.nativeBridgeState = 'promise_resolved';
+
+        if (scopes.includes('wallet_address')) {
+          this.fullScopesResult = 'resolved';
+        } else {
+          this.standardScopesResult = 'resolved';
+        }
 
         if (auth && auth.user && auth.accessToken && auth.user.uid && auth.user.username) {
           this.authenticated = true;
@@ -1346,13 +1401,14 @@ class PiSdkManagerService {
             role: auth.user.username === 'admin' ? 'admin' : 'buyer'
           };
 
-          logPiTrace(`[Pi SDK] AUTH_RESPONSE_SUCCESS attemptId=${attemptId} username=${auth.user.username} uid=${auth.user.uid} elapsedMs=${Date.now() - authStartTime}`);
+          logPiTrace(`[Pi SDK] AUTH_PROMISE_RESOLVED attemptId=${attemptId} username=${auth.user.username} uid=${auth.user.uid} elapsedMs=${elapsed}`);
           this.notifyDiagnosticStateChange();
           return this.authenticatedUser;
         } else {
           this.authLifecycleState = 'REJECTED';
+          this.authPromiseState = 'rejected';
           this.diagnosticCategory = 'CATEGORY_E_AUTH_REJECTED';
-          logPiTrace(`[Pi SDK] AUTH_REJECTED attemptId=${attemptId} category=CATEGORY_E_AUTH_REJECTED error=MISSING_CREDENTIALS`, 'warn');
+          logPiTrace(`[Pi SDK] AUTH_PROMISE_REJECTED attemptId=${attemptId} category=CATEGORY_E_AUTH_REJECTED error=MISSING_CREDENTIALS`, 'warn');
           throw new Error('Pi Browser rejected the authentication request. Please retry Pi authentication.');
         }
       } catch (err: any) {
@@ -1360,6 +1416,9 @@ class PiSdkManagerService {
           logPiTrace(`[Pi SDK] AUTH_ERROR_IGNORED attemptId=${attemptId} - superseded by ${this.lastAuthAttemptId}`);
           return;
         }
+
+        const elapsed = Date.now() - authStartTime;
+        this.authRejectionTimeMs = elapsed;
 
         if ((this.nativeBridgeState as string) !== 'call_blocked') {
           this.nativeBridgeState = 'promise_rejected';
@@ -1393,38 +1452,66 @@ class PiSdkManagerService {
 
         if (isTimeout) {
           this.authLifecycleState = 'TIMEOUT';
+          this.authPromiseState = 'timed_out';
           this.authErrorType = 'AUTH_BRIDGE_TIMEOUT';
-          this.diagnosticCategory = 'CATEGORY_D_AUTH_NO_RESPONSE';
-          this.lastErrorCode = 'CATEGORY_D_AUTH_NO_RESPONSE';
+
+          if (scopes.includes('wallet_address')) {
+            this.fullScopesResult = 'timed_out';
+          } else {
+            this.standardScopesResult = 'timed_out';
+          }
+
+          // Evaluate Scope Compatibility Diagnostic condition
+          if (this.standardScopesResult === 'resolved' && this.fullScopesResult === 'timed_out') {
+            this.diagnosticCategory = 'CATEGORY_E_AUTH_SCOPE_COMPATIBILITY';
+            this.lastErrorCode = 'CATEGORY_E_AUTH_SCOPE_COMPATIBILITY';
+            this.authenticationError =
+              'Scope compatibility issue: Native bridge timed out on "wallet_address" scope but responded to ["username", "payments"]. Suspected cause: wallet_address scope incompatibility.';
+            logPiTrace(`[Pi SDK] AUTH_SCOPE_COMPATIBILITY_DIAGNOSED attemptId=${attemptId} standardScopes=resolved fullScopes=timed_out`, 'warn');
+          } else {
+            this.diagnosticCategory = 'CATEGORY_D_AUTH_NO_RESPONSE';
+            this.lastErrorCode = 'CATEGORY_D_AUTH_NO_RESPONSE';
+            this.authenticationError =
+              'Pi Browser did not respond to the authentication request within 25 seconds. Please make sure PiNova is open in Pi Browser and tap Retry Pi Authentication.';
+          }
+
           this.currentPaymentStage = 'TIMEOUT';
-          this.authenticationError =
-            'Pi Browser did not respond to the authentication request within 25 seconds. Please make sure PiNova is open in Pi Browser and tap Retry Pi Authentication.';
-          logPiTrace(`[Pi SDK] AUTH_TIMEOUT attemptId=${attemptId} category=CATEGORY_D_AUTH_NO_RESPONSE elapsedMs=${Date.now() - authStartTime} nativeBridgeState=${this.nativeBridgeState}`, 'warn');
+          this.nativeBridgeState = 'idle';
+          logPiTrace(`[Pi SDK] AUTH_TIMEOUT attemptId=${attemptId} category=${this.diagnosticCategory} elapsedMs=${elapsed} nativeBridgeState=idle`, 'warn');
+          logPiTrace(`[Pi SDK] AUTH_PROMISE_REJECTED attemptId=${attemptId} reason=AUTH_TIMEOUT elapsedMs=${elapsed}`, 'warn');
         } else if (isCancelled) {
           this.authLifecycleState = 'REJECTED';
+          this.authPromiseState = 'rejected';
           this.authErrorType = 'AUTH_USER_CANCELLED';
           this.diagnosticCategory = 'CATEGORY_E_AUTH_REJECTED';
           this.lastErrorCode = 'CATEGORY_E_AUTH_REJECTED';
           this.currentPaymentStage = 'CANCELLED';
           this.authenticationError = 'Pi authentication was cancelled. No Pi payment was created.';
-          logPiTrace(`[Pi SDK] AUTH_REJECTED attemptId=${attemptId} category=CATEGORY_E_AUTH_REJECTED reason=USER_CANCELLED`, 'warn');
+          if (scopes.includes('wallet_address')) {
+            this.fullScopesResult = 'rejected';
+          } else {
+            this.standardScopesResult = 'rejected';
+          }
+          logPiTrace(`[Pi SDK] AUTH_PROMISE_REJECTED attemptId=${attemptId} category=CATEGORY_E_AUTH_REJECTED reason=USER_CANCELLED elapsedMs=${elapsed}`, 'warn');
         } else if (isUnavailable) {
           this.authLifecycleState = 'FAILED';
+          this.authPromiseState = 'rejected';
           this.authErrorType = 'PI_AUTHENTICATE_UNAVAILABLE';
           this.diagnosticCategory = 'CATEGORY_C_BROWSER_BRIDGE_UNAVAILABLE';
           this.lastErrorCode = 'CATEGORY_C_BROWSER_BRIDGE_UNAVAILABLE';
           this.currentPaymentStage = 'FAILED';
           this.authenticationError =
             'Pi Network SDK is unavailable. Please open PiNova in the official Pi Browser.';
-          logPiTrace(`[Pi SDK] AUTH_ERROR attemptId=${attemptId} category=CATEGORY_C_BROWSER_BRIDGE_UNAVAILABLE error=SDK_UNAVAILABLE`, 'warn');
+          logPiTrace(`[Pi SDK] AUTH_PROMISE_REJECTED attemptId=${attemptId} category=CATEGORY_C_BROWSER_BRIDGE_UNAVAILABLE error=SDK_UNAVAILABLE elapsedMs=${elapsed}`, 'warn');
         } else {
           this.authLifecycleState = 'FAILED';
+          this.authPromiseState = 'rejected';
           this.authErrorType = 'AUTH_BRIDGE_REJECTED';
           this.diagnosticCategory = 'CATEGORY_E_AUTH_REJECTED';
           this.lastErrorCode = 'CATEGORY_E_AUTH_REJECTED';
           this.currentPaymentStage = 'FAILED';
           this.authenticationError = 'Pi Browser rejected the authentication request. Please retry Pi authentication.';
-          logPiTrace(`[Pi SDK] AUTH_REJECTED attemptId=${attemptId} category=CATEGORY_E_AUTH_REJECTED error=${rawMsg}`, 'warn');
+          logPiTrace(`[Pi SDK] AUTH_PROMISE_REJECTED attemptId=${attemptId} category=CATEGORY_E_AUTH_REJECTED error=${rawMsg} elapsedMs=${elapsed}`, 'warn');
         }
 
         this.notifyDiagnosticStateChange();
@@ -1432,6 +1519,9 @@ class PiSdkManagerService {
       } finally {
         if (this.lastAuthAttemptId === attemptId) {
           this.piAuthPromise = null;
+          if (this.authLifecycleState === 'TIMEOUT') {
+            this.nativeBridgeState = 'idle';
+          }
         }
         this.notifyDiagnosticStateChange();
       }
@@ -1893,11 +1983,29 @@ export async function initPiSdk(sandbox?: boolean): Promise<boolean> {
 }
 
 export async function authenticatePiUser(
-  onIncompletePaymentFound?: (payment: PiPayment) => void,
-  forceReauth: boolean = false,
-  scopes: string[] = ['username', 'payments', 'wallet_address']
+  param1?: string[] | ((payment: PiPayment) => void),
+  param2?: boolean | ((payment: PiPayment) => void),
+  param3?: boolean | string[]
 ): Promise<PiUser> {
-  return PiSdkManager.authenticate(scopes, onIncompletePaymentFound, forceReauth);
+  let scopes: string[] = ['username', 'payments'];
+  let onIncomplete: ((payment: PiPayment) => void) | undefined = undefined;
+  let force = false;
+
+  if (Array.isArray(param1)) {
+    scopes = param1;
+    if (typeof param2 === 'boolean') force = param2;
+    else if (typeof param2 === 'function') onIncomplete = param2;
+    if (typeof param3 === 'boolean') force = param3;
+  } else if (typeof param1 === 'function') {
+    onIncomplete = param1;
+    if (typeof param2 === 'boolean') force = param2;
+    if (Array.isArray(param3)) scopes = param3;
+  } else {
+    if (typeof param2 === 'boolean') force = param2;
+    if (Array.isArray(param3)) scopes = param3;
+  }
+
+  return PiSdkManager.authenticate(scopes, onIncomplete, force);
 }
 
 export function resetPiAuthState(): void {
@@ -1946,7 +2054,7 @@ export async function initAndAuthenticateProactively(
     }
 
     await new Promise((r) => setTimeout(r, 600));
-    return await PiSdkManager.authenticate(['username', 'payments', 'wallet_address'], onIncompletePaymentFound, false);
+    return await PiSdkManager.authenticate(['username', 'payments'], onIncompletePaymentFound, false);
   } catch (err: any) {
     console.warn('[Pi SDK] Proactive auth notice:', err?.message || err);
     return null;
@@ -1966,7 +2074,7 @@ export async function ensurePaymentScopeReady(
     throw new Error('Pi Network SDK could not be initialized. Please verify the Pi App domain configuration.');
   }
 
-  const user = await PiSdkManager.authenticate(['username', 'payments', 'wallet_address'], onIncompletePaymentFound, false);
+  const user = await PiSdkManager.authenticate(['username', 'payments'], onIncompletePaymentFound, false);
   if (!user) {
     throw new Error('Pi authentication is required before payment. Permissions were not granted.');
   }

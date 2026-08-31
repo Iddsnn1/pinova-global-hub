@@ -33,6 +33,26 @@ interface PiDiagnosticViewProps {
   onBackToApp?: () => void;
 }
 
+interface RawSdkTestState {
+  state: 'idle' | 'running' | 'resolved' | 'rejected' | 'timeout';
+  scopesTested: string[] | null;
+  invokedAtIso: string | null;
+  resolvedAtIso: string | null;
+  rejectedAtIso: string | null;
+  elapsedMs: number | null;
+  rawResponseSummary: {
+    hasUser: boolean;
+    username?: string;
+    uid?: string;
+    hasAccessToken: boolean;
+    tokenLength?: number;
+    rawKeys?: string[];
+  } | null;
+  rawErrorMessage: string | null;
+  incompletePaymentDetected: boolean;
+  incompletePaymentId?: string;
+}
+
 const AUTH_STAGES: PiAuthState[] = [
   'IDLE',
   'INITIALIZING',
@@ -60,6 +80,17 @@ export const PiDiagnosticView: React.FC<PiDiagnosticViewProps> = ({ onBackToApp 
   const [isInitializing, setIsInitializing] = useState(false);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [rawTestState, setRawTestState] = useState<RawSdkTestState>({
+    state: 'idle',
+    scopesTested: null,
+    invokedAtIso: null,
+    resolvedAtIso: null,
+    rejectedAtIso: null,
+    elapsedMs: null,
+    rawResponseSummary: null,
+    rawErrorMessage: null,
+    incompletePaymentDetected: false
+  });
 
   useEffect(() => {
     const unsubState = subscribePiSdkState((newState) => {
@@ -87,16 +118,139 @@ export const PiDiagnosticView: React.FC<PiDiagnosticViewProps> = ({ onBackToApp 
     }
   };
 
-  const handleRunAuth = async (force: boolean = false) => {
+  const handleRunAuth = async (scopes?: string[], force: boolean = false) => {
     setIsAuthenticating(true);
-    logPiTrace(`[Pi DIAGNOSTIC UI] Manual trigger: authenticatePiUser(force=${force})`);
+    const scopeLabel = scopes ? JSON.stringify(scopes) : 'standard ["username", "payments"]';
+    logPiTrace(`[Pi DIAGNOSTIC UI] Manual trigger: authenticatePiUser(scopes=${scopeLabel}, force=${force})`);
     try {
-      const user = await authenticatePiUser(undefined, force);
+      const user = await authenticatePiUser(scopes, force);
       logPiTrace(`[Pi DIAGNOSTIC UI] authenticatePiUser() succeeded: username=${user.username}`);
     } catch (err: any) {
       logPiTrace(`[Pi DIAGNOSTIC UI] authenticatePiUser() error: ${err?.message || err}`, 'warn');
     } finally {
       setIsAuthenticating(false);
+    }
+  };
+
+  const handleRunRawSdkTest = async (scopes: string[] = ['username', 'payments']) => {
+    if (typeof window === 'undefined' || !(window as any).Pi) {
+      const now = new Date().toISOString();
+      setRawTestState({
+        state: 'rejected',
+        scopesTested: scopes,
+        invokedAtIso: now,
+        resolvedAtIso: null,
+        rejectedAtIso: now,
+        elapsedMs: 0,
+        rawResponseSummary: null,
+        rawErrorMessage: 'window.Pi object is not available on global scope.',
+        incompletePaymentDetected: false
+      });
+      return;
+    }
+
+    if (typeof (window as any).Pi.authenticate !== 'function') {
+      const now = new Date().toISOString();
+      setRawTestState({
+        state: 'rejected',
+        scopesTested: scopes,
+        invokedAtIso: now,
+        resolvedAtIso: null,
+        rejectedAtIso: now,
+        elapsedMs: 0,
+        rawResponseSummary: null,
+        rawErrorMessage: 'window.Pi.authenticate is not a function.',
+        incompletePaymentDetected: false
+      });
+      return;
+    }
+
+    const startTime = Date.now();
+    const invokedIso = new Date(startTime).toISOString();
+
+    setRawTestState({
+      state: 'running',
+      scopesTested: scopes,
+      invokedAtIso: invokedIso,
+      resolvedAtIso: null,
+      rejectedAtIso: null,
+      elapsedMs: null,
+      rawResponseSummary: null,
+      rawErrorMessage: null,
+      incompletePaymentDetected: false
+    });
+
+    logPiTrace(`[RAW SDK TEST] Direct window.Pi.authenticate() started with scopes=${JSON.stringify(scopes)} (bypassing app manager)`);
+
+    const onIncomplete = (payment: any) => {
+      logPiTrace(`[RAW SDK TEST] onIncompletePaymentFound callback received: paymentId=${payment?.identifier}`);
+      setRawTestState((prev) => ({
+        ...prev,
+        incompletePaymentDetected: true,
+        incompletePaymentId: payment?.identifier
+      }));
+    };
+
+    try {
+      const rawPromise = (window as any).Pi.authenticate(scopes, onIncomplete);
+      
+      let timeoutHandle: any;
+      const timeoutPromise = new Promise((_, reject) => {
+        timeoutHandle = setTimeout(() => {
+          const err = new Error('Raw native window.Pi.authenticate() timed out after 25 seconds.');
+          (err as any).code = 'RAW_AUTH_TIMEOUT';
+          reject(err);
+        }, 25000);
+      });
+
+      const result = await Promise.race([rawPromise, timeoutPromise]).finally(() => {
+        clearTimeout(timeoutHandle);
+      });
+
+      const elapsed = Date.now() - startTime;
+      const resolvedIso = new Date().toISOString();
+
+      const summary = {
+        hasUser: Boolean(result?.user),
+        username: result?.user?.username,
+        uid: result?.user?.uid,
+        hasAccessToken: Boolean(result?.accessToken),
+        tokenLength: result?.accessToken?.length,
+        rawKeys: result && typeof result === 'object' ? Object.keys(result) : []
+      };
+
+      logPiTrace(`[RAW SDK TEST] Direct window.Pi.authenticate() RESOLVED in ${elapsed}ms: username=${summary.username}`);
+
+      setRawTestState({
+        state: 'resolved',
+        scopesTested: scopes,
+        invokedAtIso: invokedIso,
+        resolvedAtIso: resolvedIso,
+        rejectedAtIso: null,
+        elapsedMs: elapsed,
+        rawResponseSummary: summary,
+        rawErrorMessage: null,
+        incompletePaymentDetected: false
+      });
+    } catch (err: any) {
+      const elapsed = Date.now() - startTime;
+      const rejectedIso = new Date().toISOString();
+      const isTimeout = err?.code === 'RAW_AUTH_TIMEOUT' || String(err?.message || '').includes('timed out');
+      const errMsg = err?.message || String(err);
+
+      logPiTrace(`[RAW SDK TEST] Direct window.Pi.authenticate() ${isTimeout ? 'TIMED OUT' : 'REJECTED'} in ${elapsed}ms: ${errMsg}`, 'warn');
+
+      setRawTestState({
+        state: isTimeout ? 'timeout' : 'rejected',
+        scopesTested: scopes,
+        invokedAtIso: invokedIso,
+        resolvedAtIso: null,
+        rejectedAtIso: rejectedIso,
+        elapsedMs: elapsed,
+        rawResponseSummary: null,
+        rawErrorMessage: errMsg,
+        incompletePaymentDetected: false
+      });
     }
   };
 
@@ -378,25 +532,243 @@ export const PiDiagnosticView: React.FC<PiDiagnosticViewProps> = ({ onBackToApp 
             </div>
           </div>
 
-          <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex gap-2">
-            <button
-              id="pi-diag-auth-btn"
-              disabled={isAuthenticating}
-              onClick={() => handleRunAuth(false)}
-              className="flex-1 py-2 px-3 text-xs font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white transition flex items-center justify-center gap-1.5 disabled:opacity-50"
-            >
-              <Play className="w-3.5 h-3.5" />
-              {isAuthenticating ? 'Authenticating...' : 'Step 2: Pi.authenticate()'}
-            </button>
-            <button
-              id="pi-diag-reset-btn"
-              onClick={handleResetState}
-              title="Reset State / Clear Locks"
-              className="py-2 px-3 text-xs font-semibold rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-            </button>
+          <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-col gap-2">
+            <div className="flex gap-2">
+              <button
+                id="pi-diag-auth-btn"
+                disabled={isAuthenticating}
+                onClick={() => handleRunAuth(undefined, true)}
+                className="flex-1 py-2 px-3 text-xs font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white transition flex items-center justify-center gap-1.5 disabled:opacity-50"
+              >
+                <Play className="w-3.5 h-3.5" />
+                {isAuthenticating ? 'Authenticating...' : 'Test Full Scopes'}
+              </button>
+              <button
+                id="pi-diag-auth-minimal-btn"
+                disabled={isAuthenticating}
+                onClick={() => handleRunAuth(['username', 'payments'], true)}
+                className="flex-1 py-2 px-3 text-xs font-semibold rounded-lg bg-teal-600 hover:bg-teal-700 text-white transition flex items-center justify-center gap-1.5 disabled:opacity-50"
+                title="Diagnostic Scope Isolation Test: ['username', 'payments']"
+              >
+                <Play className="w-3.5 h-3.5" />
+                Test Standard Scopes
+              </button>
+              <button
+                id="pi-diag-reset-btn"
+                onClick={handleResetState}
+                title="Reset State / Clear Locks"
+                className="py-2 px-3 text-xs font-semibold rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
+        </div>
+      </div>
+
+      {/* Grid 2: Native Bridge Telemetry & Scope Isolation Inspection */}
+      <div className="bg-slate-900 text-white rounded-2xl p-5 border border-slate-800 shadow-sm">
+        <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-800">
+          <div className="flex items-center gap-2">
+            <KeyRound className="w-5 h-5 text-amber-400" />
+            <span className="font-semibold">Native Bridge & Scope Diagnostic Telemetry</span>
+          </div>
+          <span className={`text-xs px-2 py-0.5 rounded font-mono font-bold ${
+            diagState.diagnosticCategory === 'CATEGORY_E_AUTH_SCOPE_COMPATIBILITY'
+              ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+              : diagState.diagnosticCategory === 'CATEGORY_D_AUTH_NO_RESPONSE'
+              ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+              : diagState.authPromiseState === 'resolved'
+              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+              : 'bg-slate-800 text-slate-300'
+          }`}>
+            {diagState.diagnosticCategory || `BRIDGE_${diagState.nativeBridgeState.toUpperCase()}`}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 text-xs font-mono">
+          <div className="bg-slate-950/70 p-2.5 rounded-xl border border-slate-800">
+            <span className="text-slate-500 block text-[10px] uppercase">Scopes Requested</span>
+            <span className="text-purple-300 font-bold break-all">
+              {JSON.stringify(diagState.authScopesRequested || [])}
+            </span>
+          </div>
+          <div className="bg-slate-950/70 p-2.5 rounded-xl border border-slate-800">
+            <span className="text-slate-500 block text-[10px] uppercase">Invocation Count</span>
+            <span className="text-emerald-400 font-bold text-sm">
+              {diagState.authInvocationCount || 0}
+            </span>
+          </div>
+          <div className="bg-slate-950/70 p-2.5 rounded-xl border border-slate-800">
+            <span className="text-slate-500 block text-[10px] uppercase">Promise State</span>
+            <span className={`font-bold text-sm ${
+              diagState.authPromiseState === 'resolved'
+                ? 'text-emerald-400'
+                : diagState.authPromiseState === 'pending'
+                ? 'text-indigo-400'
+                : diagState.authPromiseState === 'timed_out' || diagState.authPromiseState === 'rejected'
+                ? 'text-rose-400'
+                : 'text-slate-400'
+            }`}>
+              {diagState.authPromiseState || 'idle'}
+            </span>
+          </div>
+          <div className="bg-slate-950/70 p-2.5 rounded-xl border border-slate-800">
+            <span className="text-slate-500 block text-[10px] uppercase">Bridge State</span>
+            <span className="text-cyan-300 font-bold">
+              {diagState.nativeBridgeState || 'idle'}
+            </span>
+          </div>
+          <div className="bg-slate-950/70 p-2.5 rounded-xl border border-slate-800">
+            <span className="text-slate-500 block text-[10px] uppercase">Auth Timeout</span>
+            <span className="text-amber-300 font-bold">
+              {(diagState.authTimeout || 25000) / 1000}s
+            </span>
+          </div>
+          <div className="bg-slate-950/70 p-2.5 rounded-xl border border-slate-800">
+            <span className="text-slate-500 block text-[10px] uppercase">Resolution Time</span>
+            <span className="text-emerald-400 font-bold">
+              {diagState.authResolutionTimeMs !== null ? `${diagState.authResolutionTimeMs}ms` : '—'}
+            </span>
+          </div>
+          <div className="bg-slate-950/70 p-2.5 rounded-xl border border-slate-800">
+            <span className="text-slate-500 block text-[10px] uppercase">Rejection Time</span>
+            <span className="text-rose-400 font-bold">
+              {diagState.authRejectionTimeMs !== null ? `${diagState.authRejectionTimeMs}ms` : '—'}
+            </span>
+          </div>
+        </div>
+
+        <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+          <div className="p-2.5 rounded-xl bg-slate-950/50 border border-slate-800 flex justify-between items-center">
+            <span className="text-slate-400">Standard Scopes <code className="text-purple-300">['username', 'payments']</code>:</span>
+            <span className={`font-mono font-bold px-2 py-0.5 rounded text-[11px] ${
+              diagState.standardScopesResult === 'resolved'
+                ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
+                : diagState.standardScopesResult === 'timed_out'
+                ? 'bg-rose-950 text-rose-300 border border-rose-800'
+                : 'bg-slate-800 text-slate-400'
+            }`}>
+              {diagState.standardScopesResult || 'not_tested'}
+            </span>
+          </div>
+          <div className="p-2.5 rounded-xl bg-slate-950/50 border border-slate-800 flex justify-between items-center">
+            <span className="text-slate-400">Full Scopes <code className="text-purple-300">['username', 'payments', 'wallet_address']</code>:</span>
+            <span className={`font-mono font-bold px-2 py-0.5 rounded text-[11px] ${
+              diagState.fullScopesResult === 'resolved'
+                ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
+                : diagState.fullScopesResult === 'timed_out'
+                ? 'bg-rose-950 text-rose-300 border border-rose-800'
+                : 'bg-slate-800 text-slate-400'
+            }`}>
+              {diagState.fullScopesResult || 'not_tested'}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Grid 2.5: True Raw Native SDK Isolation Test (Direct window.Pi.authenticate Bypass) */}
+      <div className="bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 text-white rounded-2xl p-5 border border-indigo-800/40 shadow-md">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-indigo-900/50">
+          <div className="flex items-center gap-2">
+            <Terminal className="w-5 h-5 text-cyan-400" />
+            <div>
+              <h3 className="font-semibold text-base text-slate-100">True Raw Native SDK Isolation Test</h3>
+              <p className="text-slate-400 text-xs">
+                Directly invokes native <code className="text-cyan-300">window.Pi.authenticate()</code> without application wrappers, locks, or state dependencies.
+              </p>
+            </div>
+          </div>
+          <span className={`px-3 py-1 rounded-full text-xs font-mono font-bold uppercase tracking-wider self-start sm:self-auto ${
+            rawTestState.state === 'resolved'
+              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+              : rawTestState.state === 'running'
+              ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 animate-pulse'
+              : rawTestState.state === 'rejected' || rawTestState.state === 'timeout'
+              ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+              : 'bg-slate-800 text-slate-400'
+          }`}>
+            RAW STATUS: {rawTestState.state.toUpperCase()}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mt-3 text-xs font-mono">
+          <div className="bg-slate-950/80 p-3 rounded-xl border border-indigo-900/30">
+            <span className="text-slate-500 block text-[10px] uppercase">Scopes Tested</span>
+            <span className="text-purple-300 font-bold break-all">
+              {rawTestState.scopesTested ? JSON.stringify(rawTestState.scopesTested) : 'None (idle)'}
+            </span>
+          </div>
+          <div className="bg-slate-950/80 p-3 rounded-xl border border-indigo-900/30">
+            <span className="text-slate-500 block text-[10px] uppercase">Invoked At</span>
+            <span className="text-slate-200 font-bold truncate block">
+              {rawTestState.invokedAtIso ? rawTestState.invokedAtIso.split('T')[1]?.slice(0, 12) : '—'}
+            </span>
+          </div>
+          <div className="bg-slate-950/80 p-3 rounded-xl border border-indigo-900/30">
+            <span className="text-slate-500 block text-[10px] uppercase">Elapsed Duration</span>
+            <span className={`text-sm font-bold ${
+              rawTestState.elapsedMs !== null
+                ? rawTestState.state === 'resolved'
+                  ? 'text-emerald-400'
+                  : 'text-rose-400'
+                : 'text-slate-400'
+            }`}>
+              {rawTestState.elapsedMs !== null ? `${rawTestState.elapsedMs}ms` : '—'}
+            </span>
+          </div>
+          <div className="bg-slate-950/80 p-3 rounded-xl border border-indigo-900/30">
+            <span className="text-slate-500 block text-[10px] uppercase">Incomplete Payment</span>
+            <span className={`font-bold ${rawTestState.incompletePaymentDetected ? 'text-amber-400' : 'text-slate-400'}`}>
+              {rawTestState.incompletePaymentDetected ? `Found: ${rawTestState.incompletePaymentId || 'yes'}` : 'None'}
+            </span>
+          </div>
+        </div>
+
+        {rawTestState.rawResponseSummary && (
+          <div className="mt-3 p-3 bg-slate-950/90 rounded-xl border border-emerald-800/40 text-xs font-mono">
+            <div className="text-emerald-400 font-bold mb-1 flex items-center gap-1.5">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+              Raw Bridge Response Received Successfully:
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-slate-300 text-[11px]">
+              <div>user.username: <strong className="text-emerald-300">@{rawTestState.rawResponseSummary.username || 'present'}</strong></div>
+              <div>user.uid: <strong className="text-emerald-300">{rawTestState.rawResponseSummary.uid ? 'present (valid)' : 'none'}</strong></div>
+              <div>accessToken: <strong className="text-emerald-300">{rawTestState.rawResponseSummary.hasAccessToken ? `present (${rawTestState.rawResponseSummary.tokenLength} chars)` : 'none'}</strong></div>
+              <div>keys: <strong className="text-purple-300">{JSON.stringify(rawTestState.rawResponseSummary.rawKeys || [])}</strong></div>
+            </div>
+          </div>
+        )}
+
+        {rawTestState.rawErrorMessage && (
+          <div className="mt-3 p-3 bg-rose-950/60 rounded-xl border border-rose-800/40 text-xs font-mono text-rose-300">
+            <div className="text-rose-400 font-bold mb-1 flex items-center gap-1.5">
+              <XCircle className="w-4 h-4 text-rose-400" />
+              Raw Bridge Error:
+            </div>
+            <div>{rawTestState.rawErrorMessage}</div>
+          </div>
+        )}
+
+        <div className="mt-3 pt-3 border-t border-indigo-900/40 flex flex-wrap gap-2">
+          <button
+            id="pi-diag-raw-auth-standard-btn"
+            disabled={rawTestState.state === 'running'}
+            onClick={() => handleRunRawSdkTest(['username', 'payments'])}
+            className="flex-1 py-2 px-3 text-xs font-semibold rounded-lg bg-cyan-600 hover:bg-cyan-700 text-white transition flex items-center justify-center gap-1.5 disabled:opacity-50"
+          >
+            <Play className="w-3.5 h-3.5" />
+            {rawTestState.state === 'running' && rawTestState.scopesTested?.length === 2 ? 'Testing Raw Standard...' : 'Run Raw Native Auth (Standard: [username, payments])'}
+          </button>
+          <button
+            id="pi-diag-raw-auth-extended-btn"
+            disabled={rawTestState.state === 'running'}
+            onClick={() => handleRunRawSdkTest(['username', 'payments', 'wallet_address'])}
+            className="flex-1 py-2 px-3 text-xs font-semibold rounded-lg bg-indigo-700 hover:bg-indigo-600 text-white transition flex items-center justify-center gap-1.5 disabled:opacity-50"
+          >
+            <Play className="w-3.5 h-3.5" />
+            {rawTestState.state === 'running' && rawTestState.scopesTested?.length === 3 ? 'Testing Raw Full...' : 'Run Raw Native Auth (Extended: [username, payments, wallet_address])'}
+          </button>
         </div>
       </div>
 
