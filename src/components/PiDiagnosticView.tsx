@@ -566,7 +566,151 @@ export const PiDiagnosticView: React.FC<PiDiagnosticViewProps> = ({ onBackToApp 
         </div>
       </div>
 
-      {/* Grid 2: Native Bridge Telemetry & Scope Isolation Inspection */}
+      {/* Section C & D: 5-Stage Native Bridge Readiness & Passive Bridge Message Inspector */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        {/* 5-Stage Native Bridge Readiness Breakdown */}
+        <div className="bg-slate-900 text-white rounded-2xl p-5 border border-slate-800 shadow-sm flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <Layers className="w-5 h-5 text-cyan-400" />
+                <span className="font-semibold text-sm">5-Stage Native Bridge Readiness Diagnostic</span>
+              </div>
+              <span className="text-[11px] font-mono text-slate-400">Strict Layer Isolation</span>
+            </div>
+
+            <div className="space-y-2 text-xs font-mono">
+              {/* Stage 1: JS SDK Available */}
+              <div className="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800/80 flex items-center justify-between">
+                <div>
+                  <div className="text-slate-300 font-bold">Stage 1: JS SDK Available</div>
+                  <div className="text-slate-500 text-[10px]">window.Pi !== undefined</div>
+                </div>
+                <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${
+                  diagState.bridgeReadinessTelemetry?.jsSdkAvailable
+                    ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
+                    : 'bg-rose-950 text-rose-300 border border-rose-800'
+                }`}>
+                  {diagState.bridgeReadinessTelemetry?.jsSdkAvailable ? 'PASS (AVAILABLE)' : 'FAIL (UNDEFINED)'}
+                </span>
+              </div>
+
+              {/* Stage 2: Pi SDK Initialized */}
+              <div className="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800/80 flex items-center justify-between">
+                <div>
+                  <div className="text-slate-300 font-bold">Stage 2: Pi.init() Executed</div>
+                  <div className="text-slate-500 text-[10px]">version="2.0", sandbox={String(diagState.sandbox)}</div>
+                </div>
+                <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${
+                  diagState.bridgeReadinessTelemetry?.sdkInitialized
+                    ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
+                    : 'bg-amber-950 text-amber-300 border border-amber-800'
+                }`}>
+                  {diagState.bridgeReadinessTelemetry?.sdkInitialized ? 'PASS (INITIALIZED)' : 'NOT_INITIALIZED'}
+                </span>
+              </div>
+
+              {/* Stage 3: Pi Browser Environment Detected */}
+              <div className="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800/80 flex items-center justify-between">
+                <div>
+                  <div className="text-slate-300 font-bold">Stage 3: Pi Browser Environment</div>
+                  <div className="text-slate-500 text-[10px]">User-Agent & Pi WebView signals</div>
+                </div>
+                <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${
+                  diagState.bridgeReadinessTelemetry?.piBrowserDetected
+                    ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
+                    : 'bg-blue-950 text-blue-300 border border-blue-800'
+                }`}>
+                  {diagState.bridgeReadinessTelemetry?.piBrowserDetected ? 'PASS (PI_BROWSER)' : 'STANDARD_BROWSER'}
+                </span>
+              </div>
+
+              {/* Stage 4: Native Bridge Callable */}
+              <div className="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800/80 flex items-center justify-between">
+                <div>
+                  <div className="text-slate-300 font-bold">Stage 4: Bridge Function Callable</div>
+                  <div className="text-slate-500 text-[10px]">typeof window.Pi.authenticate === "function"</div>
+                </div>
+                <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${
+                  diagState.bridgeReadinessTelemetry?.bridgeCallable
+                    ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
+                    : 'bg-rose-950 text-rose-300 border border-rose-800'
+                }`}>
+                  {diagState.bridgeReadinessTelemetry?.bridgeCallable ? 'PASS (CALLABLE)' : 'UNAVAILABLE'}
+                </span>
+              </div>
+
+              {/* Stage 5: Bridge Responding (Resolved/Rejected vs Hung) */}
+              <div className="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800/80 flex items-center justify-between">
+                <div>
+                  <div className="text-slate-300 font-bold">Stage 5: Native Bridge Responsiveness</div>
+                  <div className="text-slate-500 text-[10px]">Promise settlement vs 25s timeout hang</div>
+                </div>
+                <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${
+                  diagState.bridgeReadinessTelemetry?.bridgeResponding === 'responding'
+                    ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
+                    : diagState.bridgeReadinessTelemetry?.bridgeResponding === 'timed_out'
+                    ? 'bg-rose-950 text-rose-300 border border-rose-800'
+                    : diagState.bridgeReadinessTelemetry?.bridgeResponding === 'pending'
+                    ? 'bg-indigo-950 text-indigo-300 border border-indigo-800 animate-pulse'
+                    : 'bg-slate-800 text-slate-400'
+                }`}>
+                  {diagState.bridgeReadinessTelemetry?.bridgeResponding === 'responding'
+                    ? 'RESPONDING (ACTIVE)'
+                    : diagState.bridgeReadinessTelemetry?.bridgeResponding === 'timed_out'
+                    ? 'NO RESPONSE (HUNG)'
+                    : diagState.bridgeReadinessTelemetry?.bridgeResponding === 'pending'
+                    ? 'AWAITING RESPONSE'
+                    : 'UNTESTED'}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-3 pt-3 border-t border-slate-800 text-[11px] text-slate-400">
+            Script Source: <code className="text-slate-300">{diagState.sdkLoadingTelemetry?.scriptSrc || 'https://sdk.minepi.com/pi-sdk.js'}</code> (count: {diagState.sdkLoadingTelemetry?.scriptCount ?? 1}, readyState: {diagState.sdkLoadingTelemetry?.scriptReadyState || 'complete'})
+          </div>
+        </div>
+
+        {/* Passive PostMessage & Bridge Event Inspector */}
+        <div className="bg-slate-900 text-white rounded-2xl p-5 border border-slate-800 shadow-sm flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <Terminal className="w-5 h-5 text-purple-400" />
+                <span className="font-semibold text-sm">Passive PostMessage & Bridge Inspector</span>
+              </div>
+              <span className="text-[11px] font-mono text-purple-300">Sanitized (Zero Secrets)</span>
+            </div>
+
+            <div className="h-56 overflow-y-auto font-mono text-xs space-y-1.5 pr-1">
+              {!diagState.bridgeEvents || diagState.bridgeEvents.length === 0 ? (
+                <div className="text-slate-500 italic py-12 text-center text-xs">
+                  No postMessage bridge events detected yet. Bridge inspection is passively monitoring `window.onmessage`.
+                </div>
+              ) : (
+                diagState.bridgeEvents.map((evt) => (
+                  <div key={evt.id} className="p-2 rounded-lg bg-slate-950/80 border border-slate-800 text-[11px] space-y-0.5">
+                    <div className="flex items-center justify-between text-slate-400">
+                      <span className="text-purple-300 font-bold">[{evt.direction}] {evt.eventType}</span>
+                      <span className="text-slate-500 text-[10px]">{evt.timestamp.split('T')[1]?.slice(0, 8)}</span>
+                    </div>
+                    <div className="text-slate-400 text-[10px] flex justify-between">
+                      <span>origin: <strong className="text-slate-300">{evt.origin}</strong></span>
+                      <span>source: <strong className="text-slate-300">{evt.sourceWindow}</strong></span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          <div className="mt-3 pt-3 border-t border-slate-800 text-[11px] text-slate-400 flex justify-between">
+            <span>Doc Visibility: <strong className="text-slate-200">{diagState.initLifecycleTelemetry?.documentVisibilityState || 'visible'}</strong></span>
+            <span>Lifecycle: <strong className="text-slate-200">{diagState.initLifecycleTelemetry?.pageLifecycleState || 'active'}</strong></span>
+          </div>
+        </div>
+      </div>
       <div className="bg-slate-900 text-white rounded-2xl p-5 border border-slate-800 shadow-sm">
         <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-800">
           <div className="flex items-center gap-2">

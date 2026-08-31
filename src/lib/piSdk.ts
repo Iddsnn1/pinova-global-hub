@@ -176,6 +176,43 @@ export interface PiNetworkConfig {
   environmentSource: string;
 }
 
+export interface PiBridgeEventTelemetry {
+  id: string;
+  timestamp: string;
+  direction: 'INBOUND' | 'OUTBOUND';
+  origin: string;
+  sourceWindow: 'SELF' | 'PARENT' | 'TOP' | 'OTHER';
+  eventType: string;
+  payloadCategory: string;
+  elapsedMs: number;
+}
+
+export interface SdkScriptTelemetry {
+  scriptFound: boolean;
+  scriptSrc: string | null;
+  scriptCount: number;
+  scriptReadyState: string;
+  scriptLoadEventFired: boolean;
+}
+
+export interface InitLifecycleTelemetry {
+  initCount: number;
+  initTimestamp: string | null;
+  initSandbox: boolean | null;
+  initVersion: string;
+  initOrigin: string;
+  documentVisibilityState: string;
+  pageLifecycleState: string;
+}
+
+export interface NativeBridgeReadinessTelemetry {
+  jsSdkAvailable: boolean;
+  sdkInitialized: boolean;
+  piBrowserDetected: boolean;
+  bridgeCallable: boolean;
+  bridgeResponding: 'responding' | 'timed_out' | 'pending' | 'untested';
+}
+
 export interface PiSdkDiagnosticState {
   sdkScriptState: 'loaded' | 'not_loaded';
   piInitState: 'success' | 'failed' | 'not_called' | 'initializing';
@@ -208,6 +245,11 @@ export interface PiSdkDiagnosticState {
   sdkInitNetwork?: PiNetworkEnvironment | null;
   sdkInitSandbox?: boolean | null;
   sdkInitializationCount?: number;
+  sdkInitTimestamp?: string | null;
+  sdkLoadingTelemetry?: SdkScriptTelemetry;
+  initLifecycleTelemetry?: InitLifecycleTelemetry;
+  bridgeReadinessTelemetry?: NativeBridgeReadinessTelemetry;
+  bridgeEvents?: PiBridgeEventTelemetry[];
   piAuthenticationState: 'success' | 'pending' | 'failed';
   paymentScopeState: 'granted' | 'not_granted';
   apiConfiguration: 'configured' | 'missing';
@@ -712,12 +754,154 @@ class PiSdkManagerService {
   private activePaymentId: string | null = null;
   private activePaymentInFlight = false;
 
+  // Forensic Telemetry & Bridge Event Log
+  private sdkInitTimestamp: string | null = null;
+  private scriptLoadEventFired = false;
+  private bridgeEvents: PiBridgeEventTelemetry[] = [];
   private diagnosticListeners: Set<(state: PiSdkDiagnosticState) => void> = new Set();
 
   constructor() {
     if (typeof window !== 'undefined') {
       window.__PI_SDK_MANAGER__ = this;
+
+      if (document.readyState === 'complete') {
+        this.scriptLoadEventFired = true;
+      } else {
+        window.addEventListener(
+          'load',
+          () => {
+            this.scriptLoadEventFired = true;
+            this.notifyDiagnosticStateChange();
+          },
+          { once: true }
+        );
+      }
+
+      window.addEventListener(
+        'message',
+        (event) => {
+          try {
+            const origin = event.origin || 'unknown';
+            let eventType = 'unknown';
+            let payloadCategory = 'non_object';
+            if (typeof event.data === 'string') {
+              try {
+                const parsed = JSON.parse(event.data);
+                eventType = parsed.type || parsed.action || parsed.event || 'json_payload';
+                payloadCategory = 'structured_json';
+              } catch {
+                eventType = event.data.slice(0, 30);
+                payloadCategory = 'plain_string';
+              }
+            } else if (event.data && typeof event.data === 'object') {
+              eventType =
+                event.data.type ||
+                event.data.action ||
+                event.data.event ||
+                (Object.keys(event.data).join(',') || 'empty_obj');
+              payloadCategory = event.data.type ? 'structured_pi_event' : 'generic_obj';
+            }
+
+            const sourceWindow =
+              event.source === window
+                ? 'SELF'
+                : event.source === window.parent
+                ? 'PARENT'
+                : event.source === window.top
+                ? 'TOP'
+                : 'OTHER';
+
+            this.recordBridgeEvent({
+              direction: 'INBOUND',
+              origin,
+              sourceWindow,
+              eventType,
+              payloadCategory
+            });
+          } catch {
+            // Passive inspection error ignored
+          }
+        },
+        { passive: true }
+      );
     }
+  }
+
+  public recordBridgeEvent(event: Omit<PiBridgeEventTelemetry, 'id' | 'timestamp' | 'elapsedMs'>): void {
+    const id = generateReqId('bridge');
+    const timestamp = new Date().toISOString();
+    const entry: PiBridgeEventTelemetry = {
+      ...event,
+      id,
+      timestamp,
+      elapsedMs: Date.now()
+    };
+    this.bridgeEvents.unshift(entry);
+    if (this.bridgeEvents.length > 30) {
+      this.bridgeEvents.pop();
+    }
+    logPiTrace(`[Pi BRIDGE] MESSAGE_RECEIVED origin=${event.origin} source=${event.sourceWindow} type=${event.eventType} category=${event.payloadCategory}`);
+    this.notifyDiagnosticStateChange();
+  }
+
+  public getScriptTelemetry(): SdkScriptTelemetry {
+    if (typeof document === 'undefined') {
+      return {
+        scriptFound: false,
+        scriptSrc: null,
+        scriptCount: 0,
+        scriptReadyState: 'unknown',
+        scriptLoadEventFired: false
+      };
+    }
+    const scripts = Array.from(document.querySelectorAll('script[src*="pi-sdk"]'));
+    const found = scripts.length > 0 || (typeof window !== 'undefined' && Boolean(window.Pi));
+    const src = scripts[0]?.getAttribute('src') || (found ? 'https://sdk.minepi.com/pi-sdk.js' : null);
+    return {
+      scriptFound: found,
+      scriptSrc: src,
+      scriptCount: scripts.length,
+      scriptReadyState: document.readyState,
+      scriptLoadEventFired: this.scriptLoadEventFired || document.readyState === 'complete'
+    };
+  }
+
+  public getInitLifecycleTelemetry(): InitLifecycleTelemetry {
+    const domainInfo = getDomainDiagnosticInfo();
+    return {
+      initCount: this.sdkInitializationCount,
+      initTimestamp: this.sdkInitTimestamp,
+      initSandbox: this.sdkInitSandbox,
+      initVersion: '2.0',
+      initOrigin: domainInfo.currentOrigin,
+      documentVisibilityState: typeof document !== 'undefined' ? document.visibilityState : 'unknown',
+      pageLifecycleState: typeof document !== 'undefined' && document.hidden ? 'hidden' : 'active'
+    };
+  }
+
+  public getBridgeReadinessTelemetry(): NativeBridgeReadinessTelemetry {
+    const hasPi = typeof window !== 'undefined' && Boolean(window.Pi);
+    const initialized = this.sdkInitialized && hasPi;
+    const inPiBrowser = isPiBrowser();
+    const callable = hasPi && typeof window.Pi?.authenticate === 'function';
+    let responding: 'responding' | 'timed_out' | 'pending' | 'untested' = 'untested';
+    if (this.authPromiseState === 'resolved') {
+      responding = 'responding';
+    } else if (this.authPromiseState === 'timed_out') {
+      responding = 'timed_out';
+    } else if (this.authPromiseState === 'pending') {
+      responding = 'pending';
+    } else if (this.authPromiseState === 'rejected') {
+      responding = 'responding';
+    }
+
+    return {
+      jsSdkAvailable: hasPi,
+      sdkInitialized: initialized,
+      piBrowserDetected: inPiBrowser,
+      bridgeCallable: callable,
+      bridgeResponding: responding
+    };
   }
 
   public subscribeDiagnostic(listener: (state: PiSdkDiagnosticState) => void): () => void {
@@ -826,6 +1010,11 @@ class PiSdkManagerService {
       sdkInitNetwork: this.sdkInitNetwork,
       sdkInitSandbox: this.sdkInitSandbox,
       sdkInitializationCount: this.sdkInitializationCount,
+      sdkInitTimestamp: this.sdkInitTimestamp,
+      sdkLoadingTelemetry: this.getScriptTelemetry(),
+      initLifecycleTelemetry: this.getInitLifecycleTelemetry(),
+      bridgeReadinessTelemetry: this.getBridgeReadinessTelemetry(),
+      bridgeEvents: [...this.bridgeEvents],
       piAuthenticationState: authStateSummary,
       paymentScopeState: this.paymentScopeGranted ? 'granted' : 'not_granted',
       apiConfiguration: this.apiConfigState,
@@ -1054,15 +1243,22 @@ class PiSdkManagerService {
     this.sdkInitializationCount++;
     this.sdkInitNetwork = resolvedNetwork;
     this.sdkInitSandbox = resolvedSandbox;
+    this.sdkInitTimestamp = new Date().toISOString();
+
+    const scriptTelem = this.getScriptTelemetry();
+    const lifecycleTelem = this.getInitLifecycleTelemetry();
 
     logPiTrace(
-      `[Pi SDK] PI_OBJECT_AVAILABLE available=${hasPiObj} hasInit=${typeof window !== 'undefined' && typeof window.Pi?.init === 'function'} hasAuth=${typeof window !== 'undefined' && typeof window.Pi?.authenticate === 'function'} hasCreatePayment=${typeof window !== 'undefined' && typeof window.Pi?.createPayment === 'function'}`
+      `[Pi TELEMETRY] SDK_AVAILABLE hasPi=${hasPiObj} hasInit=${typeof window !== 'undefined' && typeof window.Pi?.init === 'function'} hasAuth=${typeof window !== 'undefined' && typeof window.Pi?.authenticate === 'function'} hasCreatePayment=${typeof window !== 'undefined' && typeof window.Pi?.createPayment === 'function'}`
     );
     logPiTrace(
-      `[Pi SDK] BROWSER_CONTEXT isPiBrowser=${inPi} originClassification=${ctx.domainInfo.classification} isRegisteredDomain=${ctx.domainInfo.matchesExpectedDomain} userAgent=${typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown'}`
+      `[Pi SDK] PI_SDK_SCRIPT_FOUND found=${scriptTelem.scriptFound} src=${scriptTelem.scriptSrc || 'none'} count=${scriptTelem.scriptCount} readyState=${scriptTelem.scriptReadyState} loadFired=${scriptTelem.scriptLoadEventFired}`
     );
     logPiTrace(
-      `[Pi SDK] INIT_START reqId=${reqId} network=${resolvedNetwork} sandbox=${resolvedSandbox} initCount=${this.sdkInitializationCount} initialOrigin=${ctx.origin} targetOrigin=${this.expectedProductionOrigin}`
+      `[Pi TELEMETRY] PI_BROWSER_DETECTED isPiBrowser=${inPi} originClassification=${ctx.domainInfo.classification} isRegisteredDomain=${ctx.domainInfo.matchesExpectedDomain} userAgent=${typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown'}`
+    );
+    logPiTrace(
+      `[Pi SDK] INIT_START reqId=${reqId} network=${resolvedNetwork} sandbox=${resolvedSandbox} initCount=${this.sdkInitializationCount} initialOrigin=${ctx.origin} targetOrigin=${this.expectedProductionOrigin} visibility=${lifecycleTelem.documentVisibilityState} lifecycle=${lifecycleTelem.pageLifecycleState}`
     );
 
     this.piInitState = 'initializing';
@@ -1088,7 +1284,7 @@ class PiSdkManagerService {
           this.diagnosticCategory = null;
           this.lastErrorCode = null;
           this.authLifecycleState = 'IDLE';
-          logPiTrace(`[Pi SDK] INIT_SUCCESS reqId=${reqId} version=2.0 network=${resolvedNetwork} sandbox=${resolvedSandbox}`);
+          logPiTrace(`[Pi TELEMETRY] SDK_INITIALIZED reqId=${reqId} version=2.0 network=${resolvedNetwork} sandbox=${resolvedSandbox}`);
           this.notifyDiagnosticStateChange();
           return true;
         } catch (err: any) {
@@ -1099,7 +1295,7 @@ class PiSdkManagerService {
             this.diagnosticCategory = null;
             this.lastErrorCode = null;
             this.authLifecycleState = 'IDLE';
-            logPiTrace(`[Pi SDK] INIT_SUCCESS reqId=${reqId} (already initialized) version=2.0 network=${resolvedNetwork} sandbox=${resolvedSandbox}`);
+            logPiTrace(`[Pi TELEMETRY] SDK_INITIALIZED reqId=${reqId} (already initialized) version=2.0 network=${resolvedNetwork} sandbox=${resolvedSandbox}`);
             this.notifyDiagnosticStateChange();
             return true;
           }
@@ -1289,7 +1485,7 @@ class PiSdkManagerService {
           this.nativeBridgeState = 'promise_pending';
           this.authPromiseState = 'pending';
           this.notifyDiagnosticStateChange();
-          logPiTrace(`[Pi SDK] AUTH_BRIDGE_INVOKED attemptId=${attemptId} scopes=${JSON.stringify(scopes)}`);
+          logPiTrace(`[Pi TELEMETRY] NATIVE_AUTH_CALLED attemptId=${attemptId} scopes=${JSON.stringify(scopes)}`);
         } catch (syncErr: any) {
           // If synchronous rejection occurred on custom/extended scopes, test fallback once
           if (scopes.length > 2 || scopes.includes('wallet_address')) {
@@ -1299,7 +1495,7 @@ class PiSdkManagerService {
               this.nativeBridgeState = 'promise_pending';
               this.authPromiseState = 'pending';
               this.notifyDiagnosticStateChange();
-              logPiTrace(`[Pi SDK] AUTH_BRIDGE_INVOKED attemptId=${attemptId} fallback=true scopes=["username","payments"]`);
+              logPiTrace(`[Pi TELEMETRY] NATIVE_AUTH_CALLED attemptId=${attemptId} fallback=true scopes=["username","payments"]`);
             } catch (retryErr: any) {
               this.nativeBridgeState = 'call_blocked';
               this.authLifecycleState = 'REJECTED';
@@ -1310,7 +1506,7 @@ class PiSdkManagerService {
               this.currentPaymentStage = 'FAILED';
               this.authRejectionTimeMs = Date.now() - authStartTime;
               this.authenticationError = 'Pi Browser rejected the authentication request. Please retry Pi authentication.';
-              logPiTrace(`[Pi SDK] AUTH_PROMISE_REJECTED attemptId=${attemptId} category=CATEGORY_E_AUTH_REJECTED syncError=${retryErr?.message || retryErr}`, 'warn');
+              logPiTrace(`[Pi TELEMETRY] NATIVE_AUTH_REJECTED attemptId=${attemptId} category=CATEGORY_E_AUTH_REJECTED syncError=${retryErr?.message || retryErr}`, 'warn');
               this.notifyDiagnosticStateChange();
               throw retryErr;
             }
@@ -1324,7 +1520,7 @@ class PiSdkManagerService {
             this.currentPaymentStage = 'FAILED';
             this.authRejectionTimeMs = Date.now() - authStartTime;
             this.authenticationError = 'Pi Browser rejected the authentication request. Please retry Pi authentication.';
-            logPiTrace(`[Pi SDK] AUTH_PROMISE_REJECTED attemptId=${attemptId} category=CATEGORY_E_AUTH_REJECTED syncError=${syncErr?.message || syncErr}`, 'warn');
+            logPiTrace(`[Pi TELEMETRY] NATIVE_AUTH_REJECTED attemptId=${attemptId} category=CATEGORY_E_AUTH_REJECTED syncError=${syncErr?.message || syncErr}`, 'warn');
             this.notifyDiagnosticStateChange();
             throw syncErr;
           }
@@ -1401,14 +1597,14 @@ class PiSdkManagerService {
             role: auth.user.username === 'admin' ? 'admin' : 'buyer'
           };
 
-          logPiTrace(`[Pi SDK] AUTH_PROMISE_RESOLVED attemptId=${attemptId} username=${auth.user.username} uid=${auth.user.uid} elapsedMs=${elapsed}`);
+          logPiTrace(`[Pi TELEMETRY] NATIVE_AUTH_RESOLVED attemptId=${attemptId} username=${auth.user.username} uid=${auth.user.uid} elapsedMs=${elapsed}`);
           this.notifyDiagnosticStateChange();
           return this.authenticatedUser;
         } else {
           this.authLifecycleState = 'REJECTED';
           this.authPromiseState = 'rejected';
           this.diagnosticCategory = 'CATEGORY_E_AUTH_REJECTED';
-          logPiTrace(`[Pi SDK] AUTH_PROMISE_REJECTED attemptId=${attemptId} category=CATEGORY_E_AUTH_REJECTED error=MISSING_CREDENTIALS`, 'warn');
+          logPiTrace(`[Pi TELEMETRY] NATIVE_AUTH_REJECTED attemptId=${attemptId} category=CATEGORY_E_AUTH_REJECTED error=MISSING_CREDENTIALS`, 'warn');
           throw new Error('Pi Browser rejected the authentication request. Please retry Pi authentication.');
         }
       } catch (err: any) {
@@ -1477,8 +1673,7 @@ class PiSdkManagerService {
 
           this.currentPaymentStage = 'TIMEOUT';
           this.nativeBridgeState = 'idle';
-          logPiTrace(`[Pi SDK] AUTH_TIMEOUT attemptId=${attemptId} category=${this.diagnosticCategory} elapsedMs=${elapsed} nativeBridgeState=idle`, 'warn');
-          logPiTrace(`[Pi SDK] AUTH_PROMISE_REJECTED attemptId=${attemptId} reason=AUTH_TIMEOUT elapsedMs=${elapsed}`, 'warn');
+          logPiTrace(`[Pi TELEMETRY] NATIVE_AUTH_TIMED_OUT attemptId=${attemptId} category=${this.diagnosticCategory} elapsedMs=${elapsed} nativeBridgeState=idle`, 'warn');
         } else if (isCancelled) {
           this.authLifecycleState = 'REJECTED';
           this.authPromiseState = 'rejected';
@@ -1492,7 +1687,7 @@ class PiSdkManagerService {
           } else {
             this.standardScopesResult = 'rejected';
           }
-          logPiTrace(`[Pi SDK] AUTH_PROMISE_REJECTED attemptId=${attemptId} category=CATEGORY_E_AUTH_REJECTED reason=USER_CANCELLED elapsedMs=${elapsed}`, 'warn');
+          logPiTrace(`[Pi TELEMETRY] NATIVE_AUTH_REJECTED attemptId=${attemptId} category=CATEGORY_E_AUTH_REJECTED reason=USER_CANCELLED elapsedMs=${elapsed}`, 'warn');
         } else if (isUnavailable) {
           this.authLifecycleState = 'FAILED';
           this.authPromiseState = 'rejected';
@@ -1502,7 +1697,7 @@ class PiSdkManagerService {
           this.currentPaymentStage = 'FAILED';
           this.authenticationError =
             'Pi Network SDK is unavailable. Please open PiNova in the official Pi Browser.';
-          logPiTrace(`[Pi SDK] AUTH_PROMISE_REJECTED attemptId=${attemptId} category=CATEGORY_C_BROWSER_BRIDGE_UNAVAILABLE error=SDK_UNAVAILABLE elapsedMs=${elapsed}`, 'warn');
+          logPiTrace(`[Pi TELEMETRY] NATIVE_AUTH_REJECTED attemptId=${attemptId} category=CATEGORY_C_BROWSER_BRIDGE_UNAVAILABLE error=SDK_UNAVAILABLE elapsedMs=${elapsed}`, 'warn');
         } else {
           this.authLifecycleState = 'FAILED';
           this.authPromiseState = 'rejected';
@@ -1511,7 +1706,7 @@ class PiSdkManagerService {
           this.lastErrorCode = 'CATEGORY_E_AUTH_REJECTED';
           this.currentPaymentStage = 'FAILED';
           this.authenticationError = 'Pi Browser rejected the authentication request. Please retry Pi authentication.';
-          logPiTrace(`[Pi SDK] AUTH_PROMISE_REJECTED attemptId=${attemptId} category=CATEGORY_E_AUTH_REJECTED error=${rawMsg} elapsedMs=${elapsed}`, 'warn');
+          logPiTrace(`[Pi TELEMETRY] NATIVE_AUTH_REJECTED attemptId=${attemptId} category=CATEGORY_E_AUTH_REJECTED error=${rawMsg} elapsedMs=${elapsed}`, 'warn');
         }
 
         this.notifyDiagnosticStateChange();
@@ -2046,15 +2241,11 @@ export async function initAndAuthenticateProactively(
     const ready = await PiSdkManager.initialize();
     if (!ready) return null;
 
-    if (typeof document !== 'undefined' && document.readyState !== 'complete') {
-      await new Promise((resolve) => {
-        window.addEventListener('load', resolve, { once: true });
-        setTimeout(resolve, 1000);
-      });
+    const existingUser = PiSdkManager.getAuthenticatedUser();
+    if (existingUser && existingUser.authenticated) {
+      return existingUser;
     }
-
-    await new Promise((r) => setTimeout(r, 600));
-    return await PiSdkManager.authenticate(['username', 'payments'], onIncompletePaymentFound, false);
+    return null;
   } catch (err: any) {
     console.warn('[Pi SDK] Proactive auth notice:', err?.message || err);
     return null;

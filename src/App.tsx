@@ -231,7 +231,7 @@ function MainAppContent() {
     }
   }, [darkMode]);
 
-  // Proactive Pi Browser Authentication on Application Load (Controlled Lifecycle)
+  // Proactive Pi SDK Initialization on Application Load (Controlled Lifecycle)
   useEffect(() => {
     let active = true;
 
@@ -243,6 +243,7 @@ function MainAppContent() {
       }
     }
 
+    // Only proactively initialize the SDK (Pi.init). Authentication is strictly triggered on user gesture.
     initAndAuthenticateProactively().then((piUser) => {
       if (active && piUser) {
         setUser((prev) => ({
