@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { User, ShieldCheck, MapPin, Wallet, Key, Lock, ArrowRight, CheckCircle2, Package, Sparkles, Briefcase, Bell, Settings, ChevronRight, Users, BarChart3, Code } from 'lucide-react';
 import { PiUser, UserRole } from '../../types';
 import { MainSection } from '../../types/navigation';
+import { ConnectPiButton, AuthStatus } from '../auth/ConnectPiButton';
 
 interface ProfileViewProps {
   user: PiUser;
@@ -11,6 +12,9 @@ interface ProfileViewProps {
   onNavigateSection?: (section: MainSection) => void;
   onOpenNotifications?: () => void;
   onOpenVendorApplication?: () => void;
+  onConnectPi?: () => void | Promise<any>;
+  authStatus?: AuthStatus;
+  authError?: string | null;
 }
 
 export const ProfileView: React.FC<ProfileViewProps> = ({
@@ -20,7 +24,10 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   onOpenPstpShield,
   onNavigateSection,
   onOpenNotifications,
-  onOpenVendorApplication
+  onOpenVendorApplication,
+  onConnectPi,
+  authStatus,
+  authError
 }) => {
   const [address, setAddress] = useState({
     street: '102 Innovation Drive',
@@ -33,22 +40,33 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 space-y-8 pb-20 animate-fade-in">
       
+      {/* Pi Authentication Status Card */}
+      <ConnectPiButton
+        user={user}
+        authStatus={authStatus}
+        isConnecting={authStatus === 'connecting'}
+        onConnect={onConnectPi || (() => {})}
+        variant="profile-card"
+        errorMessage={authError}
+      />
+
       {/* Profile Header */}
       <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-6 sm:p-8 rounded-3xl border border-slate-800 shadow-xl flex flex-wrap items-center justify-between gap-6">
         <div className="flex items-center gap-4">
           <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-purple-600 to-amber-500 text-white font-black text-2xl flex items-center justify-center shadow-xl">
-            {user.username.slice(0, 2).toUpperCase()}
+            {(user.username || 'Pi').slice(0, 2).toUpperCase()}
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-xl sm:text-2xl font-black text-white">{user.username}</h1>
+              <h1 className="text-xl sm:text-2xl font-black text-white">@{user.username || 'Pioneer'}</h1>
               {user.authenticated && (
-                <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[10px] font-bold">
-                  Verified Pioneer
+                <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[10px] font-bold flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                  <span>Verified Pioneer</span>
                 </span>
               )}
             </div>
-            <p className="text-xs text-slate-400 mt-0.5">Pi Network Mainnet Pioneer ID: {user.uid}</p>
+            <p className="text-xs text-slate-400 mt-0.5">Pi Network Testnet Pioneer ID: {user.uid || 'Pioneer-Verified'}</p>
           </div>
         </div>
 

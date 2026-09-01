@@ -27,6 +27,7 @@ import {
 import { MainSection, BreadcrumbItem, VisitedCategory } from '../../types/navigation';
 import { PiUser } from '../../types';
 import { LanguageSelectorDropdown } from '../i18n/LanguageSelectorDropdown';
+import { ConnectPiButton, AuthStatus } from '../auth/ConnectPiButton';
 
 interface FullScreenNavHeaderProps {
   activeSection: MainSection;
@@ -49,6 +50,9 @@ interface FullScreenNavHeaderProps {
   recentlyVisitedCategories: VisitedCategory[];
   onSelectVisitedCategory: (visited: VisitedCategory) => void;
   onOpenVendorApplication?: () => void;
+  onConnectPi?: () => void | Promise<any>;
+  onDisconnectPi?: () => void;
+  authStatus?: AuthStatus;
 }
 
 export const FullScreenNavHeader: React.FC<FullScreenNavHeaderProps> = ({
@@ -71,7 +75,10 @@ export const FullScreenNavHeader: React.FC<FullScreenNavHeaderProps> = ({
   onOpenQrScanner,
   recentlyVisitedCategories,
   onSelectVisitedCategory,
-  onOpenVendorApplication
+  onOpenVendorApplication,
+  onConnectPi,
+  onDisconnectPi,
+  authStatus
 }) => {
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
@@ -258,91 +265,113 @@ export const FullScreenNavHeader: React.FC<FullScreenNavHeaderProps> = ({
             )}
           </button>
 
-          {/* Pioneer ID / User Profile Dropdown (Desktop) */}
-          <div className="relative shrink-0" ref={userDropdownRef}>
-            <button
-              onClick={() => { setShowUserDropdown(!showUserDropdown); setShowMoreMenu(false); }}
-              className="flex items-center gap-1.5 pl-1.5 pr-3 py-1 rounded-xl bg-slate-800/90 hover:bg-slate-700/90 text-slate-200 border border-purple-500/40 hover:border-purple-400 transition-all shadow-sm focus:outline-none focus:ring-1 focus:ring-purple-500"
-              title="Pioneer ID & Profile Menu"
-            >
-              <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-purple-600 via-indigo-600 to-amber-500 text-white font-black text-xs flex items-center justify-center shadow-md shrink-0">
-                {user.username.slice(0, 2).toUpperCase()}
-              </div>
-              <div className="flex flex-col text-left leading-tight">
-                <span className="text-xs font-black text-amber-300 max-w-[120px] truncate">
-                  @{user.username}
-                </span>
-                <span className="text-[9px] font-extrabold text-emerald-400 uppercase tracking-wider flex items-center gap-0.5">
-                  <CheckCircle2 className="w-2.5 h-2.5 text-emerald-400 shrink-0" />
-                  <span>VERIFIED</span>
-                </span>
-              </div>
-              <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0 ml-0.5" />
-            </button>
+          {/* Pioneer ID / User Profile Dropdown or Connect Button (Desktop) */}
+          {user.authenticated && authStatus !== 'disconnected' ? (
+            <div className="relative shrink-0" ref={userDropdownRef}>
+              <button
+                id="header-user-profile-button-desktop"
+                onClick={() => { setShowUserDropdown(!showUserDropdown); setShowMoreMenu(false); }}
+                className="flex items-center gap-1.5 pl-1.5 pr-3 py-1 rounded-xl bg-slate-800/90 hover:bg-slate-700/90 text-slate-200 border border-emerald-500/40 hover:border-emerald-400 transition-all shadow-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                title="Pioneer ID & Profile Menu"
+              >
+                <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-purple-600 via-indigo-600 to-amber-500 text-white font-black text-xs flex items-center justify-center shadow-md shrink-0">
+                  {(user.username || 'Pi').slice(0, 2).toUpperCase()}
+                </div>
+                <div className="flex flex-col text-left leading-tight">
+                  <span className="text-xs font-black text-amber-300 max-w-[120px] truncate">
+                    @{user.username}
+                  </span>
+                  <span className="text-[9px] font-extrabold text-emerald-400 uppercase tracking-wider flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+                    <span>CONNECTED</span>
+                  </span>
+                </div>
+                <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0 ml-0.5" />
+              </button>
 
-            {showUserDropdown && (
-              <div className="absolute right-0 mt-2 w-64 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-2 z-50 text-xs animate-in fade-in zoom-in-95 duration-150">
-                <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 mb-2">
-                  <div className="flex items-center justify-between">
-                    <span className="font-extrabold text-white text-xs">Pioneer ID</span>
-                    <span className="px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[9px] font-bold">Verified</span>
+              {showUserDropdown && (
+                <div className="absolute right-0 mt-2 w-64 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-2 z-50 text-xs animate-in fade-in zoom-in-95 duration-150">
+                  <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 mb-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-extrabold text-white text-xs">Pioneer ID</span>
+                      <span className="px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[9px] font-bold flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                        <span>Verified</span>
+                      </span>
+                    </div>
+                    <p className="font-bold text-amber-400 mt-0.5 text-xs truncate">@{user.username}</p>
+                    <p className="text-[10px] text-slate-500 font-mono mt-0.5 truncate">UID: {user.uid || 'Pioneer-Verified'}</p>
                   </div>
-                  <p className="font-bold text-amber-400 mt-0.5 text-xs truncate">@{user.username}</p>
-                  <p className="text-[10px] text-slate-500 font-mono mt-0.5 truncate">UID: {user.uid}</p>
-                </div>
 
-                <div className="space-y-1">
-                  <button
-                    onClick={() => { onNavigateSection('marketplace'); setShowUserDropdown(false); }}
-                    className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-slate-200 hover:bg-slate-800 hover:text-white font-semibold transition-colors"
-                  >
-                    <Package className="w-4 h-4 text-purple-400" />
-                    <span>Global Marketplace</span>
-                  </button>
-                  <button
-                    onClick={() => { onNavigateSection('seller_studio' as any); setShowUserDropdown(false); }}
-                    className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-slate-200 hover:bg-slate-800 hover:text-white font-semibold transition-colors"
-                  >
-                    <Store className="w-4 h-4 text-amber-400" />
-                    <span>Merchant Studio & Orders</span>
-                  </button>
-                  {onOpenVendorApplication && (
+                  <div className="space-y-1">
                     <button
-                      onClick={() => { onOpenVendorApplication(); setShowUserDropdown(false); }}
-                      className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-amber-300 hover:bg-amber-950/50 hover:text-amber-200 font-semibold transition-colors bg-amber-950/20 border border-amber-500/20"
+                      onClick={() => { onNavigateSection('marketplace'); setShowUserDropdown(false); }}
+                      className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-slate-200 hover:bg-slate-800 hover:text-white font-semibold transition-colors"
                     >
-                      <div className="flex items-center gap-2">
-                        <ShieldCheck className="w-4 h-4 text-amber-400" />
-                        <span>Become Verified Vendor</span>
-                      </div>
-                      <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-400 text-slate-950 font-black">APPLY</span>
+                      <Package className="w-4 h-4 text-purple-400" />
+                      <span>Global Marketplace</span>
                     </button>
-                  )}
-                  <button
-                    onClick={() => { onNavigateSection('admin_governance'); setShowUserDropdown(false); }}
-                    className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-slate-200 hover:bg-slate-800 hover:text-white font-semibold transition-colors"
-                  >
-                    <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                    <span>Admin Governance Center</span>
-                  </button>
-                  <button
-                    onClick={() => { onNavigateSection('orders'); setShowUserDropdown(false); }}
-                    className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-slate-200 hover:bg-slate-800 hover:text-white font-semibold transition-colors"
-                  >
-                    <Zap className="w-4 h-4 text-indigo-400" />
-                    <span>Escrow & Order History</span>
-                  </button>
-                  <button
-                    onClick={() => { onNavigateSection('profile'); setShowUserDropdown(false); }}
-                    className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-slate-200 hover:bg-slate-800 hover:text-white font-semibold transition-colors border-t border-slate-800/80 pt-2 mt-1"
-                  >
-                    <User className="w-4 h-4 text-slate-400" />
-                    <span>Profile & Security Settings</span>
-                  </button>
+                    <button
+                      onClick={() => { onNavigateSection('seller_studio' as any); setShowUserDropdown(false); }}
+                      className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-slate-200 hover:bg-slate-800 hover:text-white font-semibold transition-colors"
+                    >
+                      <Store className="w-4 h-4 text-amber-400" />
+                      <span>Merchant Studio & Orders</span>
+                    </button>
+                    {onOpenVendorApplication && (
+                      <button
+                        onClick={() => { onOpenVendorApplication(); setShowUserDropdown(false); }}
+                        className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-amber-300 hover:bg-amber-950/50 hover:text-amber-200 font-semibold transition-colors bg-amber-950/20 border border-amber-500/20"
+                      >
+                        <div className="flex items-center gap-2">
+                          <ShieldCheck className="w-4 h-4 text-amber-400" />
+                          <span>Become Verified Vendor</span>
+                        </div>
+                        <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-400 text-slate-950 font-black">APPLY</span>
+                      </button>
+                    )}
+                    <button
+                      onClick={() => { onNavigateSection('admin_governance'); setShowUserDropdown(false); }}
+                      className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-slate-200 hover:bg-slate-800 hover:text-white font-semibold transition-colors"
+                    >
+                      <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                      <span>Admin Governance Center</span>
+                    </button>
+                    <button
+                      onClick={() => { onNavigateSection('orders'); setShowUserDropdown(false); }}
+                      className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-slate-200 hover:bg-slate-800 hover:text-white font-semibold transition-colors"
+                    >
+                      <Zap className="w-4 h-4 text-indigo-400" />
+                      <span>Escrow & Order History</span>
+                    </button>
+                    <button
+                      onClick={() => { onNavigateSection('profile'); setShowUserDropdown(false); }}
+                      className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-slate-200 hover:bg-slate-800 hover:text-white font-semibold transition-colors border-t border-slate-800/80 pt-2 mt-1"
+                    >
+                      <User className="w-4 h-4 text-slate-400" />
+                      <span>Profile & Security Settings</span>
+                    </button>
+                    {onDisconnectPi && (
+                      <button
+                        onClick={() => { onDisconnectPi(); setShowUserDropdown(false); }}
+                        className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-rose-300 hover:bg-rose-950/40 hover:text-rose-200 font-semibold transition-colors"
+                      >
+                        <X className="w-4 h-4 text-rose-400" />
+                        <span>Disconnect Pi Account</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          ) : (
+            <ConnectPiButton
+              user={user}
+              authStatus={authStatus}
+              onConnect={onConnectPi || (() => {})}
+              variant="header-desktop"
+            />
+          )}
 
         </div>
       </div>
@@ -373,77 +402,101 @@ export const FullScreenNavHeader: React.FC<FullScreenNavHeaderProps> = ({
           </div>
         </div>
 
-        {/* Center Priority Control: 3. Pioneer ID / Profile (PERMANENTLY VISIBLE, NEVER HIDDEN) */}
-        <div className="relative shrink-0 mx-0.5" ref={userDropdownRef}>
-          <button
-            onClick={() => { setShowUserDropdown(!showUserDropdown); setShowMoreMenu(false); }}
-            className="flex items-center gap-1 pl-1 pr-1.5 py-1 rounded-xl bg-slate-800/95 hover:bg-slate-700 text-slate-200 border border-purple-500/50 hover:border-purple-400 transition-all shadow-sm focus:outline-none focus:ring-1 focus:ring-purple-500 shrink-0"
-            title="Pioneer ID & Profile Menu"
-          >
-            <div className="w-5 h-5 rounded-md bg-gradient-to-tr from-purple-600 via-indigo-600 to-amber-500 text-white font-black text-[10px] flex items-center justify-center shadow-sm shrink-0">
-              {user.username.slice(0, 2).toUpperCase()}
-            </div>
-            <div className="flex items-center gap-0.5 text-left leading-tight">
-              <span className="text-[11px] font-black text-amber-300 max-w-[50px] min-w-0 xs:max-w-[70px] sm:max-w-[100px] truncate">
-                @{user.username}
-              </span>
-              <CheckCircle2 className="w-2.5 h-2.5 text-emerald-400 shrink-0 hidden xs:inline" />
-            </div>
-            <ChevronDown className="w-3 h-3 text-slate-400 shrink-0" />
-          </button>
+        {/* Center Priority Control: 3. Connect with Pi Button OR Pioneer ID Profile (PERMANENTLY VISIBLE) */}
+        {user.authenticated && authStatus !== 'disconnected' ? (
+          <div className="relative shrink-0 mx-0.5" ref={userDropdownRef}>
+            <button
+              id="header-user-profile-button-mobile"
+              onClick={() => { setShowUserDropdown(!showUserDropdown); setShowMoreMenu(false); }}
+              className="flex items-center gap-1 pl-1 pr-1.5 py-1 min-h-[38px] rounded-xl bg-slate-800/95 hover:bg-slate-700 text-slate-200 border border-emerald-500/50 hover:border-emerald-400 transition-all shadow-sm focus:outline-none focus:ring-1 focus:ring-emerald-500 shrink-0"
+              title="Pioneer ID & Profile Menu"
+            >
+              <div className="w-5 h-5 rounded-md bg-gradient-to-tr from-purple-600 via-indigo-600 to-amber-500 text-white font-black text-[10px] flex items-center justify-center shadow-sm shrink-0">
+                {(user.username || 'Pi').slice(0, 2).toUpperCase()}
+              </div>
+              <div className="flex items-center gap-0.5 text-left leading-tight">
+                <span className="text-[11px] font-black text-amber-300 max-w-[50px] min-w-0 xs:max-w-[70px] sm:max-w-[100px] truncate">
+                  @{user.username}
+                </span>
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0 ml-0.5" />
+              </div>
+              <ChevronDown className="w-3 h-3 text-slate-400 shrink-0" />
+            </button>
 
-          {/* Pioneer ID Mobile Modal Dropdown */}
-          {showUserDropdown && (
-            <div className="fixed top-12 right-2 left-2 xs:left-auto xs:right-2 xs:w-64 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-2.5 z-50 text-xs animate-in fade-in zoom-in-95 duration-150">
-              <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 mb-2">
-                <div className="flex items-center justify-between">
-                  <span className="font-extrabold text-white text-xs">Pioneer ID</span>
-                  <span className="px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[9px] font-bold">Verified</span>
+            {/* Pioneer ID Mobile Modal Dropdown */}
+            {showUserDropdown && (
+              <div className="fixed top-12 right-2 left-2 xs:left-auto xs:right-2 xs:w-64 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-2.5 z-50 text-xs animate-in fade-in zoom-in-95 duration-150">
+                <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 mb-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-extrabold text-white text-xs">Pioneer ID</span>
+                    <span className="px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[9px] font-bold flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                      <span>Connected</span>
+                    </span>
+                  </div>
+                  <p className="font-bold text-amber-400 mt-0.5 text-xs truncate">@{user.username}</p>
+                  <p className="text-[10px] text-slate-500 font-mono mt-0.5 truncate">UID: {user.uid || 'Pioneer-Verified'}</p>
                 </div>
-                <p className="font-bold text-amber-400 mt-0.5 text-xs truncate">@{user.username}</p>
-                <p className="text-[10px] text-slate-500 font-mono mt-0.5 truncate">UID: {user.uid}</p>
-              </div>
 
-              <div className="space-y-1">
-                <button
-                  onClick={() => { onNavigateSection('marketplace'); setShowUserDropdown(false); }}
-                  className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-slate-200 hover:bg-slate-800 hover:text-white font-semibold transition-colors"
-                >
-                  <Package className="w-4 h-4 text-purple-400" />
-                  <span>Global Marketplace</span>
-                </button>
-                <button
-                  onClick={() => { onNavigateSection('seller_studio' as any); setShowUserDropdown(false); }}
-                  className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-slate-200 hover:bg-slate-800 hover:text-white font-semibold transition-colors"
-                >
-                  <Store className="w-4 h-4 text-amber-400" />
-                  <span>Merchant Studio & Orders</span>
-                </button>
-                <button
-                  onClick={() => { onNavigateSection('admin_governance'); setShowUserDropdown(false); }}
-                  className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-slate-200 hover:bg-slate-800 hover:text-white font-semibold transition-colors"
-                >
-                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                  <span>Admin Governance Center</span>
-                </button>
-                <button
-                  onClick={() => { onNavigateSection('orders'); setShowUserDropdown(false); }}
-                  className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-slate-200 hover:bg-slate-800 hover:text-white font-semibold transition-colors"
-                >
-                  <Zap className="w-4 h-4 text-indigo-400" />
-                  <span>Escrow & Order History</span>
-                </button>
-                <button
-                  onClick={() => { onNavigateSection('profile'); setShowUserDropdown(false); }}
-                  className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-slate-200 hover:bg-slate-800 hover:text-white font-semibold transition-colors border-t border-slate-800/80 pt-2 mt-1"
-                >
-                  <User className="w-4 h-4 text-slate-400" />
-                  <span>Profile & Security Settings</span>
-                </button>
+                <div className="space-y-1">
+                  <button
+                    onClick={() => { onNavigateSection('marketplace'); setShowUserDropdown(false); }}
+                    className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-slate-200 hover:bg-slate-800 hover:text-white font-semibold transition-colors"
+                  >
+                    <Package className="w-4 h-4 text-purple-400" />
+                    <span>Global Marketplace</span>
+                  </button>
+                  <button
+                    onClick={() => { onNavigateSection('seller_studio' as any); setShowUserDropdown(false); }}
+                    className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-slate-200 hover:bg-slate-800 hover:text-white font-semibold transition-colors"
+                  >
+                    <Store className="w-4 h-4 text-amber-400" />
+                    <span>Merchant Studio & Orders</span>
+                  </button>
+                  <button
+                    onClick={() => { onNavigateSection('admin_governance'); setShowUserDropdown(false); }}
+                    className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-slate-200 hover:bg-slate-800 hover:text-white font-semibold transition-colors"
+                  >
+                    <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                    <span>Admin Governance Center</span>
+                  </button>
+                  <button
+                    onClick={() => { onNavigateSection('orders'); setShowUserDropdown(false); }}
+                    className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-slate-200 hover:bg-slate-800 hover:text-white font-semibold transition-colors"
+                  >
+                    <Zap className="w-4 h-4 text-indigo-400" />
+                    <span>Escrow & Order History</span>
+                  </button>
+                  <button
+                    onClick={() => { onNavigateSection('profile'); setShowUserDropdown(false); }}
+                    className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-slate-200 hover:bg-slate-800 hover:text-white font-semibold transition-colors border-t border-slate-800/80 pt-2 mt-1"
+                  >
+                    <User className="w-4 h-4 text-slate-400" />
+                    <span>Profile & Security Settings</span>
+                  </button>
+                  {onDisconnectPi && (
+                    <button
+                      onClick={() => { onDisconnectPi(); setShowUserDropdown(false); }}
+                      className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-rose-300 hover:bg-rose-950/40 hover:text-rose-200 font-semibold transition-colors"
+                    >
+                      <X className="w-4 h-4 text-rose-400" />
+                      <span>Disconnect Pi Account</span>
+                    </button>
+                  )}
+                </div>
               </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        ) : (
+          <div className="shrink-0 mx-0.5">
+            <ConnectPiButton
+              user={user}
+              authStatus={authStatus}
+              onConnect={onConnectPi || (() => {})}
+              variant="header-mobile"
+            />
+          </div>
+        )}
 
         {/* Right Controls in Priority Order: 4. Notifications, 5. QR Scanner, 6. Search, 7/8. More Menu (Language & Theme) */}
         <div className="flex items-center gap-1 shrink-0">

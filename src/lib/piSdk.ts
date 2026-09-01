@@ -154,6 +154,7 @@ export interface PiEnvironmentDetails {
   network: PiNetworkEnvironment;
   sandbox: boolean;
   source:
+    | 'TESTNET_CONFIG'
     | 'LOCAL_STORAGE_OVERRIDE'
     | 'URL_OVERRIDE'
     | 'VITE_PI_ENV'
@@ -535,21 +536,16 @@ export function getPiEnvironmentDetails(): PiEnvironmentDetails {
   const domainInfo =
     getDomainDiagnosticInfo();
 
-  const isOfficialDomain =
-    domainInfo.matchesExpectedDomain ||
-    domainInfo.classification ===
-      'OFFICIAL_REGISTERED_DOMAIN';
-
   if (typeof window === 'undefined') {
     return {
-      network: isOfficialDomain ? 'MAINNET' : 'SANDBOX',
-      sandbox: !isOfficialDomain,
-      source: isOfficialDomain ? 'OFFICIAL_REGISTERED_DOMAIN' : 'DEFAULT_FALLBACK',
+      network: 'SANDBOX',
+      sandbox: true,
+      source: 'TESTNET_CONFIG',
       hasConflict: false,
       environmentConsistency: 'CONSISTENT',
-      configuredNetwork: isOfficialDomain ? 'MAINNET' : 'SANDBOX',
-      effectiveSandbox: !isOfficialDomain,
-      environmentSource: isOfficialDomain ? 'OFFICIAL_REGISTERED_DOMAIN' : 'DEFAULT_FALLBACK'
+      configuredNetwork: 'SANDBOX',
+      effectiveSandbox: true,
+      environmentSource: 'TESTNET_CONFIG'
     };
   }
 
@@ -726,25 +722,7 @@ export function getPiEnvironmentDetails(): PiEnvironmentDetails {
     };
   }
 
-  // 4. Official Registered Production Domain Resolution
-  // On https://iddsnn.com, the Pi Developer Portal registration is authoritative:
-  // Production domain defaults to MAINNET unless overridden via URL/LocalStorage for debugging.
-  if (isOfficialDomain) {
-    return {
-      network: 'MAINNET',
-      sandbox: false,
-      source: 'OFFICIAL_REGISTERED_DOMAIN',
-      configuredEnv: metaEnv.VITE_PI_ENV,
-      configuredSandbox: metaEnv.VITE_PI_SANDBOX,
-      hasConflict: false,
-      environmentConsistency: 'CONSISTENT',
-      configuredNetwork: 'MAINNET',
-      effectiveSandbox: false,
-      environmentSource: 'OFFICIAL_REGISTERED_DOMAIN (iddsnn.com)'
-    };
-  }
-
-  // 5. Non-Production Development Environment Resolution
+  // 4. Testnet Environment (Default for PiNova Global Hub Testnet)
   if (envWantsSandbox) {
     return {
       network: 'SANDBOX',
@@ -782,12 +760,12 @@ export function getPiEnvironmentDetails(): PiEnvironmentDetails {
   return {
     network: 'SANDBOX',
     sandbox: true,
-    source: 'DEVELOPMENT_FALLBACK',
+    source: 'TESTNET_CONFIG',
     hasConflict: false,
     environmentConsistency: 'CONSISTENT',
     configuredNetwork: 'SANDBOX',
     effectiveSandbox: true,
-    environmentSource: 'DEVELOPMENT_FALLBACK'
+    environmentSource: 'TESTNET_CONFIG'
   };
 }
 

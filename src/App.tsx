@@ -23,7 +23,8 @@ import {
 
 import { Product, Order, OrderItem, Vendor, Review, Coupon, Notification, Message, PiUser, ProductCategory, PstpOrderStatus, UserRole } from './types';
 import { INITIAL_PRODUCTS, MOCK_VENDORS, MOCK_REVIEWS, MOCK_COUPONS, SAMPLE_ORDERS } from './data/mockData';
-import { initAndAuthenticateProactively, subscribePiSdkState } from './lib/piSdk';
+import { initAndAuthenticateProactively, subscribePiSdkState, authenticatePiUser } from './lib/piSdk';
+import { AuthStatus } from './components/auth/ConnectPiButton';
 
 import { MainSection, MarketplaceCategory, UtilityCategory, BreadcrumbItem, VisitedCategory, AiHubSubTab } from './types/navigation';
 import { MARKETPLACE_CATEGORIES, UTILITY_CATEGORIES } from './data/categoryData';
@@ -97,12 +98,16 @@ function MainAppContent() {
   const [utilityConfig, setUtilityConfig] = useState<PiConversionConfig>(INITIAL_PI_CONVERSION_CONFIG);
   const [utilityRateLogs, setUtilityRateLogs] = useState<ConversionRateLog[]>(INITIAL_CONVERSION_RATE_LOGS);
 
+  // Pi Authentication State
+  const [authStatus, setAuthStatus] = useState<AuthStatus>('disconnected');
+  const [authError, setAuthError] = useState<string | null>(null);
+
   // User & Wallet State
   const [user, setUser] = useState<PiUser>({
     username: 'Pi_Pioneer_01',
     uid: 'user-uid-892341',
     walletAddress: 'GD5X...PINOVA_KEY',
-    authenticated: true,
+    authenticated: false,
     role: 'buyer'
   });
   const [userBalancePi, setUserBalancePi] = useState<number>(() => {
@@ -251,16 +256,22 @@ function MainAppContent() {
           username: piUser.username,
           authenticated: true
         }));
+        setAuthStatus('connected');
       }
     });
 
     const unsubscribe = subscribePiSdkState((state) => {
-      if (active && state.username && state.userState === 'authenticated') {
-        setUser((prev) => ({
-          ...prev,
-          username: state.username!,
-          authenticated: true
-        }));
+      if (active) {
+        if (state.username && state.userState === 'authenticated') {
+          setUser((prev) => ({
+            ...prev,
+            username: state.username!,
+            authenticated: true
+          }));
+          setAuthStatus('connected');
+        } else if (state.authPromiseState === 'pending') {
+          setAuthStatus('connecting');
+        }
       }
     });
 
@@ -269,6 +280,41 @@ function MainAppContent() {
       unsubscribe();
     };
   }, []);
+
+  // Centralized Pi Authentication Trigger
+  const handleConnectPi = async () => {
+    setAuthStatus('connecting');
+    setAuthError(null);
+    try {
+      const authResult = await authenticatePiUser(['username', 'payments']);
+      if (authResult && authResult.username) {
+        setUser((prev) => ({
+          ...prev,
+          username: authResult.username,
+          uid: authResult.uid || prev.uid,
+          authenticated: true
+        }));
+        setAuthStatus('connected');
+        setAuthError(null);
+      } else {
+        setAuthStatus('disconnected');
+        setAuthError('Pi connection was not completed. Please try again in Pi Browser.');
+      }
+    } catch (err: any) {
+      console.error('Pi Connection Notice:', err);
+      setAuthStatus('disconnected');
+      setAuthError(err?.message || 'Pi connection was not completed. Please try again in Pi Browser.');
+    }
+  };
+
+  const handleDisconnectPi = () => {
+    setUser((prev) => ({
+      ...prev,
+      authenticated: false
+    }));
+    setAuthStatus('disconnected');
+    setAuthError(null);
+  };
 
   // Open Universal Search Modal
   const handleOpenUniversalSearch = (query?: string | unknown) => {
@@ -739,6 +785,9 @@ function MainAppContent() {
         recentlyVisitedCategories={recentlyVisitedCategories}
         onSelectVisitedCategory={(visited) => handleSelectMarketplaceCategory(visited.id as MarketplaceCategory)}
         onOpenVendorApplication={() => setIsVendorApplicationOpen(true)}
+        onConnectPi={handleConnectPi}
+        onDisconnectPi={handleDisconnectPi}
+        authStatus={authStatus}
       />
 
       {/* Dedicated View Rendering */}
@@ -994,6 +1043,9 @@ function MainAppContent() {
             onNavigateSection={handleNavigateSection}
             onOpenNotifications={() => setIsNotificationsOpen(true)}
             onOpenVendorApplication={() => setIsVendorApplicationOpen(true)}
+            onConnectPi={handleConnectPi}
+            authStatus={authStatus}
+            authError={authError}
           />
         )}
 
