@@ -103,6 +103,8 @@ export const FullScreenNavHeader: React.FC<FullScreenNavHeaderProps> = ({
     };
   }, []);
 
+  const isConnected = Boolean(user?.authenticated && authStatus !== 'disconnected' && user?.username);
+
   // Five primary navigation destinations
   const primarySections: { id: MainSection; label: string; icon: React.ReactNode }[] = [
     { id: 'home', label: 'Home', icon: <Home className="w-4 h-4 text-amber-400" /> },
@@ -266,7 +268,7 @@ export const FullScreenNavHeader: React.FC<FullScreenNavHeaderProps> = ({
           </button>
 
           {/* Pioneer ID / User Profile Dropdown or Connect Button (Desktop) */}
-          {user.authenticated && authStatus !== 'disconnected' ? (
+          {isConnected ? (
             <div className="relative shrink-0" ref={userDropdownRef}>
               <button
                 id="header-user-profile-button-desktop"
@@ -403,7 +405,7 @@ export const FullScreenNavHeader: React.FC<FullScreenNavHeaderProps> = ({
         </div>
 
         {/* Center Priority Control: 3. Connect with Pi Button OR Pioneer ID Profile (PERMANENTLY VISIBLE) */}
-        {user.authenticated && authStatus !== 'disconnected' ? (
+        {isConnected ? (
           <div className="relative shrink-0 mx-0.5" ref={userDropdownRef}>
             <button
               id="header-user-profile-button-mobile"

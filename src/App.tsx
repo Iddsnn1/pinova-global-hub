@@ -790,6 +790,24 @@ function MainAppContent() {
         authStatus={authStatus}
       />
 
+      {/* Non-blocking Pi Authentication Notice / Alert */}
+      {authError && (
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 pt-3 animate-fade-in">
+          <div className="p-3 rounded-xl bg-slate-900/95 border border-purple-500/50 text-slate-200 text-xs flex items-center justify-between gap-3 shadow-xl backdrop-blur-md">
+            <div className="flex items-center gap-2.5">
+              <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0 animate-pulse" />
+              <span className="font-medium text-slate-200">{authError}</span>
+            </div>
+            <button
+              onClick={() => setAuthError(null)}
+              className="text-slate-400 hover:text-white font-bold px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-[11px] transition-colors shrink-0"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Dedicated View Rendering */}
       <main className="flex-1 mt-4">
         
@@ -814,6 +832,8 @@ function MainAppContent() {
             onConfirmReceipt={handleConfirmReceipt}
             onTrackOrder={handleTrackOrder}
             onOpenVendorApplication={() => setIsVendorApplicationOpen(true)}
+            onConnectPi={handleConnectPi}
+            authStatus={authStatus}
           />
         )}
 
