@@ -158,6 +158,8 @@ export interface PiEnvironmentDetails {
     | 'URL_OVERRIDE'
     | 'VITE_PI_ENV'
     | 'VITE_PI_SANDBOX'
+    | 'OFFICIAL_REGISTERED_DOMAIN'
+    | 'DEVELOPMENT_FALLBACK'
     | 'DEFAULT_FALLBACK';
   configuredEnv?: string;
   configuredSandbox?: string;
@@ -530,19 +532,28 @@ export function getDomainDiagnosticInfo() {
  * ========================================================= */
 
 export function getPiEnvironmentDetails(): PiEnvironmentDetails {
+  const domainInfo =
+    getDomainDiagnosticInfo();
+
+  const isOfficialDomain =
+    domainInfo.matchesExpectedDomain ||
+    domainInfo.classification ===
+      'OFFICIAL_REGISTERED_DOMAIN';
+
   if (typeof window === 'undefined') {
     return {
-      network: 'SANDBOX',
-      sandbox: true,
-      source: 'DEFAULT_FALLBACK',
+      network: isOfficialDomain ? 'MAINNET' : 'SANDBOX',
+      sandbox: !isOfficialDomain,
+      source: isOfficialDomain ? 'OFFICIAL_REGISTERED_DOMAIN' : 'DEFAULT_FALLBACK',
       hasConflict: false,
       environmentConsistency: 'CONSISTENT',
-      configuredNetwork: 'SANDBOX',
-      effectiveSandbox: true,
-      environmentSource: 'DEFAULT_FALLBACK'
+      configuredNetwork: isOfficialDomain ? 'MAINNET' : 'SANDBOX',
+      effectiveSandbox: !isOfficialDomain,
+      environmentSource: isOfficialDomain ? 'OFFICIAL_REGISTERED_DOMAIN' : 'DEFAULT_FALLBACK'
     };
   }
 
+  // 1. Explicit Local Storage Override (allows manual test toggle from Diagnostic UI)
   try {
     const override = localStorage.getItem(
       'pi_sandbox_override'
@@ -579,13 +590,14 @@ export function getPiEnvironmentDetails(): PiEnvironmentDetails {
     // Ignore storage errors.
   }
 
+  // 2. Explicit URL Query Parameter Override (for testing and direct browser debugging)
   const search =
     typeof window !== 'undefined'
       ? window.location.search || ''
       : '';
 
   if (
-    /(?:[?&])(sandbox=true|sandbox=1|env=sandbox)(?:&|$)/i.test(
+    /(?:[?&])(sandbox=true|sandbox=1|env=sandbox|env=testnet)(?:&|$)/i.test(
       search
     )
   ) {
@@ -603,7 +615,7 @@ export function getPiEnvironmentDetails(): PiEnvironmentDetails {
   }
 
   if (
-    /(?:[?&])(sandbox=false|sandbox=0|env=mainnet)(?:&|$)/i.test(
+    /(?:[?&])(sandbox=false|sandbox=0|env=mainnet|env=production)(?:&|$)/i.test(
       search
     )
   ) {
@@ -620,6 +632,7 @@ export function getPiEnvironmentDetails(): PiEnvironmentDetails {
     };
   }
 
+  // 3. Build & Runtime Environment Variables
   const metaEnv = (import.meta as any).env || {};
 
   const rawEnv =
@@ -637,7 +650,8 @@ export function getPiEnvironmentDetails(): PiEnvironmentDetails {
       : '';
 
   const envWantsMainnet =
-    rawEnv === 'mainnet';
+    rawEnv === 'mainnet' ||
+    rawEnv === 'production';
 
   const envWantsSandbox =
     rawEnv === 'sandbox' ||
@@ -677,6 +691,7 @@ export function getPiEnvironmentDetails(): PiEnvironmentDetails {
       ? 'INVALID'
       : 'CONSISTENT';
 
+  // Explicit Mainnet configured via environment
   if (envWantsMainnet) {
     return {
       network: 'MAINNET',
@@ -689,23 +704,6 @@ export function getPiEnvironmentDetails(): PiEnvironmentDetails {
       environmentConsistency: consistency,
       configuredNetwork: 'MAINNET',
       effectiveSandbox: false,
-      environmentSource:
-        `VITE_PI_ENV=${metaEnv.VITE_PI_ENV}`
-    };
-  }
-
-  if (envWantsSandbox) {
-    return {
-      network: 'SANDBOX',
-      sandbox: true,
-      source: 'VITE_PI_ENV',
-      configuredEnv: metaEnv.VITE_PI_ENV,
-      configuredSandbox: metaEnv.VITE_PI_SANDBOX,
-      hasConflict,
-      conflictWarning,
-      environmentConsistency: consistency,
-      configuredNetwork: 'SANDBOX',
-      effectiveSandbox: true,
       environmentSource:
         `VITE_PI_ENV=${metaEnv.VITE_PI_ENV}`
     };
@@ -725,6 +723,42 @@ export function getPiEnvironmentDetails(): PiEnvironmentDetails {
       effectiveSandbox: false,
       environmentSource:
         `VITE_PI_SANDBOX=${metaEnv.VITE_PI_SANDBOX}`
+    };
+  }
+
+  // 4. Official Registered Production Domain Resolution
+  // On https://iddsnn.com, the Pi Developer Portal registration is authoritative:
+  // Production domain defaults to MAINNET unless overridden via URL/LocalStorage for debugging.
+  if (isOfficialDomain) {
+    return {
+      network: 'MAINNET',
+      sandbox: false,
+      source: 'OFFICIAL_REGISTERED_DOMAIN',
+      configuredEnv: metaEnv.VITE_PI_ENV,
+      configuredSandbox: metaEnv.VITE_PI_SANDBOX,
+      hasConflict: false,
+      environmentConsistency: 'CONSISTENT',
+      configuredNetwork: 'MAINNET',
+      effectiveSandbox: false,
+      environmentSource: 'OFFICIAL_REGISTERED_DOMAIN (iddsnn.com)'
+    };
+  }
+
+  // 5. Non-Production Development Environment Resolution
+  if (envWantsSandbox) {
+    return {
+      network: 'SANDBOX',
+      sandbox: true,
+      source: 'VITE_PI_ENV',
+      configuredEnv: metaEnv.VITE_PI_ENV,
+      configuredSandbox: metaEnv.VITE_PI_SANDBOX,
+      hasConflict,
+      conflictWarning,
+      environmentConsistency: consistency,
+      configuredNetwork: 'SANDBOX',
+      effectiveSandbox: true,
+      environmentSource:
+        `VITE_PI_ENV=${metaEnv.VITE_PI_ENV}`
     };
   }
 
@@ -748,12 +782,12 @@ export function getPiEnvironmentDetails(): PiEnvironmentDetails {
   return {
     network: 'SANDBOX',
     sandbox: true,
-    source: 'DEFAULT_FALLBACK',
+    source: 'DEVELOPMENT_FALLBACK',
     hasConflict: false,
     environmentConsistency: 'CONSISTENT',
     configuredNetwork: 'SANDBOX',
     effectiveSandbox: true,
-    environmentSource: 'DEFAULT_FALLBACK'
+    environmentSource: 'DEVELOPMENT_FALLBACK'
   };
 }
 
