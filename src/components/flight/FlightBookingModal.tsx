@@ -250,6 +250,19 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
       return 'Please provide a valid email and phone number for e-ticket delivery.';
     }
 
+    if (!dateOfBirth || !dateOfBirth.trim()) {
+      return 'Passenger date of birth is required for airline ticket issuance and GDS manifest.';
+    }
+
+    const dobDate = new Date(dateOfBirth);
+    if (isNaN(dobDate.getTime()) || dobDate >= new Date() || dobDate.getFullYear() < 1900) {
+      return 'Please enter a valid passenger date of birth in the past (YYYY-MM-DD).';
+    }
+
+    if (!gender || (gender !== 'male' && gender !== 'female')) {
+      return 'Please select passenger gender (Male or Female) required for carrier ticket issuance.';
+    }
+
     if (
       !Number.isFinite(currentFareFiat) ||
       currentFareFiat <= 0
@@ -1171,12 +1184,14 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
 
                 <div>
                   <label className="block text-[11px] font-bold text-slate-400 mb-1">
-                    Date of Birth
+                    Date of Birth *
                   </label>
 
                   <input
                     id="flight-passenger-dob"
                     type="date"
+                    required
+                    max={new Date().toISOString().split('T')[0]}
                     value={dateOfBirth}
                     onChange={(e) =>
                       setDateOfBirth(
@@ -1189,11 +1204,12 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
 
                 <div>
                   <label className="block text-[11px] font-bold text-slate-400 mb-1">
-                    Gender
+                    Gender *
                   </label>
 
                   <select
                     id="flight-passenger-gender"
+                    required
                     value={gender}
                     onChange={(e) =>
                       setGender(
@@ -1208,10 +1224,6 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
 
                     <option value="female">
                       Female
-                    </option>
-
-                    <option value="other">
-                      Other
                     </option>
                   </select>
                 </div>

@@ -2005,30 +2005,271 @@ const handleFlightBook = async (req: express.Request, res: express.Response) => 
       const baseUrl = process.env.FLIGHT_API_BASE_URL || 'https://api.duffel.com';
       const token = process.env.FLIGHT_API_ACCESS_TOKEN;
 
+      // 1. Authoritative Offer Hydration from Duffel
+      let currentOffer: any = null;
+      try {
+        const offerRes = await fetch(`${baseUrl}/air/offers/${encodeURIComponent(cleanOfferId)}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Duffel-Version': 'v2',
+            'Accept': 'application/json'
+          }
+        });
+
+        const offerReqId = offerRes.headers.get('x-request-id') || 'unknown';
+
+        if (!offerRes.ok) {
+          const offerErrText = await offerRes.text().catch(() => '');
+          console.warn(`[Flight Lifecycle] Duffel offer hydration failed reqId=${reqId} duffelReqId=${offerReqId} status=${offerRes.status} offerId=${cleanOfferId}:`, offerErrText.substring(0, 150));
+          
+          const failedBookingRecord = {
+            bookingId: `BK-FAILED-${cleanPaymentId.slice(-6).toUpperCase()}`,
+            paymentId: cleanPaymentId,
+            pnr: null,
+            bookingReference: `ESCROW-${cleanPaymentId.slice(-8).toUpperCase()}`,
+            ticketNumber: null,
+            bookingStatus: 'BOOKING_FAILED_HELD_FOR_REFUND' as const,
+            provider: 'duffel',
+            bookingMode: 'LIVE_DUFFEL' as const,
+            isLiveBooking: false,
+            message: 'Flight offer is no longer available on carrier GDS. Payment is safely held in Escrow for instant refund/retry.',
+            passengerName: `${passengerDetails?.givenName || 'Pioneer'} ${passengerDetails?.familyName || 'Traveler'}`,
+            timestamp: new Date().toISOString()
+          };
+          flightFulfillmentRepo.recordBooking(key, failedBookingRecord);
+          res.status(400).json({
+            success: false,
+            error: 'OFFER_NO_LONGER_AVAILABLE',
+            status: 'BOOKING_FAILED_HELD_FOR_REFUND',
+            message: 'Flight offer is no longer available. Please search for fresh fares. Funds are protected in Escrow.',
+            reqId
+          });
+          return;
+        }
+
+        const offerData = await offerRes.json();
+        currentOffer = offerData?.data;
+      } catch (fetchErr: any) {
+        console.error(`[Flight Lifecycle] Duffel offer hydration exception reqId=${reqId}:`, fetchErr.message);
+        const failedBookingRecord = {
+          bookingId: `BK-FAILED-${cleanPaymentId.slice(-6).toUpperCase()}`,
+          paymentId: cleanPaymentId,
+          pnr: null,
+          bookingReference: `ESCROW-${cleanPaymentId.slice(-8).toUpperCase()}`,
+          ticketNumber: null,
+          bookingStatus: 'BOOKING_FAILED_HELD_FOR_REFUND' as const,
+          provider: 'duffel',
+          bookingMode: 'LIVE_DUFFEL' as const,
+          isLiveBooking: false,
+          message: 'Could not connect to airline gateway to verify offer. Payment held in Escrow.',
+          passengerName: `${passengerDetails?.givenName || 'Pioneer'} ${passengerDetails?.familyName || 'Traveler'}`,
+          timestamp: new Date().toISOString()
+        };
+        flightFulfillmentRepo.recordBooking(key, failedBookingRecord);
+        res.status(502).json({
+          success: false,
+          error: 'DUFFEL_GATEWAY_ERROR',
+          status: 'BOOKING_FAILED_HELD_FOR_REFUND',
+          message: 'Could not connect to airline gateway to verify offer. Funds held in Escrow.',
+          reqId
+        });
+        return;
+      }
+
+      if (!currentOffer || !currentOffer.id) {
+        res.status(400).json({
+          success: false,
+          error: 'OFFER_NOT_FOUND',
+          message: 'Authoritative flight offer not found on airline gateway.',
+          reqId
+        });
+        return;
+      }
+
+      // 2. Offer Expiry Verification
+      if (currentOffer.expires_at) {
+        const expiresAtMs = new Date(currentOffer.expires_at).getTime();
+        if (!isNaN(expiresAtMs) && expiresAtMs <= Date.now()) {
+          console.warn(`[Flight Lifecycle] Duffel offer expired reqId=${reqId} offerId=${cleanOfferId} expires_at=${currentOffer.expires_at}`);
+          const failedBookingRecord = {
+            bookingId: `BK-FAILED-${cleanPaymentId.slice(-6).toUpperCase()}`,
+            paymentId: cleanPaymentId,
+            pnr: null,
+            bookingReference: `ESCROW-${cleanPaymentId.slice(-8).toUpperCase()}`,
+            ticketNumber: null,
+            bookingStatus: 'BOOKING_FAILED_HELD_FOR_REFUND' as const,
+            provider: 'duffel',
+            bookingMode: 'LIVE_DUFFEL' as const,
+            isLiveBooking: false,
+            message: 'Flight offer has expired. Payment is safely held in Escrow for instant refund/retry.',
+            passengerName: `${passengerDetails?.givenName || 'Pioneer'} ${passengerDetails?.familyName || 'Traveler'}`,
+            timestamp: new Date().toISOString()
+          };
+          flightFulfillmentRepo.recordBooking(key, failedBookingRecord);
+          res.status(400).json({
+            success: false,
+            error: 'OFFER_EXPIRED',
+            status: 'BOOKING_FAILED_HELD_FOR_REFUND',
+            message: 'Flight offer has expired. Please select a fresh flight offer. Funds are protected in Escrow.',
+            reqId
+          });
+          return;
+        }
+      }
+
+      // 3. Authoritative Passenger ID Resolution (Never fallback to artificial IDs like pas_1)
+      const authoritativePassengerId = currentOffer.passengers?.[0]?.id;
+      if (!authoritativePassengerId || typeof authoritativePassengerId !== 'string' || !/^pas_[A-Za-z0-9]+$/.test(authoritativePassengerId)) {
+        console.warn(`[Flight Lifecycle] No authoritative passenger ID on Duffel offer reqId=${reqId} offerId=${cleanOfferId}`);
+        const failedBookingRecord = {
+          bookingId: `BK-FAILED-${cleanPaymentId.slice(-6).toUpperCase()}`,
+          paymentId: cleanPaymentId,
+          pnr: null,
+          bookingReference: `ESCROW-${cleanPaymentId.slice(-8).toUpperCase()}`,
+          ticketNumber: null,
+          bookingStatus: 'BOOKING_FAILED_HELD_FOR_REFUND' as const,
+          provider: 'duffel',
+          bookingMode: 'LIVE_DUFFEL' as const,
+          isLiveBooking: false,
+          message: 'Authoritative passenger structure is missing on this airline offer. Funds held in Escrow.',
+          passengerName: `${passengerDetails?.givenName || 'Pioneer'} ${passengerDetails?.familyName || 'Traveler'}`,
+          timestamp: new Date().toISOString()
+        };
+        flightFulfillmentRepo.recordBooking(key, failedBookingRecord);
+        res.status(400).json({
+          success: false,
+          error: 'PASSENGER_DATA_INVALID',
+          status: 'BOOKING_FAILED_HELD_FOR_REFUND',
+          message: 'Authoritative passenger identifier is missing on this offer. Please search for a fresh flight.',
+          reqId
+        });
+        return;
+      }
+
+      // 4. Passenger Demographic Mapping & Validation
+      const rawTitle = typeof passengerDetails?.title === 'string' ? passengerDetails.title.trim() : '';
+      let cleanTitle: 'mr' | 'ms' | 'mrs' | '' = '';
+      const titleLower = rawTitle.toLowerCase().replace(/[^a-z]/g, '');
+      if (titleLower === 'mr' || titleLower === 'dr' || titleLower === 'alh') {
+        cleanTitle = 'mr';
+      } else if (titleLower === 'mrs' || titleLower === 'hjy') {
+        cleanTitle = 'mrs';
+      } else if (titleLower === 'ms' || titleLower === 'miss') {
+        cleanTitle = 'ms';
+      }
+
+      const rawGender = typeof passengerDetails?.gender === 'string' ? passengerDetails.gender.trim().toLowerCase() : '';
+      let cleanGender: 'm' | 'f' | '' = '';
+      if (rawGender === 'male' || rawGender === 'm') {
+        cleanGender = 'm';
+      } else if (rawGender === 'female' || rawGender === 'f') {
+        cleanGender = 'f';
+      }
+
+      const rawDob = typeof passengerDetails?.dateOfBirth === 'string' ? passengerDetails.dateOfBirth.trim() : (typeof passengerDetails?.bornOn === 'string' ? passengerDetails.bornOn.trim() : '');
+      const isDobValidFormat = /^\d{4}-\d{2}-\d{2}$/.test(rawDob);
+      const dobDate = isDobValidFormat ? new Date(rawDob) : null;
+      const isDobSensible = dobDate && !isNaN(dobDate.getTime()) && dobDate.getTime() < Date.now() && dobDate.getFullYear() > 1900;
+
+      const cleanGivenName = typeof passengerDetails?.givenName === 'string' ? passengerDetails.givenName.trim().slice(0, 50) : '';
+      const cleanFamilyName = typeof passengerDetails?.familyName === 'string' ? passengerDetails.familyName.trim().slice(0, 50) : '';
+      const cleanEmail = typeof passengerDetails?.email === 'string' ? passengerDetails.email.trim().slice(0, 100) : 'traveler@pinova.hub';
+      const cleanPhone = typeof passengerDetails?.phone === 'string' ? passengerDetails.phone.trim().slice(0, 25) : '+2348000000000';
+
+      if (!cleanGivenName || !cleanFamilyName) {
+        res.status(400).json({
+          success: false,
+          error: 'PASSENGER_DATA_INVALID',
+          message: 'Passenger first and last name are required for airline ticketing.',
+          reqId
+        });
+        return;
+      }
+
+      if (!cleanTitle) {
+        res.status(400).json({
+          success: false,
+          error: 'PASSENGER_DATA_INVALID',
+          message: 'Passenger title (Mr, Mrs, Ms) is required for airline ticket issuance.',
+          reqId
+        });
+        return;
+      }
+
+      if (!cleanGender) {
+        res.status(400).json({
+          success: false,
+          error: 'PASSENGER_DATA_INVALID',
+          message: 'Passenger gender (male or female) is required for airline ticket issuance.',
+          reqId
+        });
+        return;
+      }
+
+      if (!isDobValidFormat || !isDobSensible) {
+        res.status(400).json({
+          success: false,
+          error: 'PASSENGER_DATA_INVALID',
+          message: 'Passenger date of birth in valid YYYY-MM-DD format is required for airline ticket issuance.',
+          reqId
+        });
+        return;
+      }
+
+      // 5. Authoritative Carrier Settlement Amount & Currency
+      const authoritativeAmount = typeof currentOffer.total_amount === 'string' && currentOffer.total_amount.trim() ? currentOffer.total_amount.trim() : '0.00';
+      const authoritativeCurrency = typeof currentOffer.total_currency === 'string' && currentOffer.total_currency.trim() ? currentOffer.total_currency.trim() : 'USD';
+
+      if (parseFloat(authoritativeAmount) <= 0) {
+        res.status(400).json({
+          success: false,
+          error: 'DUFFEL_VALIDATION_ERROR',
+          message: 'Authoritative offer has an invalid carrier fare amount. Please search again.',
+          reqId
+        });
+        return;
+      }
+
+      // 6. Build Duffel POST /air/orders Payload
+      const orderPayload = {
+        data: {
+          type: 'instant',
+          selected_offers: [cleanOfferId],
+          passengers: [
+            {
+              id: authoritativePassengerId,
+              title: cleanTitle,
+              gender: cleanGender,
+              given_name: cleanGivenName,
+              family_name: cleanFamilyName,
+              born_on: rawDob,
+              email: cleanEmail,
+              phone_number: cleanPhone
+            }
+          ],
+          payments: [
+            {
+              type: 'balance',
+              currency: authoritativeCurrency,
+              amount: authoritativeAmount
+            }
+          ]
+        }
+      };
+
       try {
         const orderRes = await fetch(`${baseUrl}/air/orders`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
-            'Duffel-Version': 'v2'
+            'Duffel-Version': 'v2',
+            'Accept': 'application/json'
           },
-          body: JSON.stringify({
-            data: {
-              selected_offers: [cleanOfferId],
-              passengers: [
-                {
-                  id: passengerDetails?.id || 'pas_1',
-                  given_name: typeof passengerDetails?.givenName === 'string' ? passengerDetails.givenName.slice(0, 50) : 'Pioneer',
-                  family_name: typeof passengerDetails?.familyName === 'string' ? passengerDetails.familyName.slice(0, 50) : 'Traveler',
-                  email: typeof passengerDetails?.email === 'string' ? passengerDetails.email.slice(0, 100) : 'traveler@pinova.hub',
-                  phone_number: typeof passengerDetails?.phone === 'string' ? passengerDetails.phone.slice(0, 25) : '+2348000000000'
-                }
-              ],
-              payments: [{ type: 'balance', currency: 'USD', amount: '0.00' }]
-            }
-          })
+          body: JSON.stringify(orderPayload)
         });
+
+        const duffelReqId = orderRes.headers.get('x-request-id') || 'unknown';
 
         if (orderRes.ok) {
           const orderData = await orderRes.json();
@@ -2036,7 +2277,7 @@ const handleFlightBook = async (req: express.Request, res: express.Response) => 
           const duffelOrderId = orderData?.data?.id || `REF-${Date.now()}`;
           const ticketNumber = orderData?.data?.documents?.[0]?.unique_identifier || null;
 
-          console.log(`[Flight Lifecycle] flight.booking.succeeded reqId=${reqId} duffelOrderId=${duffelOrderId} pnr=${pnr || 'N/A'}`);
+          console.log(`[Flight Lifecycle] flight.booking.succeeded reqId=${reqId} duffelReqId=${duffelReqId} duffelOrderId=${duffelOrderId} pnr=${pnr || 'N/A'} tkt=${ticketNumber || 'N/A'}`);
 
           const bookingRecord = {
             bookingId: `BK-DUFFEL-${cleanPaymentId.slice(-6).toUpperCase()}`,
@@ -2049,7 +2290,7 @@ const handleFlightBook = async (req: express.Request, res: express.Response) => 
             bookingMode: 'LIVE_DUFFEL' as const,
             isLiveBooking: true,
             message: 'Live airline ticket issued successfully via Duffel.',
-            passengerName: `${passengerDetails?.givenName || 'Pioneer'} ${passengerDetails?.familyName || 'Traveler'}`,
+            passengerName: `${cleanGivenName} ${cleanFamilyName}`,
             timestamp: new Date().toISOString()
           };
 
@@ -2057,8 +2298,35 @@ const handleFlightBook = async (req: express.Request, res: express.Response) => 
           res.json({ success: true, booking: bookingRecord, reqId });
           return;
         } else {
-          const errorText = await orderRes.text();
-          console.error(`[Flight Lifecycle] flight.booking.failed reqId=${reqId}:`, errorText.substring(0, 150));
+          const rawErrText = await orderRes.text().catch(() => '');
+          let duffelErrors: any[] = [];
+          try {
+            const parsed = JSON.parse(rawErrText);
+            duffelErrors = Array.isArray(parsed?.errors) ? parsed.errors : [];
+          } catch {
+            // raw text
+          }
+
+          const firstErr = duffelErrors[0] || {};
+          const sanitizedErrDetails = duffelErrors.map((e: any) => ({
+            code: e.code,
+            title: e.title,
+            field: e.source?.field || e.source?.pointer,
+            message: e.message
+          }));
+
+          console.error(
+            `[Flight Lifecycle] flight.booking.duffel_failed reqId=${reqId} duffelReqId=${duffelReqId} status=${orderRes.status} offerId=${cleanOfferId} errors=${JSON.stringify(sanitizedErrDetails)}`
+          );
+
+          const errorCategory = firstErr.code === 'validation_required'
+            ? 'DUFFEL_VALIDATION_ERROR'
+            : (firstErr.code ? `DUFFEL_${String(firstErr.code).toUpperCase()}` : 'DUFFEL_ORDER_FAILED');
+
+          const userMessage = firstErr.message
+            ? `Airline gateway rejected booking: ${firstErr.message}. Funds held safely in Escrow for instant refund/retry.`
+            : 'Payment completed on Pi Network. Airline seat allocation failed at carrier gateway. Funds held safely in Escrow for instant refund/retry.';
+
           const failedBookingRecord = {
             bookingId: `BK-FAILED-${cleanPaymentId.slice(-6).toUpperCase()}`,
             paymentId: cleanPaymentId,
@@ -2069,16 +2337,17 @@ const handleFlightBook = async (req: express.Request, res: express.Response) => 
             provider: 'duffel',
             bookingMode: 'LIVE_DUFFEL' as const,
             isLiveBooking: false,
-            message: 'Payment completed on Pi Network. Airline seat allocation failed at carrier gateway. Funds held safely in Escrow for instant refund/retry.',
-            passengerName: `${passengerDetails?.givenName || 'Pioneer'} ${passengerDetails?.familyName || 'Traveler'}`,
+            message: userMessage,
+            passengerName: `${cleanGivenName} ${cleanFamilyName}`,
             timestamp: new Date().toISOString()
           };
           flightFulfillmentRepo.recordBooking(key, failedBookingRecord);
           res.status(502).json({
             success: false,
+            error: errorCategory,
             status: 'BOOKING_FAILED_HELD_FOR_REFUND',
-            message: 'Payment completed on Pi Network. Airline seat allocation failed at carrier gateway. Funds held safely in Escrow for instant refund/retry.',
-            details: 'Carrier allocation error. Refund available in Escrow.',
+            message: userMessage,
+            details: firstErr.title || 'Carrier allocation error. Refund available in Escrow.',
             reqId
           });
           return;
@@ -2096,12 +2365,13 @@ const handleFlightBook = async (req: express.Request, res: express.Response) => 
           bookingMode: 'LIVE_DUFFEL' as const,
           isLiveBooking: false,
           message: 'Payment verified on Pi Network. Airline gateway timed out. Escrow active for refund/retry.',
-          passengerName: `${passengerDetails?.givenName || 'Pioneer'} ${passengerDetails?.familyName || 'Traveler'}`,
+          passengerName: `${cleanGivenName} ${cleanFamilyName}`,
           timestamp: new Date().toISOString()
         };
         flightFulfillmentRepo.recordBooking(key, failedBookingRecord);
         res.status(502).json({
           success: false,
+          error: 'BOOKING_FAILED_AFTER_PI_PAYMENT',
           status: 'BOOKING_FAILED_HELD_FOR_REFUND',
           message: 'Payment verified on Pi Network. Airline gateway timed out. Escrow active for refund/retry.',
           details: 'Gateway timeout.',
