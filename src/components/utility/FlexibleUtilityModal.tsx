@@ -1340,7 +1340,9 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
           receipt={generatedReceipt}
           onClose={() => {
             setGeneratedReceipt(null);
-            if (onClose) onClose();
+            if (!isEmbedded && onClose) {
+              onClose();
+            }
           }}
           onNewTransaction={() => {
             setGeneratedReceipt(null);

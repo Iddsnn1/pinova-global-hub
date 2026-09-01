@@ -686,7 +686,7 @@ export const UtilitiesView: React.FC<UtilitiesViewProps> = ({
                     Copy Code
                   </button>
                   <button
-                    onClick={handleBackToEcosystem}
+                    onClick={() => setPurchaseReceipt(null)}
                     className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl"
                   >
                     Done
@@ -702,7 +702,9 @@ export const UtilitiesView: React.FC<UtilitiesViewProps> = ({
                 piConversionConfig={utilityConfig}
                 userBalancePi={userBalancePi}
                 buyerUsername={buyerUsername}
-                onClose={handleBackToEcosystem}
+                onClose={() => {
+                  // In embedded mode within UtilitiesView, preserve the current service view
+                }}
                 onTransactionSuccess={(receipt) => {
                   onTransactionSuccess({
                     providerName: receipt.providerName,
@@ -715,7 +717,6 @@ export const UtilitiesView: React.FC<UtilitiesViewProps> = ({
                     piPaymentId: receipt.piPaymentId,
                     piTxid: receipt.piTxid
                   });
-                  handleBackToEcosystem();
                 }}
               />
             )}
