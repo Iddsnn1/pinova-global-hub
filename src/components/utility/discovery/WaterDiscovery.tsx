@@ -24,6 +24,7 @@ import { resolveWaterProviders } from '../../../lib/utility/serviceDiscovery';
 import { LocationSelector } from './LocationSelector';
 import { createPiPayment } from '../../../lib/piSdk';
 import { DigitalReceiptModal } from '../DigitalReceiptModal';
+import { formatPiAmount, calculateAuthoritativePiAmount } from '../../../utils/formatters';
 
 interface WaterDiscoveryProps {
   providers: UtilityServiceProvider[];
@@ -162,7 +163,7 @@ export const WaterDiscovery: React.FC<WaterDiscoveryProps> = ({
 
   // Calculate effective fiat and Pi network amounts
   const effectiveFiatAmount = selectedPackage ? selectedPackage.fiatPrice : Number(customFiatAmount) || 0;
-  const effectivePiAmount = effectiveFiatAmount > 0 ? (effectiveFiatAmount / activeRate).toFixed(7) : '0.0000000';
+  const effectivePiAmount = effectiveFiatAmount > 0 ? calculateAuthoritativePiAmount(effectiveFiatAmount, activeRate) : 0;
 
   // Handle Meter / Account Verification
   const handleVerifyAccount = () => {
@@ -196,9 +197,9 @@ export const WaterDiscovery: React.FC<WaterDiscoveryProps> = ({
       return;
     }
 
-    const piAmountNum = Number(effectivePiAmount);
+    const piAmountNum = effectivePiAmount;
     if (userBalancePi < piAmountNum) {
-      setErrorMessage(`Insufficient Pi balance. Required: ${effectivePiAmount} π, Available: ${userBalancePi.toFixed(4)} π`);
+      setErrorMessage(`Insufficient Pi balance. Required: ${formatPiAmount(effectivePiAmount)} π, Available: ${formatPiAmount(userBalancePi)} π`);
       return;
     }
 
@@ -498,7 +499,7 @@ export const WaterDiscovery: React.FC<WaterDiscoveryProps> = ({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {selectedProvider.packages.map((pkg) => {
                   const isPkgSelected = selectedPackage?.id === pkg.id;
-                  const pkgPi = (pkg.fiatPrice / activeRate).toFixed(7);
+                  const pkgPi = calculateAuthoritativePiAmount(pkg.fiatPrice, activeRate);
 
                   return (
                     <button
@@ -517,11 +518,11 @@ export const WaterDiscovery: React.FC<WaterDiscoveryProps> = ({
                     >
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-bold text-white">{pkg.name}</span>
-                        <span className="text-xs font-bold text-cyan-400 font-mono">${pkg.fiatPrice}</span>
+                        <span className="text-xs font-bold text-cyan-400 font-mono">${pkg.fiatPrice.toFixed(2)}</span>
                       </div>
                       <div className="flex items-center justify-between mt-1 text-[11px] text-slate-400">
                         <span>{pkg.description || 'Instant Meter Settlement'}</span>
-                        <span className="text-cyan-300 font-mono font-semibold">{pkgPi} π</span>
+                        <span className="text-cyan-300 font-mono font-semibold">{formatPiAmount(pkgPi)} π</span>
                       </div>
                     </button>
                   );
@@ -593,7 +594,7 @@ export const WaterDiscovery: React.FC<WaterDiscoveryProps> = ({
               <span className="font-bold text-slate-200">Total Pi Network Due</span>
               <span className="font-mono font-bold text-sm text-cyan-400 flex items-center gap-1">
                 <Coins className="w-4 h-4" />
-                {effectivePiAmount} π
+                {formatPiAmount(effectivePiAmount)} π
               </span>
             </div>
           </div>
@@ -622,7 +623,7 @@ export const WaterDiscovery: React.FC<WaterDiscoveryProps> = ({
             ) : (
               <>
                 <ShieldCheck className="w-4 h-4" />
-                <span>Settle Water Bill &bull; Pay {effectivePiAmount} π</span>
+                <span>Settle Water Bill &bull; Pay {formatPiAmount(effectivePiAmount)} π</span>
               </>
             )}
           </button>

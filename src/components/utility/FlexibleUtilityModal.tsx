@@ -47,6 +47,7 @@ import { AIRTIME_COUNTRIES } from '../../data/airtimeData';
 import { ALL_GLOBAL_COUNTRIES } from '../../data/countriesData';
 import { createPiPayment } from '../../lib/piSdk';
 import { DigitalReceiptModal } from './DigitalReceiptModal';
+import { formatPiAmount, calculateAuthoritativePiAmount } from '../../utils/formatters';
 import { ProviderValidationFactory } from '../../modules/utility/providerValidation';
 import { supportsServiceDiscovery } from '../../lib/utility/serviceDiscovery';
 import { resolveElectricityProviders } from '../../lib/utility/electricityDiscovery';
@@ -467,15 +468,15 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
     return !isNaN(parsed) && isFinite(parsed) && parsed > 0 ? parsed : 0;
   };
 
-  const calculatedPiAmount = getActiveFiatPrice() / piConversionConfig.piRateUsd;
-  const minPiThreshold = piConversionConfig.minPurchasePi || 0.000001;
+  const calculatedPiAmount = calculateAuthoritativePiAmount(getActiveFiatPrice(), piConversionConfig.piRateUsd);
+  const minPiThreshold = piConversionConfig.minPurchasePi || 0.00000001;
   const isWithinLimits =
     calculatedPiAmount >= minPiThreshold &&
     calculatedPiAmount <= (piConversionConfig.maxPurchasePi || 1000.00);
 
   // Execute Pi Payment
   const handleExecutePayment = async () => {
-    const finalPiAmount = Number(calculatedPiAmount < 0.0001 ? calculatedPiAmount.toFixed(6) : calculatedPiAmount.toFixed(4));
+    const finalPiAmount = calculateAuthoritativePiAmount(getActiveFiatPrice(), piConversionConfig.piRateUsd);
 
     if (!selectedProvider) return;
     if (!accountNumber.trim()) {
@@ -491,7 +492,7 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
       return;
     }
     if (!isWithinLimits) {
-      setErrorMessage(`Calculated Pi amount (${finalPiAmount} π) is outside allowable limits.`);
+      setErrorMessage(`Calculated Pi amount (${formatPiAmount(finalPiAmount)} π) is outside allowable limits.`);
       return;
     }
 
@@ -1199,7 +1200,7 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                             <div className="pt-2 flex items-center justify-between text-xs border-t border-slate-100 dark:border-slate-800">
                               <span className="font-bold text-slate-500">${pkg.fiatPrice.toFixed(2)} USD</span>
                               <span className="font-black text-amber-500 dark:text-amber-400">
-                                {(pkg.fiatPrice / piConversionConfig.piRateUsd).toFixed(4)} π
+                                {formatPiAmount(calculateAuthoritativePiAmount(pkg.fiatPrice, piConversionConfig.piRateUsd))} π
                               </span>
                             </div>
                           </div>
@@ -1276,7 +1277,7 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                 <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-1 text-center">
                   <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Total Pi Cost</span>
                   <div className="text-2xl sm:text-3xl font-black text-amber-400 tracking-tight">
-                    {calculatedPiAmount < 0.0001 ? calculatedPiAmount.toFixed(6) : calculatedPiAmount.toFixed(4)} π
+                    {formatPiAmount(calculatedPiAmount)} π
                   </div>
                 </div>
 
@@ -1309,7 +1310,7 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                   ) : (
                     <>
                       <Lock className="w-4 h-4 text-amber-300" />
-                      <span>Pay {calculatedPiAmount < 0.0001 ? calculatedPiAmount.toFixed(6) : calculatedPiAmount.toFixed(4)} π with Pi Wallet</span>
+                      <span>Pay {formatPiAmount(calculatedPiAmount)} π with Pi Wallet</span>
                     </>
                   )}
                 </button>

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, CheckCircle2, ShieldCheck, Copy, Check, Download, Printer, ExternalLink, Zap, ArrowRight, Share2 } from 'lucide-react';
 import { UtilityTransactionReceipt } from '../../types/utility';
+import { formatPiAmount } from '../../utils/formatters';
 
 interface DigitalReceiptModalProps {
   receipt: UtilityTransactionReceipt;
@@ -148,7 +149,7 @@ export const DigitalReceiptModal: React.FC<DigitalReceiptModalProps> = ({
 
             <div className="flex justify-between items-center pt-1 text-sm">
               <span className="font-black text-slate-900 dark:text-slate-100">Total Pi Coin Paid</span>
-              <span className="font-black text-amber-500 dark:text-amber-400 text-base">{receipt.piAmount.toFixed(4)} π</span>
+              <span className="font-black text-amber-500 dark:text-amber-400 text-base">{formatPiAmount(receipt.piAmount)} π</span>
             </div>
           </div>
 

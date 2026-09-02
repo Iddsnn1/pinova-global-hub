@@ -28,6 +28,7 @@ import { resolveElectricityProviders, verifyElectricityMeter, identifyLikelyElec
 import { LocationSelector } from './LocationSelector';
 import { createPiPayment } from '../../../lib/piSdk';
 import { DigitalReceiptModal } from '../DigitalReceiptModal';
+import { formatPiAmount, calculateAuthoritativePiAmount } from '../../../utils/formatters';
 
 interface ElectricityDiscoveryProps {
   providers: UtilityServiceProvider[];
@@ -199,7 +200,7 @@ export const ElectricityDiscovery: React.FC<ElectricityDiscoveryProps> = ({
 
   // Calculate fiat and Pi amounts
   const finalFiatAmount = selectedPackage ? selectedPackage.fiatPrice : (Number(customFiatAmount) || 0);
-  const calculatedPiAmount = finalFiatAmount > 0 ? Number((finalFiatAmount / activeRate).toFixed(7)) : 0;
+  const calculatedPiAmount = finalFiatAmount > 0 ? calculateAuthoritativePiAmount(finalFiatAmount, activeRate) : 0;
 
   // Handle Payment Settlement
   const handleProceedPayment = async () => {
@@ -224,7 +225,7 @@ export const ElectricityDiscovery: React.FC<ElectricityDiscoveryProps> = ({
     }
 
     if (userBalancePi < calculatedPiAmount) {
-      setErrorMessage(`Insufficient Pi balance. Required: ${calculatedPiAmount} π, Available: ${userBalancePi} π.`);
+      setErrorMessage(`Insufficient Pi balance. Required: ${formatPiAmount(calculatedPiAmount)} π, Available: ${formatPiAmount(userBalancePi)} π.`);
       return;
     }
 
@@ -727,7 +728,7 @@ export const ElectricityDiscovery: React.FC<ElectricityDiscoveryProps> = ({
         <div className="p-4 rounded-2xl bg-slate-900/95 border border-slate-800 space-y-3">
           <div className="flex items-center justify-between border-b border-slate-800 pb-2">
             <span className="text-xs font-bold uppercase tracking-wider text-slate-300">Order Summary</span>
-            <span className="text-xs font-bold text-amber-400">{calculatedPiAmount} π</span>
+            <span className="text-xs font-bold text-amber-400">{formatPiAmount(calculatedPiAmount)} π</span>
           </div>
 
           <div className="space-y-1.5 text-xs text-slate-300">
@@ -785,7 +786,7 @@ export const ElectricityDiscovery: React.FC<ElectricityDiscoveryProps> = ({
             </div>
             <div className="flex justify-between pt-2 border-t border-slate-800 font-bold text-sm">
               <span className="text-slate-100">Total Settlement:</span>
-              <span className="text-amber-400">{calculatedPiAmount} π (${finalFiatAmount} USD)</span>
+              <span className="text-amber-400">{formatPiAmount(calculatedPiAmount)} π (${finalFiatAmount.toFixed(2)} USD)</span>
             </div>
           </div>
 
@@ -803,7 +804,7 @@ export const ElectricityDiscovery: React.FC<ElectricityDiscoveryProps> = ({
             ) : (
               <>
                 <Zap className="w-4 h-4" />
-                <span>Pay {calculatedPiAmount} π & Generate STS Token</span>
+                <span>Pay {formatPiAmount(calculatedPiAmount)} π & Generate STS Token</span>
               </>
             )}
           </button>
@@ -814,7 +815,6 @@ export const ElectricityDiscovery: React.FC<ElectricityDiscoveryProps> = ({
       {generatedReceipt && (
         <DigitalReceiptModal
           receipt={generatedReceipt}
-          isOpen={true}
           onClose={() => setGeneratedReceipt(null)}
         />
       )}

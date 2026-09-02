@@ -29,6 +29,7 @@ import {
 import { ALL_GLOBAL_COUNTRIES } from '../../../data/countriesData';
 import { PiConversionConfig, UtilityTransactionReceipt } from '../../../types/utility';
 import { createPiPayment } from '../../../lib/piSdk';
+import { formatPiAmount, calculateAuthoritativePiAmount } from '../../../utils/formatters';
 
 interface EventsDiscoveryProps {
   selectedCountryCode?: string;
@@ -113,7 +114,7 @@ export const EventsDiscovery: React.FC<EventsDiscoveryProps> = ({
   // Helper to convert USD fiat to Pi
   const calculatePi = (usd: number) => {
     if (!usd || usd <= 0 || !piRate) return 0;
-    return Number((usd / piRate).toFixed(6));
+    return calculateAuthoritativePiAmount(usd, piRate);
   };
 
   // Sync country change if parent prop changes
@@ -590,7 +591,7 @@ export const EventsDiscovery: React.FC<EventsDiscoveryProps> = ({
                             <div>
                               <div className="text-[10px] text-slate-400 font-bold uppercase">From</div>
                               <div className="text-sm font-black text-purple-600 dark:text-purple-400">
-                                {startingPi.toFixed(6)} π
+                                {formatPiAmount(startingPi)} π
                               </div>
                               <div className="text-[10px] text-slate-400">${minTier?.fiatPrice} USD</div>
                             </div>
@@ -684,7 +685,7 @@ export const EventsDiscovery: React.FC<EventsDiscoveryProps> = ({
                       </div>
                       <div>
                         <span className="text-slate-400 block text-[10px] font-bold uppercase">Settled Pi</span>
-                        <span className="font-black text-amber-600 dark:text-amber-400">{ticket.piAmount.toFixed(6)} π</span>
+                        <span className="font-black text-amber-600 dark:text-amber-400">{formatPiAmount(ticket.piAmount)} π</span>
                         <span className="block text-slate-400 text-[10px]">(${ticket.fiatAmount} USD)</span>
                       </div>
                     </div>
@@ -855,7 +856,7 @@ export const EventsDiscovery: React.FC<EventsDiscoveryProps> = ({
 
                             <div className="text-right sm:text-right shrink-0">
                               <div className="text-base font-black text-purple-600 dark:text-purple-400">
-                                {tierPi.toFixed(6)} π
+                                {formatPiAmount(tierPi)} π
                               </div>
                               <div className="text-xs text-slate-400">${tier.fiatPrice} USD</div>
                             </div>
@@ -924,7 +925,7 @@ export const EventsDiscovery: React.FC<EventsDiscoveryProps> = ({
                           Total ({ticketQuantity}x {selectedTier.name}):
                         </div>
                         <div className="text-xl font-black text-purple-900 dark:text-purple-200">
-                          {calculatePi(selectedTier.fiatPrice * ticketQuantity).toFixed(6)} π
+                          {formatPiAmount(calculatePi(selectedTier.fiatPrice * ticketQuantity))} π
                         </div>
                         <div className="text-[11px] text-slate-500">
                           ${(selectedTier.fiatPrice * ticketQuantity).toFixed(2)} USD (GCV: 1 π = ${piRate.toLocaleString()} USD)
@@ -945,7 +946,7 @@ export const EventsDiscovery: React.FC<EventsDiscoveryProps> = ({
                         ) : (
                           <>
                             <CreditCard className="w-4 h-4" />
-                            <span>Pay with Pi ({calculatePi(selectedTier.fiatPrice * ticketQuantity).toFixed(6)} π)</span>
+                            <span>Pay with Pi ({formatPiAmount(calculatePi(selectedTier.fiatPrice * ticketQuantity))} π)</span>
                           </>
                         )}
                       </button>

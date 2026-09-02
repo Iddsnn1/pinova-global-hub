@@ -241,26 +241,54 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
    * PASSENGER VALIDATION
    * ============================================================
    */
-  const validatePassengerDetails = () => {
-    if (!givenName.trim() || !familyName.trim()) {
+  const validatePassengerDetails = (): string | null => {
+    if (!givenName || !givenName.trim() || !familyName || !familyName.trim()) {
       return 'Please enter passenger first and last name.';
     }
 
-    if (!email.trim() || !phone.trim()) {
-      return 'Please provide a valid email and phone number for e-ticket delivery.';
-    }
-
-    if (!dateOfBirth || !dateOfBirth.trim()) {
-      return 'Passenger date of birth is required for airline ticket issuance and GDS manifest.';
-    }
-
-    const dobDate = new Date(dateOfBirth);
-    if (isNaN(dobDate.getTime()) || dobDate >= new Date() || dobDate.getFullYear() < 1900) {
-      return 'Please enter a valid passenger date of birth in the past (YYYY-MM-DD).';
+    if (!title || !title.trim()) {
+      return 'Please select a passenger title (Mr, Mrs, Ms).';
     }
 
     if (!gender || (gender !== 'male' && gender !== 'female')) {
       return 'Please select passenger gender (Male or Female) required for carrier ticket issuance.';
+    }
+
+    const trimmedDob = typeof dateOfBirth === 'string' ? dateOfBirth.trim() : '';
+    if (!trimmedDob || !/^\d{4}-\d{2}-\d{2}$/.test(trimmedDob)) {
+      return "Please enter the passenger's date of birth in YYYY-MM-DD format.";
+    }
+
+    const [yStr, mStr, dStr] = trimmedDob.split('-');
+    const year = parseInt(yStr, 10);
+    const month = parseInt(mStr, 10);
+    const day = parseInt(dStr, 10);
+
+    if (isNaN(year) || isNaN(month) || isNaN(day) || month < 1 || month > 12 || day < 1 || day > 31) {
+      return "Please enter the passenger's date of birth in YYYY-MM-DD format.";
+    }
+
+    const dobDate = new Date(year, month - 1, day);
+    if (
+      dobDate.getFullYear() !== year ||
+      dobDate.getMonth() !== month - 1 ||
+      dobDate.getDate() !== day
+    ) {
+      return "Please enter the passenger's date of birth in YYYY-MM-DD format.";
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (dobDate.getTime() >= today.getTime()) {
+      return 'Passenger date of birth must be a valid date in the past.';
+    }
+
+    if (year < 1900) {
+      return 'Please enter a valid passenger date of birth (after 1900).';
+    }
+
+    if (!email || !email.trim() || !email.includes('@') || !phone || !phone.trim()) {
+      return 'Please provide a valid email and phone number for e-ticket delivery.';
     }
 
     if (
@@ -283,9 +311,9 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
       title,
       givenName: givenName.trim(),
       familyName: familyName.trim(),
-      dateOfBirth,
+      dateOfBirth: dateOfBirth.trim(),
       gender,
-      nationality,
+      nationality: nationality.trim() || undefined,
       passportNumber:
         passportNumber.trim() || undefined,
       passportExpiry:
@@ -452,6 +480,13 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
    */
   const handleExecutePiPayment = async () => {
     if (isProcessing) return;
+
+    const passengerValidationError = validatePassengerDetails();
+    if (passengerValidationError) {
+      setFlowState('details');
+      setErrorMessage(passengerValidationError);
+      return;
+    }
 
     if (
       !Number.isFinite(currentFareFiat) ||
@@ -1097,7 +1132,7 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
               <div className="text-xs font-extrabold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
                 <User className="w-4 h-4 text-purple-400" />
                 <span>
-                  Passenger & Identification Details
+                  PASSENGER DETAILS (Required for Airline GDS Manifest & E-Ticket)
                 </span>
               </div>
 
@@ -1105,11 +1140,12 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
 
                 <div>
                   <label className="block text-[11px] font-bold text-slate-400 mb-1">
-                    Title
+                    Title *
                   </label>
 
                   <select
                     id="flight-passenger-title-select"
+                    required
                     value={title}
                     onChange={(e) =>
                       setTitle(
@@ -1450,6 +1486,16 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
                     {title}{' '}
                     {givenName}{' '}
                     {familyName}
+                  </span>
+                </div>
+
+                <div className="flex justify-between text-slate-400">
+                  <span>
+                    Date of Birth / Gender
+                  </span>
+
+                  <span className="font-mono text-white">
+                    {dateOfBirth} ({gender === 'male' ? 'Male' : 'Female'})
                   </span>
                 </div>
 

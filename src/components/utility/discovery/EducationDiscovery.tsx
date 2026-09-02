@@ -32,6 +32,7 @@ import { searchInstitutions } from '../../../lib/utility/serviceDiscovery';
 import { LocationSelector } from './LocationSelector';
 import { createPiPayment } from '../../../lib/piSdk';
 import { DigitalReceiptModal } from '../DigitalReceiptModal';
+import { formatPiAmount, calculateAuthoritativePiAmount } from '../../../utils/formatters';
 
 interface EducationDiscoveryProps {
   providers: UtilityServiceProvider[];
@@ -180,7 +181,7 @@ export const EducationDiscovery: React.FC<EducationDiscoveryProps> = ({
 
   const effectivePiAmount: number = useMemo(() => {
     if (effectiveFiatAmount <= 0) return 0;
-    return Number((effectiveFiatAmount / activeRate).toFixed(7));
+    return calculateAuthoritativePiAmount(effectiveFiatAmount, activeRate);
   }, [effectiveFiatAmount, activeRate]);
 
   // Validate student account / matric number
@@ -220,7 +221,7 @@ export const EducationDiscovery: React.FC<EducationDiscoveryProps> = ({
       return;
     }
     if (userBalancePi < effectivePiAmount) {
-      setErrorMessage(`Insufficient balance: You need ${effectivePiAmount} π but have ${userBalancePi} π.`);
+      setErrorMessage(`Insufficient balance: You need ${formatPiAmount(effectivePiAmount)} π but have ${formatPiAmount(userBalancePi)} π.`);
       return;
     }
 
@@ -578,11 +579,11 @@ export const EducationDiscovery: React.FC<EducationDiscoveryProps> = ({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {selectedInstitution.packages.map((pkg) => {
                   const isPkgSelected = selectedPackage?.id === pkg.id;
-                  const pkgPi = (pkg.fiatPrice / activeRate).toFixed(7);
+                  const pkgPi = calculateAuthoritativePiAmount(pkg.fiatPrice, activeRate);
 
                   return (
                     <button
-                      id={`btn-pkg-${pkg.id}`}
+                      id={`btn-edu-pkg-${pkg.id}`}
                       key={pkg.id}
                       type="button"
                       onClick={() => {
@@ -597,11 +598,11 @@ export const EducationDiscovery: React.FC<EducationDiscoveryProps> = ({
                     >
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-bold text-white">{pkg.name}</span>
-                        <span className="text-xs font-bold text-pink-400 font-mono">${pkg.fiatPrice}</span>
+                        <span className="text-xs font-bold text-pink-400 font-mono">${pkg.fiatPrice.toFixed(2)}</span>
                       </div>
                       <div className="flex items-center justify-between mt-1 text-[11px] text-slate-400">
                         <span>{pkg.description || 'Instant Portal Deposit'}</span>
-                        <span className="text-pink-300 font-mono font-semibold">{pkgPi} π</span>
+                        <span className="text-pink-300 font-mono font-semibold">{formatPiAmount(pkgPi)} π</span>
                       </div>
                     </button>
                   );
@@ -673,7 +674,7 @@ export const EducationDiscovery: React.FC<EducationDiscoveryProps> = ({
               <span className="font-bold text-slate-200">Total Pi Network Due</span>
               <span className="font-mono font-bold text-sm text-pink-400 flex items-center gap-1">
                 <Coins className="w-4 h-4" />
-                {effectivePiAmount} π
+                {formatPiAmount(effectivePiAmount)} π
               </span>
             </div>
           </div>
@@ -702,7 +703,7 @@ export const EducationDiscovery: React.FC<EducationDiscoveryProps> = ({
             ) : (
               <>
                 <ShieldCheck className="w-4 h-4" />
-                <span>Settle Clearance &bull; Pay {effectivePiAmount} π</span>
+                <span>Settle Clearance &bull; Pay {formatPiAmount(effectivePiAmount)} π</span>
               </>
             )}
           </button>

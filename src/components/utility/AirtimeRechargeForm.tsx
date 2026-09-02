@@ -13,6 +13,7 @@ import {
 import { UtilityServiceProvider, UtilityProviderPackage, PiConversionConfig } from '../../types/utility';
 import { AIRTIME_COUNTRIES, validateAirtimePhoneNumber, PhoneValidationStatus } from '../../data/airtimeData';
 import { SAMPLE_UTILITY_PROVIDERS } from '../../data/utilityData';
+import { formatPiAmount, calculateAuthoritativePiAmount } from '../../utils/formatters';
 
 interface AirtimeRechargeFormProps {
   piConversionConfig: PiConversionConfig;
@@ -129,9 +130,9 @@ export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
   };
 
   const activeFiatPrice = getActiveFiatPrice();
-  const calculatedPiAmount = activeFiatPrice / piConversionConfig.piRateUsd;
+  const calculatedPiAmount = calculateAuthoritativePiAmount(activeFiatPrice, piConversionConfig.piRateUsd);
   const isValidPositiveAmount = typeof activeFiatPrice === 'number' && !isNaN(activeFiatPrice) && isFinite(activeFiatPrice) && activeFiatPrice > 0;
-  const minPiThreshold = piConversionConfig.minPurchasePi || 0.000001;
+  const minPiThreshold = piConversionConfig.minPurchasePi || 0.00000001;
   const isWithinLimits =
     calculatedPiAmount >= minPiThreshold &&
     calculatedPiAmount <= (piConversionConfig.maxPurchasePi || 1000.00);
@@ -156,7 +157,7 @@ export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const finalPiAmount = Number(calculatedPiAmount < 0.0001 ? calculatedPiAmount.toFixed(6) : calculatedPiAmount.toFixed(4));
+    const finalPiAmount = calculateAuthoritativePiAmount(getActiveFiatPrice(), piConversionConfig.piRateUsd);
     console.log('[PI PAYMENT] button clicked (AirtimeRechargeForm)', {
       country: activeCountry?.name,
       provider: selectedProvider?.name,
@@ -518,11 +519,11 @@ export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
           </div>
           <div className="flex justify-between text-xs">
             <span className="text-slate-400">Pi Platform Exchange Rate:</span>
-            <span className="text-amber-400 font-bold">1 π = ${piConversionConfig.piRateUsd.toFixed(2)} USD</span>
+            <span className="text-amber-400 font-bold">1 π = ${piConversionConfig.piRateUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD</span>
           </div>
           <div className="flex justify-between items-center pt-2 border-t border-slate-800">
             <span className="text-xs font-black uppercase tracking-wider text-slate-200">Required Pi Amount:</span>
-            <span className="text-xl font-black text-amber-400">{calculatedPiAmount < 0.0001 ? calculatedPiAmount.toFixed(6) : calculatedPiAmount.toFixed(4)} π</span>
+            <span className="text-xl font-black text-amber-400">{formatPiAmount(calculatedPiAmount)} π</span>
           </div>
         </div>
       )}
@@ -550,7 +551,7 @@ export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
             <ShieldCheck className="w-5 h-5 text-amber-300" />
             <span>
               {canProceed
-                ? `Pay ${calculatedPiAmount < 0.0001 ? calculatedPiAmount.toFixed(6) : calculatedPiAmount.toFixed(4)} π Now`
+                ? `Pay ${formatPiAmount(calculatedPiAmount)} π Now`
                 : !selectedCountryCode
                 ? 'Select Country to Continue'
                 : !selectedProvider

@@ -37,6 +37,7 @@ import {
   TRANSIT_STATIONS 
 } from '../../../data/transportData';
 import { FlightServicesHub } from '../../flight/FlightServicesHub';
+import { formatPiAmount, calculateAuthoritativePiAmount } from '../../../utils/formatters';
 
 export type TransportModeType = 'air' | 'rail' | 'bus' | 'bus_line';
 
@@ -132,7 +133,7 @@ export const TransportDiscovery: React.FC<TransportDiscoveryProps> = ({
   const calculatePi = (fiatAmount: number): number => {
     const rate = piConversionConfig?.piRateUsd > 0 ? piConversionConfig.piRateUsd : 10.0;
     const raw = typeof fiatAmount === 'number' && Number.isFinite(fiatAmount) && fiatAmount > 0 ? fiatAmount : 25.0;
-    return Number((raw / rate).toFixed(4));
+    return calculateAuthoritativePiAmount(raw, rate);
   };
 
   // Station Suggestions based on current mode
@@ -883,7 +884,7 @@ export const TransportDiscovery: React.FC<TransportDiscoveryProps> = ({
                       <div className="flex items-center justify-between w-full sm:w-auto gap-5 pt-3 sm:pt-0 border-t sm:border-0 border-slate-100 dark:border-slate-800 shrink-0">
                         <div className="text-right">
                           <div className="text-base font-black text-amber-500 dark:text-amber-400 font-mono">
-                            {piFare.toFixed(4)} π
+                            {formatPiAmount(piFare)} π
                           </div>
                           <div className="text-[11px] text-slate-500 dark:text-slate-400">
                             ≈ ${safeFare.toFixed(2)} USD
@@ -1080,7 +1081,7 @@ export const TransportDiscovery: React.FC<TransportDiscoveryProps> = ({
                 </div>
                 <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-200 dark:border-slate-800">
                   <span className="font-extrabold text-amber-600 dark:text-amber-300">Pi Payment Required:</span>
-                  <span className="text-amber-600 dark:text-amber-300 font-black text-sm font-mono">{selectedPendingOption.piFare.toFixed(4)} π</span>
+                  <span className="text-amber-600 dark:text-amber-300 font-black text-sm font-mono">{formatPiAmount(selectedPendingOption.piFare)} π</span>
                 </div>
               </div>
 

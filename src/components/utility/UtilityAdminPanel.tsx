@@ -28,6 +28,7 @@ import {
 } from '../../types/utility';
 import { UTILITY_CATEGORY_META, SAMPLE_UTILITY_PROVIDERS, INITIAL_UTILITY_TRANSACTIONS } from '../../data/utilityData';
 import { DigitalReceiptModal } from './DigitalReceiptModal';
+import { formatPiAmount } from '../../utils/formatters';
 
 interface UtilityAdminPanelProps {
   config: PiConversionConfig;
@@ -509,8 +510,8 @@ export const UtilityAdminPanel: React.FC<UtilityAdminPanelProps> = ({
                       <div className="text-[10px] text-slate-400 font-mono">{tx.accountNumber}</div>
                     </td>
                     <td className="py-3 px-3 font-bold">${tx.fiatAmount.toFixed(2)} {tx.fiatCurrency}</td>
-                    <td className="py-3 px-3 font-black text-amber-500">{tx.piAmount.toFixed(4)} π</td>
-                    <td className="py-3 px-3 font-mono text-slate-500">1 π = ${tx.appliedPiRateUsd.toFixed(2)}</td>
+                    <td className="py-3 px-3 font-black text-amber-500">{formatPiAmount(tx.piAmount)} π</td>
+                    <td className="py-3 px-3 font-mono text-slate-500">1 π = ${tx.appliedPiRateUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                     <td className="py-3 px-3">
                       <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
                         {tx.status}

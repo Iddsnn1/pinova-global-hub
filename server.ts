@@ -2168,13 +2168,35 @@ const handleFlightBook = async (req: express.Request, res: express.Response) => 
 
       const rawDob = typeof passengerDetails?.dateOfBirth === 'string' ? passengerDetails.dateOfBirth.trim() : (typeof passengerDetails?.bornOn === 'string' ? passengerDetails.bornOn.trim() : '');
       const isDobValidFormat = /^\d{4}-\d{2}-\d{2}$/.test(rawDob);
-      const dobDate = isDobValidFormat ? new Date(rawDob) : null;
-      const isDobSensible = dobDate && !isNaN(dobDate.getTime()) && dobDate.getTime() < Date.now() && dobDate.getFullYear() > 1900;
+      let isDobSensible = false;
+      if (isDobValidFormat) {
+        const [y, m, d] = rawDob.split('-').map(Number);
+        if (m >= 1 && m <= 12 && d >= 1 && d <= 31 && y >= 1900) {
+          const parsedDate = new Date(y, m - 1, d);
+          if (
+            parsedDate.getFullYear() === y &&
+            parsedDate.getMonth() === m - 1 &&
+            parsedDate.getDate() === d &&
+            parsedDate.getTime() < Date.now()
+          ) {
+            isDobSensible = true;
+          }
+        }
+      }
 
       const cleanGivenName = typeof passengerDetails?.givenName === 'string' ? passengerDetails.givenName.trim().slice(0, 50) : '';
       const cleanFamilyName = typeof passengerDetails?.familyName === 'string' ? passengerDetails.familyName.trim().slice(0, 50) : '';
       const cleanEmail = typeof passengerDetails?.email === 'string' ? passengerDetails.email.trim().slice(0, 100) : 'traveler@pinova.hub';
       const cleanPhone = typeof passengerDetails?.phone === 'string' ? passengerDetails.phone.trim().slice(0, 25) : '+2348000000000';
+
+      console.log(
+        `[Flight Lifecycle] PASSENGER_VALIDATION reqId=${reqId} ` +
+        `born_on_present=${Boolean(rawDob)} ` +
+        `born_on_format_valid=${Boolean(isDobValidFormat && isDobSensible)} ` +
+        `gender_present=${Boolean(cleanGender)} ` +
+        `title_present=${Boolean(cleanTitle)} ` +
+        `duffel_passenger_id_present=${Boolean(authoritativePassengerId)}`
+      );
 
       if (!cleanGivenName || !cleanFamilyName) {
         res.status(400).json({

@@ -23,6 +23,7 @@ import { resolveGovernmentServices } from '../../../lib/utility/serviceDiscovery
 import { LocationSelector } from './LocationSelector';
 import { createPiPayment } from '../../../lib/piSdk';
 import { DigitalReceiptModal } from '../DigitalReceiptModal';
+import { formatPiAmount, calculateAuthoritativePiAmount } from '../../../utils/formatters';
 
 interface GovernmentDiscoveryProps {
   providers: UtilityServiceProvider[];
@@ -143,7 +144,7 @@ export const GovernmentDiscovery: React.FC<GovernmentDiscoveryProps> = ({
   };
 
   const effectiveFiatAmount = selectedPackage ? selectedPackage.fiatPrice : Number(customFiatAmount) || 0;
-  const effectivePiAmount = effectiveFiatAmount > 0 ? (effectiveFiatAmount / activeRate).toFixed(7) : '0.0000000';
+  const effectivePiAmount = effectiveFiatAmount > 0 ? calculateAuthoritativePiAmount(effectiveFiatAmount, activeRate) : 0;
 
   const handleProcessPayment = async () => {
     if (!selectedAgency || !selectedCivicService) {
@@ -159,9 +160,9 @@ export const GovernmentDiscovery: React.FC<GovernmentDiscoveryProps> = ({
       return;
     }
 
-    const piAmountNum = Number(effectivePiAmount);
+    const piAmountNum = effectivePiAmount;
     if (userBalancePi < piAmountNum) {
-      setErrorMessage(`Insufficient Pi balance. Required: ${effectivePiAmount} π, Available: ${userBalancePi.toFixed(4)} π`);
+      setErrorMessage(`Insufficient Pi balance. Required: ${formatPiAmount(effectivePiAmount)} π, Available: ${formatPiAmount(userBalancePi)} π`);
       return;
     }
 
@@ -473,7 +474,7 @@ export const GovernmentDiscovery: React.FC<GovernmentDiscoveryProps> = ({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {selectedAgency.packages.map((pkg) => {
                   const isPkgSelected = selectedPackage?.id === pkg.id;
-                  const pkgPi = (pkg.fiatPrice / activeRate).toFixed(7);
+                  const pkgPi = calculateAuthoritativePiAmount(pkg.fiatPrice, activeRate);
 
                   return (
                     <button
@@ -492,11 +493,11 @@ export const GovernmentDiscovery: React.FC<GovernmentDiscoveryProps> = ({
                     >
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-bold text-white">{pkg.name}</span>
-                        <span className="text-xs font-bold text-emerald-400 font-mono">${pkg.fiatPrice}</span>
+                        <span className="text-xs font-bold text-emerald-400 font-mono">${pkg.fiatPrice.toFixed(2)}</span>
                       </div>
                       <div className="flex items-center justify-between mt-1 text-[11px] text-slate-400">
                         <span>{pkg.description || 'Instant Civic Clearance'}</span>
-                        <span className="text-emerald-300 font-mono font-semibold">{pkgPi} π</span>
+                        <span className="text-emerald-300 font-mono font-semibold">{formatPiAmount(pkgPi)} π</span>
                       </div>
                     </button>
                   );
@@ -568,7 +569,7 @@ export const GovernmentDiscovery: React.FC<GovernmentDiscoveryProps> = ({
               <span className="font-bold text-slate-200">Total Pi Network Due</span>
               <span className="font-mono font-bold text-sm text-emerald-400 flex items-center gap-1">
                 <Coins className="w-4 h-4" />
-                {effectivePiAmount} π
+                {formatPiAmount(effectivePiAmount)} π
               </span>
             </div>
           </div>
@@ -597,7 +598,7 @@ export const GovernmentDiscovery: React.FC<GovernmentDiscoveryProps> = ({
             ) : (
               <>
                 <ShieldCheck className="w-4 h-4" />
-                <span>Settle Civic Fee &bull; Pay {effectivePiAmount} π</span>
+                <span>Settle Civic Fee &bull; Pay {formatPiAmount(effectivePiAmount)} π</span>
               </>
             )}
           </button>

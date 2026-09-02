@@ -69,6 +69,7 @@ import { LanguageProvider } from './context/LanguageContext';
 import { LanguageSelectorModal } from './components/i18n/LanguageSelectorModal';
 import { MerchantEcosystemHub } from './components/merchant/MerchantEcosystemHub';
 import { VendorApplicationModal } from './components/vendor/VendorApplicationModal';
+import { formatPiAmount } from './utils/formatters';
 
 function MainAppContent() {
   // Dark mode
@@ -975,7 +976,7 @@ function MainAppContent() {
                 {
                   id: `notif-${Date.now()}`,
                   title: 'Utility Purchase Fulfilled & Order Recorded',
-                  message: `Successfully purchased ${providerTitle} (${receipt.accountNumber}) for ${receipt.piAmount.toFixed(4)} π. Order ID: ${orderId}. Token: ${receipt.tokenOrCode || 'Delivered'}`,
+                  message: `Successfully purchased ${providerTitle} (${receipt.accountNumber}) for ${formatPiAmount(receipt.piAmount)} π. Order ID: ${orderId}. Token: ${receipt.tokenOrCode || 'Delivered'}`,
                   type: 'order_protection',
                   timestamp: new Date().toISOString(),
                   read: false
