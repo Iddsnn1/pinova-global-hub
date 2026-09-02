@@ -2357,6 +2357,27 @@ const handleFlightBook = async (req: express.Request, res: express.Response) => 
         }
       };
 
+      console.log(
+        `[Flight Lifecycle] DUFFEL_ORDER_REQUEST_DISPATCH reqId=${reqId} ` +
+        `bookingRef=ESCROW-${cleanPaymentId.slice(-8).toUpperCase()} ` +
+        `offerId=${cleanOfferId} passengerId=${authoritativePassengerId} ` +
+        `authoritativePassenger=true offerRevalidated=true offerExpired=false ` +
+        `amount=${authoritativeAmount} currency=${authoritativeCurrency} ` +
+        `payloadSummary=${JSON.stringify({
+          type: orderPayload.data.type,
+          selected_offers: orderPayload.data.selected_offers,
+          passengers: orderPayload.data.passengers.map(p => ({
+            id: p.id,
+            title: p.title,
+            gender: p.gender,
+            born_on_present: Boolean(p.born_on),
+            has_email: Boolean(p.email),
+            has_phone: Boolean(p.phone_number)
+          })),
+          payments: orderPayload.data.payments
+        })}`
+      );
+
       try {
         const orderRes = await fetch(`${baseUrl}/air/orders`, {
           method: 'POST',
@@ -2411,26 +2432,45 @@ const handleFlightBook = async (req: express.Request, res: express.Response) => 
           const sanitizedErrDetails = duffelErrors.map((e: any) => ({
             code: e.code,
             title: e.title,
+            type: e.type,
             field: e.source?.field || e.source?.pointer,
             message: e.message
           }));
 
-          console.error(
-            `[Flight Lifecycle] flight.booking.duffel_failed reqId=${reqId} duffelReqId=${duffelReqId} status=${orderRes.status} offerId=${cleanOfferId} errors=${JSON.stringify(sanitizedErrDetails)}`
-          );
+          const isAirlineInternalError =
+            firstErr.code === 'airline_internal_error' ||
+            firstErr.code === 'internal_error' ||
+            firstErr.type === 'airline_error' ||
+            firstErr.type === 'supplier_error' ||
+            (typeof firstErr.message === 'string' && firstErr.message.toLowerCase().includes('internal_error'));
 
           const isOfferUnavailable = firstErr.code === 'offer_no_longer_available' || orderRes.status === 422;
+
+          console.error(
+            `[Flight Lifecycle] flight.booking.duffel_failed reqId=${reqId} ` +
+            `bookingRef=ESCROW-${cleanPaymentId.slice(-8).toUpperCase()} ` +
+            `duffelReqId=${duffelReqId} httpStatus=${orderRes.status} ` +
+            `stage=order_creation_dispatch offerId=${cleanOfferId} ` +
+            `authoritativePassengerId=${authoritativePassengerId} ` +
+            `isAirlineInternalError=${isAirlineInternalError} ` +
+            `errors=${JSON.stringify(sanitizedErrDetails)}`
+          );
+
           const errorCategory = isOfferUnavailable
             ? 'OFFER_NO_LONGER_AVAILABLE'
-            : (firstErr.code === 'validation_required'
-              ? 'DUFFEL_VALIDATION_ERROR'
-              : (firstErr.code ? `DUFFEL_${String(firstErr.code).toUpperCase()}` : 'DUFFEL_ORDER_FAILED'));
+            : (isAirlineInternalError
+              ? 'AIRLINE_GATEWAY_INTERNAL_ERROR'
+              : (firstErr.code === 'validation_required'
+                ? 'DUFFEL_VALIDATION_ERROR'
+                : (firstErr.code ? `DUFFEL_${String(firstErr.code).toUpperCase()}` : 'DUFFEL_ORDER_FAILED')));
 
           const userMessage = isOfferUnavailable
             ? 'Your Pi payment was received. The selected airline offer is no longer available. Your payment protection/retry workflow has been preserved.'
-            : (firstErr.message
-              ? `Airline gateway rejected booking: ${firstErr.message}. Funds held safely in Escrow for instant refund/retry.`
-              : 'Payment completed on Pi Network. Airline seat allocation failed at carrier gateway. Funds held safely in Escrow for instant refund/retry.');
+            : (isAirlineInternalError
+              ? `Airline gateway rejected booking: ${firstErr.message || 'The airline reservation system reported an internal error'}. Funds held safely in Escrow for instant refund/retry.`
+              : (firstErr.message
+                ? `Airline gateway rejected booking: ${firstErr.message}. Funds held safely in Escrow for instant refund/retry.`
+                : 'Payment completed on Pi Network. Airline seat allocation failed at carrier gateway. Funds held safely in Escrow for instant refund/retry.'));
 
           const failedBookingRecord = {
             bookingId: `BK-FAILED-${cleanPaymentId.slice(-6).toUpperCase()}`,
@@ -2452,8 +2492,9 @@ const handleFlightBook = async (req: express.Request, res: express.Response) => 
             error: errorCategory,
             status: 'BOOKING_FAILED_HELD_FOR_REFUND',
             message: userMessage,
-            details: firstErr.title || 'Carrier allocation error. Refund available in Escrow.',
-            reqId
+            details: firstErr.title || (isAirlineInternalError ? 'Carrier gateway internal error' : 'Carrier allocation error. Refund available in Escrow.'),
+            reqId,
+            duffelReqId
           });
           return;
         }
