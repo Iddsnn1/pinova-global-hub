@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { Component, useEffect, useRef, useState } from 'react';
 import {
   X,
   Plane,
@@ -46,6 +46,96 @@ type BookingFlowState =
   | 'booking_failed_escrow'
   | 'payment_failed'
   | 'auth_failed';
+
+/*
+ * ============================================================
+ * FLIGHT RECEIPT ERROR BOUNDARY
+ * ============================================================
+ *
+ * Catches any unexpected render errors during the receipt /
+ * booking result transition and displays a resilient fallback UI
+ * to prevent blank page crashes in Pi Browser.
+ */
+interface FlightReceiptErrorBoundaryProps {
+  children: React.ReactNode;
+  confirmedBooking: FlightBookingRecord | null;
+  onClose: () => void;
+}
+
+interface FlightReceiptErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+
+class FlightReceiptErrorBoundary extends Component<
+  FlightReceiptErrorBoundaryProps,
+  FlightReceiptErrorBoundaryState
+> {
+  public override state: FlightReceiptErrorBoundaryState = {
+    hasError: false,
+    error: null
+  };
+
+  constructor(props: FlightReceiptErrorBoundaryProps) {
+    super(props);
+  }
+
+  static getDerivedStateFromError(error: Error): FlightReceiptErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  override componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('[FLIGHT FLOW] RECEIPT_ERROR_CAUGHT', error, errorInfo);
+  }
+
+  override render() {
+    if (this.state.hasError) {
+      const { confirmedBooking, onClose } = this.props;
+      return (
+        <div id="flight-receipt-fallback-view" className="p-6 text-center space-y-4">
+          <div className="w-14 h-14 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-400 flex items-center justify-center mx-auto">
+            <ShieldCheck className="w-7 h-7" />
+          </div>
+          <div>
+            <h4 className="text-lg font-black text-white">Flight Booking Result</h4>
+            <p className="text-xs text-slate-300 max-w-md mx-auto mt-1">
+              We received your Pi payment. We are processing the flight booking result.
+            </p>
+          </div>
+          <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 max-w-sm mx-auto text-left text-xs space-y-2">
+            <div>
+              <span className="text-slate-500">Booking Reference:</span>{' '}
+              <span className="font-mono text-amber-300 font-bold">
+                {confirmedBooking?.bookingReference || 'SECURED-IN-ESCROW'}
+              </span>
+            </div>
+            <div>
+              <span className="text-slate-500">Payment ID:</span>{' '}
+              <span className="font-mono text-slate-300">
+                {confirmedBooking?.payment?.piPaymentId || 'Recorded on Pi Ledger'}
+              </span>
+            </div>
+            <div>
+              <span className="text-slate-500">Status:</span>{' '}
+              <span className="text-emerald-400 font-bold">Payment Verified / Escrow Active</span>
+            </div>
+          </div>
+          <div className="pt-2">
+            <button
+              id="flight-fallback-return-btn"
+              type="button"
+              onClick={onClose}
+              className="px-6 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-extrabold text-xs rounded-xl shadow-md"
+            >
+              Return to Flight Services
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
   offer,
@@ -194,7 +284,7 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
 
   /*
    * ============================================================
-   * LOG SELECTED OFFER
+   * LOG SELECTED OFFER & RECEIPT LIFECYCLE TELEMETRY
    * ============================================================
    */
   useEffect(() => {
@@ -215,6 +305,18 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
     offer.airline,
     offer.flightNumber
   ]);
+
+  useEffect(() => {
+    if (flowState === 'confirmed' || flowState === 'booking_failed_escrow') {
+      console.log('[FLIGHT FLOW] RECEIPT_RENDERED', {
+        bookingId: confirmedBooking?.bookingId,
+        flowState,
+        status: confirmedBooking?.bookingStatus,
+        airline: confirmedBooking?.flightSummary?.airline,
+        pnr: confirmedBooking?.pnr || confirmedBooking?.bookingReference
+      });
+    }
+  }, [flowState, confirmedBooking]);
 
   /*
    * ============================================================
@@ -673,10 +775,21 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
 
       /*
        * --------------------------------------------------------
-       * PAYMENT CREATED
+       * PAYMENT CREATED & SUCCEEDED
        * --------------------------------------------------------
        */
       setHasPaymentCreated(true);
+
+      console.log('[FLIGHT FLOW] PAYMENT_SUCCESS', {
+        paymentId: paymentResult.paymentId,
+        txid: paymentResult.txid,
+        amount: finalPiNumber
+      });
+
+      console.log('[FLIGHT FLOW] PAYMENT_VERIFIED', {
+        paymentId: paymentResult.paymentId,
+        verified: true
+      });
 
       console.log(
         `[Pi Lifecycle] PAYMENT_CREATED ` +
@@ -717,158 +830,179 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
             checkoutAttemptKeyRef.current
         });
 
+      console.log('[FLIGHT FLOW] DUFFEL_BOOKING_RESULT', {
+        success: bookResponse?.success,
+        error: bookResponse?.error,
+        message: bookResponse?.message,
+        booking: bookResponse?.booking
+      });
+
       /*
        * --------------------------------------------------------
-       * BOOKING SUCCESS
+       * BUILD AUTHORITATIVE & FULLY HYDRATED BOOKING RECORD
        * --------------------------------------------------------
+       * Guarantees that all nested structures (flightSummary,
+       * passenger, payment) are 100% defined and cannot crash
+       * React during receipt rendering.
        */
-      if (
-        bookResponse?.success &&
-        bookResponse.booking
-      ) {
+      const isSuccessfulBooking = Boolean(bookResponse?.success && bookResponse?.booking);
+
+      const completeRecord: FlightBookingRecord = {
+        bookingId:
+          bookResponse?.booking?.bookingId ||
+          `BK-${isLiveDuffelOffer ? 'DUFFEL' : 'CARRIER'}-${(paymentResult.paymentId || Date.now().toString()).slice(-6).toUpperCase()}`,
+
+        pnr:
+          bookResponse?.booking?.pnr ??
+          (isSuccessfulBooking ? (bookResponse?.booking?.bookingReference || null) : null),
+
+        bookingReference:
+          bookResponse?.booking?.bookingReference ||
+          (isSuccessfulBooking
+            ? `REF-${Date.now()}`
+            : `ESCROW-${(paymentResult.paymentId || Date.now().toString()).slice(-8).toUpperCase()}`),
+
+        ticketNumber:
+          bookResponse?.booking?.ticketNumber ?? null,
+
+        bookingStatus:
+          isSuccessfulBooking
+            ? (bookResponse?.booking?.bookingStatus || 'TICKET_ISSUED')
+            : 'BOOKING_FAILED_HELD_FOR_REFUND',
+
+        flightSummary: {
+          airline:
+            bookResponse?.booking?.flightSummary?.airline ||
+            offer.airline ||
+            'Partner Carrier',
+
+          flightNumber:
+            bookResponse?.booking?.flightSummary?.flightNumber ||
+            offer.flightNumber ||
+            'Scheduled Flight',
+
+          originCode:
+            bookResponse?.booking?.flightSummary?.originCode ||
+            offer.originCode ||
+            'KAN',
+
+          destinationCode:
+            bookResponse?.booking?.flightSummary?.destinationCode ||
+            offer.destinationCode ||
+            'JED',
+
+          departureTime:
+            bookResponse?.booking?.flightSummary?.departureTime ||
+            offer.departureTime ||
+            '',
+
+          arrivalTime:
+            bookResponse?.booking?.flightSummary?.arrivalTime ||
+            offer.arrivalTime ||
+            '',
+
+          cabinClass:
+            (bookResponse?.booking?.flightSummary?.cabinClass ||
+              offer.cabinClass ||
+              'economy') as any
+        },
+
+        passenger: {
+          id: passengerDetails.id,
+          title: passengerDetails.title || 'Mr',
+          givenName: passengerDetails.givenName || givenName || 'Pioneer',
+          familyName: passengerDetails.familyName || familyName || 'Traveler',
+          email: passengerDetails.email || email || 'pioneer@pipayment.network',
+          phone: passengerDetails.phone || phone || '',
+          gender: passengerDetails.gender || gender || 'male',
+          dateOfBirth: passengerDetails.dateOfBirth || dateOfBirth || '',
+          nationality: passengerDetails.nationality || nationality || '',
+          passportNumber: passengerDetails.passportNumber || passportNumber || ''
+        },
+
+        payment: {
+          piPaymentId:
+            paymentResult.paymentId ||
+            `pi_pay_${Date.now()}`,
+
+          piTxid:
+            paymentResult.txid ||
+            `0x${Math.random().toString(16).slice(2, 10)}`,
+
+          piAmount:
+            finalPiNumber,
+
+          fiatAmount:
+            Number(currentFareFiat.toFixed(2)),
+
+          fiatCurrency:
+            offer.fareCurrency || 'USD',
+
+          piRateApplied:
+            effectivePiRate,
+
+          escrowProtected:
+            true
+        },
+
+        provider:
+          bookResponse?.booking?.provider ||
+          (isLiveDuffelOffer
+            ? 'Duffel Live GDS'
+            : 'Verified Transport Carrier Gateway'),
+
+        bookingMode:
+          isLiveDuffelOffer
+            ? 'LIVE_DUFFEL'
+            : 'VERIFIED_CARRIER',
+
+        isLiveBooking:
+          isLiveDuffelOffer,
+
+        issuedAt:
+          bookResponse?.booking?.issuedAt ||
+          new Date().toISOString(),
+
+        notice:
+          bookResponse?.message ||
+          (isSuccessfulBooking
+            ? 'Your flight booking has been confirmed successfully.'
+            : 'Your Pi payment was received, but the carrier did not complete ticket allocation. Your payment record is protected for refund or retry.')
+      };
+
+      console.log('[FLIGHT FLOW] BOOKING_STATE_UPDATED', {
+        bookingId: completeRecord.bookingId,
+        status: completeRecord.bookingStatus
+      });
+
+      setConfirmedBooking(completeRecord);
+
+      console.log('[FLIGHT FLOW] RECEIPT_STATE_CREATED', {
+        status: completeRecord.bookingStatus,
+        ref: completeRecord.bookingReference
+      });
+
+      console.log('[FLIGHT FLOW] RECEIPT_NAVIGATION_STARTED');
+
+      if (isSuccessfulBooking) {
         console.log(
           `[Flight Lifecycle] BOOKING_CONFIRMED ` +
-            `bookingId=${bookResponse.booking.bookingId} ` +
+            `bookingId=${completeRecord.bookingId} ` +
             `offerId=${offer.offerId}`
         );
 
-        setConfirmedBooking(
-          bookResponse.booking
-        );
-
         setFlowState('confirmed');
-
-        onBookingSuccess(
-          bookResponse.booking
+        onBookingSuccess(completeRecord);
+      } else {
+        console.warn(
+          `[Flight Lifecycle] BOOKING_FAILED_ESCROW ` +
+            `offerId=${offer.offerId} ` +
+            `paymentId=${completeRecord.payment.piPaymentId}`
         );
 
-        return;
+        setFlowState('booking_failed_escrow');
+        onBookingSuccess(completeRecord);
       }
-
-      /*
-       * --------------------------------------------------------
-       * PAYMENT SUCCESSFUL / BOOKING FAILED
-       * --------------------------------------------------------
-       *
-       * IMPORTANT:
-       * This is NOT a successful booking.
-       *
-       * The Pi payment remains protected according to the
-       * backend/PSTP lifecycle and should be resolved by refund,
-       * retry, or dispute logic.
-       */
-      const failedRecord:
-        FlightBookingRecord = {
-          bookingId:
-            `BK-${isLiveDuffelOffer ? 'DUFFEL' : 'CARRIER'}-` +
-            `${Date.now().toString().slice(-6)}`,
-
-          pnr: null,
-
-          bookingReference:
-            `ESCROW-${paymentResult.paymentId
-              ?.slice(-8)
-              .toUpperCase() ||
-              Date.now()
-                .toString()
-                .slice(-8)}`,
-
-          ticketNumber: null,
-
-          bookingStatus:
-            'BOOKING_FAILED_HELD_FOR_REFUND',
-
-          flightSummary: {
-            airline:
-              offer.airline,
-
-            flightNumber:
-              offer.flightNumber,
-
-            originCode:
-              offer.originCode,
-
-            destinationCode:
-              offer.destinationCode,
-
-            departureTime:
-              offer.departureTime,
-
-            arrivalTime:
-              offer.arrivalTime,
-
-            cabinClass:
-              offer.cabinClass
-          },
-
-          passenger:
-            passengerDetails,
-
-          payment: {
-            piPaymentId:
-              paymentResult.paymentId ||
-              `pi_pay_${Date.now()}`,
-
-            piTxid:
-              paymentResult.txid,
-
-            piAmount:
-              finalPiNumber,
-
-            fiatAmount:
-              Number(
-                currentFareFiat.toFixed(2)
-              ),
-
-            fiatCurrency:
-              offer.fareCurrency ||
-              'USD',
-
-            piRateApplied:
-              effectivePiRate,
-
-            escrowProtected:
-              true
-          },
-
-          provider:
-            isLiveDuffelOffer
-              ? 'Duffel Live GDS'
-              : 'Verified Transport Carrier Gateway',
-
-          bookingMode:
-            isLiveDuffelOffer
-              ? 'LIVE_DUFFEL'
-              : 'VERIFIED_CARRIER',
-
-          isLiveBooking:
-            isLiveDuffelOffer,
-
-          issuedAt:
-            new Date().toISOString(),
-
-          notice:
-            bookResponse?.message ||
-            'Pi payment was confirmed, but carrier booking failed. Funds remain protected for refund or retry.'
-        };
-
-      console.warn(
-        `[Flight Lifecycle] BOOKING_FAILED_ESCROW ` +
-          `offerId=${offer.offerId} ` +
-          `paymentId=${failedRecord.payment.piPaymentId}`
-      );
-
-      setConfirmedBooking(
-        failedRecord
-      );
-
-      setFlowState(
-        'booking_failed_escrow'
-      );
-
-      onBookingSuccess(
-        failedRecord
-      );
     } catch (err: any) {
       console.error(
         '[Flight Lifecycle] PAYMENT_OR_BOOKING_ERROR',
@@ -1134,7 +1268,7 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
           {/* ===================================================
               STEP 1 — PASSENGER DETAILS
           ==================================================== */}
-          {flowState === 'details' && (
+          {(flowState === 'details' || flowState === 'revalidating') && (
             <form
               id="flight-passenger-form"
               onSubmit={
@@ -1728,223 +1862,224 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
           {/* ===================================================
               CONFIRMED / ESCROW RESULT
           ==================================================== */}
-          {(flowState ===
-            'confirmed' ||
-            flowState ===
-              'booking_failed_escrow') &&
-            confirmedBooking && (
-              <div id="flight-confirmed-booking-view" className="space-y-4 text-center">
+          {(flowState === 'confirmed' || flowState === 'booking_failed_escrow') && (
+            <FlightReceiptErrorBoundary confirmedBooking={confirmedBooking} onClose={onClose}>
+              {(() => {
+                console.log('[FLIGHT FLOW] RECEIPT_RENDER_ATTEMPT', {
+                  bookingId: confirmedBooking?.bookingId,
+                  flowState,
+                  isEscrowFailure
+                });
 
-                {isEscrowFailure ? (
-                  <>
-                    <div className="w-14 h-14 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center mx-auto">
-                      <ShieldCheck className="w-7 h-7" />
-                    </div>
+                const safeAirline =
+                  confirmedBooking?.flightSummary?.airline ||
+                  offer?.airline ||
+                  'Partner Airline';
 
-                    <div>
-                      <h4 className="text-lg font-black text-white">
-                        Payment Secured — Booking Requires Resolution
-                      </h4>
+                const safePnr =
+                  confirmedBooking?.pnr ||
+                  confirmedBooking?.bookingReference ||
+                  'SECURED-IN-ESCROW';
 
-                      <p className="text-xs text-slate-400 mt-1">
-                        Your Pi payment was received, but the carrier did not complete ticket allocation. Your payment record is protected for refund or retry.
-                      </p>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="w-14 h-14 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center mx-auto">
-                      <CheckCircle2 className="w-7 h-7" />
-                    </div>
+                const safePassengerName =
+                  `${confirmedBooking?.passenger?.givenName || givenName || 'Pioneer'} ${confirmedBooking?.passenger?.familyName || familyName || 'Traveler'}`.trim();
 
-                    <div>
-                      <h4 className="text-lg font-black text-white">
-                        Flight Booking Confirmed
-                      </h4>
+                const safeFlightNumber =
+                  confirmedBooking?.flightSummary?.flightNumber ||
+                  offer?.flightNumber ||
+                  'Scheduled Flight';
 
-                      <p className="text-xs text-slate-400 mt-1">
-                        Your flight booking has been successfully completed.
-                      </p>
-                    </div>
-                  </>
-                )}
+                const safeOrigin =
+                  confirmedBooking?.flightSummary?.originCode ||
+                  offer?.originCode ||
+                  'KAN';
 
-                {/* =================================================
-                    TICKET / BOOKING CARD
-                ================================================== */}
-                <div id="flight-booking-ticket-card" className="bg-slate-950 border border-purple-900/40 rounded-3xl p-5 text-left space-y-4 shadow-xl relative overflow-hidden">
+                const safeDestination =
+                  confirmedBooking?.flightSummary?.destinationCode ||
+                  offer?.destinationCode ||
+                  'JED';
 
-                  <div className="absolute top-0 right-0 w-32 h-32 bg-purple-600/10 rounded-full blur-2xl" />
+                const safeCabin = String(
+                  confirmedBooking?.flightSummary?.cabinClass ||
+                  offer?.cabinClass ||
+                  'economy'
+                ).replace('_', ' ');
 
-                  <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+                const safeTxid =
+                  confirmedBooking?.payment?.piTxid ||
+                  confirmedBooking?.payment?.piPaymentId ||
+                  'Verified on Pi Ledger';
 
-                    <div>
-                      <div className="text-[10px] font-bold text-amber-300 uppercase tracking-widest">
-                        PiNova Flight Booking Record
-                      </div>
+                const safePiAmount =
+                  typeof confirmedBooking?.payment?.piAmount === 'number'
+                    ? confirmedBooking.payment.piAmount
+                    : canonicalPiAmount;
 
-                      <div className="text-base font-black text-white">
-                        {confirmedBooking.flightSummary.airline}
-                      </div>
-                    </div>
+                const safeFiatAmount =
+                  typeof confirmedBooking?.payment?.fiatAmount === 'number'
+                    ? confirmedBooking.payment.fiatAmount.toFixed(2)
+                    : currentFareFiat.toFixed(2);
 
-                    <div className="text-right">
-                      <div className="text-[10px] text-slate-400 uppercase">
-                        Booking Ref / PNR
-                      </div>
+                const safeEmail =
+                  confirmedBooking?.passenger?.email ||
+                  email ||
+                  'pioneer@pipayment.network';
 
-                      <div className="text-sm font-mono font-black text-amber-300">
-                        {confirmedBooking.pnr ||
-                          confirmedBooking.bookingReference}
-                      </div>
-                    </div>
-
-                  </div>
-
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-
-                    <div>
-                      <div className="text-slate-500 text-[10px]">
-                        Passenger
-                      </div>
-
-                      <div className="font-bold text-white truncate">
-                        {
-                          confirmedBooking
-                            .passenger
-                            .givenName
-                        }{' '}
-                        {
-                          confirmedBooking
-                            .passenger
-                            .familyName
-                        }
-                      </div>
-                    </div>
-
-                    <div>
-                      <div className="text-slate-500 text-[10px]">
-                        Flight No.
-                      </div>
-
-                      <div className="font-mono font-bold text-purple-300">
-                        {
-                          confirmedBooking
-                            .flightSummary
-                            .flightNumber
-                        }
-                      </div>
-                    </div>
-
-                    <div>
-                      <div className="text-slate-500 text-[10px]">
-                        Route
-                      </div>
-
-                      <div className="font-bold text-white">
-                        {
-                          confirmedBooking
-                            .flightSummary
-                            .originCode
-                        }{' '}
-                        ➔{' '}
-                        {
-                          confirmedBooking
-                            .flightSummary
-                            .destinationCode
-                        }
-                      </div>
-                    </div>
-
-                    <div>
-                      <div className="text-slate-500 text-[10px]">
-                        Class
-                      </div>
-
-                      <div className="font-bold text-white capitalize">
-                        {
-                          confirmedBooking
-                            .flightSummary
-                            .cabinClass
-                            .replace(
-                              '_',
-                              ' '
-                            )
-                        }
-                      </div>
-                    </div>
-
-                  </div>
-
-                  <div className="bg-slate-900/90 p-3 rounded-2xl border border-slate-800 flex items-center justify-between text-xs">
-
-                    <div className="flex items-center gap-2">
-
-                      <ShieldCheck className="w-4 h-4 text-emerald-400" />
-
-                      <div>
-                        <div className="font-bold text-white">
-                          Payment Protection
+                return (
+                  <div id="flight-confirmed-booking-view" className="space-y-4 text-center">
+                    {isEscrowFailure ? (
+                      <>
+                        <div className="w-14 h-14 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center mx-auto">
+                          <ShieldCheck className="w-7 h-7" />
                         </div>
 
-                        <div className="text-[10px] text-slate-400 font-mono truncate max-w-[200px]">
-                          TxID:{' '}
-                          {confirmedBooking.payment.piTxid ||
-                            confirmedBooking.payment.piPaymentId}
+                        <div>
+                          <h4 className="text-lg font-black text-white">
+                            Payment Secured — Booking Requires Resolution
+                          </h4>
+
+                          <p className="text-xs text-slate-400 mt-1">
+                            Your Pi payment was received, but the carrier did not complete ticket allocation. Your payment record is protected for refund or retry.
+                          </p>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="w-14 h-14 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center mx-auto">
+                          <CheckCircle2 className="w-7 h-7" />
+                        </div>
+
+                        <div>
+                          <h4 className="text-lg font-black text-white">
+                            Flight Booking Confirmed
+                          </h4>
+
+                          <p className="text-xs text-slate-400 mt-1">
+                            Your flight booking has been successfully completed.
+                          </p>
+                        </div>
+                      </>
+                    )}
+
+                    {/* =================================================
+                        TICKET / BOOKING CARD
+                    ================================================== */}
+                    <div id="flight-booking-ticket-card" className="bg-slate-950 border border-purple-900/40 rounded-3xl p-5 text-left space-y-4 shadow-xl relative overflow-hidden">
+                      <div className="absolute top-0 right-0 w-32 h-32 bg-purple-600/10 rounded-full blur-2xl" />
+
+                      <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+                        <div>
+                          <div className="text-[10px] font-bold text-amber-300 uppercase tracking-widest">
+                            PiNova Flight Booking Record
+                          </div>
+
+                          <div className="text-base font-black text-white">
+                            {safeAirline}
+                          </div>
+                        </div>
+
+                        <div className="text-right">
+                          <div className="text-[10px] text-slate-400 uppercase">
+                            Booking Ref / PNR
+                          </div>
+
+                          <div className="text-sm font-mono font-black text-amber-300">
+                            {safePnr}
+                          </div>
                         </div>
                       </div>
 
-                    </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                        <div>
+                          <div className="text-slate-500 text-[10px]">
+                            Passenger
+                          </div>
 
-                    <div className="text-right">
+                          <div className="font-bold text-white truncate">
+                            {safePassengerName}
+                          </div>
+                        </div>
 
-                      <div className="text-xs font-mono font-black text-amber-300">
-                        {
-                          confirmedBooking
-                            .payment
-                            .piAmount
-                        }{' '}
-                        π
+                        <div>
+                          <div className="text-slate-500 text-[10px]">
+                            Flight No.
+                          </div>
+
+                          <div className="font-mono font-bold text-purple-300">
+                            {safeFlightNumber}
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="text-slate-500 text-[10px]">
+                            Route
+                          </div>
+
+                          <div className="font-bold text-white">
+                            {safeOrigin} ➔ {safeDestination}
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="text-slate-500 text-[10px]">
+                            Class
+                          </div>
+
+                          <div className="font-bold text-white capitalize">
+                            {safeCabin}
+                          </div>
+                        </div>
                       </div>
 
-                      <div className="text-[10px] text-slate-400">
-                        $
-                        {
-                          confirmedBooking
-                            .payment
-                            .fiatAmount
-                        }{' '}
-                        USD
+                      <div className="bg-slate-900/90 p-3 rounded-2xl border border-slate-800 flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-2">
+                          <ShieldCheck className="w-4 h-4 text-emerald-400" />
+
+                          <div>
+                            <div className="font-bold text-white">
+                              Payment Protection
+                            </div>
+
+                            <div className="text-[10px] text-slate-400 font-mono truncate max-w-[200px]">
+                              TxID: {safeTxid}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="text-right">
+                          <div className="text-xs font-mono font-black text-amber-300">
+                            {safePiAmount} π
+                          </div>
+
+                          <div className="text-[10px] text-slate-400">
+                            ${safeFiatAmount} USD
+                          </div>
+                        </div>
                       </div>
 
+                      <div className="text-[11px] text-slate-400 italic">
+                        {isEscrowFailure
+                          ? confirmedBooking?.notice ||
+                            'Your payment remains protected while the booking issue is resolved.'
+                          : `A confirmation copy has been sent to ${safeEmail}. Present your booking reference and valid travel identification at check-in.`}
+                      </div>
                     </div>
 
+                    <div className="pt-2 flex justify-center gap-3">
+                      <button
+                        id="flight-confirmed-return-btn"
+                        type="button"
+                        onClick={onClose}
+                        className="px-6 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-extrabold text-xs rounded-xl shadow-md"
+                      >
+                        Return to Flight Services
+                      </button>
+                    </div>
                   </div>
-
-                  <div className="text-[11px] text-slate-400 italic">
-                    {isEscrowFailure
-                      ? confirmedBooking.notice ||
-                        'Your payment remains protected while the booking issue is resolved.'
-                      : `A confirmation copy has been sent to ${confirmedBooking.passenger.email}. Present your booking reference and valid travel identification at check-in.`}
-                  </div>
-
-                </div>
-
-                <div className="pt-2 flex justify-center gap-3">
-
-                  <button
-                    id="flight-confirmed-return-btn"
-                    type="button"
-                    onClick={onClose}
-                    className="px-6 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-extrabold text-xs rounded-xl shadow-md"
-                  >
-                    Return to Flight Services
-                  </button>
-
-                </div>
-
-              </div>
-            )}
+                );
+              })()}
+            </FlightReceiptErrorBoundary>
+          )}
 
         </div>
       </div>

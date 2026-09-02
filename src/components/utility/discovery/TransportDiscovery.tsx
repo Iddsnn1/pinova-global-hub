@@ -552,11 +552,7 @@ export const TransportDiscovery: React.FC<TransportDiscoveryProps> = ({
           <button
             type="button"
             onClick={() => handleSelectMode('air')}
-            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors ${
-              selectedMode === 'air'
-                ? 'bg-purple-600 text-white shadow'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-            }`}
+            className="px-2.5 py-1 rounded-lg text-xs font-bold transition-colors text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
           >
             Flights
           </button>
