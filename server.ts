@@ -1775,6 +1775,7 @@ const handleFlightSearch = async (req: express.Request, res: express.Response) =
       }
 
       const rawData = await apiRes.json();
+      const offerRequestId = rawData?.data?.id || 'unknown_req';
       const offers = rawData?.data?.offers || [];
       const validDuffelOffers = Array.isArray(offers)
         ? offers.filter((off: any, idx: number) => {
@@ -1787,35 +1788,85 @@ const handleFlightSearch = async (req: express.Request, res: express.Response) =
           })
         : [];
 
+      // Task 2: Safe Development Diagnostic for Raw Duffel Search Response
+      console.log('DUFFEL_SEARCH_DIAGNOSTIC');
+      console.log(`offer_request_id: ${offerRequestId}`);
+      console.log(`offer_count: ${validDuffelOffers.length}`);
+      validDuffelOffers.forEach((off: any, idx: number) => {
+        const ownerName = off.owner?.name || 'Unknown Airline';
+        const ownerIata = off.owner?.iata_code || '??';
+        const segments = off.slices?.[0]?.segments || [];
+        const flightNumbers = segments
+          .map((s: any) => `${s.operating_carrier?.iata_code || s.marketing_carrier?.iata_code || ''} ${s.operating_carrier_flight_number || s.marketing_flight_number || ''}`.trim())
+          .filter(Boolean)
+          .join(' -> ') || 'Scheduled Flight';
+        const origIata = off.slices?.[0]?.origin?.iata_code || originCode;
+        const destIata = off.slices?.[0]?.destination?.iata_code || destinationCode;
+        console.log(
+          `${idx + 1}. offer_id=${off.id} carrier=${ownerName} (${ownerIata}) flight=${flightNumbers} route=${origIata}->${destIata} total=${off.total_amount} ${off.total_currency} expires_at=${off.expires_at || 'N/A'}`
+        );
+      });
+
       const mappedLiveResults = validDuffelOffers.map((off: any) => {
         const rawOfferId = off.id.trim();
         const airline = off.owner?.name || 'Partner Airline';
-        const flightNumber = off.slices?.[0]?.segments?.[0]?.marketing_flight_number || (off.slices?.[0]?.segments?.[0]?.operating_carrier_flight_number ? `${off.slices[0].segments[0].operating_carrier?.iata_code || ''} ${off.slices[0].segments[0].operating_carrier_flight_number}`.trim() : 'Scheduled Flight');
+        const slice0 = off.slices?.[0];
+        const segments = slice0?.segments || [];
+        const numSegments = segments.length;
+        const firstSegment = segments[0];
+        const lastSegment = segments[numSegments - 1] || firstSegment;
+
+        // Build comprehensive flight number string and segment details
+        const segmentFlightNums = segments
+          .map((s: any) => `${s.operating_carrier?.iata_code || s.marketing_carrier?.iata_code || ''} ${s.operating_carrier_flight_number || s.marketing_flight_number || ''}`.trim())
+          .filter(Boolean);
+
+        const flightNumber = segmentFlightNums.length > 0
+          ? segmentFlightNums.join(' ➔ ')
+          : (firstSegment?.marketing_flight_number || 'Scheduled Flight');
+
+        // Extract stop airports
+        const stopAirports: string[] = [];
+        if (numSegments > 1) {
+          for (let i = 0; i < numSegments - 1; i++) {
+            const stopCode = segments[i]?.destination?.iata_code;
+            if (stopCode) stopAirports.push(stopCode);
+          }
+        }
+
         const total_amount = off.total_amount || '0';
         const total_currency = off.total_currency || 'USD';
 
-        console.log(`[Flight Lifecycle] live offer received reqId=${reqId} offerId=${rawOfferId} bookingMode=LIVE_DUFFEL isLive=true isLiveBooking=true airline=${airline} flightNumber=${flightNumber} total_amount=${total_amount} total_currency=${total_currency}`);
+        console.log(
+          `[Flight Lifecycle] search_offer_id=${rawOfferId} airline=${airline} flightNumber=${flightNumber} stops=${stopAirports.length} total_amount=${total_amount} ${total_currency}`
+        );
 
         return {
           offerId: rawOfferId,
+          offerRequestId,
           airline,
           flightNumber,
-          originCode: off.slices?.[0]?.origin?.iata_code || originCode,
-          destinationCode: off.slices?.[0]?.destination?.iata_code || destinationCode,
-          departureTime: off.slices?.[0]?.segments?.[0]?.departing_at || safeDepartureDate,
-          arrivalTime: off.slices?.[0]?.segments?.[0]?.arriving_at || safeDepartureDate,
-          duration: off.slices?.[0]?.duration || 'Scheduled',
-          stops: off.slices?.[0]?.segments?.length > 1 ? off.slices[0].segments.length - 1 : 0,
-          aircraft: off.slices?.[0]?.segments?.[0]?.aircraft?.name || 'Commercial Aircraft',
+          originCode: slice0?.origin?.iata_code || originCode,
+          originCity: slice0?.origin?.city_name || undefined,
+          destinationCode: slice0?.destination?.iata_code || destinationCode,
+          destinationCity: slice0?.destination?.city_name || undefined,
+          departureTime: firstSegment?.departing_at || safeDepartureDate,
+          arrivalTime: lastSegment?.arriving_at || firstSegment?.arriving_at || safeDepartureDate,
+          duration: slice0?.duration || 'Scheduled',
+          stops: numSegments > 1 ? numSegments - 1 : 0,
+          stopAirports,
+          aircraft: firstSegment?.aircraft?.name || 'Commercial Aircraft',
           cabinClass: safeCabin,
-          baggageAllowance: off.slices?.[0]?.segments?.[0]?.passengers?.[0]?.baggages?.length ? `${off.slices[0].segments[0].passengers[0].baggages.length} Checked Bag(s)` : 'Standard Allowance',
+          baggageAllowance: firstSegment?.passengers?.[0]?.baggages?.length ? `${firstSegment.passengers[0].baggages.length} Checked Bag(s)` : 'Standard Allowance',
           fareAmountFiat: parseFloat(total_amount) || 0,
           currency: total_currency,
           seatsAvailable: typeof off.available_seats === 'number' ? off.available_seats : 1,
           fareConditions: 'Live Duffel Tariff. Changeable subject to airline rules.',
+          expiresAt: off.expires_at || undefined,
           isLive: true,
           bookingMode: 'LIVE_DUFFEL' as const,
-          isLiveBooking: true
+          isLiveBooking: true,
+          searchTimestamp: new Date().toISOString()
         };
       });
 
@@ -1823,6 +1874,7 @@ const handleFlightSearch = async (req: express.Request, res: express.Response) =
         success: true,
         apiConfigured: true,
         providerName: process.env.FLIGHT_API_PROVIDER || 'duffel',
+        offerRequestId,
         liveResults: mappedLiveResults,
         verificationMode: mappedLiveResults.length > 0 ? 'live-duffel' : 'verified-carrier',
         message: mappedLiveResults.length > 0 
@@ -1862,7 +1914,7 @@ const handleFlightRevalidate = async (req: express.Request, res: express.Respons
     const configured = isFlightApiConfigured();
     const bookingMode = (configured && isLiveOfferId) ? 'LIVE_DUFFEL' : 'VERIFIED_CARRIER';
 
-    console.log(`[Flight Lifecycle] live offer revalidation reqId=${reqId} offerId=${cleanOfferId}`);
+    console.log(`[Flight Lifecycle] revalidated_offer_id=${cleanOfferId} reqId=${reqId}`);
 
     if (!configured || !isLiveOfferId) {
       res.json({
@@ -1898,18 +1950,41 @@ const handleFlightRevalidate = async (req: express.Request, res: express.Respons
         res.json({
           success: false,
           valid: false,
+          error: 'OFFER_NO_LONGER_AVAILABLE',
           priceChanged: false,
           seatsAvailable: 0,
           verificationMode: 'LIVE_DUFFEL',
           offerId: cleanOfferId,
-          message: 'Live Duffel offer could not be revalidated. Please search again.',
+          message: 'This flight offer is no longer available. Please search again to get the latest availability.',
           reqId
         });
         return;
       }
 
       const offerData = await apiRes.json();
-      const currentPrice = parseFloat(offerData?.data?.total_amount) || Number(expectedFareFiat);
+      const offer = offerData?.data;
+
+      // Expiry Check
+      if (offer?.expires_at) {
+        const expiresAtMs = new Date(offer.expires_at).getTime();
+        if (!isNaN(expiresAtMs) && expiresAtMs <= Date.now()) {
+          console.warn(`[Flight Lifecycle] flight.offer.past_expiry reqId=${reqId} offerId=${cleanOfferId} expires_at=${offer.expires_at}`);
+          res.json({
+            success: false,
+            valid: false,
+            error: 'OFFER_NO_LONGER_AVAILABLE',
+            priceChanged: false,
+            seatsAvailable: 0,
+            verificationMode: 'LIVE_DUFFEL',
+            offerId: cleanOfferId,
+            message: 'This flight offer has expired. Please search again to get the latest availability.',
+            reqId
+          });
+          return;
+        }
+      }
+
+      const currentPrice = parseFloat(offer?.total_amount) || Number(expectedFareFiat);
       const priceChanged = Math.abs(currentPrice - Number(expectedFareFiat)) > 0.01;
 
       console.log(`[Flight Lifecycle] flight.offer.revalidated reqId=${reqId} offerId=${cleanOfferId} priceChanged=${priceChanged} fare=${currentPrice}`);
@@ -1919,9 +1994,11 @@ const handleFlightRevalidate = async (req: express.Request, res: express.Respons
         valid: true,
         priceChanged,
         newFareFiat: currentPrice,
-        seatsAvailable: typeof offerData?.data?.available_seats === 'number' ? offerData.data.available_seats : 1,
+        seatsAvailable: typeof offer?.available_seats === 'number' ? offer.available_seats : 1,
         verificationMode: 'LIVE_DUFFEL',
         offerId: cleanOfferId,
+        expiresAt: offer?.expires_at,
+        currency: offer?.total_currency || 'USD',
         message: priceChanged ? 'Fare has been updated by carrier.' : 'Live Duffel fare revalidated successfully.',
         reqId
       });
@@ -1930,12 +2007,13 @@ const handleFlightRevalidate = async (req: express.Request, res: express.Respons
       res.json({
         success: false,
         valid: false,
+        error: 'OFFER_NO_LONGER_AVAILABLE',
         priceChanged: false,
         newFareFiat: Number(expectedFareFiat) || 0,
         seatsAvailable: 0,
         verificationMode: 'LIVE_DUFFEL',
         offerId: cleanOfferId,
-        message: 'Live Duffel offer could not be revalidated. Please search again.',
+        message: 'This flight offer is no longer available. Please search again to get the latest availability.',
         reqId
       });
     }
@@ -1999,7 +2077,7 @@ const handleFlightBook = async (req: express.Request, res: express.Response) => 
     const bookingMode = isLiveDuffelBooking ? 'LIVE_DUFFEL' : 'VERIFIED_CARRIER';
 
     // Safe diagnostic log without sensitive tokens
-    console.log(`[Flight Lifecycle] live Duffel booking dispatch reqId=${reqId} offerId=${cleanOfferId}`);
+    console.log(`[Flight Lifecycle] book_offer_id=${cleanOfferId} reqId=${reqId} paymentId=${cleanPaymentId} bookingMode=${bookingMode}`);
 
     if (isLiveDuffelBooking) {
       const baseUrl = process.env.FLIGHT_API_BASE_URL || 'https://api.duffel.com';
@@ -2032,7 +2110,7 @@ const handleFlightBook = async (req: express.Request, res: express.Response) => 
             provider: 'duffel',
             bookingMode: 'LIVE_DUFFEL' as const,
             isLiveBooking: false,
-            message: 'Flight offer is no longer available on carrier GDS. Payment is safely held in Escrow for instant refund/retry.',
+            message: 'Your Pi payment was received. The selected airline offer is no longer available. Your payment protection/retry workflow has been preserved.',
             passengerName: `${passengerDetails?.givenName || 'Pioneer'} ${passengerDetails?.familyName || 'Traveler'}`,
             timestamp: new Date().toISOString()
           };
@@ -2041,7 +2119,7 @@ const handleFlightBook = async (req: express.Request, res: express.Response) => 
             success: false,
             error: 'OFFER_NO_LONGER_AVAILABLE',
             status: 'BOOKING_FAILED_HELD_FOR_REFUND',
-            message: 'Flight offer is no longer available. Please search for fresh fares. Funds are protected in Escrow.',
+            message: 'Your Pi payment was received. The selected airline offer is no longer available. Your payment protection/retry workflow has been preserved.',
             reqId
           });
           return;
@@ -2061,7 +2139,7 @@ const handleFlightBook = async (req: express.Request, res: express.Response) => 
           provider: 'duffel',
           bookingMode: 'LIVE_DUFFEL' as const,
           isLiveBooking: false,
-          message: 'Could not connect to airline gateway to verify offer. Payment held in Escrow.',
+          message: 'Your Pi payment was received. Could not connect to airline gateway to verify offer. Funds held in Escrow.',
           passengerName: `${passengerDetails?.givenName || 'Pioneer'} ${passengerDetails?.familyName || 'Traveler'}`,
           timestamp: new Date().toISOString()
         };
@@ -2070,7 +2148,7 @@ const handleFlightBook = async (req: express.Request, res: express.Response) => 
           success: false,
           error: 'DUFFEL_GATEWAY_ERROR',
           status: 'BOOKING_FAILED_HELD_FOR_REFUND',
-          message: 'Could not connect to airline gateway to verify offer. Funds held in Escrow.',
+          message: 'Your Pi payment was received. Could not connect to airline gateway. Funds held in Escrow.',
           reqId
         });
         return;
@@ -2101,16 +2179,16 @@ const handleFlightBook = async (req: express.Request, res: express.Response) => 
             provider: 'duffel',
             bookingMode: 'LIVE_DUFFEL' as const,
             isLiveBooking: false,
-            message: 'Flight offer has expired. Payment is safely held in Escrow for instant refund/retry.',
+            message: 'Your Pi payment was received. The selected airline offer has expired. Funds are protected in Escrow.',
             passengerName: `${passengerDetails?.givenName || 'Pioneer'} ${passengerDetails?.familyName || 'Traveler'}`,
             timestamp: new Date().toISOString()
           };
           flightFulfillmentRepo.recordBooking(key, failedBookingRecord);
           res.status(400).json({
             success: false,
-            error: 'OFFER_EXPIRED',
+            error: 'OFFER_NO_LONGER_AVAILABLE',
             status: 'BOOKING_FAILED_HELD_FOR_REFUND',
-            message: 'Flight offer has expired. Please select a fresh flight offer. Funds are protected in Escrow.',
+            message: 'Your Pi payment was received. The selected airline offer has expired. Funds are protected in Escrow for instant refund or retry.',
             reqId
           });
           return;
@@ -2341,13 +2419,18 @@ const handleFlightBook = async (req: express.Request, res: express.Response) => 
             `[Flight Lifecycle] flight.booking.duffel_failed reqId=${reqId} duffelReqId=${duffelReqId} status=${orderRes.status} offerId=${cleanOfferId} errors=${JSON.stringify(sanitizedErrDetails)}`
           );
 
-          const errorCategory = firstErr.code === 'validation_required'
-            ? 'DUFFEL_VALIDATION_ERROR'
-            : (firstErr.code ? `DUFFEL_${String(firstErr.code).toUpperCase()}` : 'DUFFEL_ORDER_FAILED');
+          const isOfferUnavailable = firstErr.code === 'offer_no_longer_available' || orderRes.status === 422;
+          const errorCategory = isOfferUnavailable
+            ? 'OFFER_NO_LONGER_AVAILABLE'
+            : (firstErr.code === 'validation_required'
+              ? 'DUFFEL_VALIDATION_ERROR'
+              : (firstErr.code ? `DUFFEL_${String(firstErr.code).toUpperCase()}` : 'DUFFEL_ORDER_FAILED'));
 
-          const userMessage = firstErr.message
-            ? `Airline gateway rejected booking: ${firstErr.message}. Funds held safely in Escrow for instant refund/retry.`
-            : 'Payment completed on Pi Network. Airline seat allocation failed at carrier gateway. Funds held safely in Escrow for instant refund/retry.';
+          const userMessage = isOfferUnavailable
+            ? 'Your Pi payment was received. The selected airline offer is no longer available. Your payment protection/retry workflow has been preserved.'
+            : (firstErr.message
+              ? `Airline gateway rejected booking: ${firstErr.message}. Funds held safely in Escrow for instant refund/retry.`
+              : 'Payment completed on Pi Network. Airline seat allocation failed at carrier gateway. Funds held safely in Escrow for instant refund/retry.');
 
           const failedBookingRecord = {
             bookingId: `BK-FAILED-${cleanPaymentId.slice(-6).toUpperCase()}`,

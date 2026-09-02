@@ -34,11 +34,11 @@ export const FlightSearchForm: React.FC<FlightSearchFormProps> = ({
   const [destinationCode, setDestinationCode] = useState<string>(initialCriteria?.destination || 'JED');
 
   const todayStr = new Date().toISOString().split('T')[0];
-  const nextWeekObj = new Date(Date.now() + 7 * 86400000);
-  const nextWeekStr = nextWeekObj.toISOString().split('T')[0];
+  const defaultFutureDep = new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0];
+  const defaultFutureRet = new Date(Date.now() + 21 * 86400000).toISOString().split('T')[0];
 
-  const [departureDate, setDepartureDate] = useState<string>(initialCriteria?.departureDate || '2026-08-31');
-  const [returnDate, setReturnDate] = useState<string>(initialCriteria?.returnDate || nextWeekStr);
+  const [departureDate, setDepartureDate] = useState<string>(initialCriteria?.departureDate || defaultFutureDep);
+  const [returnDate, setReturnDate] = useState<string>(initialCriteria?.returnDate || defaultFutureRet);
 
   const [adults, setAdults] = useState<number>(initialCriteria?.passengers?.adults || 1);
   const [childrenCount, setChildrenCount] = useState<number>(initialCriteria?.passengers?.children || 0);

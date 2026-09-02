@@ -45,8 +45,10 @@ export const FlightServicesHub: React.FC<FlightServicesHubProps> = ({
   onSelectOptionForUtility,
   initialOrigin = 'KAN',
   initialDestination = 'JED',
-  initialDepartureDate = '2026-08-31'
+  initialDepartureDate
 }) => {
+  const defaultDepartureDate = initialDepartureDate || new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0];
+
   // Backend config status
   const [flightConfig, setFlightConfig] = useState<FlightConfigStatus>({
     apiConfigured: false,
@@ -61,7 +63,7 @@ export const FlightServicesHub: React.FC<FlightServicesHubProps> = ({
     origin: initialOrigin,
     destination: initialDestination,
     tripType: 'one_way',
-    departureDate: initialDepartureDate,
+    departureDate: defaultDepartureDate,
     passengers: { adults: 1, children: 0, infants: 0 },
     cabinClass: 'economy'
   });

@@ -62,15 +62,19 @@ export async function searchFlights(
 
         return {
           offerId: off.offerId,
+          offerRequestId: off.offerRequestId,
           airline: off.airline || 'Partner Airline',
           flightNumber: off.flightNumber || 'Scheduled Flight',
           aircraft: off.aircraft || undefined,
           originCode: off.originCode,
+          originCity: off.originCity,
           destinationCode: off.destinationCode,
+          destinationCity: off.destinationCity,
           departureTime: off.departureTime,
           arrivalTime: off.arrivalTime,
           duration: off.duration || 'Direct',
           stops: typeof off.stops === 'number' ? off.stops : 0,
+          stopAirports: off.stopAirports || [],
           cabinClass: criteria.cabinClass,
           baggage: {
             cabinBaggage: '1 x 7kg Carry-on',
@@ -83,6 +87,7 @@ export async function searchFlights(
           fareAmountPi: pi,
           seatsAvailable: typeof off.seatsAvailable === 'number' ? off.seatsAvailable : 1,
           fareConditions: off.fareConditions || 'Live Duffel Carrier Tariff. Changeable subject to airline rules.',
+          expiresAt: off.expiresAt,
           refundable: true,
           isLive: true,
           bookingMode: 'LIVE_DUFFEL' as const,

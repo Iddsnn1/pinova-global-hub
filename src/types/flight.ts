@@ -75,6 +75,9 @@ export interface FlightOffer {
   bookingMode?: 'LIVE_DUFFEL' | 'VERIFIED_CARRIER';
   isLiveBooking?: boolean;
   providerName?: string;
+  offerRequestId?: string;
+  expiresAt?: string;
+  searchTimestamp?: string;
   segments?: FlightSegment[];
 }
 

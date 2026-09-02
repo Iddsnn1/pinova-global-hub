@@ -342,6 +342,11 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
 
     setErrorMessage(null);
 
+    console.log(
+      `[Flight Lifecycle] selected_offer_id=${offer.offerId} ` +
+      `search_offer_id=${offer.offerId}`
+    );
+
     /*
      * Live Duffel offers MUST be revalidated before payment.
      */
@@ -366,12 +371,16 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
         if (!reval?.valid) {
           setErrorMessage(
             reval?.message ||
-              'Live Duffel offer could not be revalidated. Please search again.'
+              'This flight offer is no longer available. Please search again to get the latest availability.'
           );
 
           setFlowState('details');
           return;
         }
+
+        console.log(
+          `[Flight Lifecycle] revalidated_offer_id=${reval.offerId || offer.offerId}`
+        );
 
         if (
           typeof reval.newFareFiat === 'number' &&
@@ -401,7 +410,7 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
         setErrorMessage(
           getErrorMessage(
             err,
-            'Live Duffel offer could not be revalidated. Please search again.'
+            'This flight offer is no longer available. Please search again to get the latest availability.'
           )
         );
 
@@ -683,6 +692,11 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
       setFlowState('booking');
       setPaymentStatusText(
         'Securing ticket with carrier...'
+      );
+
+      console.log(
+        `[Flight Lifecycle] book_offer_id=${offer.offerId} ` +
+          `paymentId=${paymentResult.paymentId || 'unknown'}`
       );
 
       const bookResponse =
