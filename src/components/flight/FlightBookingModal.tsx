@@ -44,6 +44,7 @@ type BookingFlowState =
   | 'booking'
   | 'confirmed'
   | 'booking_failed_escrow'
+  | 'booking_reconciliation_required'
   | 'payment_failed'
   | 'auth_failed';
 
@@ -307,7 +308,7 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
   ]);
 
   useEffect(() => {
-    if (flowState === 'confirmed' || flowState === 'booking_failed_escrow') {
+    if (flowState === 'confirmed' || flowState === 'booking_failed_escrow' || flowState === 'booking_reconciliation_required') {
       console.log('[FLIGHT FLOW] RECEIPT_RENDERED', {
         bookingId: confirmedBooking?.bookingId,
         flowState,
@@ -846,6 +847,9 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
        * React during receipt rendering.
        */
       const isSuccessfulBooking = Boolean(bookResponse?.success && bookResponse?.booking);
+      const isReconciliationRequired =
+        bookResponse?.status === 'BOOKING_RECONCILIATION_REQUIRED' ||
+        bookResponse?.booking?.bookingStatus === 'BOOKING_RECONCILIATION_REQUIRED';
 
       const completeRecord: FlightBookingRecord = {
         bookingId:
@@ -865,10 +869,24 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
         ticketNumber:
           bookResponse?.booking?.ticketNumber ?? null,
 
+        duffelOrderId:
+          bookResponse?.booking?.duffelOrderId ?? null,
+
+        idempotencyKey:
+          checkoutAttemptKeyRef.current,
+
+        offerId:
+          offer.offerId,
+
+        reconciliationStatus:
+          bookResponse?.booking?.reconciliationStatus || (isReconciliationRequired ? 'PENDING' : 'NOT_REQUIRED'),
+
         bookingStatus:
           isSuccessfulBooking
             ? (bookResponse?.booking?.bookingStatus || 'TICKET_ISSUED')
-            : 'BOOKING_FAILED_HELD_FOR_REFUND',
+            : (isReconciliationRequired
+              ? 'BOOKING_RECONCILIATION_REQUIRED'
+              : 'BOOKING_FAILED_HELD_FOR_REFUND'),
 
         flightSummary: {
           airline:
@@ -993,6 +1011,15 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
 
         setFlowState('confirmed');
         onBookingSuccess(completeRecord);
+      } else if (isReconciliationRequired) {
+        console.log(
+          `[Flight Lifecycle] BOOKING_RECONCILIATION_REQUIRED ` +
+            `offerId=${offer.offerId} ` +
+            `paymentId=${completeRecord.payment.piPaymentId}`
+        );
+
+        setFlowState('booking_reconciliation_required');
+        onBookingSuccess(completeRecord);
       } else {
         console.warn(
           `[Flight Lifecycle] BOOKING_FAILED_ESCROW ` +
@@ -1055,13 +1082,22 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
   const isSuccessfulBooking =
     flowState === 'confirmed' &&
     confirmedBooking?.bookingStatus !==
-      'BOOKING_FAILED_HELD_FOR_REFUND';
+      'BOOKING_FAILED_HELD_FOR_REFUND' &&
+    confirmedBooking?.bookingStatus !==
+      'BOOKING_RECONCILIATION_REQUIRED';
+
+  const isReconciliationRequired =
+    flowState ===
+      'booking_reconciliation_required' ||
+    confirmedBooking?.bookingStatus ===
+      'BOOKING_RECONCILIATION_REQUIRED';
 
   const isEscrowFailure =
-    flowState ===
+    (flowState ===
       'booking_failed_escrow' ||
     confirmedBooking?.bookingStatus ===
-      'BOOKING_FAILED_HELD_FOR_REFUND';
+      'BOOKING_FAILED_HELD_FOR_REFUND') &&
+    !isReconciliationRequired;
 
   /*
    * ============================================================
@@ -1862,7 +1898,7 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
           {/* ===================================================
               CONFIRMED / ESCROW RESULT
           ==================================================== */}
-          {(flowState === 'confirmed' || flowState === 'booking_failed_escrow') && (
+          {(flowState === 'confirmed' || flowState === 'booking_failed_escrow' || flowState === 'booking_reconciliation_required') && (
             <FlightReceiptErrorBoundary confirmedBooking={confirmedBooking} onClose={onClose}>
               {(() => {
                 console.log('[FLIGHT FLOW] RECEIPT_RENDER_ATTEMPT', {
@@ -1927,7 +1963,23 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
 
                 return (
                   <div id="flight-confirmed-booking-view" className="space-y-4 text-center">
-                    {isEscrowFailure ? (
+                    {isReconciliationRequired ? (
+                      <>
+                        <div className="w-14 h-14 rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-400 flex items-center justify-center mx-auto">
+                          <RefreshCw className="w-7 h-7 animate-spin" />
+                        </div>
+
+                        <div>
+                          <h4 className="text-lg font-black text-white">
+                            Payment Received — Booking Verification in Progress
+                          </h4>
+
+                          <p className="text-xs text-slate-400 mt-1">
+                            Your payment was received on the Pi Network. We are verifying the airline seat allocation and reservation status with the carrier gateway.
+                          </p>
+                        </div>
+                      </>
+                    ) : isEscrowFailure ? (
                       <>
                         <div className="w-14 h-14 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center mx-auto">
                           <ShieldCheck className="w-7 h-7" />

@@ -74,14 +74,27 @@ export interface FlightFulfillmentEntity {
   id: string;
   key: string; // paymentId or custom idempotencyKey
   paymentId: string;
+  bookingAttemptId?: string;
+  offerId?: string;
+  idempotencyKey?: string;
   pnr: string | null;
-  bookingReference: string;
+  bookingReference: string; // Airline PNR
+  duffelOrderId?: string | null; // Duffel internal order ID
   ticketNumber: string | null;
-  bookingStatus: 'TICKET_ISSUED' | 'VERIFIED_CARRIER_VOUCHER_ISSUED' | 'BOOKING_FAILED_HELD_FOR_REFUND';
+  bookingStatus:
+    | 'TICKET_ISSUED'
+    | 'VERIFIED_CARRIER_VOUCHER_ISSUED'
+    | 'BOOKING_FAILED_HELD_FOR_REFUND'
+    | 'BOOKING_RECONCILIATION_REQUIRED'
+    | 'BOOKING_OUTCOME_UNKNOWN'
+    | 'HELD_IN_ESCROW'
+    | 'CANCELLED';
+  reconciliationStatus?: 'NOT_REQUIRED' | 'PENDING' | 'RECONCILED_SUCCESS' | 'RECONCILED_FAILED' | 'UNKNOWN';
   provider: string;
   passengerName: string;
   timestamp: string;
-  idempotencyKey?: string;
+  createdAt?: string;
+  updatedAt?: string;
   bookingMode?: 'LIVE_DUFFEL' | 'VERIFIED_CARRIER';
   isLiveBooking?: boolean;
   message?: string;

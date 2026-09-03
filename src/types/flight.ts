@@ -46,6 +46,20 @@ export interface FlightSegment {
   cabinClass: CabinClass;
 }
 
+export interface FlightFareOption {
+  offerId: string;
+  fareBrandName?: string;
+  fareAmountFiat: number;
+  fareCurrency: string;
+  fareAmountPi: number;
+  baseFareFiat?: number;
+  taxesAndFeesFiat?: number;
+  baggage: FlightBaggageAllowance;
+  fareConditions?: string;
+  refundable?: boolean;
+  seatsAvailable: number;
+}
+
 export interface FlightOffer {
   offerId: string;
   airline: string;
@@ -79,6 +93,8 @@ export interface FlightOffer {
   expiresAt?: string;
   searchTimestamp?: string;
   segments?: FlightSegment[];
+  fareBrandName?: string;
+  fareOptions?: FlightFareOption[];
 }
 
 export interface FlightPassengerDetails {
@@ -99,8 +115,20 @@ export interface FlightBookingRecord {
   bookingId: string;
   pnr: string | null;
   bookingReference: string;
+  duffelOrderId?: string | null;
   ticketNumber: string | null;
-  bookingStatus: 'TICKET_ISSUED' | 'VERIFIED_CARRIER_VOUCHER_ISSUED' | 'HELD_IN_ESCROW' | 'CANCELLED' | 'BOOKING_FAILED_HELD_FOR_REFUND';
+  bookingStatus:
+    | 'TICKET_ISSUED'
+    | 'VERIFIED_CARRIER_VOUCHER_ISSUED'
+    | 'HELD_IN_ESCROW'
+    | 'CANCELLED'
+    | 'BOOKING_FAILED_HELD_FOR_REFUND'
+    | 'BOOKING_RECONCILIATION_REQUIRED'
+    | 'BOOKING_OUTCOME_UNKNOWN';
+  reconciliationStatus?: 'NOT_REQUIRED' | 'PENDING' | 'RECONCILED_SUCCESS' | 'RECONCILED_FAILED' | 'UNKNOWN';
+  bookingAttemptId?: string;
+  idempotencyKey?: string;
+  offerId?: string;
   bookingMode?: 'LIVE_DUFFEL' | 'VERIFIED_CARRIER';
   isLiveBooking?: boolean;
   flightSummary: {
@@ -124,6 +152,8 @@ export interface FlightBookingRecord {
   };
   provider: string;
   issuedAt: string;
+  createdAt?: string;
+  updatedAt?: string;
   eTicketUrl?: string;
   qrCodeData?: string;
   notice?: string;

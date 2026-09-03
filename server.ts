@@ -1,6 +1,7 @@
 import express from 'express';
 import path from 'path';
 import dotenv from 'dotenv';
+import crypto from 'crypto';
 import { GoogleGenAI } from '@google/genai';
 import {
   paymentLedgerRepo,
@@ -11,7 +12,8 @@ import {
   securityEventRepo,
   platformConfigRepo,
   idempotencyRepo,
-  vendorApplicationRepo
+  vendorApplicationRepo,
+  FlightFulfillmentEntity
 } from './src/server/db';
 import { vtuNgAdapter } from './src/server/integrations';
 
@@ -1727,7 +1729,7 @@ const handleFlightSearch = async (req: express.Request, res: express.Response) =
     const token = process.env.FLIGHT_API_ACCESS_TOKEN;
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 25000);
+    const timeoutId = setTimeout(() => controller.abort(), 35000);
 
     try {
       const passengerSlices = [
@@ -1777,6 +1779,7 @@ const handleFlightSearch = async (req: express.Request, res: express.Response) =
       const rawData = await apiRes.json();
       const offerRequestId = rawData?.data?.id || 'unknown_req';
       const offers = rawData?.data?.offers || [];
+      const rawOffersCount = offers.length;
       const validDuffelOffers = Array.isArray(offers)
         ? offers.filter((off: any, idx: number) => {
             const rawOfferId = typeof off?.id === 'string' ? off.id.trim() : '';
@@ -1841,6 +1844,24 @@ const handleFlightSearch = async (req: express.Request, res: express.Response) =
           `[Flight Lifecycle] search_offer_id=${rawOfferId} airline=${airline} flightNumber=${flightNumber} stops=${stopAirports.length} total_amount=${total_amount} ${total_currency}`
         );
 
+        const fareBrandName = slice0?.fare_brand_name || off.fare_brand_name || undefined;
+        const baseFareFiat = parseFloat(off.base_amount) || undefined;
+        const taxesAndFeesFiat = parseFloat(off.tax_amount) || undefined;
+        const mappedSegments = segments.map((s: any) => ({
+          marketingAirline: s.marketing_carrier?.name || s.marketing_carrier?.iata_code || airline,
+          operatingAirline: s.operating_carrier?.name || s.operating_carrier?.iata_code || undefined,
+          flightNumber: `${s.operating_carrier?.iata_code || s.marketing_carrier?.iata_code || ''} ${s.operating_carrier_flight_number || s.marketing_flight_number || ''}`.trim(),
+          aircraft: s.aircraft?.name || undefined,
+          originCode: s.origin?.iata_code || originCode,
+          originName: s.origin?.name || undefined,
+          destinationCode: s.destination?.iata_code || destinationCode,
+          destinationName: s.destination?.name || undefined,
+          departureTime: s.departing_at || safeDepartureDate,
+          arrivalTime: s.arriving_at || safeDepartureDate,
+          duration: s.duration || 'Scheduled',
+          cabinClass: safeCabin
+        }));
+
         return {
           offerId: rawOfferId,
           offerRequestId,
@@ -1859,16 +1880,41 @@ const handleFlightSearch = async (req: express.Request, res: express.Response) =
           cabinClass: safeCabin,
           baggageAllowance: firstSegment?.passengers?.[0]?.baggages?.length ? `${firstSegment.passengers[0].baggages.length} Checked Bag(s)` : 'Standard Allowance',
           fareAmountFiat: parseFloat(total_amount) || 0,
+          baseFareFiat,
+          taxesAndFeesFiat,
+          fareBrandName,
           currency: total_currency,
           seatsAvailable: typeof off.available_seats === 'number' ? off.available_seats : 1,
-          fareConditions: 'Live Duffel Tariff. Changeable subject to airline rules.',
+          fareConditions: off.conditions?.refund_before_departure?.allowed ? 'Refundable before departure' : (fareBrandName ? `${fareBrandName} Tariff` : 'Live Duffel Tariff. Changeable subject to airline rules.'),
           expiresAt: off.expires_at || undefined,
           isLive: true,
           bookingMode: 'LIVE_DUFFEL' as const,
           isLiveBooking: true,
-          searchTimestamp: new Date().toISOString()
+          searchTimestamp: new Date().toISOString(),
+          segments: mappedSegments
         };
       });
+
+      // Calculate unique physical itineraries for diagnostics
+      const uniqueItineraryKeys = new Set<string>();
+      validDuffelOffers.forEach((off: any) => {
+        const slice = off.slices?.[0];
+        const segs = slice?.segments || [];
+        const fp = [
+          slice?.origin?.iata_code || originCode,
+          slice?.destination?.iata_code || destinationCode,
+          segs[0]?.departing_at || '',
+          segs[segs.length - 1]?.arriving_at || '',
+          segs.map((s: any) => `${s.operating_carrier?.iata_code || s.marketing_carrier?.iata_code || ''} ${s.operating_carrier_flight_number || s.marketing_flight_number || ''}`.trim()).join(','),
+          segs.map((s: any) => s.operating_carrier?.iata_code || s.marketing_carrier?.iata_code || '').join(','),
+          safeCabin
+        ].join('|');
+        uniqueItineraryKeys.add(fp);
+      });
+
+      console.log(
+        `[FLIGHT SEARCH] requestId=${offerRequestId} rawOffers=${rawOffersCount} normalizedOffers=${mappedLiveResults.length} uniqueItineraries=${uniqueItineraryKeys.size} renderedCards=${uniqueItineraryKeys.size}`
+      );
 
       res.json({
         success: true,
@@ -2022,6 +2068,179 @@ const handleFlightRevalidate = async (req: express.Request, res: express.Respons
   }
 };
 
+function hashKey(key: string): string {
+  return crypto.createHash('sha256').update(key).digest('hex').slice(0, 12);
+}
+
+interface FlightOrderDiagnosticParams {
+  paymentId: string;
+  bookingAttemptId: string;
+  offerId: string;
+  idempotencyKey: string;
+  duffelRequestId?: string;
+  duffelOrderId?: string | null;
+  bookingReference?: string | null;
+  httpStatus: number;
+  transportError?: string;
+  bookingStatus: string;
+  reconciliationStatus: string;
+}
+
+function logFlightOrderDiagnostic(params: FlightOrderDiagnosticParams) {
+  const keyHash = hashKey(params.idempotencyKey);
+  console.log(
+    `[FLIGHT ORDER] paymentId=${params.paymentId} ` +
+    `bookingAttemptId=${params.bookingAttemptId} ` +
+    `offerId=${params.offerId} ` +
+    `idempotencyKeyHash=${keyHash} ` +
+    `duffelRequestId=${params.duffelRequestId || 'N/A'} ` +
+    `duffelOrderId=${params.duffelOrderId || 'N/A'} ` +
+    `bookingReference=${params.bookingReference || 'N/A'} ` +
+    `httpStatus=${params.httpStatus} ` +
+    `transportError=${params.transportError || 'none'} ` +
+    `bookingStatus=${params.bookingStatus} ` +
+    `reconciliationStatus=${params.reconciliationStatus}`
+  );
+}
+
+async function reconcileDuffelBooking(params: {
+  paymentId: string;
+  offerId: string;
+  idempotencyKey: string;
+  bookingAttemptId: string;
+  cleanGivenName: string;
+  cleanFamilyName: string;
+  orderPayload?: any;
+  baseUrl: string;
+  token?: string;
+  reqId: string;
+}): Promise<{
+  outcome: 'CONFIRMED' | 'NO_ORDER' | 'AMBIGUOUS';
+  order?: any;
+  pnr?: string;
+  duffelOrderId?: string;
+  ticketNumber?: string | null;
+  message?: string;
+  httpStatus?: number;
+  transportError?: string;
+}> {
+  if (!params.token) {
+    return { outcome: 'AMBIGUOUS', transportError: 'NO_TOKEN' };
+  }
+
+  try {
+    // Step 1: Query Duffel recent orders
+    const ordersRes = await fetch(`${params.baseUrl}/air/orders?limit=50`, {
+      headers: {
+        'Authorization': `Bearer ${params.token}`,
+        'Duffel-Version': 'v2',
+        'Accept': 'application/json'
+      }
+    });
+
+    if (ordersRes.ok) {
+      const ordersData = await ordersRes.json();
+      const ordersList: any[] = Array.isArray(ordersData?.data) ? ordersData.data : [];
+
+      const matchedOrder = ordersList.find((ord: any) => {
+        if (params.offerId && ord.offer_id === params.offerId) {
+          return true;
+        }
+        if (params.cleanFamilyName && Array.isArray(ord.passengers)) {
+          const passMatch = ord.passengers.some((p: any) =>
+            typeof p.family_name === 'string' &&
+            p.family_name.toLowerCase() === params.cleanFamilyName.toLowerCase()
+          );
+          if (passMatch && ord.created_at) {
+            const ageMs = Date.now() - new Date(ord.created_at).getTime();
+            if (ageMs < 30 * 60 * 1000) {
+              return true;
+            }
+          }
+        }
+        return false;
+      });
+
+      if (matchedOrder) {
+        return {
+          outcome: 'CONFIRMED',
+          order: matchedOrder,
+          pnr: matchedOrder.booking_reference || null,
+          duffelOrderId: matchedOrder.id,
+          ticketNumber: (Array.isArray(matchedOrder.documents) && matchedOrder.documents[0]?.unique_identifier)
+            ? matchedOrder.documents[0].unique_identifier
+            : null
+        };
+      }
+    }
+  } catch (err: any) {
+    console.warn(`[Flight Lifecycle] Error querying orders during reconciliation reqId=${params.reqId}: ${err.message}`);
+  }
+
+  // Step 2: Idempotent replay if orderPayload is available
+  if (params.orderPayload) {
+    try {
+      const replayRes = await fetch(`${params.baseUrl}/air/orders`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${params.token}`,
+          'Content-Type': 'application/json',
+          'Duffel-Version': 'v2',
+          'Duffel-Idempotency-Key': params.idempotencyKey,
+          'Idempotency-Key': params.idempotencyKey,
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify(params.orderPayload)
+      });
+
+      if (replayRes.ok) {
+        const replayData = await replayRes.json();
+        const ord = replayData?.data || {};
+        return {
+          outcome: 'CONFIRMED',
+          order: ord,
+          pnr: ord.booking_reference || null,
+          duffelOrderId: ord.id,
+          ticketNumber: (Array.isArray(ord.documents) && ord.documents[0]?.unique_identifier)
+            ? ord.documents[0].unique_identifier
+            : null,
+          httpStatus: replayRes.status
+        };
+      } else {
+        const errText = await replayRes.text().catch(() => '');
+        let errJson: any = null;
+        try { errJson = JSON.parse(errText); } catch {}
+        const firstErr = errJson?.errors?.[0];
+
+        if (
+          firstErr?.code === 'airline_internal_error' ||
+          firstErr?.code === 'internal_error' ||
+          firstErr?.type === 'airline_error' ||
+          firstErr?.type === 'supplier_error' ||
+          firstErr?.code === 'offer_no_longer_available' ||
+          replayRes.status === 422
+        ) {
+          return {
+            outcome: 'NO_ORDER',
+            message: firstErr?.message || 'Carrier gateway rejected order creation.',
+            httpStatus: replayRes.status
+          };
+        }
+      }
+    } catch (replayErr: any) {
+      return {
+        outcome: 'AMBIGUOUS',
+        transportError: replayErr.message
+      };
+    }
+  }
+
+  return {
+    outcome: 'AMBIGUOUS',
+    transportError: 'no_conclusive_order_state'
+  };
+}
+
 const handleFlightBook = async (req: express.Request, res: express.Response) => {
   const reqId = (req as any).reqId || 'req_bok';
   try {
@@ -2033,18 +2252,183 @@ const handleFlightBook = async (req: express.Request, res: express.Response) => 
     }
 
     const cleanPaymentId = paymentId.trim();
-    const key = (typeof idempotencyKey === 'string' && idempotencyKey.trim()) ? idempotencyKey.trim() : cleanPaymentId;
+    // Deterministic stable idempotency key for Duffel tied strictly to the Pi payment
+    const safePaymentSegment = cleanPaymentId.replace(/[^a-zA-Z0-9_-]/g, '');
+    const stableIdempotencyKey = `pinova-flight-${safePaymentSegment}`;
+    const bookingAttemptId = `att_${safePaymentSegment}`;
+    const cleanOfferId = typeof offerId === 'string' ? offerId.trim() : '';
 
-    const existingBooking = flightFulfillmentRepo.findByKey(key);
+    const baseUrl = process.env.FLIGHT_API_BASE_URL || 'https://api.duffel.com';
+    const token = process.env.FLIGHT_API_ACCESS_TOKEN;
+    const configured = isFlightApiConfigured();
+    const isLiveOfferId = /^off_[A-Za-z0-9]+$/.test(cleanOfferId);
+    const isLiveDuffelBooking = configured && isLiveOfferId;
+
+    // Invariant: 1 Pi Payment ID -> 1 Booking Attempt -> 1 Idempotency Key -> at most 1 Duffel Order
+    const existingBooking =
+      flightFulfillmentRepo.findByPaymentId(cleanPaymentId) ||
+      flightFulfillmentRepo.findByIdempotencyKey(stableIdempotencyKey) ||
+      flightFulfillmentRepo.findByKey(cleanPaymentId);
+
     if (existingBooking) {
-      console.log(`[Flight Lifecycle] flight.booking.idempotent_replay reqId=${reqId} key=${key}`);
-      res.json({
-        success: true,
-        idempotent: true,
-        booking: existingBooking,
-        reqId
-      });
-      return;
+      // Case A: Confirmed order
+      if (
+        existingBooking.bookingStatus === 'TICKET_ISSUED' ||
+        existingBooking.bookingStatus === 'VERIFIED_CARRIER_VOUCHER_ISSUED' ||
+        Boolean(existingBooking.duffelOrderId && existingBooking.pnr)
+      ) {
+        logFlightOrderDiagnostic({
+          paymentId: cleanPaymentId,
+          bookingAttemptId: existingBooking.bookingAttemptId || bookingAttemptId,
+          offerId: existingBooking.offerId || cleanOfferId,
+          idempotencyKey: stableIdempotencyKey,
+          duffelOrderId: existingBooking.duffelOrderId,
+          bookingReference: existingBooking.bookingReference || existingBooking.pnr,
+          httpStatus: 200,
+          transportError: 'none',
+          bookingStatus: existingBooking.bookingStatus,
+          reconciliationStatus: existingBooking.reconciliationStatus || 'NOT_REQUIRED'
+        });
+
+        res.json({
+          success: true,
+          idempotent: true,
+          booking: existingBooking,
+          reqId
+        });
+        return;
+      }
+
+      // Case B: Ambiguous / Reconciliation Required
+      if (
+        existingBooking.bookingStatus === 'BOOKING_RECONCILIATION_REQUIRED' ||
+        existingBooking.bookingStatus === 'BOOKING_OUTCOME_UNKNOWN'
+      ) {
+        console.log(`[Flight Lifecycle] Reconciling existing ambiguous booking attempt for paymentId=${cleanPaymentId}`);
+        const reconciliation = await reconcileDuffelBooking({
+          paymentId: cleanPaymentId,
+          offerId: existingBooking.offerId || cleanOfferId,
+          idempotencyKey: stableIdempotencyKey,
+          bookingAttemptId: existingBooking.bookingAttemptId || bookingAttemptId,
+          cleanGivenName: (passengerDetails?.givenName || existingBooking.passengerName?.split(' ')[0] || '').trim(),
+          cleanFamilyName: (passengerDetails?.familyName || existingBooking.passengerName?.split(' ').slice(1).join(' ') || '').trim(),
+          orderPayload: null, // do not re-post blindly
+          baseUrl,
+          token,
+          reqId
+        });
+
+        if (reconciliation.outcome === 'CONFIRMED' && reconciliation.order) {
+          const order = reconciliation.order;
+          const duffelOrderId = order.id || reconciliation.duffelOrderId;
+          const pnr = order.booking_reference || reconciliation.pnr || null;
+          const ticketNumber = (Array.isArray(order.documents) && order.documents[0]?.unique_identifier)
+            ? order.documents[0].unique_identifier
+            : (reconciliation.ticketNumber || null);
+
+          const resolvedRecord = flightFulfillmentRepo.recordBooking(cleanPaymentId, {
+            ...existingBooking,
+            pnr,
+            bookingReference: pnr || duffelOrderId,
+            duffelOrderId,
+            ticketNumber,
+            bookingStatus: 'TICKET_ISSUED',
+            reconciliationStatus: 'RECONCILED_SUCCESS',
+            message: 'Live airline ticket issued successfully via Duffel after reconciliation.',
+            metadata: {
+              ...(existingBooking.metadata || {}),
+              reconciledAt: new Date().toISOString()
+            }
+          });
+
+          logFlightOrderDiagnostic({
+            paymentId: cleanPaymentId,
+            bookingAttemptId: existingBooking.bookingAttemptId || bookingAttemptId,
+            offerId: existingBooking.offerId || cleanOfferId,
+            idempotencyKey: stableIdempotencyKey,
+            duffelOrderId,
+            bookingReference: pnr || duffelOrderId,
+            httpStatus: 200,
+            transportError: 'none',
+            bookingStatus: 'TICKET_ISSUED',
+            reconciliationStatus: 'RECONCILED_SUCCESS'
+          });
+
+          res.json({
+            success: true,
+            booking: resolvedRecord,
+            reqId
+          });
+          return;
+        } else if (reconciliation.outcome === 'NO_ORDER') {
+          const failedRecord = flightFulfillmentRepo.recordBooking(cleanPaymentId, {
+            ...existingBooking,
+            bookingStatus: 'BOOKING_FAILED_HELD_FOR_REFUND',
+            reconciliationStatus: 'RECONCILED_FAILED',
+            message: 'Reconciliation confirmed no airline booking was created. Payment is secured in Escrow for refund.',
+            metadata: {
+              ...(existingBooking.metadata || {}),
+              reconciledAt: new Date().toISOString()
+            }
+          });
+
+          logFlightOrderDiagnostic({
+            paymentId: cleanPaymentId,
+            bookingAttemptId: existingBooking.bookingAttemptId || bookingAttemptId,
+            offerId: existingBooking.offerId || cleanOfferId,
+            idempotencyKey: stableIdempotencyKey,
+            httpStatus: 502,
+            transportError: 'none',
+            bookingStatus: 'BOOKING_FAILED_HELD_FOR_REFUND',
+            reconciliationStatus: 'RECONCILED_FAILED'
+          });
+
+          res.status(502).json({
+            success: false,
+            error: 'AIRLINE_BOOKING_NOT_FOUND',
+            status: 'BOOKING_FAILED_HELD_FOR_REFUND',
+            message: 'Reconciliation confirmed no airline booking was created. Payment is secured in Escrow for refund.',
+            booking: failedRecord,
+            reqId
+          });
+          return;
+        } else {
+          // Ambiguous remains
+          logFlightOrderDiagnostic({
+            paymentId: cleanPaymentId,
+            bookingAttemptId: existingBooking.bookingAttemptId || bookingAttemptId,
+            offerId: existingBooking.offerId || cleanOfferId,
+            idempotencyKey: stableIdempotencyKey,
+            httpStatus: 202,
+            transportError: reconciliation.transportError || 'gateway_unresponsive',
+            bookingStatus: 'BOOKING_RECONCILIATION_REQUIRED',
+            reconciliationStatus: 'PENDING'
+          });
+
+          res.status(202).json({
+            success: false,
+            status: 'BOOKING_RECONCILIATION_REQUIRED',
+            error: 'BOOKING_OUTCOME_UNKNOWN',
+            message: 'Your payment was received. We are verifying the airline booking result before allowing another attempt.',
+            booking: existingBooking,
+            reqId
+          });
+          return;
+        }
+      }
+
+      // Case C: Conclusively failed and held in Escrow
+      if (existingBooking.bookingStatus === 'BOOKING_FAILED_HELD_FOR_REFUND') {
+        res.status(502).json({
+          success: false,
+          error: 'BOOKING_PREVIOUSLY_FAILED_IN_ESCROW',
+          status: 'BOOKING_FAILED_HELD_FOR_REFUND',
+          message: 'Your payment was received. This booking attempt was previously resolved as failed and funds are held in Escrow.',
+          booking: existingBooking,
+          reqId
+        });
+        return;
+      }
     }
 
     // Authoritative Pi Payment Verification
@@ -2070,19 +2454,10 @@ const handleFlightBook = async (req: express.Request, res: express.Response) => 
       txid ||
       '';
 
-    const configured = isFlightApiConfigured();
-    const cleanOfferId = typeof offerId === 'string' ? offerId.trim() : '';
-    const isLiveOfferId = /^off_[A-Za-z0-9]+$/.test(cleanOfferId);
-    const isLiveDuffelBooking = configured && isLiveOfferId;
     const bookingMode = isLiveDuffelBooking ? 'LIVE_DUFFEL' : 'VERIFIED_CARRIER';
-
-    // Safe diagnostic log without sensitive tokens
     console.log(`[Flight Lifecycle] book_offer_id=${cleanOfferId} reqId=${reqId} paymentId=${cleanPaymentId} bookingMode=${bookingMode}`);
 
     if (isLiveDuffelBooking) {
-      const baseUrl = process.env.FLIGHT_API_BASE_URL || 'https://api.duffel.com';
-      const token = process.env.FLIGHT_API_ACCESS_TOKEN;
-
       // 1. Authoritative Offer Hydration from Duffel
       let currentOffer: any = null;
       try {
@@ -2101,25 +2476,34 @@ const handleFlightBook = async (req: express.Request, res: express.Response) => 
           console.warn(`[Flight Lifecycle] Duffel offer hydration failed reqId=${reqId} duffelReqId=${offerReqId} status=${offerRes.status} offerId=${cleanOfferId}:`, offerErrText.substring(0, 150));
           
           const failedBookingRecord = {
-            bookingId: `BK-FAILED-${cleanPaymentId.slice(-6).toUpperCase()}`,
+            id: `FLT-BOK-${Date.now()}`,
+            key: cleanPaymentId,
             paymentId: cleanPaymentId,
+            bookingAttemptId,
+            offerId: cleanOfferId,
+            idempotencyKey: stableIdempotencyKey,
             pnr: null,
             bookingReference: `ESCROW-${cleanPaymentId.slice(-8).toUpperCase()}`,
+            duffelOrderId: null,
             ticketNumber: null,
             bookingStatus: 'BOOKING_FAILED_HELD_FOR_REFUND' as const,
+            reconciliationStatus: 'NOT_REQUIRED' as const,
             provider: 'duffel',
             bookingMode: 'LIVE_DUFFEL' as const,
             isLiveBooking: false,
             message: 'Your Pi payment was received. The selected airline offer is no longer available. Your payment protection/retry workflow has been preserved.',
             passengerName: `${passengerDetails?.givenName || 'Pioneer'} ${passengerDetails?.familyName || 'Traveler'}`,
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
           };
-          flightFulfillmentRepo.recordBooking(key, failedBookingRecord);
+          flightFulfillmentRepo.recordBooking(cleanPaymentId, failedBookingRecord);
           res.status(400).json({
             success: false,
             error: 'OFFER_NO_LONGER_AVAILABLE',
             status: 'BOOKING_FAILED_HELD_FOR_REFUND',
             message: 'Your Pi payment was received. The selected airline offer is no longer available. Your payment protection/retry workflow has been preserved.',
+            booking: failedBookingRecord,
             reqId
           });
           return;
@@ -2130,25 +2514,34 @@ const handleFlightBook = async (req: express.Request, res: express.Response) => 
       } catch (fetchErr: any) {
         console.error(`[Flight Lifecycle] Duffel offer hydration exception reqId=${reqId}:`, fetchErr.message);
         const failedBookingRecord = {
-          bookingId: `BK-FAILED-${cleanPaymentId.slice(-6).toUpperCase()}`,
+          id: `FLT-BOK-${Date.now()}`,
+          key: cleanPaymentId,
           paymentId: cleanPaymentId,
+          bookingAttemptId,
+          offerId: cleanOfferId,
+          idempotencyKey: stableIdempotencyKey,
           pnr: null,
           bookingReference: `ESCROW-${cleanPaymentId.slice(-8).toUpperCase()}`,
+          duffelOrderId: null,
           ticketNumber: null,
           bookingStatus: 'BOOKING_FAILED_HELD_FOR_REFUND' as const,
+          reconciliationStatus: 'NOT_REQUIRED' as const,
           provider: 'duffel',
           bookingMode: 'LIVE_DUFFEL' as const,
           isLiveBooking: false,
           message: 'Your Pi payment was received. Could not connect to airline gateway to verify offer. Funds held in Escrow.',
           passengerName: `${passengerDetails?.givenName || 'Pioneer'} ${passengerDetails?.familyName || 'Traveler'}`,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
         };
-        flightFulfillmentRepo.recordBooking(key, failedBookingRecord);
+        flightFulfillmentRepo.recordBooking(cleanPaymentId, failedBookingRecord);
         res.status(502).json({
           success: false,
           error: 'DUFFEL_GATEWAY_ERROR',
           status: 'BOOKING_FAILED_HELD_FOR_REFUND',
           message: 'Your Pi payment was received. Could not connect to airline gateway. Funds held in Escrow.',
+          booking: failedBookingRecord,
           reqId
         });
         return;
@@ -2170,55 +2563,73 @@ const handleFlightBook = async (req: express.Request, res: express.Response) => 
         if (!isNaN(expiresAtMs) && expiresAtMs <= Date.now()) {
           console.warn(`[Flight Lifecycle] Duffel offer expired reqId=${reqId} offerId=${cleanOfferId} expires_at=${currentOffer.expires_at}`);
           const failedBookingRecord = {
-            bookingId: `BK-FAILED-${cleanPaymentId.slice(-6).toUpperCase()}`,
+            id: `FLT-BOK-${Date.now()}`,
+            key: cleanPaymentId,
             paymentId: cleanPaymentId,
+            bookingAttemptId,
+            offerId: cleanOfferId,
+            idempotencyKey: stableIdempotencyKey,
             pnr: null,
             bookingReference: `ESCROW-${cleanPaymentId.slice(-8).toUpperCase()}`,
+            duffelOrderId: null,
             ticketNumber: null,
             bookingStatus: 'BOOKING_FAILED_HELD_FOR_REFUND' as const,
+            reconciliationStatus: 'NOT_REQUIRED' as const,
             provider: 'duffel',
             bookingMode: 'LIVE_DUFFEL' as const,
             isLiveBooking: false,
             message: 'Your Pi payment was received. The selected airline offer has expired. Funds are protected in Escrow.',
             passengerName: `${passengerDetails?.givenName || 'Pioneer'} ${passengerDetails?.familyName || 'Traveler'}`,
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
           };
-          flightFulfillmentRepo.recordBooking(key, failedBookingRecord);
+          flightFulfillmentRepo.recordBooking(cleanPaymentId, failedBookingRecord);
           res.status(400).json({
             success: false,
             error: 'OFFER_NO_LONGER_AVAILABLE',
             status: 'BOOKING_FAILED_HELD_FOR_REFUND',
             message: 'Your Pi payment was received. The selected airline offer has expired. Funds are protected in Escrow for instant refund or retry.',
+            booking: failedBookingRecord,
             reqId
           });
           return;
         }
       }
 
-      // 3. Authoritative Passenger ID Resolution (Never fallback to artificial IDs like pas_1)
+      // 3. Authoritative Passenger ID Resolution
       const authoritativePassengerId = currentOffer.passengers?.[0]?.id;
       if (!authoritativePassengerId || typeof authoritativePassengerId !== 'string' || !/^pas_[A-Za-z0-9]+$/.test(authoritativePassengerId)) {
         console.warn(`[Flight Lifecycle] No authoritative passenger ID on Duffel offer reqId=${reqId} offerId=${cleanOfferId}`);
         const failedBookingRecord = {
-          bookingId: `BK-FAILED-${cleanPaymentId.slice(-6).toUpperCase()}`,
+          id: `FLT-BOK-${Date.now()}`,
+          key: cleanPaymentId,
           paymentId: cleanPaymentId,
+          bookingAttemptId,
+          offerId: cleanOfferId,
+          idempotencyKey: stableIdempotencyKey,
           pnr: null,
           bookingReference: `ESCROW-${cleanPaymentId.slice(-8).toUpperCase()}`,
+          duffelOrderId: null,
           ticketNumber: null,
           bookingStatus: 'BOOKING_FAILED_HELD_FOR_REFUND' as const,
+          reconciliationStatus: 'NOT_REQUIRED' as const,
           provider: 'duffel',
           bookingMode: 'LIVE_DUFFEL' as const,
           isLiveBooking: false,
           message: 'Authoritative passenger structure is missing on this airline offer. Funds held in Escrow.',
           passengerName: `${passengerDetails?.givenName || 'Pioneer'} ${passengerDetails?.familyName || 'Traveler'}`,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
         };
-        flightFulfillmentRepo.recordBooking(key, failedBookingRecord);
+        flightFulfillmentRepo.recordBooking(cleanPaymentId, failedBookingRecord);
         res.status(400).json({
           success: false,
           error: 'PASSENGER_DATA_INVALID',
           status: 'BOOKING_FAILED_HELD_FOR_REFUND',
           message: 'Authoritative passenger identifier is missing on this offer. Please search for a fresh flight.',
+          booking: failedBookingRecord,
           reqId
         });
         return;
@@ -2266,15 +2677,6 @@ const handleFlightBook = async (req: express.Request, res: express.Response) => 
       const cleanFamilyName = typeof passengerDetails?.familyName === 'string' ? passengerDetails.familyName.trim().slice(0, 50) : '';
       const cleanEmail = typeof passengerDetails?.email === 'string' ? passengerDetails.email.trim().slice(0, 100) : 'traveler@pinova.hub';
       const cleanPhone = typeof passengerDetails?.phone === 'string' ? passengerDetails.phone.trim().slice(0, 25) : '+2348000000000';
-
-      console.log(
-        `[Flight Lifecycle] PASSENGER_VALIDATION reqId=${reqId} ` +
-        `born_on_present=${Boolean(rawDob)} ` +
-        `born_on_format_valid=${Boolean(isDobValidFormat && isDobSensible)} ` +
-        `gender_present=${Boolean(cleanGender)} ` +
-        `title_present=${Boolean(cleanTitle)} ` +
-        `duffel_passenger_id_present=${Boolean(authoritativePassengerId)}`
-      );
 
       if (!cleanGivenName || !cleanFamilyName) {
         res.status(400).json({
@@ -2357,26 +2759,35 @@ const handleFlightBook = async (req: express.Request, res: express.Response) => 
         }
       };
 
-      console.log(
-        `[Flight Lifecycle] DUFFEL_ORDER_REQUEST_DISPATCH reqId=${reqId} ` +
-        `bookingRef=ESCROW-${cleanPaymentId.slice(-8).toUpperCase()} ` +
-        `offerId=${cleanOfferId} passengerId=${authoritativePassengerId} ` +
-        `authoritativePassenger=true offerRevalidated=true offerExpired=false ` +
-        `amount=${authoritativeAmount} currency=${authoritativeCurrency} ` +
-        `payloadSummary=${JSON.stringify({
-          type: orderPayload.data.type,
-          selected_offers: orderPayload.data.selected_offers,
-          passengers: orderPayload.data.passengers.map(p => ({
-            id: p.id,
-            title: p.title,
-            gender: p.gender,
-            born_on_present: Boolean(p.born_on),
-            has_email: Boolean(p.email),
-            has_phone: Boolean(p.phone_number)
-          })),
-          payments: orderPayload.data.payments
-        })}`
-      );
+      // 7. Persist in-flight state BEFORE dispatching to Duffel to survive container restart or network abort
+      const initialRecord: FlightFulfillmentEntity = {
+        id: `FLT-BOK-${Date.now()}`,
+        key: cleanPaymentId,
+        paymentId: cleanPaymentId,
+        bookingAttemptId,
+        offerId: cleanOfferId,
+        idempotencyKey: stableIdempotencyKey,
+        pnr: null,
+        bookingReference: `ESCROW-${cleanPaymentId.slice(-8).toUpperCase()}`,
+        duffelOrderId: null,
+        ticketNumber: null,
+        bookingStatus: 'BOOKING_RECONCILIATION_REQUIRED',
+        reconciliationStatus: 'PENDING',
+        provider: 'duffel',
+        passengerName: `${cleanGivenName} ${cleanFamilyName}`,
+        timestamp: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        bookingMode: 'LIVE_DUFFEL',
+        isLiveBooking: true,
+        message: 'Order submission initiated; awaiting carrier outcome.',
+        metadata: {
+          amount: authoritativeAmount,
+          currency: authoritativeCurrency,
+          txid: verifiedTxid
+        }
+      };
+      flightFulfillmentRepo.recordBooking(cleanPaymentId, initialRecord);
 
       try {
         const orderRes = await fetch(`${baseUrl}/air/orders`, {
@@ -2385,6 +2796,8 @@ const handleFlightBook = async (req: express.Request, res: express.Response) => 
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
             'Duffel-Version': 'v2',
+            'Duffel-Idempotency-Key': stableIdempotencyKey,
+            'Idempotency-Key': stableIdempotencyKey,
             'Accept': 'application/json'
           },
           body: JSON.stringify(orderPayload)
@@ -2394,39 +2807,70 @@ const handleFlightBook = async (req: express.Request, res: express.Response) => 
 
         if (orderRes.ok) {
           const orderData = await orderRes.json();
-          const pnr = orderData?.data?.booking_reference || null;
-          const duffelOrderId = orderData?.data?.id || `REF-${Date.now()}`;
-          const ticketNumber = orderData?.data?.documents?.[0]?.unique_identifier || null;
+          const order = orderData?.data || {};
+          const pnr = order.booking_reference || null;
+          const duffelOrderId = order.id || `ord_${Date.now()}`;
+          // Requirement 8: Do NOT require documents[0] to exist.
+          const ticketNumber = (Array.isArray(order.documents) && order.documents[0]?.unique_identifier)
+            ? order.documents[0].unique_identifier
+            : null;
 
-          console.log(`[Flight Lifecycle] flight.booking.succeeded reqId=${reqId} duffelReqId=${duffelReqId} duffelOrderId=${duffelOrderId} pnr=${pnr || 'N/A'} tkt=${ticketNumber || 'N/A'}`);
-
-          const bookingRecord = {
-            bookingId: `BK-DUFFEL-${cleanPaymentId.slice(-6).toUpperCase()}`,
+          // Requirement 7: bookingReference is pnr, duffelOrderId stored distinctly
+          const bookingRecord: FlightFulfillmentEntity = {
+            id: `FLT-BOK-${Date.now()}`,
+            key: cleanPaymentId,
             paymentId: cleanPaymentId,
+            bookingAttemptId,
+            offerId: cleanOfferId,
+            idempotencyKey: stableIdempotencyKey,
             pnr,
-            bookingReference: duffelOrderId,
+            bookingReference: pnr || duffelOrderId,
+            duffelOrderId,
             ticketNumber,
-            bookingStatus: 'TICKET_ISSUED' as const,
+            bookingStatus: 'TICKET_ISSUED',
+            reconciliationStatus: 'NOT_REQUIRED',
             provider: 'duffel',
-            bookingMode: 'LIVE_DUFFEL' as const,
+            bookingMode: 'LIVE_DUFFEL',
             isLiveBooking: true,
             message: 'Live airline ticket issued successfully via Duffel.',
             passengerName: `${cleanGivenName} ${cleanFamilyName}`,
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
+            createdAt: initialRecord.createdAt,
+            updatedAt: new Date().toISOString(),
+            metadata: {
+              duffelReqId,
+              amount: authoritativeAmount,
+              currency: authoritativeCurrency,
+              liveMode: Boolean(order.live_mode)
+            }
           };
 
-          flightFulfillmentRepo.recordBooking(key, bookingRecord);
+          flightFulfillmentRepo.recordBooking(cleanPaymentId, bookingRecord);
+
+          logFlightOrderDiagnostic({
+            paymentId: cleanPaymentId,
+            bookingAttemptId,
+            offerId: cleanOfferId,
+            idempotencyKey: stableIdempotencyKey,
+            duffelRequestId: duffelReqId,
+            duffelOrderId,
+            bookingReference: pnr || duffelOrderId,
+            httpStatus: orderRes.status,
+            transportError: 'none',
+            bookingStatus: 'TICKET_ISSUED',
+            reconciliationStatus: 'NOT_REQUIRED'
+          });
+
           res.json({ success: true, booking: bookingRecord, reqId });
           return;
         } else {
+          // HTTP 4xx or 5xx from Duffel
           const rawErrText = await orderRes.text().catch(() => '');
           let duffelErrors: any[] = [];
           try {
             const parsed = JSON.parse(rawErrText);
             duffelErrors = Array.isArray(parsed?.errors) ? parsed.errors : [];
-          } catch {
-            // raw text
-          }
+          } catch {}
 
           const firstErr = duffelErrors[0] || {};
           const sanitizedErrDetails = duffelErrors.map((e: any) => ({
@@ -2437,6 +2881,80 @@ const handleFlightBook = async (req: express.Request, res: express.Response) => 
             message: e.message
           }));
 
+          // First check: Could Duffel have created an order despite 409 or 422 or 500?
+          if (orderRes.status === 409 || orderRes.status === 422 || orderRes.status >= 500) {
+            const reconciliation = await reconcileDuffelBooking({
+              paymentId: cleanPaymentId,
+              offerId: cleanOfferId,
+              idempotencyKey: stableIdempotencyKey,
+              bookingAttemptId,
+              cleanGivenName,
+              cleanFamilyName,
+              orderPayload: null, // do not re-post
+              baseUrl,
+              token,
+              reqId
+            });
+
+            if (reconciliation.outcome === 'CONFIRMED' && reconciliation.order) {
+              const order = reconciliation.order;
+              const duffelOrderId = order.id || reconciliation.duffelOrderId;
+              const pnr = order.booking_reference || reconciliation.pnr || null;
+              const ticketNumber = (Array.isArray(order.documents) && order.documents[0]?.unique_identifier)
+                ? order.documents[0].unique_identifier
+                : null;
+
+              const confirmedRecord: FlightFulfillmentEntity = {
+                id: `FLT-BOK-${Date.now()}`,
+                key: cleanPaymentId,
+                paymentId: cleanPaymentId,
+                bookingAttemptId,
+                offerId: cleanOfferId,
+                idempotencyKey: stableIdempotencyKey,
+                pnr,
+                bookingReference: pnr || duffelOrderId,
+                duffelOrderId,
+                ticketNumber,
+                bookingStatus: 'TICKET_ISSUED',
+                reconciliationStatus: 'RECONCILED_SUCCESS',
+                provider: 'duffel',
+                bookingMode: 'LIVE_DUFFEL',
+                isLiveBooking: true,
+                message: 'Live airline ticket confirmed after gateway reconciliation.',
+                passengerName: `${cleanGivenName} ${cleanFamilyName}`,
+                timestamp: new Date().toISOString(),
+                createdAt: initialRecord.createdAt,
+                updatedAt: new Date().toISOString(),
+                metadata: {
+                  duffelReqId,
+                  amount: authoritativeAmount,
+                  currency: authoritativeCurrency,
+                  reconciledAfterStatus: orderRes.status
+                }
+              };
+
+              flightFulfillmentRepo.recordBooking(cleanPaymentId, confirmedRecord);
+
+              logFlightOrderDiagnostic({
+                paymentId: cleanPaymentId,
+                bookingAttemptId,
+                offerId: cleanOfferId,
+                idempotencyKey: stableIdempotencyKey,
+                duffelRequestId: duffelReqId,
+                duffelOrderId,
+                bookingReference: pnr || duffelOrderId,
+                httpStatus: orderRes.status,
+                transportError: 'none',
+                bookingStatus: 'TICKET_ISSUED',
+                reconciliationStatus: 'RECONCILED_SUCCESS'
+              });
+
+              res.json({ success: true, booking: confirmedRecord, reqId });
+              return;
+            }
+          }
+
+          // Conclusive provider rejection
           const isAirlineInternalError =
             firstErr.code === 'airline_internal_error' ||
             firstErr.code === 'internal_error' ||
@@ -2445,16 +2963,6 @@ const handleFlightBook = async (req: express.Request, res: express.Response) => 
             (typeof firstErr.message === 'string' && firstErr.message.toLowerCase().includes('internal_error'));
 
           const isOfferUnavailable = firstErr.code === 'offer_no_longer_available' || orderRes.status === 422;
-
-          console.error(
-            `[Flight Lifecycle] flight.booking.duffel_failed reqId=${reqId} ` +
-            `bookingRef=ESCROW-${cleanPaymentId.slice(-8).toUpperCase()} ` +
-            `duffelReqId=${duffelReqId} httpStatus=${orderRes.status} ` +
-            `stage=order_creation_dispatch offerId=${cleanOfferId} ` +
-            `authoritativePassengerId=${authoritativePassengerId} ` +
-            `isAirlineInternalError=${isAirlineInternalError} ` +
-            `errors=${JSON.stringify(sanitizedErrDetails)}`
-          );
 
           const errorCategory = isOfferUnavailable
             ? 'OFFER_NO_LONGER_AVAILABLE'
@@ -2472,58 +2980,221 @@ const handleFlightBook = async (req: express.Request, res: express.Response) => 
                 ? `Airline gateway rejected booking: ${firstErr.message}. Funds held safely in Escrow for instant refund/retry.`
                 : 'Payment completed on Pi Network. Airline seat allocation failed at carrier gateway. Funds held safely in Escrow for instant refund/retry.'));
 
-          const failedBookingRecord = {
-            bookingId: `BK-FAILED-${cleanPaymentId.slice(-6).toUpperCase()}`,
+          const failedBookingRecord: FlightFulfillmentEntity = {
+            id: `FLT-BOK-${Date.now()}`,
+            key: cleanPaymentId,
             paymentId: cleanPaymentId,
+            bookingAttemptId,
+            offerId: cleanOfferId,
+            idempotencyKey: stableIdempotencyKey,
             pnr: null,
             bookingReference: `ESCROW-${cleanPaymentId.slice(-8).toUpperCase()}`,
+            duffelOrderId: null,
             ticketNumber: null,
-            bookingStatus: 'BOOKING_FAILED_HELD_FOR_REFUND' as const,
+            bookingStatus: 'BOOKING_FAILED_HELD_FOR_REFUND',
+            reconciliationStatus: 'RECONCILED_FAILED',
             provider: 'duffel',
-            bookingMode: 'LIVE_DUFFEL' as const,
+            bookingMode: 'LIVE_DUFFEL',
             isLiveBooking: false,
             message: userMessage,
             passengerName: `${cleanGivenName} ${cleanFamilyName}`,
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
+            createdAt: initialRecord.createdAt,
+            updatedAt: new Date().toISOString(),
+            metadata: {
+              duffelReqId,
+              httpStatus: orderRes.status,
+              isAirlineInternalError,
+              errors: sanitizedErrDetails
+            }
           };
-          flightFulfillmentRepo.recordBooking(key, failedBookingRecord);
+
+          flightFulfillmentRepo.recordBooking(cleanPaymentId, failedBookingRecord);
+
+          logFlightOrderDiagnostic({
+            paymentId: cleanPaymentId,
+            bookingAttemptId,
+            offerId: cleanOfferId,
+            idempotencyKey: stableIdempotencyKey,
+            duffelRequestId: duffelReqId,
+            httpStatus: orderRes.status,
+            transportError: 'none',
+            bookingStatus: 'BOOKING_FAILED_HELD_FOR_REFUND',
+            reconciliationStatus: 'RECONCILED_FAILED'
+          });
+
           res.status(502).json({
             success: false,
             error: errorCategory,
             status: 'BOOKING_FAILED_HELD_FOR_REFUND',
             message: userMessage,
             details: firstErr.title || (isAirlineInternalError ? 'Carrier gateway internal error' : 'Carrier allocation error. Refund available in Escrow.'),
+            booking: failedBookingRecord,
             reqId,
             duffelReqId
           });
           return;
         }
-      } catch (err: any) {
-        console.error(`[Flight Lifecycle] flight.booking.exception reqId=${reqId}:`, err.message);
-        const failedBookingRecord = {
-          bookingId: `BK-FAILED-${cleanPaymentId.slice(-6).toUpperCase()}`,
+      } catch (transportErr: any) {
+        // Transport failure (Timeout, socket disconnect, ECONNRESET, AbortError)
+        console.warn(`[Flight Lifecycle] Transport error during POST /air/orders reqId=${reqId}: ${transportErr.message}`);
+
+        // Reconcile before classifying outcome!
+        const reconciliation = await reconcileDuffelBooking({
           paymentId: cleanPaymentId,
-          pnr: null,
-          bookingReference: `ESCROW-${cleanPaymentId.slice(-8).toUpperCase()}`,
-          ticketNumber: null,
-          bookingStatus: 'BOOKING_FAILED_HELD_FOR_REFUND' as const,
-          provider: 'duffel',
-          bookingMode: 'LIVE_DUFFEL' as const,
-          isLiveBooking: false,
-          message: 'Payment verified on Pi Network. Airline gateway timed out. Escrow active for refund/retry.',
-          passengerName: `${cleanGivenName} ${cleanFamilyName}`,
-          timestamp: new Date().toISOString()
-        };
-        flightFulfillmentRepo.recordBooking(key, failedBookingRecord);
-        res.status(502).json({
-          success: false,
-          error: 'BOOKING_FAILED_AFTER_PI_PAYMENT',
-          status: 'BOOKING_FAILED_HELD_FOR_REFUND',
-          message: 'Payment verified on Pi Network. Airline gateway timed out. Escrow active for refund/retry.',
-          details: 'Gateway timeout.',
+          offerId: cleanOfferId,
+          idempotencyKey: stableIdempotencyKey,
+          bookingAttemptId,
+          cleanGivenName,
+          cleanFamilyName,
+          orderPayload,
+          baseUrl,
+          token,
           reqId
         });
-        return;
+
+        if (reconciliation.outcome === 'CONFIRMED' && reconciliation.order) {
+          const order = reconciliation.order;
+          const duffelOrderId = order.id || reconciliation.duffelOrderId;
+          const pnr = order.booking_reference || reconciliation.pnr || null;
+          const ticketNumber = (Array.isArray(order.documents) && order.documents[0]?.unique_identifier)
+            ? order.documents[0].unique_identifier
+            : null;
+
+          const confirmedRecord: FlightFulfillmentEntity = {
+            id: `FLT-BOK-${Date.now()}`,
+            key: cleanPaymentId,
+            paymentId: cleanPaymentId,
+            bookingAttemptId,
+            offerId: cleanOfferId,
+            idempotencyKey: stableIdempotencyKey,
+            pnr,
+            bookingReference: pnr || duffelOrderId,
+            duffelOrderId,
+            ticketNumber,
+            bookingStatus: 'TICKET_ISSUED',
+            reconciliationStatus: 'RECONCILED_SUCCESS',
+            provider: 'duffel',
+            bookingMode: 'LIVE_DUFFEL',
+            isLiveBooking: true,
+            message: 'Live airline ticket confirmed after transport reconciliation.',
+            passengerName: `${cleanGivenName} ${cleanFamilyName}`,
+            timestamp: new Date().toISOString(),
+            createdAt: initialRecord.createdAt,
+            updatedAt: new Date().toISOString()
+          };
+
+          flightFulfillmentRepo.recordBooking(cleanPaymentId, confirmedRecord);
+
+          logFlightOrderDiagnostic({
+            paymentId: cleanPaymentId,
+            bookingAttemptId,
+            offerId: cleanOfferId,
+            idempotencyKey: stableIdempotencyKey,
+            duffelOrderId,
+            bookingReference: pnr || duffelOrderId,
+            httpStatus: 200,
+            transportError: transportErr.message,
+            bookingStatus: 'TICKET_ISSUED',
+            reconciliationStatus: 'RECONCILED_SUCCESS'
+          });
+
+          res.json({ success: true, booking: confirmedRecord, reqId });
+          return;
+        } else if (reconciliation.outcome === 'NO_ORDER') {
+          const failedRecord: FlightFulfillmentEntity = {
+            id: `FLT-BOK-${Date.now()}`,
+            key: cleanPaymentId,
+            paymentId: cleanPaymentId,
+            bookingAttemptId,
+            offerId: cleanOfferId,
+            idempotencyKey: stableIdempotencyKey,
+            pnr: null,
+            bookingReference: `ESCROW-${cleanPaymentId.slice(-8).toUpperCase()}`,
+            duffelOrderId: null,
+            ticketNumber: null,
+            bookingStatus: 'BOOKING_FAILED_HELD_FOR_REFUND',
+            reconciliationStatus: 'RECONCILED_FAILED',
+            provider: 'duffel',
+            bookingMode: 'LIVE_DUFFEL',
+            isLiveBooking: false,
+            message: 'Reconciliation confirmed no airline booking was created. Payment is secured in Escrow.',
+            passengerName: `${cleanGivenName} ${cleanFamilyName}`,
+            timestamp: new Date().toISOString(),
+            createdAt: initialRecord.createdAt,
+            updatedAt: new Date().toISOString()
+          };
+
+          flightFulfillmentRepo.recordBooking(cleanPaymentId, failedRecord);
+
+          logFlightOrderDiagnostic({
+            paymentId: cleanPaymentId,
+            bookingAttemptId,
+            offerId: cleanOfferId,
+            idempotencyKey: stableIdempotencyKey,
+            httpStatus: 502,
+            transportError: transportErr.message,
+            bookingStatus: 'BOOKING_FAILED_HELD_FOR_REFUND',
+            reconciliationStatus: 'RECONCILED_FAILED'
+          });
+
+          res.status(502).json({
+            success: false,
+            error: 'AIRLINE_BOOKING_NOT_FOUND',
+            status: 'BOOKING_FAILED_HELD_FOR_REFUND',
+            message: 'Reconciliation confirmed no airline booking was created. Payment is secured in Escrow.',
+            booking: failedRecord,
+            reqId
+          });
+          return;
+        } else {
+          // Ambiguous: Keep BOOKING_RECONCILIATION_REQUIRED
+          const ambiguousRecord: FlightFulfillmentEntity = {
+            id: `FLT-BOK-${Date.now()}`,
+            key: cleanPaymentId,
+            paymentId: cleanPaymentId,
+            bookingAttemptId,
+            offerId: cleanOfferId,
+            idempotencyKey: stableIdempotencyKey,
+            pnr: null,
+            bookingReference: `ESCROW-${cleanPaymentId.slice(-8).toUpperCase()}`,
+            duffelOrderId: null,
+            ticketNumber: null,
+            bookingStatus: 'BOOKING_RECONCILIATION_REQUIRED',
+            reconciliationStatus: 'PENDING',
+            provider: 'duffel',
+            bookingMode: 'LIVE_DUFFEL',
+            isLiveBooking: true,
+            message: 'Your payment was received. We are verifying the airline booking result before allowing another attempt.',
+            passengerName: `${cleanGivenName} ${cleanFamilyName}`,
+            timestamp: new Date().toISOString(),
+            createdAt: initialRecord.createdAt,
+            updatedAt: new Date().toISOString()
+          };
+
+          flightFulfillmentRepo.recordBooking(cleanPaymentId, ambiguousRecord);
+
+          logFlightOrderDiagnostic({
+            paymentId: cleanPaymentId,
+            bookingAttemptId,
+            offerId: cleanOfferId,
+            idempotencyKey: stableIdempotencyKey,
+            httpStatus: 202,
+            transportError: transportErr.message,
+            bookingStatus: 'BOOKING_RECONCILIATION_REQUIRED',
+            reconciliationStatus: 'PENDING'
+          });
+
+          res.status(202).json({
+            success: false,
+            status: 'BOOKING_RECONCILIATION_REQUIRED',
+            error: 'BOOKING_OUTCOME_UNKNOWN',
+            message: 'Your payment was received. We are verifying the airline booking result before allowing another attempt.',
+            booking: ambiguousRecord,
+            reqId
+          });
+          return;
+        }
       }
     } else {
       // Verified carrier voucher issuance when live Duffel offer is not used
@@ -2538,22 +3209,29 @@ const handleFlightBook = async (req: express.Request, res: express.Response) => 
       const safeFamily = typeof passengerDetails?.familyName === 'string' ? passengerDetails.familyName.slice(0, 50) : '';
       const fullName = safeGiven ? `${safeTitle ? safeTitle + ' ' : ''}${safeGiven} ${safeFamily}`.trim() : 'Verified Pioneer Passenger';
 
-      const bookingRecord = {
-        bookingId: `BK-CARRIER-${cleanPaymentId.slice(-6).toUpperCase()}`,
+      const bookingRecord: FlightFulfillmentEntity = {
+        id: `FLT-BOK-${Date.now()}`,
+        key: cleanPaymentId,
         paymentId: cleanPaymentId,
+        bookingAttemptId,
+        idempotencyKey: stableIdempotencyKey,
         pnr,
         bookingReference,
+        duffelOrderId: null,
         ticketNumber,
-        bookingStatus: 'VERIFIED_CARRIER_VOUCHER_ISSUED' as const,
+        bookingStatus: 'VERIFIED_CARRIER_VOUCHER_ISSUED',
+        reconciliationStatus: 'NOT_REQUIRED',
         provider: 'Verified Transport Carrier Gateway',
-        bookingMode: 'VERIFIED_CARRIER' as const,
+        bookingMode: 'VERIFIED_CARRIER',
         isLiveBooking: false,
         message: 'Verified carrier voucher issued. Not an airline-issued ticket.',
         passengerName: fullName,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
       };
 
-      flightFulfillmentRepo.recordBooking(key, bookingRecord);
+      flightFulfillmentRepo.recordBooking(cleanPaymentId, bookingRecord);
 
       res.json({
         success: true,
