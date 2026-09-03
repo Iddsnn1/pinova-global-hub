@@ -2110,7 +2110,6 @@ async function reconcileDuffelBooking(params: {
   bookingAttemptId: string;
   cleanGivenName: string;
   cleanFamilyName: string;
-  orderPayload?: any;
   baseUrl: string;
   token?: string;
   reqId: string;
@@ -2129,7 +2128,7 @@ async function reconcileDuffelBooking(params: {
   }
 
   try {
-    // Step 1: Query Duffel recent orders
+    // Read-only query of Duffel recent orders
     const ordersRes = await fetch(`${params.baseUrl}/air/orders?limit=50`, {
       headers: {
         'Authorization': `Bearer ${params.token}`,
@@ -2142,26 +2141,48 @@ async function reconcileDuffelBooking(params: {
       const ordersData = await ordersRes.json();
       const ordersList: any[] = Array.isArray(ordersData?.data) ? ordersData.data : [];
 
-      const matchedOrder = ordersList.find((ord: any) => {
-        if (params.offerId && ord.offer_id === params.offerId) {
-          return true;
-        }
-        if (params.cleanFamilyName && Array.isArray(ord.passengers)) {
-          const passMatch = ord.passengers.some((p: any) =>
-            typeof p.family_name === 'string' &&
-            p.family_name.toLowerCase() === params.cleanFamilyName.toLowerCase()
-          );
-          if (passMatch && ord.created_at) {
-            const ageMs = Date.now() - new Date(ord.created_at).getTime();
-            if (ageMs < 30 * 60 * 1000) {
-              return true;
-            }
+      const matchedOrders = ordersList.filter((ord: any) => {
+        // 1. Primary correlation chain: exact metadata match (paymentId, bookingAttemptId, or idempotencyKey)
+        if (ord.metadata && typeof ord.metadata === 'object') {
+          if (
+            (ord.metadata.payment_id && ord.metadata.payment_id === params.paymentId) ||
+            (ord.metadata.booking_attempt_id && ord.metadata.booking_attempt_id === params.bookingAttemptId) ||
+            (ord.metadata.idempotency_key && ord.metadata.idempotency_key === params.idempotencyKey)
+          ) {
+            return true;
           }
         }
-        return false;
+
+        // 2. Secondary correlation chain: requires MULTIPLE independent fields:
+        // Must match exact offerId AND full passenger identity (given AND family name) AND recency window.
+        // NEVER match merely on passenger name, email, or amount alone!
+        const offerMatches = Boolean(
+          (params.offerId && ord.offer_id === params.offerId) ||
+          (params.offerId && Array.isArray(ord.selected_offers) && ord.selected_offers.includes(params.offerId)) ||
+          (params.offerId && Array.isArray(ord.slices) && ord.slices.some((s: any) => s.id === params.offerId || s.offer_id === params.offerId))
+        );
+
+        const passengerMatches = Boolean(
+          params.cleanFamilyName &&
+          Array.isArray(ord.passengers) &&
+          ord.passengers.some((p: any) =>
+            typeof p.family_name === 'string' &&
+            p.family_name.toLowerCase() === params.cleanFamilyName.toLowerCase() &&
+            (!params.cleanGivenName || (typeof p.given_name === 'string' && p.given_name.toLowerCase() === params.cleanGivenName.toLowerCase()))
+          )
+        );
+
+        let recencyMatches = false;
+        if (ord.created_at) {
+          const ageMs = Date.now() - new Date(ord.created_at).getTime();
+          recencyMatches = ageMs >= 0 && ageMs < 60 * 60 * 1000;
+        }
+
+        return offerMatches && passengerMatches && recencyMatches;
       });
 
-      if (matchedOrder) {
+      if (matchedOrders.length === 1) {
+        const matchedOrder = matchedOrders[0];
         return {
           outcome: 'CONFIRMED',
           order: matchedOrder,
@@ -2171,74 +2192,32 @@ async function reconcileDuffelBooking(params: {
             ? matchedOrder.documents[0].unique_identifier
             : null
         };
+      } else if (matchedOrders.length > 1) {
+        console.warn(`[Flight Lifecycle] Multiple potential order matches encountered for paymentId=${params.paymentId}`);
+        return {
+          outcome: 'AMBIGUOUS',
+          message: 'Multiple potential order matches encountered; manual verification required.',
+          httpStatus: 202
+        };
+      } else {
+        return {
+          outcome: 'NO_ORDER',
+          message: 'No airline order matches this booking attempt.'
+        };
       }
+    } else {
+      return {
+        outcome: 'AMBIGUOUS',
+        transportError: `HTTP_${ordersRes.status}`
+      };
     }
   } catch (err: any) {
     console.warn(`[Flight Lifecycle] Error querying orders during reconciliation reqId=${params.reqId}: ${err.message}`);
+    return {
+      outcome: 'AMBIGUOUS',
+      transportError: err.message
+    };
   }
-
-  // Step 2: Idempotent replay if orderPayload is available
-  if (params.orderPayload) {
-    try {
-      const replayRes = await fetch(`${params.baseUrl}/air/orders`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${params.token}`,
-          'Content-Type': 'application/json',
-          'Duffel-Version': 'v2',
-          'Duffel-Idempotency-Key': params.idempotencyKey,
-          'Idempotency-Key': params.idempotencyKey,
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify(params.orderPayload)
-      });
-
-      if (replayRes.ok) {
-        const replayData = await replayRes.json();
-        const ord = replayData?.data || {};
-        return {
-          outcome: 'CONFIRMED',
-          order: ord,
-          pnr: ord.booking_reference || null,
-          duffelOrderId: ord.id,
-          ticketNumber: (Array.isArray(ord.documents) && ord.documents[0]?.unique_identifier)
-            ? ord.documents[0].unique_identifier
-            : null,
-          httpStatus: replayRes.status
-        };
-      } else {
-        const errText = await replayRes.text().catch(() => '');
-        let errJson: any = null;
-        try { errJson = JSON.parse(errText); } catch {}
-        const firstErr = errJson?.errors?.[0];
-
-        if (
-          firstErr?.code === 'airline_internal_error' ||
-          firstErr?.code === 'internal_error' ||
-          firstErr?.type === 'airline_error' ||
-          firstErr?.type === 'supplier_error' ||
-          firstErr?.code === 'offer_no_longer_available' ||
-          replayRes.status === 422
-        ) {
-          return {
-            outcome: 'NO_ORDER',
-            message: firstErr?.message || 'Carrier gateway rejected order creation.',
-            httpStatus: replayRes.status
-          };
-        }
-      }
-    } catch (replayErr: any) {
-      return {
-        outcome: 'AMBIGUOUS',
-        transportError: replayErr.message
-      };
-    }
-  }
-
-  return {
-    outcome: 'AMBIGUOUS',
-    transportError: 'no_conclusive_order_state'
-  };
 }
 
 const handleFlightBook = async (req: express.Request, res: express.Response) => {
@@ -2312,7 +2291,6 @@ const handleFlightBook = async (req: express.Request, res: express.Response) => 
           bookingAttemptId: existingBooking.bookingAttemptId || bookingAttemptId,
           cleanGivenName: (passengerDetails?.givenName || existingBooking.passengerName?.split(' ')[0] || '').trim(),
           cleanFamilyName: (passengerDetails?.familyName || existingBooking.passengerName?.split(' ').slice(1).join(' ') || '').trim(),
-          orderPayload: null, // do not re-post blindly
           baseUrl,
           token,
           reqId
@@ -2755,7 +2733,12 @@ const handleFlightBook = async (req: express.Request, res: express.Response) => 
               currency: authoritativeCurrency,
               amount: authoritativeAmount
             }
-          ]
+          ],
+          metadata: {
+            payment_id: cleanPaymentId,
+            booking_attempt_id: bookingAttemptId,
+            idempotency_key: stableIdempotencyKey
+          }
         }
       };
 
@@ -2890,7 +2873,6 @@ const handleFlightBook = async (req: express.Request, res: express.Response) => 
               bookingAttemptId,
               cleanGivenName,
               cleanFamilyName,
-              orderPayload: null, // do not re-post
               baseUrl,
               token,
               reqId
@@ -3047,7 +3029,6 @@ const handleFlightBook = async (req: express.Request, res: express.Response) => 
           bookingAttemptId,
           cleanGivenName,
           cleanFamilyName,
-          orderPayload,
           baseUrl,
           token,
           reqId
@@ -3101,54 +3082,9 @@ const handleFlightBook = async (req: express.Request, res: express.Response) => 
 
           res.json({ success: true, booking: confirmedRecord, reqId });
           return;
-        } else if (reconciliation.outcome === 'NO_ORDER') {
-          const failedRecord: FlightFulfillmentEntity = {
-            id: `FLT-BOK-${Date.now()}`,
-            key: cleanPaymentId,
-            paymentId: cleanPaymentId,
-            bookingAttemptId,
-            offerId: cleanOfferId,
-            idempotencyKey: stableIdempotencyKey,
-            pnr: null,
-            bookingReference: `ESCROW-${cleanPaymentId.slice(-8).toUpperCase()}`,
-            duffelOrderId: null,
-            ticketNumber: null,
-            bookingStatus: 'BOOKING_FAILED_HELD_FOR_REFUND',
-            reconciliationStatus: 'RECONCILED_FAILED',
-            provider: 'duffel',
-            bookingMode: 'LIVE_DUFFEL',
-            isLiveBooking: false,
-            message: 'Reconciliation confirmed no airline booking was created. Payment is secured in Escrow.',
-            passengerName: `${cleanGivenName} ${cleanFamilyName}`,
-            timestamp: new Date().toISOString(),
-            createdAt: initialRecord.createdAt,
-            updatedAt: new Date().toISOString()
-          };
-
-          flightFulfillmentRepo.recordBooking(cleanPaymentId, failedRecord);
-
-          logFlightOrderDiagnostic({
-            paymentId: cleanPaymentId,
-            bookingAttemptId,
-            offerId: cleanOfferId,
-            idempotencyKey: stableIdempotencyKey,
-            httpStatus: 502,
-            transportError: transportErr.message,
-            bookingStatus: 'BOOKING_FAILED_HELD_FOR_REFUND',
-            reconciliationStatus: 'RECONCILED_FAILED'
-          });
-
-          res.status(502).json({
-            success: false,
-            error: 'AIRLINE_BOOKING_NOT_FOUND',
-            status: 'BOOKING_FAILED_HELD_FOR_REFUND',
-            message: 'Reconciliation confirmed no airline booking was created. Payment is secured in Escrow.',
-            booking: failedRecord,
-            reqId
-          });
-          return;
         } else {
-          // Ambiguous: Keep BOOKING_RECONCILIATION_REQUIRED
+          // Ambiguous network outcome: MUST NOT be treated as terminal booking failure!
+          // State remains BOOKING_RECONCILIATION_REQUIRED so subsequent check safely reconciles.
           const ambiguousRecord: FlightFulfillmentEntity = {
             id: `FLT-BOK-${Date.now()}`,
             key: cleanPaymentId,
@@ -3169,7 +3105,10 @@ const handleFlightBook = async (req: express.Request, res: express.Response) => 
             passengerName: `${cleanGivenName} ${cleanFamilyName}`,
             timestamp: new Date().toISOString(),
             createdAt: initialRecord.createdAt,
-            updatedAt: new Date().toISOString()
+            updatedAt: new Date().toISOString(),
+            metadata: {
+              transportError: transportErr.message
+            }
           };
 
           flightFulfillmentRepo.recordBooking(cleanPaymentId, ambiguousRecord);
