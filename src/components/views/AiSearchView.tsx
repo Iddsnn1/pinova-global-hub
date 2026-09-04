@@ -573,12 +573,17 @@ export const AiSearchView: React.FC<AiSearchViewProps> = ({
   const [privacySettings, setPrivacySettings] = useState<AIPrivacySettings>({
     dataProcessingConsent: true,
     personalizationConsent: true,
+    trainingDataUsageConsent: false,
+    personalizedSearchIndexing: true,
+    crossMerchantContextSharing: false,
+    crossSessionMemoryPersistence: true,
     retentionDays: 60,
     piiRedactionEnabled: true,
     dataMinimizationEnabled: true,
     encryptionStatus: 'AES-256-GCM Active',
     allowExport: true,
-    allowDeletion: true
+    allowDeletion: true,
+    backgroundProfilingActive: false
   });
 
   const [responsibleControls, setResponsibleControls] = useState<AIResponsibleControls>({
@@ -969,13 +974,13 @@ export const AiSearchView: React.FC<AiSearchViewProps> = ({
 
       // Apply type filter if selected
       if (selectedFilterType === 'physical') {
-        matched = matched.filter(p => !p.isDigital && p.category !== 'service');
+        matched = matched.filter(p => p.productType !== 'digital' && p.category !== 'service');
       } else if (selectedFilterType === 'digital') {
-        matched = matched.filter(p => p.isDigital);
+        matched = matched.filter(p => p.productType === 'digital' || Boolean(p.digitalDeliveryType));
       } else if (selectedFilterType === 'services') {
         matched = matched.filter(p => p.category === 'service' || (p.tags && p.tags.includes('service')));
       } else if (selectedFilterType === 'verified_only') {
-        matched = matched.filter(p => p.sellerRating && p.sellerRating >= 4.7);
+        matched = matched.filter(p => p.sellerVerified || p.rating >= 4.7);
       }
 
       // Apply budget filter strictly

@@ -1261,7 +1261,7 @@ export const FinanceAnalyticsView: React.FC<FinanceAnalyticsViewProps> = ({
                       paddingAngle={5}
                       dataKey="sharePercent"
                       nameKey="source"
-                      label={(entry) => `${entry.source}: ${entry.sharePercent}%`}
+                      label={(entry: any) => `${entry.source}: ${entry.sharePercent}%`}
                     >
                       {analyticsData.trafficSources.map((_, index) => (
                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />

@@ -390,7 +390,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
         {(() => {
           const displayOrder = activeOrders && activeOrders.length > 0 ? activeOrders[0] : null;
           const orderId = displayOrder?.id || 'ORD-PI-892341';
-          const orderStatus = displayOrder?.status || 'IN TRANSIT';
+          const orderStatus = (displayOrder?.pstpStatus || displayOrder?.escrowStatus || 'IN TRANSIT').replace('_', ' ').toUpperCase();
 
           return (
             <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 p-3 sm:p-3.5 space-y-2.5">
@@ -402,7 +402,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                   </span>
                   {displayOrder && (
                     <span className="text-[11px] text-amber-500 dark:text-amber-400 font-bold hidden sm:inline">
-                      • {displayOrder.totalPi || displayOrder.totalAmount} π
+                      • {displayOrder.totalPi} π
                     </span>
                   )}
                 </div>

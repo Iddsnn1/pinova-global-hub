@@ -1437,10 +1437,10 @@ export const PlatformAdminView: React.FC<PlatformAdminViewProps> = ({
 
                       <td className="p-3">
                         <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${
-                          u.kycLevel === 'LEVEL_3_ENTERPRISE_MERCHANT'
-                            ? 'bg-amber-950 text-amber-300 border-amber-800'
-                            : u.kycLevel === 'LEVEL_2_KYC_VERIFIED'
+                          u.kycLevel === 'LEVEL_2_IDENTITY_VERIFIED'
                             ? 'bg-emerald-950 text-emerald-300 border-emerald-800'
+                            : u.kycLevel === 'LEVEL_1_BASIC'
+                            ? 'bg-amber-950 text-amber-300 border-amber-800'
                             : 'bg-slate-800 text-slate-400 border-slate-700'
                         }`}>
                           {u.kycLevel.replace(/_/g, ' ')}

@@ -263,7 +263,7 @@ export const VendorApplicationModal: React.FC<VendorApplicationModalProps> = ({
                 {existingApplication.status === 'APPROVED'
                   ? 'Congratulations! Your merchant account is verified. You have full access to Seller Studio and product listings.'
                   : existingApplication.status === 'REJECTED'
-                  ? `Application requires revision: ${existingApplication.reviewNotes || 'Please update your verification credentials and resubmit.'}`
+                  ? `Application requires revision: ${existingApplication.adminReviewNotes || 'Please update your verification credentials and resubmit.'}`
                   : 'Your application is currently under review by PiNova Merchant Governance. Expected turnaround is 2-4 hours.'}
               </p>
             </div>

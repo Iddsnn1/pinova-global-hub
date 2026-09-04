@@ -55,6 +55,7 @@ import { TransportDiscovery } from './discovery/TransportDiscovery';
 import { WaterDiscovery } from './discovery/WaterDiscovery';
 import { GovernmentDiscovery } from './discovery/GovernmentDiscovery';
 import { EducationDiscovery } from './discovery/EducationDiscovery';
+import { EducationHub } from '../education/EducationHub';
 import { ElectricityDiscovery } from './discovery/ElectricityDiscovery';
 import { EventsDiscovery } from './discovery/EventsDiscovery';
 import { getSubdivisionInfo } from '../../data/countrySubdivisions';
@@ -701,24 +702,13 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
             )}
 
             {selectedCategory === 'education' && (
-              <EducationDiscovery
-                providers={SAMPLE_UTILITY_PROVIDERS}
-                selectedCountryCode={selectedCountryCode}
-                initialState={selectedState}
-                piConversionConfig={piConversionConfig}
-                userBalancePi={userBalancePi}
-                buyerUsername={buyerUsername}
-                onCountryChange={(code) => {
-                  setSelectedCountryCode(code);
-                  setSelectedState('');
-                }}
-                onStateChange={(st) => setSelectedState(st)}
-                onSelectInstitutionService={(provider, serviceName) => {
-                  handleSelectProvider(provider);
-                  setSelectedDesignation(serviceName);
-                }}
-                onTransactionSuccess={onTransactionSuccess}
-              />
+              <div className="p-4 sm:p-6">
+                <EducationHub
+                  onBackToUtilities={() => {
+                    if (onClose) onClose();
+                  }}
+                />
+              </div>
             )}
 
             {selectedCategory === 'events' && (

@@ -201,7 +201,7 @@ export const SocialCommunityHub: React.FC<SocialCommunityHubProps> = ({
     }
   ]);
   const [newQuestionInput, setNewQuestionInput] = useState('');
-  const [selectedQaProduct, setSelectedQaProduct] = useState(products[0]?.name || 'PiNova Quantum 5G Smartphone');
+  const [selectedQaProduct, setSelectedQaProduct] = useState(products[0]?.title || 'PiNova Quantum 5G Smartphone');
 
   // --- LIVE COMMERCE STATE ---
   const [isRegisteredLive, setIsRegisteredLive] = useState(false);
@@ -784,7 +784,7 @@ export const SocialCommunityHub: React.FC<SocialCommunityHubProps> = ({
                 {vendors.map((vendor) => (
                   <div key={vendor.id} className="flex items-center justify-between p-2.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 text-xs">
                     <div className="flex items-center gap-2 min-w-0">
-                      <img src={vendor.logo} alt={vendor.storeName} className="w-8 h-8 rounded-full object-cover" />
+                      <img src={vendor.logoImage} alt={vendor.storeName} className="w-8 h-8 rounded-full object-cover" />
                       <span className="font-bold text-slate-900 dark:text-white truncate">{vendor.storeName}</span>
                     </div>
                     <button
@@ -851,7 +851,7 @@ export const SocialCommunityHub: React.FC<SocialCommunityHubProps> = ({
                   <img src={products[0]?.images[0]} alt="Featured Product" className="w-12 h-12 rounded-xl object-cover" />
                   <div>
                     <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 font-bold text-[9px] uppercase">Pinned Featured Deal</span>
-                    <h4 className="font-bold text-xs text-white truncate">{products[0]?.name}</h4>
+                    <h4 className="font-bold text-xs text-white truncate">{products[0]?.title}</h4>
                     <span className="text-xs font-black text-amber-400">{products[0]?.pricePi} π</span>
                   </div>
                 </div>
@@ -917,7 +917,7 @@ export const SocialCommunityHub: React.FC<SocialCommunityHubProps> = ({
                   className="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-bold border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 outline-none"
                 >
                   {products.map((p) => (
-                    <option key={p.id} value={p.name}>{p.name}</option>
+                    <option key={p.id} value={p.title}>{p.title}</option>
                   ))}
                 </select>
               </div>

@@ -1,0 +1,103 @@
+[
+  {
+    "id": "sch-001",
+    "title": "Pi Global STEM & Technology Pioneer Fellowship",
+    "sponsorName": "Pi Network Pioneer Foundation",
+    "sponsorType": "ngo",
+    "badge": "100% Tuition + Research Stipend",
+    "description": "Global merit scholarship for exceptional undergraduate and vocational learners pursuing Computer Science, Electrical Engineering, AI, and Blockchain Systems.",
+    "coverageType": "Full Tuition",
+    "amountValue": "Full Tuition + $1,200 Annual Tech Grant",
+    "applicableTiers": [
+      "tertiary",
+      "technical_vocational"
+    ],
+    "eligibleCountries": [
+      "NG",
+      "GH",
+      "KE",
+      "US",
+      "GB"
+    ],
+    "deadline": "2025-12-31",
+    "eligibilityCriteria": [
+      "Enrolled in an accredited STEM or vocational tech program",
+      "Minimum CGPA 3.5/5.0 or high demonstrated engineering capability",
+      "Active Pi Network Pioneer Community Member"
+    ],
+    "numberOfAwards": 50,
+    "applicationCount": 342
+  },
+  {
+    "id": "sch-002",
+    "title": "Federal Bilateral Education Agreement (BEA) Awards",
+    "sponsorName": "Federal Ministry of Education Nigeria",
+    "sponsorType": "government",
+    "badge": "Government Funded",
+    "description": "Full international and domestic tuition sponsorship for outstanding secondary school graduates entering engineering, medicine, and physical sciences.",
+    "coverageType": "Full Tuition",
+    "amountValue": "Full Tuition & Living Allowance",
+    "applicableTiers": [
+      "tertiary"
+    ],
+    "eligibleCountries": [
+      "NG"
+    ],
+    "deadline": "2025-11-30",
+    "eligibilityCriteria": [
+      "Minimum 5 A/B grades in WASSCE / NECO including Math & English",
+      "JAMB score of 240 and above"
+    ],
+    "numberOfAwards": 120,
+    "applicationCount": 1420
+  },
+  {
+    "id": "sch-003",
+    "title": "MTN Science & Technology Scholarship Scheme",
+    "sponsorName": "MTN Foundation Nigeria",
+    "sponsorType": "corporate",
+    "badge": "Corporate Grant",
+    "description": "Annual educational support grant for high-performing second and third year university and polytechnic students in science, technology, and applied sciences.",
+    "coverageType": "Partial Tuition (50%)",
+    "amountValue": "$400 / Academic Year",
+    "applicableTiers": [
+      "tertiary"
+    ],
+    "eligibleCountries": [
+      "NG"
+    ],
+    "deadline": "2025-12-15",
+    "eligibilityCriteria": [
+      "Second year (200L) or higher in public universities/polytechnics",
+      "Minimum CGPA of 3.5 out of 5.0 (or equivalent)"
+    ],
+    "numberOfAwards": 300,
+    "applicationCount": 980
+  },
+  {
+    "id": "sch-004",
+    "title": "Early Years & Primary Equity Educational Grant",
+    "sponsorName": "Global Children First Initiative",
+    "sponsorType": "ngo",
+    "badge": "Need-Based Support",
+    "description": "Subsidizes tuition, uniforms, and learning materials for low-income and vulnerable learners across accredited nursery and primary basic schools.",
+    "coverageType": "Partial Tuition (50%)",
+    "amountValue": "Up to $150 / Term",
+    "applicableTiers": [
+      "early_childhood",
+      "primary"
+    ],
+    "eligibleCountries": [
+      "NG",
+      "GH",
+      "KE"
+    ],
+    "deadline": "2026-01-31",
+    "eligibilityCriteria": [
+      "Household income verification",
+      "Enrolled in an accredited partner basic school"
+    ],
+    "numberOfAwards": 500,
+    "applicationCount": 620
+  }
+]

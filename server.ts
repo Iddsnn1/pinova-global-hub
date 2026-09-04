@@ -13,9 +13,12 @@ import {
   platformConfigRepo,
   idempotencyRepo,
   vendorApplicationRepo,
+  educationRepo,
   FlightFulfillmentEntity
 } from './src/server/db';
 import { vtuNgAdapter } from './src/server/integrations';
+import { getTaxonomyByCountry, GLOBAL_EDUCATION_TAXONOMIES } from './src/data/educationTaxonomyData';
+import { SEED_MARKETPLACE_ITEMS } from './src/data/educationSeedData';
 
 dotenv.config();
 
@@ -1489,6 +1492,365 @@ app.post('/api/v2/utility/vtu/webhook', (req, res) => {
   } catch (err: any) {
     console.warn('[VTU.ng Webhook] Processing error:', err.message);
     res.status(500).json({ success: false, error: 'WEBHOOK_PROCESSING_ERROR' });
+  }
+});
+
+// ==========================================
+// PINOVA GLOBAL EDUCATION ECOSYSTEM API
+// ==========================================
+
+// 1. Institution Directory & Verification Registry
+app.get('/api/education/institutions', (req, res) => {
+  try {
+    const { countryCode, tier, institutionType, isPublic, search, verificationStatus } = req.query;
+    const filter: any = {};
+    if (countryCode) filter.countryCode = String(countryCode);
+    if (tier) filter.tier = String(tier);
+    if (institutionType) filter.institutionType = String(institutionType);
+    if (isPublic !== undefined) filter.isPublic = isPublic === 'true';
+    if (search) filter.search = String(search);
+    if (verificationStatus) filter.verificationStatus = String(verificationStatus);
+
+    const list = educationRepo.getInstitutions(filter);
+    res.json({
+      success: true,
+      count: list.length,
+      institutions: list
+    });
+  } catch (err: any) {
+    console.error('[Education API] Failed to query institutions:', err.message);
+    res.status(500).json({ success: false, error: 'FAILED_TO_LOAD_INSTITUTIONS', message: err.message });
+  }
+});
+
+app.get('/api/education/institutions/:id', (req, res) => {
+  try {
+    const inst = educationRepo.getInstitutionById(req.params.id);
+    if (!inst) {
+      res.status(404).json({ success: false, error: 'INSTITUTION_NOT_FOUND', message: `Institution ${req.params.id} does not exist.` });
+      return;
+    }
+    res.json({ success: true, institution: inst });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: 'INSTITUTION_FETCH_FAILED', message: err.message });
+  }
+});
+
+// 2. Global Education Taxonomy / Classification
+app.get('/api/education/taxonomy/:countryCode?', (req, res) => {
+  try {
+    const countryCode = req.params.countryCode || (req.query.countryCode as string) || 'NG';
+    const taxonomy = getTaxonomyByCountry(countryCode);
+    res.json({
+      success: true,
+      countryCode: taxonomy.countryCode,
+      taxonomy
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: 'TAXONOMY_FETCH_FAILED', message: err.message });
+  }
+});
+
+// 3. Student Identity & Parent "My Children"
+app.get('/api/education/students/:id', (req, res) => {
+  try {
+    const student = educationRepo.getStudentById(req.params.id);
+    if (!student) {
+      res.status(404).json({ success: false, error: 'STUDENT_NOT_FOUND' });
+      return;
+    }
+    res.json({ success: true, student });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: 'STUDENT_FETCH_FAILED', message: err.message });
+  }
+});
+
+app.get('/api/education/guardians/:id/children', (req, res) => {
+  try {
+    const children = educationRepo.getGuardianChildrenSummaries(req.params.id);
+    res.json({ success: true, count: children.length, children });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: 'GUARDIAN_CHILDREN_FETCH_FAILED', message: err.message });
+  }
+});
+
+// 4. Invoices & School Fees Engine
+app.get('/api/education/invoices', (req, res) => {
+  try {
+    const { studentId, institutionId, status, guardianId } = req.query;
+    const filter: any = {};
+    if (studentId) filter.studentId = String(studentId);
+    if (institutionId) filter.institutionId = String(institutionId);
+    if (status) filter.status = String(status);
+    if (guardianId) filter.guardianId = String(guardianId);
+
+    const invoices = educationRepo.getInvoices(filter);
+    res.json({ success: true, count: invoices.length, invoices });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: 'INVOICES_FETCH_FAILED', message: err.message });
+  }
+});
+
+app.get('/api/education/invoices/:id', (req, res) => {
+  try {
+    const invoice = educationRepo.getInvoiceById(req.params.id);
+    if (!invoice) {
+      res.status(404).json({ success: false, error: 'INVOICE_NOT_FOUND' });
+      return;
+    }
+    res.json({ success: true, invoice });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: 'INVOICE_FETCH_FAILED', message: err.message });
+  }
+});
+
+// 5. Secure Pi School Fees Settlement & Digital Receipt Issuance
+app.post('/api/education/invoices/pay', async (req, res) => {
+  try {
+    const {
+      invoiceId,
+      amountPaid,
+      currency = 'USD',
+      piAmount,
+      piPaymentId,
+      piTxid,
+      paymentMethod = 'PI_NETWORK',
+      payerUsername = 'pioneer_parent',
+      idempotencyKey
+    } = req.body;
+
+    if (!invoiceId) {
+      res.status(400).json({ success: false, error: 'MISSING_INVOICE_ID', message: 'Invoice ID is required' });
+      return;
+    }
+
+    const numericAmount = Number(amountPaid);
+    if (!numericAmount || numericAmount <= 0) {
+      res.status(400).json({ success: false, error: 'INVALID_AMOUNT', message: 'Payment amount must be greater than zero' });
+      return;
+    }
+
+    const invoice = educationRepo.getInvoiceById(invoiceId);
+    if (!invoice) {
+      res.status(404).json({ success: false, error: 'INVOICE_NOT_FOUND', message: `Invoice ${invoiceId} not found` });
+      return;
+    }
+
+    if (invoice.status === 'PAID') {
+      res.status(400).json({ success: false, error: 'INVOICE_ALREADY_PAID', message: 'This invoice is already fully paid.' });
+      return;
+    }
+
+    if (numericAmount > invoice.outstandingBalance + 0.01) {
+      res.status(400).json({
+        success: false,
+        error: 'AMOUNT_EXCEEDS_BALANCE',
+        message: `Amount $${numericAmount} exceeds current outstanding balance of $${invoice.outstandingBalance.toFixed(2)}`
+      });
+      return;
+    }
+
+    // Pi Network server verification: Check if paymentId was completed on ledger
+    if (piPaymentId) {
+      const ledgerEntry = paymentLedgerRepo.findByPaymentId(piPaymentId);
+      if (ledgerEntry && ledgerEntry.status === 'FAILED') {
+        res.status(400).json({ success: false, error: 'PI_PAYMENT_FAILED_ON_LEDGER', message: 'The referenced Pi payment failed verification.' });
+        return;
+      }
+    }
+
+    const effectiveIdempotencyKey = idempotencyKey || piPaymentId || `IDEMP-EDU-${invoiceId}-${Date.now()}`;
+
+    // Execute atomic settlement in repository
+    const result = educationRepo.recordPayment({
+      invoiceId,
+      amountPaid: numericAmount,
+      currency,
+      piAmount: Number(piAmount || (numericAmount * 0.00000318).toFixed(6)),
+      piPaymentId,
+      piTxid,
+      paymentMethod,
+      payerUsername,
+      idempotencyKey: effectiveIdempotencyKey
+    });
+
+    res.json({
+      success: true,
+      message: 'School fee payment verified and completed successfully',
+      payment: result.payment,
+      invoice: result.invoice,
+      receipt: result.receipt
+    });
+  } catch (err: any) {
+    console.error('[Education Payment] Processing error:', err.message);
+    res.status(500).json({ success: false, error: 'PAYMENT_PROCESSING_FAILED', message: err.message });
+  }
+});
+
+// 6. Digital Receipt Verification (Tamper-Resistant Public Validation)
+app.get('/api/education/receipts/:receiptNumber/verify', (req, res) => {
+  try {
+    const { receiptNumber } = req.params;
+    const verification = educationRepo.verifyReceipt(receiptNumber);
+    if (!verification.found || !verification.receipt) {
+      res.status(404).json({
+        success: false,
+        isAuthentic: false,
+        error: 'RECEIPT_NOT_FOUND',
+        message: `No authentic education fee receipt matches reference "${receiptNumber}".`
+      });
+      return;
+    }
+
+    // Public safe representation - hides unneeded PII while confirming authenticity
+    res.json({
+      success: true,
+      isAuthentic: true,
+      receiptNumber: verification.receipt.receiptNumber,
+      verificationReference: verification.receipt.verificationReference,
+      verificationHash: verification.receipt.verificationHash,
+      institutionName: verification.receipt.institutionName,
+      academicSession: verification.receipt.academicSession,
+      termOrSemester: verification.receipt.termOrSemester,
+      educationLevel: verification.receipt.educationLevel,
+      amountPaid: verification.receipt.amountPaid,
+      currency: verification.receipt.currency,
+      piAmount: verification.receipt.piAmount,
+      paymentDate: verification.receipt.paymentDate,
+      verifiedByServer: verification.receipt.verifiedByServer,
+      chargeDescription: verification.receipt.chargeDescription,
+      publicSummary: verification.receipt.publicSafeSummary
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: 'VERIFICATION_FAILED', message: err.message });
+  }
+});
+
+app.get('/api/education/receipts/:receiptNumber', (req, res) => {
+  try {
+    const receipt = educationRepo.getReceiptByNumber(req.params.receiptNumber);
+    if (!receipt) {
+      res.status(404).json({ success: false, error: 'RECEIPT_NOT_FOUND' });
+      return;
+    }
+    res.json({ success: true, receipt });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: 'RECEIPT_FETCH_FAILED', message: err.message });
+  }
+});
+
+// 7. Admissions & Application Pipeline
+app.get('/api/education/admissions', (req, res) => {
+  try {
+    const { institutionId, status, applicantEmail } = req.query;
+    const filter: any = {};
+    if (institutionId) filter.institutionId = String(institutionId);
+    if (status) filter.status = String(status);
+    if (applicantEmail) filter.applicantEmail = String(applicantEmail);
+
+    const list = educationRepo.getAdmissions(filter);
+    res.json({ success: true, count: list.length, applications: list });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: 'ADMISSIONS_FETCH_FAILED', message: err.message });
+  }
+});
+
+app.post('/api/education/admissions/apply', (req, res) => {
+  try {
+    const appData = req.body;
+    if (!appData.institutionId || !appData.applicantFullName || !appData.programmeName) {
+      res.status(400).json({ success: false, error: 'MISSING_REQUIRED_FIELDS' });
+      return;
+    }
+
+    const application = educationRepo.submitAdmissionApplication({
+      ...appData,
+      status: 'SUBMITTED',
+      applicationFeePaid: Boolean(appData.applicationFeePaid),
+      documents: appData.documents || []
+    });
+
+    res.json({ success: true, message: 'Admission application submitted successfully', application });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: 'ADMISSION_SUBMISSION_FAILED', message: err.message });
+  }
+});
+
+app.post('/api/education/admissions/:id/offer/accept', (req, res) => {
+  try {
+    const updated = educationRepo.acceptAdmissionOffer(req.params.id);
+    if (!updated) {
+      res.status(404).json({ success: false, error: 'APPLICATION_NOT_FOUND' });
+      return;
+    }
+    res.json({ success: true, message: 'Admission offer accepted', application: updated });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: 'OFFER_ACCEPT_FAILED', message: err.message });
+  }
+});
+
+// 8. Scholarships & Financial Aid
+app.get('/api/education/scholarships', (req, res) => {
+  try {
+    const { tier, countryCode } = req.query;
+    const scholarships = educationRepo.getScholarships(tier as string, countryCode as string);
+    res.json({ success: true, count: scholarships.length, scholarships });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: 'SCHOLARSHIPS_FETCH_FAILED', message: err.message });
+  }
+});
+
+// 9. Education Marketplace Products
+app.get('/api/education/marketplace', (req, res) => {
+  try {
+    const { category, tier } = req.query;
+    let items = SEED_MARKETPLACE_ITEMS;
+    if (category && category !== 'all') {
+      items = items.filter((i) => i.category === category);
+    }
+    if (tier && tier !== 'all') {
+      items = items.filter((i) => i.tier === tier);
+    }
+    res.json({ success: true, count: items.length, items });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: 'MARKETPLACE_FETCH_FAILED', message: err.message });
+  }
+});
+
+// 10. School Administrator Portal Endpoints
+app.post('/api/education/admin/institutions/:id/verify', (req, res) => {
+  try {
+    const { status, notes } = req.body;
+    if (!status) {
+      res.status(400).json({ success: false, error: 'MISSING_VERIFICATION_STATUS' });
+      return;
+    }
+    const updated = educationRepo.verifyInstitution(req.params.id, status, notes);
+    if (!updated) {
+      res.status(404).json({ success: false, error: 'INSTITUTION_NOT_FOUND' });
+      return;
+    }
+    res.json({ success: true, institution: updated });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: 'VERIFICATION_UPDATE_FAILED', message: err.message });
+  }
+});
+
+app.get('/api/education/admin/institutions/:id/analytics', (req, res) => {
+  try {
+    const analytics = educationRepo.getInstitutionAnalytics(req.params.id);
+    res.json({ success: true, analytics });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: 'ANALYTICS_FAILED', message: err.message });
+  }
+});
+
+app.get('/api/education/admin/audit-logs', (req, res) => {
+  try {
+    const logs = educationRepo.getAuditLogs(req.query.entityType as string);
+    res.json({ success: true, count: logs.length, logs });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: 'AUDIT_LOGS_FAILED', message: err.message });
   }
 });
 

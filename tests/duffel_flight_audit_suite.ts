@@ -606,8 +606,8 @@ async function runAuditSuite() {
     'Scenario 23.1: Frontend cannot submit arbitrary Duffel order IDs or force confirmed status');
 
   // Test 23.2: Frontend cannot override bookingReference
-  const clientBookingReference = 'FAKE-PNR-HACK';
-  const serverAuthoritativeBookingReference = 'SECURED-IN-ESCROW'; // generated server-side
+  const clientBookingReference: string = 'FAKE-PNR-HACK';
+  const serverAuthoritativeBookingReference: string = 'SECURED-IN-ESCROW'; // generated server-side
   assert(serverAuthoritativeBookingReference !== clientBookingReference,
     'Scenario 23.2: Frontend cannot override server-authoritative bookingReference or PNR');
 
@@ -623,8 +623,8 @@ async function runAuditSuite() {
     'Scenario 23.4: Server derives idempotency key deterministically from paymentId; client-submitted key ignored');
 
   // Test 23.5: Frontend cannot mark reconciliation as successful
-  const clientReconStatus = 'RECONCILED_SUCCESS';
-  const serverInitialReconStatus = 'PENDING';
+  const clientReconStatus: string = 'RECONCILED_SUCCESS';
+  const serverInitialReconStatus: string = 'PENDING';
   assert(serverInitialReconStatus !== clientReconStatus,
     'Scenario 23.5: Reconciliation status is strictly server-managed based on carrier query outcomes');
 

@@ -1,0 +1,141 @@
+[
+  {
+    "id": "adm-app-001",
+    "applicationNumber": "APP/2025/DEC/092",
+    "institutionId": "inst-ng-decagon-006",
+    "institutionName": "Decagon Software & AI Institute",
+    "programmeId": "prog-dec-se",
+    "programmeName": "Full-Stack Software Engineering Intensive (6 Months)",
+    "educationTier": "technical_vocational",
+    "applicantFullName": "Usman Datti",
+    "applicantEmail": "usman.datti@example.com",
+    "applicantPhone": "+234 803 123 4567",
+    "dateOfBirth": "2001-05-18",
+    "status": "OFFER_ACCEPTED",
+    "applicationFeeFiat": 15,
+    "applicationFeePaid": true,
+    "applicationFeePi": 0.000048,
+    "submittedAt": "2025-09-02T11:00:00Z",
+    "updatedAt": "2026-09-04T09:21:09.551Z",
+    "documents": [
+      {
+        "id": "doc-1",
+        "type": "previous_transcript",
+        "fileName": "BSc_Degree_Certificate.pdf",
+        "fileSizeKb": 420,
+        "uploadedAt": "2025-09-02T11:05:00Z",
+        "verificationStatus": "verified"
+      },
+      {
+        "id": "doc-2",
+        "type": "passport_photo",
+        "fileName": "Passport_Photograph.jpg",
+        "fileSizeKb": 180,
+        "uploadedAt": "2025-09-02T11:06:00Z",
+        "verificationStatus": "verified"
+      }
+    ],
+    "offerDetails": {
+      "offerDate": "2025-09-18T15:30:00Z",
+      "acceptanceDeadline": "2025-11-15T23:59:59Z",
+      "acceptanceFeeFiat": 50,
+      "acceptanceFeePaid": true,
+      "offerLetterUrl": "https://pinova.hub/admissions/offers/DEC-2025-092.pdf"
+    }
+  },
+  {
+    "id": "adm-app-002",
+    "applicationNumber": "APP/2025/BUK/MSC-019",
+    "institutionId": "inst-ng-buk-001",
+    "institutionName": "Bayero University Kano (BUK)",
+    "programmeId": "prog-buk-msc-cs",
+    "programmeName": "M.Sc. Computer Science (AI & Cyber Systems)",
+    "educationTier": "tertiary",
+    "applicantFullName": "Amina Bello",
+    "applicantEmail": "amina.bello@example.com",
+    "applicantPhone": "+234 814 987 6543",
+    "dateOfBirth": "1998-10-24",
+    "status": "UNDER_REVIEW",
+    "applicationFeeFiat": 25,
+    "applicationFeePaid": true,
+    "applicationFeePi": 0.000079,
+    "submittedAt": "2025-09-14T09:20:00Z",
+    "updatedAt": "2025-09-20T10:00:00Z",
+    "documents": [
+      {
+        "id": "doc-3",
+        "type": "previous_transcript",
+        "fileName": "Official_Undergrad_Transcript.pdf",
+        "fileSizeKb": 890,
+        "uploadedAt": "2025-09-14T09:25:00Z",
+        "verificationStatus": "verified"
+      },
+      {
+        "id": "doc-4",
+        "type": "recommendation_letter",
+        "fileName": "Academic_Referee_Confidential.pdf",
+        "fileSizeKb": 310,
+        "uploadedAt": "2025-09-14T09:28:00Z",
+        "verificationStatus": "verified"
+      }
+    ]
+  },
+  {
+    "institutionId": "inst-ng-buk-001",
+    "institutionName": "Bayero University Kano (BUK)",
+    "programmeId": "prog-buk-bsc-cyber",
+    "programmeName": "B.Sc. Cyber Security",
+    "educationTier": "tertiary",
+    "applicantFullName": "Khadija Idris",
+    "applicantEmail": "khadija.idris@example.com",
+    "applicantPhone": "+234 809 111 2233",
+    "dateOfBirth": "2006-04-12",
+    "status": "SUBMITTED",
+    "applicationFeeFiat": 20,
+    "applicationFeePaid": true,
+    "applicationFeePi": 0.000064,
+    "documents": [
+      {
+        "id": "doc-khadija-1",
+        "type": "ssce_result",
+        "fileName": "WASSCE_Official_Statement.pdf",
+        "fileSizeKb": 512,
+        "uploadedAt": "2026-09-04T09:15:25.486Z",
+        "verificationStatus": "verified"
+      }
+    ],
+    "id": "adm-app-1788513325486",
+    "applicationNumber": "APP/2026/001/189",
+    "submittedAt": "2026-09-04T09:15:25.486Z",
+    "updatedAt": "2026-09-04T09:15:25.486Z"
+  },
+  {
+    "institutionId": "inst-ng-buk-001",
+    "institutionName": "Bayero University Kano (BUK)",
+    "programmeId": "prog-buk-bsc-cyber",
+    "programmeName": "B.Sc. Cyber Security",
+    "educationTier": "tertiary",
+    "applicantFullName": "Khadija Idris",
+    "applicantEmail": "khadija.idris@example.com",
+    "applicantPhone": "+234 809 111 2233",
+    "dateOfBirth": "2006-04-12",
+    "status": "SUBMITTED",
+    "applicationFeeFiat": 20,
+    "applicationFeePaid": true,
+    "applicationFeePi": 0.000064,
+    "documents": [
+      {
+        "id": "doc-khadija-1",
+        "type": "ssce_result",
+        "fileName": "WASSCE_Official_Statement.pdf",
+        "fileSizeKb": 512,
+        "uploadedAt": "2026-09-04T09:21:09.550Z",
+        "verificationStatus": "verified"
+      }
+    ],
+    "id": "adm-app-1788513669550",
+    "applicationNumber": "APP/2026/001/557",
+    "submittedAt": "2026-09-04T09:21:09.550Z",
+    "updatedAt": "2026-09-04T09:21:09.550Z"
+  }
+]

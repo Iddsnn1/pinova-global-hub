@@ -1,0 +1,68 @@
+[
+  {
+    "action": "SETTLE_FEE_PAYMENT",
+    "entityType": "PAYMENT",
+    "entityId": "PAY-EDU-1788513325485-710",
+    "actorUsername": "Alhaji_Idris",
+    "actorRole": "PARENT",
+    "details": "Paid $80 (0.000256 π) for Invoice INV/2025/BUK/ENG-004. Receipt RCP-EDU-001-325485 generated.",
+    "id": "AUD-EDU-1788513325486-194",
+    "timestamp": "2026-09-04T09:15:25.486Z",
+    "auditHash": "16143fa81f242799ca8319ef2f06992ce3417f9378cfff3d45814b887aa14dc7"
+  },
+  {
+    "action": "SUBMIT_ADMISSION_APPLICATION",
+    "entityType": "ADMISSION",
+    "entityId": "adm-app-1788513325486",
+    "actorUsername": "khadija.idris@example.com",
+    "actorRole": "STUDENT",
+    "details": "Submitted application APP/2026/001/189 for programme B.Sc. Cyber Security at Bayero University Kano (BUK)",
+    "id": "AUD-EDU-1788513325487-870",
+    "timestamp": "2026-09-04T09:15:25.487Z",
+    "auditHash": "1662ec534a1039e7ef0316b89ccd16314f07bd736fa5441b2381e90d57159092"
+  },
+  {
+    "action": "ACCEPT_ADMISSION_OFFER",
+    "entityType": "ADMISSION",
+    "entityId": "adm-app-001",
+    "actorUsername": "usman.datti@example.com",
+    "actorRole": "STUDENT",
+    "details": "Candidate accepted offer for Full-Stack Software Engineering Intensive (6 Months) (APP/2025/DEC/092)",
+    "id": "AUD-EDU-1788513325487-897",
+    "timestamp": "2026-09-04T09:15:25.487Z",
+    "auditHash": "e77acb5e22695b9439cd2e8fba5146d683b464f0b83016fb44bb67369d382e69"
+  },
+  {
+    "action": "SETTLE_FEE_PAYMENT",
+    "entityType": "PAYMENT",
+    "entityId": "PAY-EDU-1788513669549-715",
+    "actorUsername": "Alhaji_Idris",
+    "actorRole": "PARENT",
+    "details": "Paid $80 (0.000256 π) for Invoice INV/2025/BUK/ENG-004. Receipt RCP-EDU-001-669549 generated.",
+    "id": "AUD-EDU-1788513669550-463",
+    "timestamp": "2026-09-04T09:21:09.550Z",
+    "auditHash": "414e5393948d4db7d4d1f6a783903a205905e0cabac1fcd45cb1708d9806775b"
+  },
+  {
+    "action": "SUBMIT_ADMISSION_APPLICATION",
+    "entityType": "ADMISSION",
+    "entityId": "adm-app-1788513669550",
+    "actorUsername": "khadija.idris@example.com",
+    "actorRole": "STUDENT",
+    "details": "Submitted application APP/2026/001/557 for programme B.Sc. Cyber Security at Bayero University Kano (BUK)",
+    "id": "AUD-EDU-1788513669551-98",
+    "timestamp": "2026-09-04T09:21:09.551Z",
+    "auditHash": "9a337ce4dd7c66fe70c3f4c80bd1a343788d9a878604dedfce1d7eeaad6a1c99"
+  },
+  {
+    "action": "ACCEPT_ADMISSION_OFFER",
+    "entityType": "ADMISSION",
+    "entityId": "adm-app-001",
+    "actorUsername": "usman.datti@example.com",
+    "actorRole": "STUDENT",
+    "details": "Candidate accepted offer for Full-Stack Software Engineering Intensive (6 Months) (APP/2025/DEC/092)",
+    "id": "AUD-EDU-1788513669552-487",
+    "timestamp": "2026-09-04T09:21:09.552Z",
+    "auditHash": "23e5c27cd5e4d7d1484ba3659980eddc02d3d0c65c2a9ee9a2a42f939fe88a31"
+  }
+]

@@ -1,0 +1,223 @@
+[
+  {
+    "id": "inv-ng-2025-001",
+    "invoiceNumber": "INV/2025/KMA/001",
+    "institutionId": "inst-ng-kano-model-005",
+    "institutionName": "Kano Model Primary & Nursery Academy",
+    "studentId": "std-child-1-fatima",
+    "studentName": "Fatima Idris",
+    "studentMatricOrReg": "KMA/2024/KG-042",
+    "guardianId": "user-pioneer-parent-001",
+    "educationTier": "early_childhood",
+    "programmeOrClass": "Kindergarten / Reception",
+    "academicSession": "2025/2026",
+    "termOrSemester": "1st Term",
+    "items": [
+      {
+        "id": "itm-1",
+        "category": "tuition",
+        "description": "Early Years Tuition Fee",
+        "amount": 45,
+        "isCompulsory": true
+      },
+      {
+        "id": "itm-2",
+        "category": "books_learning_materials",
+        "description": "Montessori Activity Workbooks",
+        "amount": 10,
+        "isCompulsory": true
+      },
+      {
+        "id": "itm-3",
+        "category": "medical",
+        "description": "Termly Pediatric First-Aid Coverage",
+        "amount": 5,
+        "isCompulsory": true
+      }
+    ],
+    "subtotal": 60,
+    "discountAmount": 0,
+    "taxAmount": 0,
+    "totalAmount": 60,
+    "amountPaid": 60,
+    "outstandingBalance": 0,
+    "currency": "USD",
+    "dueDate": "2025-09-30",
+    "status": "PAID",
+    "allowedInstallments": 2,
+    "installmentsPaidCount": 2,
+    "createdAt": "2025-09-01T08:00:00Z",
+    "updatedAt": "2025-09-10T14:30:00Z"
+  },
+  {
+    "id": "inv-ng-2025-002",
+    "invoiceNumber": "INV/2025/KMA/002",
+    "institutionId": "inst-ng-kano-model-005",
+    "institutionName": "Kano Model Primary & Nursery Academy",
+    "studentId": "std-child-2-ibrahim",
+    "studentName": "Ibrahim Idris",
+    "studentMatricOrReg": "KMA/2022/PRI-118",
+    "guardianId": "user-pioneer-parent-001",
+    "educationTier": "primary",
+    "programmeOrClass": "Primary 4",
+    "academicSession": "2025/2026",
+    "termOrSemester": "1st Term",
+    "items": [
+      {
+        "id": "itm-4",
+        "category": "tuition",
+        "description": "Primary 4 Instructional Tuition",
+        "amount": 55,
+        "isCompulsory": true
+      },
+      {
+        "id": "itm-5",
+        "category": "technology_ict",
+        "description": "Computer & STEM Coding Lab Levy",
+        "amount": 15,
+        "isCompulsory": true
+      },
+      {
+        "id": "itm-6",
+        "category": "pta",
+        "description": "Parents-Teachers Association (PTA) Levy",
+        "amount": 10,
+        "isCompulsory": true
+      },
+      {
+        "id": "itm-7",
+        "category": "sports",
+        "description": "Inter-House Sports Kit & Facility Maintenance",
+        "amount": 5,
+        "isCompulsory": false
+      }
+    ],
+    "subtotal": 85,
+    "discountAmount": 0,
+    "taxAmount": 0,
+    "totalAmount": 85,
+    "amountPaid": 45,
+    "outstandingBalance": 40,
+    "currency": "USD",
+    "dueDate": "2025-11-30",
+    "status": "PARTIALLY_PAID",
+    "allowedInstallments": 2,
+    "installmentsPaidCount": 1,
+    "createdAt": "2025-09-01T08:00:00Z",
+    "updatedAt": "2025-09-12T10:00:00Z"
+  },
+  {
+    "id": "inv-ng-2025-003",
+    "invoiceNumber": "INV/2025/KCL/003",
+    "institutionId": "inst-ng-kings-college-004",
+    "institutionName": "King's College Lagos",
+    "studentId": "std-child-3-zainab",
+    "studentName": "Zainab Idris",
+    "studentMatricOrReg": "KCL/2023/JSS-089",
+    "guardianId": "user-pioneer-parent-001",
+    "educationTier": "secondary",
+    "programmeOrClass": "Junior Secondary 2 (JSS 2)",
+    "academicSession": "2025/2026",
+    "termOrSemester": "1st Term (Autumn)",
+    "items": [
+      {
+        "id": "itm-8",
+        "category": "tuition",
+        "description": "Junior Secondary Termly Tuition",
+        "amount": 65,
+        "isCompulsory": true
+      },
+      {
+        "id": "itm-9",
+        "category": "boarding",
+        "description": "Hostel Boarding & Utility Maintenance",
+        "amount": 30,
+        "isCompulsory": true
+      },
+      {
+        "id": "itm-10",
+        "category": "laboratory",
+        "description": "Integrated Science & Tech Laboratory Fee",
+        "amount": 10,
+        "isCompulsory": true
+      },
+      {
+        "id": "itm-11",
+        "category": "library",
+        "description": "Digital Library & E-Learning Subscription",
+        "amount": 10,
+        "isCompulsory": true
+      }
+    ],
+    "subtotal": 115,
+    "discountAmount": 0,
+    "taxAmount": 0,
+    "totalAmount": 115,
+    "amountPaid": 0,
+    "outstandingBalance": 115,
+    "currency": "USD",
+    "dueDate": "2025-11-25",
+    "status": "UNPAID",
+    "allowedInstallments": 3,
+    "installmentsPaidCount": 0,
+    "createdAt": "2025-09-15T09:00:00Z",
+    "updatedAt": "2025-09-15T09:00:00Z"
+  },
+  {
+    "id": "inv-ng-2025-004",
+    "invoiceNumber": "INV/2025/BUK/ENG-004",
+    "institutionId": "inst-ng-buk-001",
+    "institutionName": "Bayero University Kano (BUK)",
+    "studentId": "std-child-4-farouk",
+    "studentName": "Farouk Idris",
+    "studentMatricOrReg": "CKS/ENG/22/0014",
+    "guardianId": "user-pioneer-parent-001",
+    "educationTier": "tertiary",
+    "programmeOrClass": "300L B.Eng Computer Engineering",
+    "academicSession": "2025/2026",
+    "termOrSemester": "Harmattan (1st) Semester",
+    "items": [
+      {
+        "id": "itm-12",
+        "category": "tuition",
+        "description": "Harmattan Semester Academic Registration & Tuition",
+        "amount": 95,
+        "isCompulsory": true
+      },
+      {
+        "id": "itm-13",
+        "category": "laboratory",
+        "description": "Engineering Workshop & Microcontroller Lab Fee",
+        "amount": 30,
+        "isCompulsory": true
+      },
+      {
+        "id": "itm-14",
+        "category": "accommodation",
+        "description": "Campus Hostel Accommodation Bedspace",
+        "amount": 20,
+        "isCompulsory": false
+      },
+      {
+        "id": "itm-15",
+        "category": "medical",
+        "description": "University Health Services Scheme (TISHIP)",
+        "amount": 10,
+        "isCompulsory": true
+      }
+    ],
+    "subtotal": 155,
+    "discountAmount": 0,
+    "taxAmount": 0,
+    "totalAmount": 155,
+    "amountPaid": 235,
+    "outstandingBalance": 0,
+    "currency": "USD",
+    "dueDate": "2025-12-10",
+    "status": "PAID",
+    "allowedInstallments": 2,
+    "installmentsPaidCount": 3,
+    "createdAt": "2025-10-01T10:00:00Z",
+    "updatedAt": "2026-09-04T09:21:09.548Z"
+  }
+]

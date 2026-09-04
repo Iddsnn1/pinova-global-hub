@@ -9,6 +9,7 @@ export * from './repositories/SecurityEventRepository';
 export * from './repositories/IdempotencyRepository';
 export * from './repositories/PlatformConfigRepository';
 export * from './repositories/VendorApplicationRepository';
+export * from './repositories/EducationRepository';
 
 import { PaymentLedgerRepository } from './repositories/PaymentLedgerRepository';
 import { PstpAuditRepository } from './repositories/PstpAuditRepository';
@@ -19,6 +20,7 @@ import { SecurityEventRepository } from './repositories/SecurityEventRepository'
 import { IdempotencyRepository } from './repositories/IdempotencyRepository';
 import { PlatformConfigRepository } from './repositories/PlatformConfigRepository';
 import { VendorApplicationRepository } from './repositories/VendorApplicationRepository';
+import { EducationRepository } from './repositories/EducationRepository';
 
 // Durable Singleton Repositories
 export const paymentLedgerRepo = new PaymentLedgerRepository();
@@ -30,3 +32,4 @@ export const securityEventRepo = new SecurityEventRepository();
 export const idempotencyRepo = new IdempotencyRepository();
 export const platformConfigRepo = new PlatformConfigRepository();
 export const vendorApplicationRepo = new VendorApplicationRepository();
+export const educationRepo = new EducationRepository();

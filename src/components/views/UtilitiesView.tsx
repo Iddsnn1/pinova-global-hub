@@ -34,6 +34,7 @@ import { UtilityCategory } from '../../types/navigation';
 import { UTILITY_CATEGORIES, UtilityCategoryDef } from '../../data/categoryData';
 import { PiConversionConfig, UtilityCategoryType } from '../../types/utility';
 import { FlexibleUtilityModal } from '../utility/FlexibleUtilityModal';
+import { EducationHub } from '../education/EducationHub';
 
 const getMappedCategoryType = (utilityId: string | null): UtilityCategoryType => {
   if (!utilityId) return 'airtime';
@@ -693,6 +694,14 @@ export const UtilitiesView: React.FC<UtilitiesViewProps> = ({
                   </button>
                 </div>
               </div>
+            ) : getMappedCategoryType(selectedUtility) === 'education' || selectedUtility === 'education_payments' ? (
+              /* GLOBAL EDUCATION ECOSYSTEM MASTER HUB */
+              <EducationHub
+                onBackToUtilities={() => {
+                  setSelectedUtility(null);
+                  if (onSelectCategory) onSelectCategory('all');
+                }}
+              />
             ) : (
               /* FLEXIBLE UTILITY MODAL IN EMBEDDED MODE */
               <FlexibleUtilityModal

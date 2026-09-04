@@ -392,7 +392,7 @@ function MainAppContent() {
     setNavigationStack((prev) => {
       const top = prev[prev.length - 1];
       if (top && top.section === targetSection && top.category === newCategory) return prev;
-      return [...prev, { section: targetSection, category: newCategory }];
+      return [...prev, { section: targetSection, category: (newCategory || 'all') as MarketplaceCategory }];
     });
 
     try {
@@ -416,7 +416,7 @@ function MainAppContent() {
             {
               id: cat,
               name: found.name,
-              type: 'marketplace',
+              type: 'marketplace' as const,
               iconName: found.iconName,
               timestamp: new Date().toISOString()
             },
@@ -535,7 +535,7 @@ function MainAppContent() {
         rating: matchingProduct?.rating || 4.8,
         reviewsCount: matchingProduct?.reviewsCount || 24,
         verified: Boolean(matchingProduct?.sellerVerified),
-        verificationStatus: matchingProduct?.sellerVerified ? 'Verified' : 'Standard',
+        verificationStatus: matchingProduct?.sellerVerified ? 'Verified' : 'Unverified',
         totalSalesPi: 1250.00,
         bannerImage: 'https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1200&q=80',
         logoImage: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=200&q=80',
@@ -1079,6 +1079,7 @@ function MainAppContent() {
               vendors.find((v) => v.storeName.toLowerCase() === user.username.toLowerCase()) ||
               vendors[0] || {
                 id: 'vendor-current',
+                sellerUsername: user.username,
                 storeName: `${user.username}'s Official Store`,
                 bio: 'Verified Pi Pioneer Merchant offering authentic merchandise & trusted local fulfillment.',
                 rating: 5.0,

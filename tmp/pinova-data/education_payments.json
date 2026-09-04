@@ -1,0 +1,38 @@
+[
+  {
+    "id": "PAY-EDU-1788513325485-710",
+    "invoiceId": "inv-ng-2025-004",
+    "institutionId": "inst-ng-buk-001",
+    "studentId": "std-child-4-farouk",
+    "amountPaid": 80,
+    "currency": "USD",
+    "piAmount": 0.000256,
+    "piPaymentId": "pi-test-pay-1788513325484",
+    "piTxid": "pi-tx-1788513325484",
+    "paymentMethod": "PI_NETWORK",
+    "status": "VERIFIED_COMPLETED",
+    "receiptNumber": "RCP-EDU-001-325485",
+    "payerUsername": "Alhaji_Idris",
+    "idempotencyKey": "idemp-1788513325484",
+    "verifiedAt": "2026-09-04T09:15:25.485Z",
+    "auditHash": "7b12a1a374b26d900fd9ff06dd1c49a4cdb3f94e728909b7c7bce50dc6e229e4"
+  },
+  {
+    "id": "PAY-EDU-1788513669549-715",
+    "invoiceId": "inv-ng-2025-004",
+    "institutionId": "inst-ng-buk-001",
+    "studentId": "std-child-4-farouk",
+    "amountPaid": 80,
+    "currency": "USD",
+    "piAmount": 0.000256,
+    "piPaymentId": "pi-test-pay-1788513669548",
+    "piTxid": "pi-tx-1788513669548",
+    "paymentMethod": "PI_NETWORK",
+    "status": "VERIFIED_COMPLETED",
+    "receiptNumber": "RCP-EDU-001-669549",
+    "payerUsername": "Alhaji_Idris",
+    "idempotencyKey": "idemp-1788513669548",
+    "verifiedAt": "2026-09-04T09:21:09.548Z",
+    "auditHash": "0c05c6cbfad4727f6f766e87b4cb0c4654f1b9ae92ba85a2227be1b67697d08f"
+  }
+]
