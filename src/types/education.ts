@@ -132,6 +132,8 @@ export interface TaxonomyEducationLevel {
   periods: string[];
 }
 
+export type EducationLevelDefinition = TaxonomyEducationLevel;
+
 export interface CountryEducationTaxonomy {
   countryCode: string;
   countryName: string;
@@ -219,6 +221,7 @@ export interface FeeInvoiceItem {
   description: string;
   amount: number;
   isCompulsory: boolean;
+  compulsory?: boolean;
 }
 
 export type InvoicePaymentStatus =
@@ -239,10 +242,12 @@ export interface EducationInvoice {
   studentMatricOrReg: string;
   guardianId?: string;
   educationTier: EducationTier;
+  educationLevel?: string;
   programmeOrClass: string;
   academicSession: string;
   termOrSemester: string;
   items: FeeInvoiceItem[];
+  lineItems?: FeeInvoiceItem[];
   subtotal: number;
   discountAmount: number;
   discountReason?: string;
@@ -252,6 +257,7 @@ export interface EducationInvoice {
   outstandingBalance: number;
   currency: string;
   dueDate: string;
+  issuedDate?: string;
   status: InvoicePaymentStatus;
   allowedInstallments: number; // 1 = full only, 2-4 = split
   installmentsPaidCount: number;
@@ -282,11 +288,14 @@ export interface DigitalEducationReceipt {
   receiptNumber: string;
   verificationReference: string;
   verificationHash: string;
+  algorithm?: string;
   invoiceId: string;
   invoiceNumber: string;
+  paymentId?: string;
   institutionId: string;
   institutionName: string;
   institutionLogo?: string;
+  studentId?: string;
   studentName: string;
   studentMatricOrReg: string;
   educationLevel: string;
@@ -300,6 +309,7 @@ export interface DigitalEducationReceipt {
   piTxid?: string;
   paymentMethod: string;
   paymentDate: string;
+  settlementStatus?: string;
   verifiedByServer: boolean;
   publicSafeSummary: {
     receiptNumber: string;
@@ -318,11 +328,16 @@ export type AdmissionApplicationStatus =
   | 'SUBMITTED'
   | 'UNDER_REVIEW'
   | 'ADDITIONAL_INFO_REQUIRED'
+  | 'DOCUMENTS_REQUIRED'
   | 'ACCEPTED'
   | 'OFFER_ISSUED'
+  | 'OFFERED'
   | 'OFFER_ACCEPTED'
   | 'REGISTRATION_COMPLETED'
-  | 'REJECTED';
+  | 'ENROLLED'
+  | 'REJECTED'
+  | 'WITHDRAWN'
+  | 'EXPIRED';
 
 export interface AdmissionDocument {
   id: string;
@@ -347,6 +362,7 @@ export interface AdmissionApplication {
   guardianName?: string;
   guardianPhone?: string;
   dateOfBirth: string;
+  academicSession?: string;
   status: AdmissionApplicationStatus;
   applicationFeeFiat: number;
   applicationFeePaid: boolean;
@@ -357,10 +373,12 @@ export interface AdmissionApplication {
   offerDetails?: {
     offerDate: string;
     acceptanceDeadline: string;
-    acceptanceFeeFiat: number;
+    acceptanceFeeFiat?: number;
+    acceptanceFee?: number;
     acceptanceFeePaid: boolean;
     offerLetterUrl?: string;
   };
+  decisionNotes?: string;
 }
 
 // Scholarships & Aid
@@ -373,6 +391,7 @@ export interface ScholarshipOpportunity {
   description: string;
   coverageType: 'Full Tuition' | 'Partial Tuition (50%)' | 'Research Grant' | 'Living Stipend';
   amountValue: string; // e.g. "$1,500 / Year" or "Full Tuition Covered"
+  coverageAmountUsd?: number;
   applicableTiers: EducationTier[];
   eligibleCountries: string[];
   deadline: string;
@@ -407,7 +426,7 @@ export type UserRole = 'PARENT' | 'GUARDIAN' | 'STUDENT' | 'SPONSOR';
 export interface EducationAuditLog {
   id: string;
   action: string;
-  entityType: 'INVOICE' | 'PAYMENT' | 'ADMISSION' | 'INSTITUTION' | 'STUDENT' | 'RECEIPT';
+  entityType: 'INVOICE' | 'PAYMENT' | 'ADMISSION' | 'INSTITUTION' | 'STUDENT' | 'RECEIPT' | 'SCHOLARSHIP';
   entityId: string;
   actorUsername: string;
   actorRole: string;

@@ -1,0 +1,243 @@
+[
+  {
+    "id": "DSP-UUID-1788517466646",
+    "orderId": "ORD-TEST-9001",
+    "buyerUsername": "pioneer_alice",
+    "sellerUsername": "merchant_charlie",
+    "reason": "Defective item received",
+    "description": "The screen is shattered upon arrival.",
+    "amountPi": 50,
+    "status": "resolved_refunded",
+    "evidenceFiles": [],
+    "comments": [
+      {
+        "id": "CMT-1788517466647",
+        "sender": "pioneer_alice",
+        "role": "buyer",
+        "text": "Attached image evidence.",
+        "timestamp": "2026-09-04T10:24:26.647Z"
+      }
+    ],
+    "createdAt": "2026-09-04T10:24:26.646Z",
+    "updatedAt": "2026-09-04T10:24:26.647Z",
+    "adminResolution": {
+      "decision": "full_refund",
+      "note": "Evidence confirmed item arrived shattered.",
+      "refundAmountPi": 50,
+      "resolvedBy": "admin_bob",
+      "resolvedAt": "2026-09-04T10:24:26.647Z"
+    }
+  },
+  {
+    "id": "DSP-UUID-1788517407145",
+    "orderId": "ORD-TEST-9001",
+    "buyerUsername": "pioneer_alice",
+    "sellerUsername": "merchant_charlie",
+    "reason": "Defective item received",
+    "description": "The screen is shattered upon arrival.",
+    "amountPi": 50,
+    "status": "resolved_refunded",
+    "evidenceFiles": [],
+    "comments": [
+      {
+        "id": "CMT-1788517407146",
+        "sender": "pioneer_alice",
+        "role": "buyer",
+        "text": "Attached image evidence.",
+        "timestamp": "2026-09-04T10:23:27.146Z"
+      }
+    ],
+    "createdAt": "2026-09-04T10:23:27.145Z",
+    "updatedAt": "2026-09-04T10:23:27.146Z",
+    "adminResolution": {
+      "decision": "full_refund",
+      "note": "Evidence confirmed item arrived shattered.",
+      "refundAmountPi": 50,
+      "resolvedBy": "admin_bob",
+      "resolvedAt": "2026-09-04T10:23:27.146Z"
+    }
+  },
+  {
+    "id": "DSP-UUID-1788517321425",
+    "orderId": "ORD-TEST-9001",
+    "buyerUsername": "pioneer_alice",
+    "sellerUsername": "merchant_charlie",
+    "reason": "Defective item received",
+    "description": "The screen is shattered upon arrival.",
+    "amountPi": 50,
+    "status": "resolved_refunded",
+    "evidenceFiles": [],
+    "comments": [
+      {
+        "id": "CMT-1788517321426",
+        "sender": "pioneer_alice",
+        "role": "buyer",
+        "text": "Attached image evidence.",
+        "timestamp": "2026-09-04T10:22:01.426Z"
+      }
+    ],
+    "createdAt": "2026-09-04T10:22:01.425Z",
+    "updatedAt": "2026-09-04T10:22:01.426Z",
+    "adminResolution": {
+      "decision": "full_refund",
+      "note": "Evidence confirmed item arrived shattered.",
+      "refundAmountPi": 50,
+      "resolvedBy": "admin_bob",
+      "resolvedAt": "2026-09-04T10:22:01.426Z"
+    }
+  },
+  {
+    "id": "DSP-UUID-1788517303568",
+    "orderId": "ORD-TEST-9001",
+    "buyerUsername": "pioneer_alice",
+    "sellerUsername": "merchant_charlie",
+    "reason": "Defective item received",
+    "description": "The screen is shattered upon arrival.",
+    "amountPi": 50,
+    "status": "resolved_refunded",
+    "evidenceFiles": [],
+    "comments": [
+      {
+        "id": "CMT-1788517303568",
+        "sender": "pioneer_alice",
+        "role": "buyer",
+        "text": "Attached image evidence.",
+        "timestamp": "2026-09-04T10:21:43.568Z"
+      }
+    ],
+    "createdAt": "2026-09-04T10:21:43.568Z",
+    "updatedAt": "2026-09-04T10:21:43.569Z",
+    "adminResolution": {
+      "decision": "full_refund",
+      "note": "Evidence confirmed item arrived shattered.",
+      "refundAmountPi": 50,
+      "resolvedBy": "admin_bob",
+      "resolvedAt": "2026-09-04T10:21:43.569Z"
+    }
+  },
+  {
+    "id": "DSP-UUID-1788517281025",
+    "orderId": "ORD-TEST-9001",
+    "buyerUsername": "pioneer_alice",
+    "sellerUsername": "merchant_charlie",
+    "reason": "Defective item received",
+    "description": "The screen is shattered upon arrival.",
+    "amountPi": 50,
+    "status": "resolved_refunded",
+    "evidenceFiles": [],
+    "comments": [
+      {
+        "id": "CMT-1788517281025",
+        "sender": "pioneer_alice",
+        "role": "buyer",
+        "text": "Attached image evidence.",
+        "timestamp": "2026-09-04T10:21:21.025Z"
+      }
+    ],
+    "createdAt": "2026-09-04T10:21:21.025Z",
+    "updatedAt": "2026-09-04T10:21:21.026Z",
+    "adminResolution": {
+      "decision": "full_refund",
+      "note": "Evidence confirmed item arrived shattered.",
+      "refundAmountPi": 50,
+      "resolvedBy": "admin_bob",
+      "resolvedAt": "2026-09-04T10:21:21.026Z"
+    }
+  },
+  {
+    "id": "DSP-UUID-1788517224653",
+    "orderId": "ORD-TEST-9001",
+    "buyerUsername": "pioneer_alice",
+    "sellerUsername": "merchant_charlie",
+    "reason": "Defective item received",
+    "description": "The screen is shattered upon arrival.",
+    "amountPi": 50,
+    "status": "resolved_refunded",
+    "evidenceFiles": [],
+    "comments": [
+      {
+        "id": "CMT-1788517224653",
+        "sender": "pioneer_alice",
+        "role": "buyer",
+        "text": "Attached image evidence.",
+        "timestamp": "2026-09-04T10:20:24.653Z"
+      }
+    ],
+    "createdAt": "2026-09-04T10:20:24.653Z",
+    "updatedAt": "2026-09-04T10:20:24.653Z",
+    "adminResolution": {
+      "decision": "full_refund",
+      "note": "Evidence confirmed item arrived shattered.",
+      "refundAmountPi": 50,
+      "resolvedBy": "admin_bob",
+      "resolvedAt": "2026-09-04T10:20:24.653Z"
+    }
+  },
+  {
+    "id": "DSP-UUID-1788517134380",
+    "orderId": "ORD-TEST-9001",
+    "buyerUsername": "pioneer_alice",
+    "sellerUsername": "merchant_charlie",
+    "reason": "Defective item received",
+    "description": "The screen is shattered upon arrival.",
+    "amountPi": 50,
+    "status": "resolved_refunded",
+    "evidenceFiles": [],
+    "comments": [
+      {
+        "id": "CMT-1788517134380",
+        "sender": "pioneer_alice",
+        "role": "buyer",
+        "text": "Attached image evidence.",
+        "timestamp": "2026-09-04T10:18:54.380Z"
+      }
+    ],
+    "createdAt": "2026-09-04T10:18:54.380Z",
+    "updatedAt": "2026-09-04T10:18:54.381Z",
+    "adminResolution": {
+      "decision": "full_refund",
+      "note": "Evidence confirmed item arrived shattered.",
+      "refundAmountPi": 50,
+      "resolvedBy": "admin_bob",
+      "resolvedAt": "2026-09-04T10:18:54.381Z"
+    }
+  },
+  {
+    "id": "DSP-UUID-1001",
+    "orderId": "ORD-PI-334110",
+    "buyerUsername": "Pioneer_Explorer",
+    "sellerUsername": "Nexus_Gadgets",
+    "reason": "Damaged package upon delivery",
+    "description": "The sealed parcel arrived with visible physical impact damage to the box outer shell. Screen cracked.",
+    "amountPi": 145,
+    "status": "open",
+    "evidenceFiles": [
+      {
+        "id": "EVI-1",
+        "fileName": "damaged_box_front.jpg",
+        "fileUrl": "https://images.unsplash.com/photo-1578575437130-527eed3abbec?auto=format&fit=crop&w=400&q=80",
+        "fileType": "image",
+        "uploadedBy": "Pioneer_Explorer",
+        "uploadedAt": "2026-09-03T09:09:51.368Z"
+      }
+    ],
+    "comments": [
+      {
+        "id": "CMT-1",
+        "sender": "Pioneer_Explorer",
+        "role": "buyer",
+        "text": "I received the package today at 2 PM. Photos attached show severe transit damage.",
+        "timestamp": "2026-09-03T09:09:51.368Z"
+      },
+      {
+        "id": "CMT-2",
+        "sender": "Nexus_Gadgets",
+        "role": "seller",
+        "text": "We inspect all outgoing shipments with video logs. We have requested transit insurance claim from carrier.",
+        "timestamp": "2026-09-03T21:09:51.368Z"
+      }
+    ],
+    "createdAt": "2026-09-03T09:09:51.368Z",
+    "updatedAt": "2026-09-03T21:09:51.368Z"
+  }
+]

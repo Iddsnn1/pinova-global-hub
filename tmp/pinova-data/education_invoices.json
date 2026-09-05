@@ -219,5 +219,189 @@
     "installmentsPaidCount": 3,
     "createdAt": "2025-10-01T10:00:00Z",
     "updatedAt": "2026-09-04T09:21:09.548Z"
+  },
+  {
+    "id": "inv-test-1788517224658",
+    "invoiceNumber": "INV-TEST-001",
+    "institutionId": "inst-unilag-01",
+    "institutionName": "University of Lagos",
+    "studentId": "std-ng-001",
+    "studentName": "Chiamaka Adeleke",
+    "academicSession": "2024/2025",
+    "termOrSemester": "1st Semester",
+    "educationLevel": "Undergraduate",
+    "lineItems": [
+      {
+        "id": "li-1",
+        "description": "Tuition Fee",
+        "amount": 400,
+        "compulsory": true
+      }
+    ],
+    "subtotal": 400,
+    "discountAmount": 0,
+    "taxAmount": 0,
+    "totalAmount": 400,
+    "amountPaid": 250,
+    "outstandingBalance": 150,
+    "currency": "USD",
+    "dueDate": "2025-12-31",
+    "status": "PARTIALLY_PAID",
+    "issuedDate": "2026-09-04T10:20:24.658Z",
+    "installmentsPaidCount": null,
+    "updatedAt": "2026-09-04T10:20:24.659Z"
+  },
+  {
+    "id": "inv-test-1788517281031",
+    "invoiceNumber": "INV-TEST-001",
+    "institutionId": "inst-unilag-01",
+    "institutionName": "University of Lagos",
+    "studentId": "std-ng-001",
+    "studentName": "Chiamaka Adeleke",
+    "academicSession": "2024/2025",
+    "termOrSemester": "1st Semester",
+    "educationLevel": "Undergraduate",
+    "lineItems": [
+      {
+        "id": "li-1",
+        "description": "Tuition Fee",
+        "amount": 400,
+        "compulsory": true
+      }
+    ],
+    "subtotal": 400,
+    "discountAmount": 0,
+    "taxAmount": 0,
+    "totalAmount": 400,
+    "amountPaid": 0,
+    "outstandingBalance": 400,
+    "currency": "USD",
+    "dueDate": "2025-12-31",
+    "status": "ISSUED",
+    "issuedDate": "2026-09-04T10:21:21.031Z"
+  },
+  {
+    "id": "inv-test-1788517303574",
+    "invoiceNumber": "INV-TEST-001",
+    "institutionId": "inst-unilag-01",
+    "institutionName": "University of Lagos",
+    "studentId": "std-ng-001",
+    "studentName": "Chiamaka Adeleke",
+    "academicSession": "2024/2025",
+    "termOrSemester": "1st Semester",
+    "educationLevel": "Undergraduate",
+    "lineItems": [
+      {
+        "id": "li-1",
+        "description": "Tuition Fee",
+        "amount": 400,
+        "compulsory": true
+      }
+    ],
+    "subtotal": 400,
+    "discountAmount": 0,
+    "taxAmount": 0,
+    "totalAmount": 400,
+    "amountPaid": 250,
+    "outstandingBalance": 150,
+    "currency": "USD",
+    "dueDate": "2025-12-31",
+    "status": "PARTIALLY_PAID",
+    "issuedDate": "2026-09-04T10:21:43.574Z",
+    "installmentsPaidCount": null,
+    "updatedAt": "2026-09-04T10:21:43.575Z"
+  },
+  {
+    "id": "inv-test-1788517321433",
+    "invoiceNumber": "INV-TEST-001",
+    "institutionId": "inst-unilag-01",
+    "institutionName": "University of Lagos",
+    "studentId": "std-ng-001",
+    "studentName": "Chiamaka Adeleke",
+    "academicSession": "2024/2025",
+    "termOrSemester": "1st Semester",
+    "educationLevel": "Undergraduate",
+    "lineItems": [
+      {
+        "id": "li-1",
+        "description": "Tuition Fee",
+        "amount": 400,
+        "compulsory": true
+      }
+    ],
+    "subtotal": 400,
+    "discountAmount": 0,
+    "taxAmount": 0,
+    "totalAmount": 400,
+    "amountPaid": 250,
+    "outstandingBalance": 150,
+    "currency": "USD",
+    "dueDate": "2025-12-31",
+    "status": "PARTIALLY_PAID",
+    "issuedDate": "2026-09-04T10:22:01.433Z",
+    "installmentsPaidCount": null,
+    "updatedAt": "2026-09-04T10:22:01.435Z"
+  },
+  {
+    "id": "inv-test-1788517407156",
+    "invoiceNumber": "INV-TEST-001",
+    "institutionId": "inst-unilag-01",
+    "institutionName": "University of Lagos",
+    "studentId": "std-ng-001",
+    "studentName": "Chiamaka Adeleke",
+    "academicSession": "2024/2025",
+    "termOrSemester": "1st Semester",
+    "educationLevel": "Undergraduate",
+    "lineItems": [
+      {
+        "id": "li-1",
+        "description": "Tuition Fee",
+        "amount": 400,
+        "compulsory": true
+      }
+    ],
+    "subtotal": 400,
+    "discountAmount": 0,
+    "taxAmount": 0,
+    "totalAmount": 400,
+    "amountPaid": 250,
+    "outstandingBalance": 150,
+    "currency": "USD",
+    "dueDate": "2025-12-31",
+    "status": "PARTIALLY_PAID",
+    "issuedDate": "2026-09-04T10:23:27.156Z",
+    "installmentsPaidCount": null,
+    "updatedAt": "2026-09-04T10:23:27.157Z"
+  },
+  {
+    "id": "inv-test-1788517466654",
+    "invoiceNumber": "INV-TEST-001",
+    "institutionId": "inst-unilag-01",
+    "institutionName": "University of Lagos",
+    "studentId": "std-ng-001",
+    "studentName": "Chiamaka Adeleke",
+    "academicSession": "2024/2025",
+    "termOrSemester": "1st Semester",
+    "educationLevel": "Undergraduate",
+    "lineItems": [
+      {
+        "id": "li-1",
+        "description": "Tuition Fee",
+        "amount": 400,
+        "compulsory": true
+      }
+    ],
+    "subtotal": 400,
+    "discountAmount": 0,
+    "taxAmount": 0,
+    "totalAmount": 400,
+    "amountPaid": 250,
+    "outstandingBalance": 150,
+    "currency": "USD",
+    "dueDate": "2025-12-31",
+    "status": "PARTIALLY_PAID",
+    "issuedDate": "2026-09-04T10:24:26.654Z",
+    "installmentsPaidCount": null,
+    "updatedAt": "2026-09-04T10:24:26.655Z"
   }
 ]

@@ -1,0 +1,103 @@
+[
+  {
+    "id": "EVT-AUDIT-1788517466648-74e7db3d",
+    "orderId": "ORD-TEST-9001",
+    "actor": "admin_bob",
+    "actorRole": "admin",
+    "action": "DISPUTE_RESOLVED",
+    "details": "Full refund granted to buyer",
+    "ipAddress": "127.0.0.1",
+    "deviceInfo": "Pi Server / Automated Engine",
+    "timestamp": "2026-09-04T10:24:26.648Z"
+  },
+  {
+    "id": "EVT-AUDIT-1788517407147-be4205ec",
+    "orderId": "ORD-TEST-9001",
+    "actor": "admin_bob",
+    "actorRole": "admin",
+    "action": "DISPUTE_RESOLVED",
+    "details": "Full refund granted to buyer",
+    "ipAddress": "127.0.0.1",
+    "deviceInfo": "Pi Server / Automated Engine",
+    "timestamp": "2026-09-04T10:23:27.147Z"
+  },
+  {
+    "id": "EVT-AUDIT-1788517321427-b599e3ad",
+    "orderId": "ORD-TEST-9001",
+    "actor": "admin_bob",
+    "actorRole": "admin",
+    "action": "DISPUTE_RESOLVED",
+    "details": "Full refund granted to buyer",
+    "ipAddress": "127.0.0.1",
+    "deviceInfo": "Pi Server / Automated Engine",
+    "timestamp": "2026-09-04T10:22:01.427Z"
+  },
+  {
+    "id": "EVT-AUDIT-1788517303569-39f162a2",
+    "orderId": "ORD-TEST-9001",
+    "actor": "admin_bob",
+    "actorRole": "admin",
+    "action": "DISPUTE_RESOLVED",
+    "details": "Full refund granted to buyer",
+    "ipAddress": "127.0.0.1",
+    "deviceInfo": "Pi Server / Automated Engine",
+    "timestamp": "2026-09-04T10:21:43.569Z"
+  },
+  {
+    "id": "EVT-AUDIT-1788517281026-b293b297",
+    "orderId": "ORD-TEST-9001",
+    "actor": "admin_bob",
+    "actorRole": "admin",
+    "action": "DISPUTE_RESOLVED",
+    "details": "Full refund granted to buyer",
+    "ipAddress": "127.0.0.1",
+    "deviceInfo": "Pi Server / Automated Engine",
+    "timestamp": "2026-09-04T10:21:21.026Z"
+  },
+  {
+    "id": "EVT-AUDIT-1788517224654-d5f3ab68",
+    "orderId": "ORD-TEST-9001",
+    "actor": "admin_bob",
+    "actorRole": "admin",
+    "action": "DISPUTE_RESOLVED",
+    "details": "Full refund granted to buyer",
+    "ipAddress": "127.0.0.1",
+    "deviceInfo": "Pi Server / Automated Engine",
+    "timestamp": "2026-09-04T10:20:24.654Z"
+  },
+  {
+    "id": "EVT-AUDIT-1788517134381-30cd987a",
+    "orderId": "ORD-TEST-9001",
+    "actor": "admin_bob",
+    "actorRole": "admin",
+    "action": "DISPUTE_RESOLVED",
+    "details": "Full refund granted to buyer",
+    "ipAddress": "127.0.0.1",
+    "deviceInfo": "Pi Server / Automated Engine",
+    "timestamp": "2026-09-04T10:18:54.381Z"
+  },
+  {
+    "id": "LOG-UUID-9001",
+    "orderId": "ORD-PI-778210",
+    "paymentId": "PAY-PI-449102",
+    "actor": "system",
+    "actorRole": "system",
+    "action": "PAYMENT_SERVER_APPROVED",
+    "details": "Pi Platform API v2 payment verification completed with 256-bit signature validation.",
+    "ipAddress": "127.0.0.1",
+    "deviceInfo": "Pi Nova Core Escrow Engine",
+    "timestamp": "2026-09-04T07:09:51.368Z"
+  },
+  {
+    "id": "LOG-UUID-9002",
+    "orderId": "ORD-PI-778210",
+    "paymentId": "PAY-PI-449102",
+    "actor": "TechPulse_Official",
+    "actorRole": "seller",
+    "action": "ORDER_STATUS_CHANGED",
+    "details": "Order status updated from \"Payment Verified\" to \"Shipped\". Carrier: FedEx Express, Tracking: FX-9921-PI.",
+    "ipAddress": "198.51.100.44",
+    "deviceInfo": "Merchant Workstation / Chrome 124",
+    "timestamp": "2026-09-04T08:09:51.368Z"
+  }
+]

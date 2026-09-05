@@ -18,15 +18,24 @@ export interface PaymentLedgerEntity {
 
 export interface PstpAuditLogEntity {
   id: string;
+  eventId?: string;
   orderId?: string;
   paymentId?: string;
   actor: string;
-  actorRole: 'buyer' | 'seller' | 'admin' | 'system';
+  actorId?: string;
+  actorRole: string;
   action: string;
+  resourceType?: string;
+  resourceId?: string;
+  correlationId?: string;
+  result?: string;
   details: string;
   ipAddress: string;
   deviceInfo: string;
   timestamp: string;
+  metadata?: Record<string, any>;
+  previousStateHash?: string;
+  newStateHash?: string;
 }
 
 export interface DisputeEvidenceFile {
@@ -125,10 +134,15 @@ export interface SecurityEventEntity {
   eventType: string;
   severity: 'low' | 'medium' | 'high' | 'critical' | 'info';
   username?: string;
+  actorId?: string;
+  correlationId?: string;
+  resourceType?: string;
+  resourceId?: string;
   ip: string;
   device: string;
   location?: string;
   details: string;
+  metadata?: Record<string, any>;
   resolved: boolean;
   createdAt: string;
   updatedAt: string;
@@ -136,7 +150,10 @@ export interface SecurityEventEntity {
 
 export interface IdempotencyEntity {
   key: string;
-  result: any;
+  operationFingerprint?: string;
+  requestHash?: string;
+  status: 'PENDING' | 'RESOLVED' | 'FAILED';
+  result?: any;
   createdAt: string;
   expiresAt: number;
 }

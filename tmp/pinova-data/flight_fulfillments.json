@@ -14,9 +14,9 @@
     "reconciliationStatus": "NOT_REQUIRED",
     "provider": "duffel",
     "passengerName": "Jane Smith",
-    "timestamp": "2026-09-03T12:26:25.713Z",
+    "timestamp": "2026-09-05T07:19:08.333Z",
     "createdAt": "2026-09-03T12:25:31.807Z",
-    "updatedAt": "2026-09-03T12:26:25.713Z",
+    "updatedAt": "2026-09-05T07:19:08.333Z",
     "metadata": {}
   },
   {
@@ -34,9 +34,9 @@
     "reconciliationStatus": "NOT_REQUIRED",
     "provider": "duffel",
     "passengerName": "Jane Smith",
-    "timestamp": "2026-09-03T12:26:25.714Z",
+    "timestamp": "2026-09-05T07:19:08.334Z",
     "createdAt": "2026-09-03T12:25:31.808Z",
-    "updatedAt": "2026-09-03T12:26:25.714Z",
+    "updatedAt": "2026-09-05T07:19:08.334Z",
     "metadata": {}
   },
   {
@@ -54,9 +54,9 @@
     "reconciliationStatus": "NOT_REQUIRED",
     "provider": "duffel",
     "passengerName": "Jane Smith",
-    "timestamp": "2026-09-03T12:26:25.714Z",
+    "timestamp": "2026-09-05T07:19:08.334Z",
     "createdAt": "2026-09-03T12:25:31.808Z",
-    "updatedAt": "2026-09-03T12:26:25.714Z",
+    "updatedAt": "2026-09-05T07:19:08.334Z",
     "metadata": {}
   },
   {
@@ -74,9 +74,9 @@
     "reconciliationStatus": "PENDING",
     "provider": "duffel",
     "passengerName": "Jane Smith",
-    "timestamp": "2026-09-03T12:26:25.715Z",
+    "timestamp": "2026-09-05T07:19:08.334Z",
     "createdAt": "2026-09-03T12:25:31.808Z",
-    "updatedAt": "2026-09-03T12:26:25.715Z",
+    "updatedAt": "2026-09-05T07:19:08.334Z",
     "metadata": {
       "transportError": "Network timeout during POST"
     }
@@ -96,9 +96,9 @@
     "reconciliationStatus": "PENDING",
     "provider": "duffel",
     "passengerName": "Jane Smith",
-    "timestamp": "2026-09-03T12:26:25.716Z",
+    "timestamp": "2026-09-05T07:19:08.334Z",
     "createdAt": "2026-09-03T12:25:31.808Z",
-    "updatedAt": "2026-09-03T12:26:25.716Z",
+    "updatedAt": "2026-09-05T07:19:08.334Z",
     "metadata": {
       "transportError": "read ECONNRESET"
     }
@@ -118,9 +118,9 @@
     "reconciliationStatus": "PENDING",
     "provider": "duffel",
     "passengerName": "Jane Smith",
-    "timestamp": "2026-09-03T12:26:25.716Z",
+    "timestamp": "2026-09-05T07:19:08.334Z",
     "createdAt": "2026-09-03T12:25:31.809Z",
-    "updatedAt": "2026-09-03T12:26:25.716Z",
+    "updatedAt": "2026-09-05T07:19:08.334Z",
     "metadata": {
       "httpStatus": 504
     }
@@ -140,9 +140,9 @@
     "reconciliationStatus": "RECONCILED_FAILED",
     "provider": "duffel",
     "passengerName": "Jane Smith",
-    "timestamp": "2026-09-03T12:26:25.717Z",
+    "timestamp": "2026-09-05T07:19:08.335Z",
     "createdAt": "2026-09-03T12:25:31.810Z",
-    "updatedAt": "2026-09-03T12:26:25.717Z",
+    "updatedAt": "2026-09-05T07:19:08.335Z",
     "message": "Carrier rejected booking due to invalid state. Refund secured in Escrow.",
     "metadata": {}
   },
@@ -161,9 +161,9 @@
     "reconciliationStatus": "RECONCILED_FAILED",
     "provider": "duffel",
     "passengerName": "Jane Smith",
-    "timestamp": "2026-09-03T12:26:25.717Z",
+    "timestamp": "2026-09-05T07:19:08.335Z",
     "createdAt": "2026-09-03T12:25:31.810Z",
-    "updatedAt": "2026-09-03T12:26:25.717Z",
+    "updatedAt": "2026-09-05T07:19:08.335Z",
     "message": "Airline reservation system rejected booking. Refund secured in Escrow.",
     "metadata": {}
   },
@@ -182,9 +182,9 @@
     "reconciliationStatus": "RECONCILED_FAILED",
     "provider": "duffel",
     "passengerName": "Jane Smith",
-    "timestamp": "2026-09-03T12:26:25.718Z",
+    "timestamp": "2026-09-05T07:19:08.335Z",
     "createdAt": "2026-09-03T12:25:31.810Z",
-    "updatedAt": "2026-09-03T12:26:25.718Z",
+    "updatedAt": "2026-09-05T07:19:08.335Z",
     "message": "Provider internal error. Refund secured in Escrow.",
     "metadata": {}
   }

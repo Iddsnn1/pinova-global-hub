@@ -1,5 +1,5 @@
 import { StorageEngine } from '../StorageEngine';
-import { PstpDisputeEntity, DisputeComment, DisputeAdminResolution } from '../types';
+import { PstpDisputeEntity, DisputeComment, DisputeAdminResolution, DisputeEvidenceFile } from '../types';
 
 const INITIAL_DISPUTES: PstpDisputeEntity[] = [
   {
@@ -49,7 +49,7 @@ export class PstpDisputeRepository {
     this.engine = new StorageEngine<PstpDisputeEntity>('pstp_disputes', 'id', INITIAL_DISPUTES);
   }
 
-  public createDispute(disputeData: Omit<PstpDisputeEntity, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }): PstpDisputeEntity {
+  public createDispute(disputeData: Omit<PstpDisputeEntity, 'id' | 'createdAt' | 'updatedAt' | 'evidenceFiles' | 'comments'> & { id?: string; evidenceFiles?: (DisputeEvidenceFile | string)[]; comments?: DisputeComment[] }): PstpDisputeEntity {
     const now = new Date().toISOString();
     const dispute: PstpDisputeEntity = {
       id: disputeData.id || `DSP-UUID-${Date.now()}`,
@@ -60,7 +60,19 @@ export class PstpDisputeRepository {
       description: disputeData.description,
       amountPi: Number(disputeData.amountPi) || 0,
       status: disputeData.status || 'open',
-      evidenceFiles: disputeData.evidenceFiles || [],
+      evidenceFiles: (disputeData.evidenceFiles || []).map((file: any, idx: number) => {
+        if (typeof file === 'string') {
+          return {
+            id: `ev-${Date.now()}-${idx}`,
+            fileName: file.split('/').pop() || file,
+            fileUrl: file,
+            fileType: 'application/octet-stream',
+            uploadedBy: disputeData.buyerUsername || 'buyer',
+            uploadedAt: now
+          };
+        }
+        return file as DisputeEvidenceFile;
+      }),
       comments: disputeData.comments || [],
       createdAt: now,
       updatedAt: now

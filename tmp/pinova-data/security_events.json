@@ -1,0 +1,94 @@
+[
+  {
+    "id": "SEC-EVENT-1788517466649",
+    "eventType": "tamper_detected",
+    "severity": "critical",
+    "username": "attacker_x",
+    "correlationId": "CORR-SEC-1788517466649",
+    "details": "Client attempted to submit altered Pi fee amount",
+    "resolved": false,
+    "createdAt": "2026-09-04T10:24:26.649Z",
+    "updatedAt": "2026-09-04T10:24:26.649Z"
+  },
+  {
+    "id": "SEC-EVENT-1788517407150",
+    "eventType": "tamper_detected",
+    "severity": "critical",
+    "username": "attacker_x",
+    "correlationId": "CORR-SEC-1788517407150",
+    "details": "Client attempted to submit altered Pi fee amount",
+    "resolved": false,
+    "createdAt": "2026-09-04T10:23:27.150Z",
+    "updatedAt": "2026-09-04T10:23:27.150Z"
+  },
+  {
+    "id": "SEC-EVENT-1788517321428",
+    "eventType": "tamper_detected",
+    "severity": "critical",
+    "username": "attacker_x",
+    "correlationId": "CORR-SEC-1788517321428",
+    "details": "Client attempted to submit altered Pi fee amount",
+    "resolved": false,
+    "createdAt": "2026-09-04T10:22:01.428Z",
+    "updatedAt": "2026-09-04T10:22:01.428Z"
+  },
+  {
+    "id": "SEC-EVENT-1788517303570",
+    "eventType": "tamper_detected",
+    "severity": "critical",
+    "username": "attacker_x",
+    "correlationId": "CORR-SEC-1788517303570",
+    "details": "Client attempted to submit altered Pi fee amount",
+    "resolved": false,
+    "createdAt": "2026-09-04T10:21:43.570Z",
+    "updatedAt": "2026-09-04T10:21:43.570Z"
+  },
+  {
+    "id": "SEC-EVENT-1788517281027",
+    "eventType": "tamper_detected",
+    "severity": "critical",
+    "username": "attacker_x",
+    "correlationId": "CORR-SEC-1788517281027",
+    "details": "Client attempted to submit altered Pi fee amount",
+    "resolved": false,
+    "createdAt": "2026-09-04T10:21:21.027Z",
+    "updatedAt": "2026-09-04T10:21:21.027Z"
+  },
+  {
+    "id": "SEC-EVENT-1788517224654",
+    "eventType": "tamper_detected",
+    "severity": "critical",
+    "username": "attacker_x",
+    "correlationId": "CORR-SEC-1788517224654",
+    "details": "Client attempted to submit altered Pi fee amount",
+    "resolved": false,
+    "createdAt": "2026-09-04T10:20:24.654Z",
+    "updatedAt": "2026-09-04T10:20:24.654Z"
+  },
+  {
+    "id": "SEC-EVT-501",
+    "eventType": "suspicious_login",
+    "severity": "medium",
+    "username": "Pioneer_Guest",
+    "ip": "192.0.2.14",
+    "device": "Safari 17 / iPhone 15 Pro",
+    "location": "London, UK",
+    "details": "New device login detected. Verified via Pi SDK session token.",
+    "resolved": true,
+    "createdAt": "2026-09-04T07:09:51.369Z",
+    "updatedAt": "2026-09-04T07:09:51.369Z"
+  },
+  {
+    "id": "SEC-EVT-502",
+    "eventType": "large_transaction",
+    "severity": "high",
+    "username": "Enterprise_Buyer_01",
+    "ip": "203.0.113.88",
+    "device": "Pi Browser 1.8 / Android 14",
+    "location": "Singapore",
+    "details": "Transaction of 4,500.00 π passed server verification & anti-fraud rate limit check.",
+    "resolved": true,
+    "createdAt": "2026-09-04T05:09:51.369Z",
+    "updatedAt": "2026-09-04T05:09:51.369Z"
+  }
+]

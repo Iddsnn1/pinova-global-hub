@@ -1,0 +1,134 @@
+[
+  {
+    "id": "usr-admin-001",
+    "username": "admin",
+    "email": "admin@pinova.network",
+    "roles": [
+      "PLATFORM_ADMIN",
+      "COMPLIANCE_ADMIN"
+    ],
+    "status": "ACTIVE",
+    "createdAt": "2026-01-01T00:00:00.000Z",
+    "updatedAt": "2026-01-01T00:00:00.000Z"
+  },
+  {
+    "id": "usr-compliance-001",
+    "username": "compliance_admin",
+    "email": "compliance@pinova.network",
+    "roles": [
+      "COMPLIANCE_ADMIN"
+    ],
+    "status": "ACTIVE",
+    "createdAt": "2026-01-01T00:00:00.000Z",
+    "updatedAt": "2026-01-01T00:00:00.000Z"
+  },
+  {
+    "id": "usr-bursar-001",
+    "username": "school_bursar",
+    "email": "bursar@unilag.edu.ng",
+    "roles": [
+      "BURSAR",
+      "INSTITUTION_ADMIN"
+    ],
+    "institutionId": "inst-unilag-001",
+    "status": "ACTIVE",
+    "createdAt": "2026-01-01T00:00:00.000Z",
+    "updatedAt": "2026-01-01T00:00:00.000Z"
+  },
+  {
+    "id": "usr-admissions-001",
+    "username": "admissions_officer",
+    "email": "admissions@unilag.edu.ng",
+    "roles": [
+      "ADMISSIONS_OFFICER"
+    ],
+    "institutionId": "inst-unilag-001",
+    "status": "ACTIVE",
+    "createdAt": "2026-01-01T00:00:00.000Z",
+    "updatedAt": "2026-01-01T00:00:00.000Z"
+  },
+  {
+    "id": "usr-parent-001",
+    "username": "Pioneer_Parent_Kano",
+    "email": "parent.kano@pioneer.network",
+    "roles": [
+      "GUARDIAN"
+    ],
+    "guardianId": "usr-parent-001",
+    "status": "ACTIVE",
+    "createdAt": "2026-01-01T00:00:00.000Z",
+    "updatedAt": "2026-01-01T00:00:00.000Z"
+  },
+  {
+    "id": "usr-parent-secondary",
+    "username": "parent_user",
+    "email": "parent.user@pioneer.network",
+    "roles": [
+      "GUARDIAN"
+    ],
+    "guardianId": "usr-parent-secondary",
+    "status": "ACTIVE",
+    "createdAt": "2026-01-01T00:00:00.000Z",
+    "updatedAt": "2026-01-01T00:00:00.000Z"
+  },
+  {
+    "id": "usr-student-001",
+    "username": "student_aminu",
+    "email": "aminu.kano@student.unilag.edu.ng",
+    "roles": [
+      "STUDENT"
+    ],
+    "status": "ACTIVE",
+    "createdAt": "2026-01-01T00:00:00.000Z",
+    "updatedAt": "2026-01-01T00:00:00.000Z"
+  },
+  {
+    "id": "usr-seller-001",
+    "username": "Nexus_Gadgets",
+    "email": "nexus@merchants.pinova.network",
+    "roles": [
+      "SELLER"
+    ],
+    "status": "ACTIVE",
+    "createdAt": "2026-01-01T00:00:00.000Z",
+    "updatedAt": "2026-01-01T00:00:00.000Z"
+  },
+  {
+    "id": "usr-explorer-001",
+    "username": "Pioneer_Explorer",
+    "email": "explorer@pioneer.network",
+    "roles": [
+      "BUYER",
+      "GUARDIAN"
+    ],
+    "guardianId": "usr-explorer-001",
+    "status": "ACTIVE",
+    "createdAt": "2026-01-01T00:00:00.000Z",
+    "updatedAt": "2026-01-01T00:00:00.000Z"
+  },
+  {
+    "id": "usr-1788517097039-kao71",
+    "username": "pioneer_alice",
+    "piUid": "pi-uid-alice-123",
+    "email": "pioneer_alice@pioneer.network",
+    "roles": [
+      "PIONEER",
+      "STUDENT"
+    ],
+    "status": "ACTIVE",
+    "createdAt": "2026-09-04T10:18:17.039Z",
+    "updatedAt": "2026-09-04T10:24:26.643Z"
+  },
+  {
+    "id": "usr-1788517097040-v78sf",
+    "username": "admin_bob",
+    "piUid": "pi-uid-bob-admin",
+    "email": "admin_bob@pioneer.network",
+    "roles": [
+      "PLATFORM_ADMIN"
+    ],
+    "status": "ACTIVE",
+    "createdAt": "2026-09-04T10:18:17.040Z",
+    "updatedAt": "2026-09-04T10:24:26.644Z"
+  }
+]

@@ -9,7 +9,10 @@
     "start": "node dist/server.cjs",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
-    "test": "tsx tests/duffel_flight_audit_suite.ts"
+    "test": "tsx tests/education_ecosystem_verification_suite.ts && tsx tests/audit_v2_remediation_suite.ts && tsx tests/duffel_flight_audit_suite.ts",
+    "test:edu": "tsx tests/education_ecosystem_verification_suite.ts",
+    "test:audit": "tsx tests/audit_v2_remediation_suite.ts",
+    "test:flight": "tsx tests/duffel_flight_audit_suite.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

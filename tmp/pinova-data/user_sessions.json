@@ -1,0 +1,194 @@
+[
+  {
+    "token": "pinova_sess_58e3f658d0f97e7932242020a215d78083258b2752ed984c",
+    "userId": "usr-1788517097039-kao71",
+    "username": "pioneer_alice",
+    "roles": [
+      "PIONEER",
+      "STUDENT"
+    ],
+    "expiresAt": 1789121897039,
+    "createdAt": "2026-09-04T10:18:17.039Z",
+    "user": {
+      "id": "usr-1788517097039-kao71",
+      "username": "pioneer_alice",
+      "piUid": "pi-uid-alice-123",
+      "roles": [
+        "PIONEER",
+        "STUDENT"
+      ],
+      "permissions": {},
+      "authMethod": "SESSION"
+    }
+  },
+  {
+    "token": "pinova_sess_78c6edd1ebe332ccb4b30e6ca9952f323d8467735d57543e",
+    "userId": "usr-1788517097040-v78sf",
+    "username": "admin_bob",
+    "roles": [
+      "PLATFORM_ADMIN"
+    ],
+    "expiresAt": 1789121897040,
+    "createdAt": "2026-09-04T10:18:17.040Z"
+  },
+  {
+    "token": "pinova_sess_2f31cf75f4ae7e5932e05dd1f2f9eeeca0f9cfd7bfc5f9a8",
+    "userId": "usr-1788517097040-v78sf",
+    "username": "admin_bob",
+    "roles": [
+      "PLATFORM_ADMIN"
+    ],
+    "expiresAt": 1789121916311,
+    "createdAt": "2026-09-04T10:18:36.311Z",
+    "user": {
+      "id": "usr-1788517097040-v78sf",
+      "username": "admin_bob",
+      "piUid": "pi-uid-bob-admin",
+      "roles": [
+        "PLATFORM_ADMIN"
+      ],
+      "permissions": {},
+      "authMethod": "SESSION"
+    }
+  },
+  {
+    "token": "pinova_sess_a034f4fb1bbf2c52701b4a91ae56d745f68ac222ea794776",
+    "userId": "usr-1788517097040-v78sf",
+    "username": "admin_bob",
+    "roles": [
+      "PLATFORM_ADMIN"
+    ],
+    "expiresAt": 1789121934378,
+    "createdAt": "2026-09-04T10:18:54.378Z",
+    "user": {
+      "id": "usr-1788517097040-v78sf",
+      "username": "admin_bob",
+      "piUid": "pi-uid-bob-admin",
+      "roles": [
+        "PLATFORM_ADMIN"
+      ],
+      "permissions": {},
+      "authMethod": "SESSION"
+    }
+  },
+  {
+    "token": "pinova_sess_6b8b9b692b6190a332016e0340451da4e4ab654e60798f50",
+    "userId": "usr-1788517097040-v78sf",
+    "username": "admin_bob",
+    "roles": [
+      "PLATFORM_ADMIN"
+    ],
+    "expiresAt": 1789122024651,
+    "createdAt": "2026-09-04T10:20:24.651Z",
+    "user": {
+      "id": "usr-1788517097040-v78sf",
+      "username": "admin_bob",
+      "piUid": "pi-uid-bob-admin",
+      "roles": [
+        "PLATFORM_ADMIN"
+      ],
+      "permissions": {},
+      "authMethod": "SESSION"
+    }
+  },
+  {
+    "token": "pinova_sess_0ab521aadf6a69e450a43b093f9c3706d77942cca840e94d",
+    "userId": "usr-1788517097040-v78sf",
+    "username": "admin_bob",
+    "roles": [
+      "PLATFORM_ADMIN"
+    ],
+    "expiresAt": 1789122081023,
+    "createdAt": "2026-09-04T10:21:21.023Z",
+    "user": {
+      "id": "usr-1788517097040-v78sf",
+      "username": "admin_bob",
+      "piUid": "pi-uid-bob-admin",
+      "roles": [
+        "PLATFORM_ADMIN"
+      ],
+      "permissions": {},
+      "authMethod": "SESSION"
+    }
+  },
+  {
+    "token": "pinova_sess_95ace69f9e6d9490bd90fb84fa40252376d3dd53f47ba0a9",
+    "userId": "usr-1788517097040-v78sf",
+    "username": "admin_bob",
+    "roles": [
+      "PLATFORM_ADMIN"
+    ],
+    "expiresAt": 1789122103566,
+    "createdAt": "2026-09-04T10:21:43.566Z",
+    "user": {
+      "id": "usr-1788517097040-v78sf",
+      "username": "admin_bob",
+      "piUid": "pi-uid-bob-admin",
+      "roles": [
+        "PLATFORM_ADMIN"
+      ],
+      "permissions": {},
+      "authMethod": "SESSION"
+    }
+  },
+  {
+    "token": "pinova_sess_1b5ec3a035f2d6681813e1fa8fb710a2cb72726b40cb2f2b",
+    "userId": "usr-1788517097040-v78sf",
+    "username": "admin_bob",
+    "roles": [
+      "PLATFORM_ADMIN"
+    ],
+    "expiresAt": 1789122121423,
+    "createdAt": "2026-09-04T10:22:01.423Z",
+    "user": {
+      "id": "usr-1788517097040-v78sf",
+      "username": "admin_bob",
+      "piUid": "pi-uid-bob-admin",
+      "roles": [
+        "PLATFORM_ADMIN"
+      ],
+      "permissions": {},
+      "authMethod": "SESSION"
+    }
+  },
+  {
+    "token": "pinova_sess_daa834316181602dd8b7c21f6a4360e28cb36f2a1f51e5ae",
+    "userId": "usr-1788517097040-v78sf",
+    "username": "admin_bob",
+    "roles": [
+      "PLATFORM_ADMIN"
+    ],
+    "expiresAt": 1789122207143,
+    "createdAt": "2026-09-04T10:23:27.143Z",
+    "user": {
+      "id": "usr-1788517097040-v78sf",
+      "username": "admin_bob",
+      "piUid": "pi-uid-bob-admin",
+      "roles": [
+        "PLATFORM_ADMIN"
+      ],
+      "permissions": {},
+      "authMethod": "SESSION"
+    }
+  },
+  {
+    "token": "pinova_sess_e28ff92f51b439f4cb13465988accced23071083584103e2",
+    "userId": "usr-1788517097040-v78sf",
+    "username": "admin_bob",
+    "roles": [
+      "PLATFORM_ADMIN"
+    ],
+    "expiresAt": 1789122266645,
+    "createdAt": "2026-09-04T10:24:26.645Z",
+    "user": {
+      "id": "usr-1788517097040-v78sf",
+      "username": "admin_bob",
+      "piUid": "pi-uid-bob-admin",
+      "roles": [
+        "PLATFORM_ADMIN"
+      ],
+      "permissions": {},
+      "authMethod": "SESSION"
+    }
+  }
+]

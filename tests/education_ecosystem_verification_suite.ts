@@ -14,6 +14,10 @@
  * 10. Institutional Bursar Analytics & Audit Trail
  */
 
+import os from 'os';
+import path from 'path';
+process.env.PINOVA_DATA_DIR = path.join(os.tmpdir(), `pinova_edu_test_${Date.now()}`);
+
 import { EducationRepository } from '../src/server/db/repositories/EducationRepository';
 import {
   getTaxonomyByCountry

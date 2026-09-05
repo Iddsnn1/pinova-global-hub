@@ -19,6 +19,21 @@ import {
 import { vtuNgAdapter } from './src/server/integrations';
 import { getTaxonomyByCountry, GLOBAL_EDUCATION_TAXONOMIES } from './src/data/educationTaxonomyData';
 import { SEED_MARKETPLACE_ITEMS } from './src/data/educationSeedData';
+import {
+  authService,
+  authenticate,
+  requireAuthenticatedUser,
+  requireRole,
+  requirePermission,
+  AuthenticatedRequest,
+  AuthenticatedUser,
+  Permission
+} from './src/server/auth';
+import { createRateLimiter } from './src/server/auth/rateLimit';
+import { AuditService } from './src/server/services/AuditService';
+import { EducationClassificationEngine } from './src/server/services/EducationClassificationEngine';
+import { StudentVerificationService } from './src/server/services/StudentVerificationService';
+import { EducationRepository } from './src/server/db/repositories/EducationRepository';
 
 dotenv.config();
 
@@ -26,6 +41,19 @@ const app = express();
 const PORT = 3000;
 
 app.use(express.json());
+
+// Initialize core server-side services
+const auditService = AuditService.getInstance(pstpAuditRepo);
+const classificationEngine = EducationClassificationEngine.getInstance();
+const studentVerificationService = StudentVerificationService.getInstance();
+
+// Rate Limiters
+const authRateLimiter = createRateLimiter({ windowMs: 60000, maxRequests: 30, message: 'Too many auth requests. Please retry in a minute.' });
+const paymentRateLimiter = createRateLimiter({ windowMs: 60000, maxRequests: 20, message: 'Too many payment requests. Please retry in a minute.' });
+const receiptVerifyRateLimiter = createRateLimiter({ windowMs: 60000, maxRequests: 60, message: 'Receipt verification rate limit exceeded.' });
+const studentVerifyRateLimiter = createRateLimiter({ windowMs: 60000, maxRequests: 30, message: 'Student verification rate limit exceeded.' });
+const disputeRateLimiter = createRateLimiter({ windowMs: 60000, maxRequests: 30, message: 'Dispute rate limit exceeded.' });
+const securityEventsRateLimiter = createRateLimiter({ windowMs: 60000, maxRequests: 20, message: 'Security events reporting rate limit exceeded.' });
 
 // Vercel Serverless Request URL Restoration Middleware
 app.use((req, res, next) => {
@@ -69,14 +97,33 @@ app.use((req, res, next) => {
   next();
 });
 
-// CORS & Pi Browser Iframe Security Headers
+const isProduction = process.env.NODE_ENV === 'production';
+
+// Phase 16 & 17: Production CORS & Restricted Frame Ancestors
+const ALLOWED_CORS_ORIGINS = [
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+  'https://app-cdn.minepi.com'
+];
+
 app.use((req, res, next) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  const origin = req.headers.origin as string | undefined;
+  if (origin) {
+    const isPiDomain = origin.endsWith('.minepi.com') || ALLOWED_CORS_ORIGINS.includes(origin) || origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:');
+    if (isPiDomain || !isProduction) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+    }
+  } else {
+    // Non-browser or local client requests
+    res.setHeader('Access-Control-Allow-Origin', isProduction ? 'https://app-cdn.minepi.com' : '*');
+  }
+
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-  // Allow Pi Browser iframe embedding
+  res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Admin-Key, X-Idempotency-Key, Idempotency-Key');
+  // Allow Pi Browser iframe embedding strictly without wildcard leak
   res.removeHeader('X-Frame-Options');
-  res.setHeader('Content-Security-Policy', "frame-ancestors 'self' https://*.minepi.com https://app-cdn.minepi.com pi:* *;");
+  res.setHeader('Content-Security-Policy', "frame-ancestors 'self' https://*.minepi.com https://app-cdn.minepi.com pi:;");
+
   if (req.method === 'OPTIONS') {
     res.sendStatus(200);
     return;
@@ -90,16 +137,13 @@ app.use((req, res, next) => {
   next();
 });
 
-const isProduction = process.env.NODE_ENV === 'production';
-
-// Helper to verify admin authorization for sensitive administrative endpoints
-function checkAdminAuth(req: express.Request): { authenticated: boolean; authorized: boolean } {
+// Phase 1: Authoritative Server-Side Admin Auth (Completely removes trust in client x-user-role header)
+async function checkAdminAuth(req: express.Request): Promise<{ authenticated: boolean; authorized: boolean; user?: AuthenticatedUser }> {
   const authHeader = req.headers['authorization'] as string | undefined;
   const adminKeyHeader = req.headers['x-admin-key'] as string | undefined;
-  const userRoleHeader = (req.headers['x-user-role'] as string || req.headers['x-admin-role'] as string || '').toLowerCase().trim();
   const adminSecret = process.env.ADMIN_API_KEY || process.env.PI_API_KEY || process.env.PI_SERVER_KEY;
 
-  // 1. Check direct API Key header against server secrets (server-to-server or admin script)
+  // 1. Machine/Server Key Verification
   if (adminSecret && adminSecret !== 'YOUR_PI_PLATFORM_API_KEY' && adminSecret !== 'MY_PI_API_KEY') {
     const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : null;
     const keyToken = authHeader?.startsWith('Key ') ? authHeader.substring(4).trim() : null;
@@ -111,20 +155,31 @@ function checkAdminAuth(req: express.Request): { authenticated: boolean; authori
       (directToken && directToken === adminSecret) ||
       (adminKeyHeader && adminKeyHeader === adminSecret)
     ) {
-      return { authenticated: true, authorized: true };
+      return {
+        authenticated: true,
+        authorized: true,
+        user: {
+          id: 'usr-admin-sys',
+          username: 'system_admin',
+          roles: ['PLATFORM_ADMIN', 'COMPLIANCE_OFFICER'],
+          permissions: new Set<Permission>(['platform.admin.access']),
+          authMethod: 'API_KEY'
+        }
+      };
     }
   }
 
-  // 2. Check authenticated user role header
-  if (userRoleHeader) {
-    if (userRoleHeader === 'admin' || userRoleHeader === 'super_admin' || userRoleHeader === 'compliance') {
-      return { authenticated: true, authorized: true };
+  // 2. Verified Server Session / Token (via AuthorizationService)
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : authHeader?.trim();
+  if (token) {
+    const user = await authService.authenticateToken(token);
+    if (user) {
+      const isAuthorized = user.roles.some((r) => r === 'PLATFORM_ADMIN' || r === 'COMPLIANCE_OFFICER');
+      return { authenticated: true, authorized: isAuthorized, user };
     }
-    // Authenticated user but not admin
-    return { authenticated: true, authorized: false };
   }
 
-  // 3. Unauthenticated
+  // Unauthenticated or invalid token - NEVER trust client-supplied role headers
   return { authenticated: false, authorized: false };
 }
 
@@ -313,10 +368,48 @@ app.get('/validation-key.txt', (req, res) => {
   res.status(200).send('8a6a4b885d34141bb2512da532760394d83de4673574b82de61c4a0895e00cb11dacc69b4618c84393a5518a75ca356597e3df7ed67a9d884baa7b8edd3f7cca');
 });
 
+// Authentication Endpoints (Phase 1 Remediation)
+app.post(['/api/auth/session', '/api/v1/auth/session'], authRateLimiter, async (req, res) => {
+  try {
+    const { accessToken, username, uid, roles } = req.body;
+    const session = await authService.createSession({
+      accessToken,
+      username: username || 'pioneer_user',
+      uid: uid || `pi-uid-${Date.now()}`,
+      roles
+    });
+
+    res.json({
+      success: true,
+      token: session.token,
+      expiresAt: session.expiresAt,
+      user: session.user
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: 'SESSION_CREATION_FAILED', message: err.message });
+  }
+});
+
+app.get(['/api/auth/me', '/api/v1/auth/me'], authenticate, requireAuthenticatedUser, (req: AuthenticatedRequest, res) => {
+  res.json({
+    success: true,
+    user: req.user
+  });
+});
+
+app.post(['/api/auth/logout', '/api/v1/auth/logout'], authenticate, (req: AuthenticatedRequest, res) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : authHeader?.trim();
+  if (token) {
+    authService.invalidateSession(token);
+  }
+  res.json({ success: true, message: 'Session invalidated successfully' });
+});
+
 // Diagnostic API Endpoint (Protected in Production)
-app.get(['/api/debug/runtime', '/debug/runtime'], (req, res) => {
+app.get(['/api/debug/runtime', '/debug/runtime'], async (req, res) => {
   if (isProduction) {
-    const auth = checkAdminAuth(req);
+    const auth = await checkAdminAuth(req);
     if (!auth.authenticated) {
       res.status(401).json({
         success: false,
@@ -346,9 +439,9 @@ app.get(['/api/debug/runtime', '/debug/runtime'], (req, res) => {
 
 // PSTP REST API Endpoints
 
-// 1. Audit Logs Retrieval (Protected with Admin Authorization & Pagination)
-app.get(['/api/pstp/audit-logs', '/api/v1/pstp/audit-logs'], (req, res) => {
-  const auth = checkAdminAuth(req);
+// 1. Audit Logs Retrieval (Protected with Server-Side Admin Authorization & Pagination)
+app.get(['/api/pstp/audit-logs', '/api/v1/pstp/audit-logs'], async (req, res) => {
+  const auth = await checkAdminAuth(req);
   if (!auth.authenticated) {
     res.status(401).json({
       success: false,
@@ -383,106 +476,192 @@ app.get(['/api/pstp/audit-logs', '/api/v1/pstp/audit-logs'], (req, res) => {
   });
 });
 
-// Create Audit Log Entry
-app.post(['/api/pstp/audit-logs', '/api/v1/pstp/audit-logs'], (req, res) => {
-  const { orderId, paymentId, actor, actorRole, action, details, ipAddress, deviceInfo } = req.body;
-  const newLog = pstpAuditRepo.appendLog({
+// Create Audit Log Entry (Strict Server-Side Protected Ingestion)
+app.post(['/api/pstp/audit-logs', '/api/v1/pstp/audit-logs'], authenticate, async (req: AuthenticatedRequest, res) => {
+  const auth = await checkAdminAuth(req);
+  if (!auth.authenticated) {
+    res.status(401).json({ success: false, error: 'UNAUTHORIZED', message: 'Authentication required to post audit log' });
+    return;
+  }
+
+  const { orderId, paymentId, action, details, ipAddress, deviceInfo } = req.body;
+  const actor = req.user?.username || auth.user?.username || 'system';
+  const actorRole = req.user?.roles[0] || auth.user?.roles[0] || 'system';
+
+  const newLog = auditService.recordPstpAudit({
     orderId,
     paymentId,
-    actor: actor || 'system',
-    actorRole: actorRole || 'system',
+    actor,
+    actorRole,
     action: action || 'AUDIT_EVENT',
     details: details || 'PSTP Security Audit Log Entry',
     ipAddress: ipAddress || req.ip || '127.0.0.1',
-    deviceInfo: deviceInfo || req.headers['user-agent'] || 'Pi Browser Web'
+    deviceInfo: deviceInfo || (req.headers['user-agent'] as string) || 'Server Verified Session'
   });
   res.json({ success: true, log: newLog });
 });
 
-// 2. Disputes API
+// 2. Disputes API (Phase 2 Remediation)
 app.get(['/api/pstp/disputes', '/api/v1/pstp/disputes'], (req, res) => {
   const disputes = pstpDisputeRepo.getAll();
   res.json({ success: true, disputes });
 });
 
-app.post(['/api/pstp/disputes', '/api/v1/pstp/disputes'], (req, res) => {
-  const { orderId, buyerUsername, sellerUsername, reason, description, amountPi, evidenceFiles } = req.body;
-  const newDispute = pstpDisputeRepo.createDispute({
-    orderId: orderId || `ORD-${Date.now()}`,
-    buyerUsername: buyerUsername || 'Pioneer_User',
-    sellerUsername: sellerUsername || 'Seller_Merchant',
-    reason: reason || 'Item issue',
-    description: description || 'Buyer submitted a dispute',
-    amountPi: Number(amountPi) || 0,
-    status: 'open',
-    evidenceFiles: evidenceFiles || [],
-    comments: [
-      {
-        id: `CMT-${Date.now()}`,
-        sender: buyerUsername || 'Pioneer_User',
-        role: 'buyer',
-        text: description || 'Opened dispute ticket.',
-        timestamp: new Date().toISOString()
-      }
-    ]
+app.post(['/api/pstp/disputes', '/api/v1/pstp/disputes'], disputeRateLimiter, authenticate, async (req: AuthenticatedRequest, res) => {
+  try {
+    const { orderId, reason, description, amountPi, evidenceFiles } = req.body;
+    const idempotencyKey = (req.headers['idempotency-key'] as string) || (req.headers['x-idempotency-key'] as string) || req.body.idempotencyKey || `DISP-${orderId}-${Date.now()}`;
+
+    // Derive buyer identity authoritatively from server authenticated user
+    const buyerUsername = req.user?.username || req.body.buyerUsername || 'Pioneer_User';
+    const sellerUsername = req.body.sellerUsername || 'Seller_Merchant';
+
+    // Atomic idempotency reservation to prevent race conditions & duplicate tickets
+    const reservation = await idempotencyRepo.reserveIdempotencyKey(
+      idempotencyKey,
+      req.user?.id || buyerUsername,
+      'PSTP_CREATE_DISPUTE'
+    );
+
+    if (reservation.status === 'RESOLVED' && reservation.cachedResult) {
+      res.json(reservation.cachedResult);
+      return;
+    }
+
+    const newDispute = pstpDisputeRepo.createDispute({
+      orderId: orderId || `ORD-${Date.now()}`,
+      buyerUsername,
+      sellerUsername,
+      reason: reason || 'Item issue',
+      description: description || 'Buyer submitted a dispute',
+      amountPi: Number(amountPi) || 0,
+      status: 'open',
+      evidenceFiles: evidenceFiles || [],
+      comments: [
+        {
+          id: `CMT-${Date.now()}`,
+          sender: buyerUsername,
+          role: 'buyer',
+          text: description || 'Opened dispute ticket.',
+          timestamp: new Date().toISOString()
+        }
+      ]
+    });
+
+    // Authoritative audit log
+    auditService.recordPstpAudit({
+      orderId: newDispute.orderId,
+      actor: buyerUsername,
+      actorRole: 'buyer',
+      action: 'DISPUTE_FILED',
+      details: `Dispute filed for order ${newDispute.orderId}. Reason: ${reason}`,
+      ipAddress: req.ip || '127.0.0.1',
+      deviceInfo: (req.headers['user-agent'] as string) || 'Pi Browser'
+    });
+
+    const responsePayload = { success: true, dispute: newDispute };
+    await idempotencyRepo.completeIdempotencyKey(idempotencyKey, responsePayload);
+    res.json(responsePayload);
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: 'DISPUTE_CREATION_FAILED', message: err.message });
+  }
+});
+
+// Protected Dispute Comments (Restricted to Buyer, Seller, or Compliance Admin)
+app.post(['/api/pstp/disputes/:id/comment', '/api/v1/pstp/disputes/:id/comment'], disputeRateLimiter, authenticate, (req: AuthenticatedRequest, res) => {
+  const { id } = req.params;
+  const { text } = req.body;
+  const dispute = pstpDisputeRepo.findById(id);
+
+  if (!dispute) {
+    res.status(404).json({ success: false, error: 'DISPUTE_NOT_FOUND', message: 'Dispute not found' });
+    return;
+  }
+
+  const currentUser = req.user?.username || req.body.sender || 'User';
+  const isAdmin = req.user?.roles.some((r) => r === 'PLATFORM_ADMIN' || r === 'COMPLIANCE_OFFICER');
+  const isSeller = dispute.sellerUsername === currentUser;
+  const isBuyer = dispute.buyerUsername === currentUser;
+
+  if (!isAdmin && !isSeller && !isBuyer) {
+    res.status(403).json({
+      success: false,
+      error: 'FORBIDDEN',
+      message: 'Access denied: You are not an authorized party or compliance officer for this dispute.'
+    });
+    return;
+  }
+
+  // Derive role authoritatively on the server
+  let derivedRole: 'admin' | 'seller' | 'buyer' = 'buyer';
+  if (isAdmin) {
+    derivedRole = 'admin';
+  } else if (isSeller) {
+    derivedRole = 'seller';
+  } else {
+    derivedRole = 'buyer';
+  }
+
+  const updatedDispute = pstpDisputeRepo.addComment(id, {
+    sender: currentUser,
+    role: derivedRole,
+    text: text || ''
   });
 
-  // Add audit log entry
-  pstpAuditRepo.appendLog({
-    orderId: newDispute.orderId,
-    actor: buyerUsername || 'Pioneer_User',
-    actorRole: 'buyer',
-    action: 'DISPUTE_FILED',
-    details: `Dispute filed for order ${newDispute.orderId}. Reason: ${reason}`,
+  auditService.recordPstpAudit({
+    orderId: dispute.orderId,
+    actor: currentUser,
+    actorRole: derivedRole,
+    action: 'DISPUTE_COMMENT_ADDED',
+    details: `Added ${derivedRole} comment to dispute ${id}`,
     ipAddress: req.ip || '127.0.0.1',
     deviceInfo: (req.headers['user-agent'] as string) || 'Pi Browser'
   });
 
-  res.json({ success: true, dispute: newDispute });
-});
-
-app.post(['/api/pstp/disputes/:id/comment', '/api/v1/pstp/disputes/:id/comment'], (req, res) => {
-  const { id } = req.params;
-  const { sender, role, text } = req.body;
-  const updatedDispute = pstpDisputeRepo.addComment(id, {
-    sender: sender || 'User',
-    role: role || 'buyer',
-    text: text || ''
-  });
-
-  if (!updatedDispute) {
-    res.status(404).json({ error: 'Dispute not found' });
-    return;
-  }
   res.json({ success: true, dispute: updatedDispute });
 });
 
-app.post(['/api/pstp/disputes/:id/resolve', '/api/v1/pstp/disputes/:id/resolve'], (req, res) => {
+// Protected Dispute Resolution (Restricted to Server-Verified Admins with State Machine Validation)
+app.post(['/api/pstp/disputes/:id/resolve', '/api/v1/pstp/disputes/:id/resolve'], disputeRateLimiter, authenticate, requireRole(['PLATFORM_ADMIN', 'COMPLIANCE_OFFICER']), (req: AuthenticatedRequest, res) => {
   const { id } = req.params;
-  const { decision, note, refundAmountPi, resolvedBy } = req.body;
+  const { decision, note, refundAmountPi } = req.body;
   const dispute = pstpDisputeRepo.findById(id);
+
   if (!dispute) {
-    res.status(404).json({ error: 'Dispute not found' });
+    res.status(404).json({ success: false, error: 'DISPUTE_NOT_FOUND', message: 'Dispute not found' });
     return;
   }
+
+  // Prevent invalid re-resolution on already resolved/closed disputes
+  if (dispute.status === 'resolved_refunded' || dispute.status === 'resolved_rejected' || dispute.status === 'closed') {
+    res.status(400).json({
+      success: false,
+      error: 'INVALID_STATUS_TRANSITION',
+      message: `Dispute ${id} is already in terminal state "${dispute.status}". Re-resolution rejected.`
+    });
+    return;
+  }
+
+  // Authoritatively derive resolver identity from authenticated user
+  const resolvedBy = req.user?.username || 'Platform_Admin';
 
   const updatedDispute = pstpDisputeRepo.resolveDispute(id, {
     decision,
     note: note || 'Admin resolved dispute according to PSTP guidelines',
     refundAmountPi: refundAmountPi ? Number(refundAmountPi) : (decision === 'full_refund' ? dispute.amountPi : 0),
-    resolvedBy: resolvedBy || 'Admin_Escrow_Desk',
+    resolvedBy,
     resolvedAt: new Date().toISOString()
   });
 
-  // Record audit log
-  pstpAuditRepo.appendLog({
+  // Record immutable audit log
+  auditService.recordPstpAudit({
     orderId: dispute.orderId,
-    actor: resolvedBy || 'Admin_Escrow_Desk',
+    actor: resolvedBy,
     actorRole: 'admin',
     action: 'DISPUTE_RESOLVED',
-    details: `Admin decision: ${decision}. Note: ${note}`,
+    details: `Admin decision: ${decision}. Note: ${note || 'None'}. Refund Pi: ${refundAmountPi || 0}`,
     ipAddress: req.ip || '127.0.0.1',
-    deviceInfo: 'Admin Console / Chrome'
+    deviceInfo: (req.headers['user-agent'] as string) || 'Admin Console'
   });
 
   res.json({ success: true, dispute: updatedDispute });
@@ -588,8 +767,8 @@ app.post(['/api/vendor/apply', '/api/v1/vendor/apply'], (req, res) => {
   }
 });
 
-app.get(['/api/admin/vendor-applications', '/api/v1/admin/vendor-applications'], (req, res) => {
-  const auth = checkAdminAuth(req);
+app.get(['/api/admin/vendor-applications', '/api/v1/admin/vendor-applications'], async (req, res) => {
+  const auth = await checkAdminAuth(req);
   if (!auth.authenticated) {
     res.status(401).json({ success: false, error: 'UNAUTHORIZED', message: 'Authentication required.' });
     return;
@@ -603,8 +782,8 @@ app.get(['/api/admin/vendor-applications', '/api/v1/admin/vendor-applications'],
   res.json({ success: true, count: applications.length, applications });
 });
 
-app.post(['/api/admin/vendor-application/:id/review', '/api/v1/admin/vendor-application/:id/review'], (req, res) => {
-  const auth = checkAdminAuth(req);
+app.post(['/api/admin/vendor-application/:id/review', '/api/v1/admin/vendor-application/:id/review'], async (req, res) => {
+  const auth = await checkAdminAuth(req);
   if (!auth.authenticated) {
     res.status(401).json({ success: false, error: 'UNAUTHORIZED', message: 'Authentication required.' });
     return;
@@ -615,7 +794,8 @@ app.post(['/api/admin/vendor-application/:id/review', '/api/v1/admin/vendor-appl
   }
 
   const { id } = req.params;
-  const { status, adminNotes, reviewedBy } = req.body || {};
+  const { status, adminNotes } = req.body || {};
+  const reviewedBy = auth.user?.username || 'Admin_Compliance_Lead';
   const updated = vendorApplicationRepo.updateStatus(id, status, adminNotes, reviewedBy);
 
   if (!updated) {
@@ -623,58 +803,93 @@ app.post(['/api/admin/vendor-application/:id/review', '/api/v1/admin/vendor-appl
     return;
   }
 
-  pstpAuditRepo.appendLog({
+  auditService.recordPstpAudit({
     orderId: id,
-    actor: reviewedBy || 'Admin_Compliance_Lead',
+    actor: reviewedBy,
     actorRole: 'admin',
     action: `VENDOR_APPLICATION_${status}`,
     details: `Application ${id} (${updated.storeName}) status updated to ${status}. Notes: ${adminNotes || 'None'}`,
     ipAddress: req.ip || '127.0.0.1',
-    deviceInfo: 'Admin Console / Chrome'
+    deviceInfo: (req.headers['user-agent'] as string) || 'Admin Console'
   });
 
   res.json({ success: true, application: updated });
 });
 
-// 4. Security Events API
-app.get(['/api/pstp/security-events', '/api/v1/pstp/security-events'], (req, res) => {
+// 4. Security Events API (Phase 4 Remediation)
+app.get(['/api/pstp/security-events', '/api/v1/pstp/security-events'], async (req, res) => {
+  const auth = await checkAdminAuth(req);
+  if (!auth.authenticated) {
+    res.status(401).json({ success: false, error: 'UNAUTHORIZED', message: 'Authentication required to view security events.' });
+    return;
+  }
+  if (!auth.authorized) {
+    res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Administrative privileges required.' });
+    return;
+  }
+
   const events = securityEventRepo.getAll();
-  res.json({ success: true, events });
+  res.json({ success: true, count: events.length, events });
 });
 
-app.post(['/api/pstp/security-events', '/api/v1/pstp/security-events'], (req, res) => {
-  const { eventType, severity, description } = req.body;
-  const newEvent = securityEventRepo.recordEvent({
-    eventType: eventType || 'SECURITY_AUDIT',
-    severity: severity || 'info',
-    ip: req.ip || '127.0.0.1',
-    device: (req.headers['user-agent'] as string) || 'Pi Browser Web',
-    details: description || 'PSTP Security Event Recorded',
-    resolved: false
-  });
-  res.json({ success: true, event: newEvent });
+app.post(['/api/pstp/security-events', '/api/v1/pstp/security-events'], securityEventsRateLimiter, authenticate, (req: AuthenticatedRequest, res) => {
+  try {
+    const { eventType, severity, description, resourceType, resourceId, metadata } = req.body;
+    const correlationId = (req.headers['x-correlation-id'] as string) || `CORR-SEC-${Date.now()}`;
+
+    // Record authoritatively with server validation and sanitization
+    const newEvent = securityEventRepo.recordEvent({
+      eventType: eventType || 'suspicious_login',
+      severity: severity || 'info',
+      username: req.user?.username || req.body.username || 'anonymous_client',
+      actorId: req.user?.id,
+      correlationId,
+      resourceType,
+      resourceId,
+      ip: req.ip || '127.0.0.1',
+      device: (req.headers['user-agent'] as string) || 'Pi Browser Web',
+      details: description ? String(description).slice(0, 1000) : 'Security Event Recorded',
+      metadata,
+      resolved: false
+    });
+
+    res.json({ success: true, event: newEvent });
+  } catch (err: any) {
+    res.status(400).json({ success: false, error: 'INVALID_SECURITY_EVENT', message: err.message });
+  }
 });
 
-// 4. Platform Pricing Configuration & Utility Config APIs
+// 5. Platform Pricing Configuration & Utility Config APIs
 const handleGetUtilityConfig = (req: express.Request, res: express.Response) => {
   const config = platformConfigRepo.getConfig();
   const logs = platformConfigRepo.getAuditLogs();
   res.json({ success: true, config, logs });
 };
 
-const handlePostUtilityConfig = (req: express.Request, res: express.Response) => {
-  const { piRateUsd, minPurchasePi, maxPurchasePi, reason, updatedBy } = req.body;
+const handlePostUtilityConfig = async (req: express.Request, res: express.Response) => {
+  const auth = await checkAdminAuth(req);
+  if (!auth.authenticated) {
+    res.status(401).json({ success: false, error: 'UNAUTHORIZED', message: 'Authentication required to update pricing configuration.' });
+    return;
+  }
+  if (!auth.authorized) {
+    res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Platform administration privileges required.' });
+    return;
+  }
+
+  const { piRateUsd, minPurchasePi, maxPurchasePi, reason } = req.body;
   if (!piRateUsd || Number(piRateUsd) <= 0) {
     res.status(400).json({ error: 'Pricing rate must be greater than zero' });
     return;
   }
 
+  const updatedBy = auth.user?.username || 'Platform_Admin';
   const previousConfig = platformConfigRepo.getConfig();
   const updatedConfig = platformConfigRepo.updateConfig({
     piRateUsd: Number(piRateUsd),
     minPurchasePi: minPurchasePi ? Number(minPurchasePi) : previousConfig.minPurchasePi,
     maxPurchasePi: maxPurchasePi ? Number(maxPurchasePi) : previousConfig.maxPurchasePi,
-    updatedBy: updatedBy || 'Platform_Admin'
+    updatedBy
   });
 
   const newLog = platformConfigRepo.addAuditLog({
@@ -682,7 +897,7 @@ const handlePostUtilityConfig = (req: express.Request, res: express.Response) =>
     newRate: updatedConfig.piRateUsd,
     currency: 'USD',
     source: reason || 'Pricing updated via Admin Console',
-    updatedBy: updatedBy || 'Platform_Admin',
+    updatedBy,
     ipAddress: req.ip || '127.0.0.1'
   });
 
@@ -1536,11 +1751,21 @@ app.get('/api/education/institutions/:id', (req, res) => {
   }
 });
 
-// 2. Global Education Taxonomy / Classification
-app.get('/api/education/taxonomy/:countryCode?', (req, res) => {
+// 2. Global Education Taxonomy / Classification (Phase 6 Remediation)
+app.get(['/api/education/taxonomy', '/api/education/taxonomy/:countryCode?'], (req, res) => {
   try {
-    const countryCode = req.params.countryCode || (req.query.countryCode as string) || 'NG';
-    const taxonomy = getTaxonomyByCountry(countryCode);
+    const countryCode = req.params.countryCode || (req.query.countryCode as string);
+    if (!countryCode || countryCode === 'all') {
+      res.json({
+        success: true,
+        count: Object.keys(GLOBAL_EDUCATION_TAXONOMIES).length,
+        supportedCountries: classificationEngine.getSupportedCountries(),
+        taxonomies: classificationEngine.getAllTaxonomies()
+      });
+      return;
+    }
+
+    const taxonomy = classificationEngine.getTaxonomy(countryCode);
     res.json({
       success: true,
       countryCode: taxonomy.countryCode,
@@ -1551,7 +1776,48 @@ app.get('/api/education/taxonomy/:countryCode?', (req, res) => {
   }
 });
 
-// 3. Student Identity & Parent "My Children"
+// 3. Student Identity & Verification Engine (Phase 7 Remediation)
+app.post('/api/education/students/verify', studentVerifyRateLimiter, authenticate, (req: AuthenticatedRequest, res) => {
+  try {
+    const { studentId, matricOrRegistrationNumber, institutionId, countryCode, claimedFullName, nationalStudentNumber } = req.body;
+    if (!studentId && !matricOrRegistrationNumber) {
+      res.status(400).json({
+        success: false,
+        error: 'MISSING_IDENTIFIER',
+        message: 'Student ID or Matric/Registration number is required for authoritative verification.'
+      });
+      return;
+    }
+
+    const verificationResult = studentVerificationService.verifyStudent({
+      studentId,
+      matricOrRegistrationNumber,
+      institutionId,
+      countryCode: countryCode || 'NG',
+      claimedFullName,
+      nationalStudentNumber
+    });
+
+    res.json({
+      success: true,
+      verification: verificationResult
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: 'STUDENT_VERIFICATION_FAILED', message: err.message });
+  }
+});
+
+app.post('/api/education/institutions/:id/verify-accreditation', studentVerifyRateLimiter, (req, res) => {
+  try {
+    const { id } = req.params;
+    const { countryCode, registryNumber } = req.body;
+    const result = studentVerificationService.verifyInstitution(id, countryCode || 'NG', registryNumber);
+    res.json({ success: true, accreditation: result });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: 'ACCREDITATION_CHECK_FAILED', message: err.message });
+  }
+});
+
 app.get('/api/education/students/:id', (req, res) => {
   try {
     const student = educationRepo.getStudentById(req.params.id);
@@ -1574,7 +1840,7 @@ app.get('/api/education/guardians/:id/children', (req, res) => {
   }
 });
 
-// 4. Invoices & School Fees Engine
+// 4. Invoices & Authoritative School Fees Engine (Phase 5 & 11 Remediation)
 app.get('/api/education/invoices', (req, res) => {
   try {
     const { studentId, institutionId, status, guardianId } = req.query;
@@ -1604,8 +1870,59 @@ app.get('/api/education/invoices/:id', (req, res) => {
   }
 });
 
-// 5. Secure Pi School Fees Settlement & Digital Receipt Issuance
-app.post('/api/education/invoices/pay', async (req, res) => {
+// Authoritative fee calculation endpoint (prevents client-side price tampering)
+app.post('/api/education/invoices/calculate', (req, res) => {
+  try {
+    const { items, subtotal, discountAmount, taxAmount } = req.body;
+    let computedSubtotal = Number(subtotal) || 0;
+
+    if (Array.isArray(items) && items.length > 0) {
+      computedSubtotal = items.reduce((acc: number, item: any) => {
+        const itemAmount = Number(item.amount || item.unitPrice || 0);
+        const itemQty = Number(item.quantity || 1);
+        return acc + (itemAmount * itemQty);
+      }, 0);
+    }
+
+    const totals = EducationRepository.calculateInvoiceTotals({
+      subtotal: computedSubtotal,
+      discount: Number(discountAmount) || 0,
+      tax: Number(taxAmount) || 0
+    });
+
+    res.json({
+      success: true,
+      totals
+    });
+  } catch (err: any) {
+    res.status(400).json({ success: false, error: 'CALCULATION_ERROR', message: err.message });
+  }
+});
+
+// Apply Scholarship to Invoice (Requires Financial/Institutional Admin Role)
+app.post('/api/education/invoices/:id/apply-scholarship', authenticate, requireRole(['PLATFORM_ADMIN', 'INSTITUTION_ADMIN', 'FINANCE_ADMIN']), (req: AuthenticatedRequest, res) => {
+  try {
+    const { id } = req.params;
+    const { scholarshipId, notes } = req.body;
+
+    if (!scholarshipId) {
+      res.status(400).json({ success: false, error: 'MISSING_SCHOLARSHIP_ID', message: 'scholarshipId is required' });
+      return;
+    }
+
+    const updatedInvoice = educationRepo.applyScholarshipToInvoice(id, scholarshipId, notes);
+    res.json({
+      success: true,
+      message: 'Scholarship credit applied to invoice',
+      invoice: updatedInvoice
+    });
+  } catch (err: any) {
+    res.status(400).json({ success: false, error: 'SCHOLARSHIP_APPLICATION_FAILED', message: err.message });
+  }
+});
+
+// 5. Secure Pi School Fees Settlement & Digital Receipt Issuance (Phase 5 & 12 Remediation)
+app.post('/api/education/invoices/pay', paymentRateLimiter, authenticate, async (req: AuthenticatedRequest, res) => {
   try {
     const {
       invoiceId,
@@ -1615,7 +1932,6 @@ app.post('/api/education/invoices/pay', async (req, res) => {
       piPaymentId,
       piTxid,
       paymentMethod = 'PI_NETWORK',
-      payerUsername = 'pioneer_parent',
       idempotencyKey
     } = req.body;
 
@@ -1659,9 +1975,11 @@ app.post('/api/education/invoices/pay', async (req, res) => {
       }
     }
 
+    // Authoritatively derive payer username
+    const payerUsername = req.user?.username || req.body.payerUsername || 'pioneer_parent';
     const effectiveIdempotencyKey = idempotencyKey || piPaymentId || `IDEMP-EDU-${invoiceId}-${Date.now()}`;
 
-    // Execute atomic settlement in repository
+    // Execute atomic settlement in repository with canonical SHA-256 digest creation
     const result = educationRepo.recordPayment({
       invoiceId,
       amountPaid: numericAmount,
@@ -1672,6 +1990,18 @@ app.post('/api/education/invoices/pay', async (req, res) => {
       paymentMethod,
       payerUsername,
       idempotencyKey: effectiveIdempotencyKey
+    });
+
+    // Record immutable audit log
+    auditService.recordPstpAudit({
+      orderId: invoiceId,
+      paymentId: piPaymentId,
+      actor: payerUsername,
+      actorRole: 'payer',
+      action: 'EDUCATION_FEE_PAID',
+      details: `Paid ${numericAmount} ${currency} (Pi: ${result.payment.piAmount}) for student ${invoice.studentName}`,
+      ipAddress: req.ip || '127.0.0.1',
+      deviceInfo: (req.headers['user-agent'] as string) || 'Pi Browser Web'
     });
 
     res.json({
@@ -1687,14 +2017,15 @@ app.post('/api/education/invoices/pay', async (req, res) => {
   }
 });
 
-// 6. Digital Receipt Verification (Tamper-Resistant Public Validation)
-app.get('/api/education/receipts/:receiptNumber/verify', (req, res) => {
+// 6. Digital Receipt Verification (Tamper-Resistant Cryptographic Validation)
+app.get('/api/education/receipts/:receiptNumber/verify', receiptVerifyRateLimiter, (req, res) => {
   try {
     const { receiptNumber } = req.params;
     const verification = educationRepo.verifyReceipt(receiptNumber);
     if (!verification.found || !verification.receipt) {
       res.status(404).json({
         success: false,
+        status: 'NOT_FOUND',
         isAuthentic: false,
         error: 'RECEIPT_NOT_FOUND',
         message: `No authentic education fee receipt matches reference "${receiptNumber}".`
@@ -1702,10 +2033,12 @@ app.get('/api/education/receipts/:receiptNumber/verify', (req, res) => {
       return;
     }
 
-    // Public safe representation - hides unneeded PII while confirming authenticity
     res.json({
       success: true,
-      isAuthentic: true,
+      status: verification.status,
+      isAuthentic: verification.status === 'VERIFIED',
+      algorithm: verification.algorithm,
+      digest: verification.digest,
       receiptNumber: verification.receipt.receiptNumber,
       verificationReference: verification.receipt.verificationReference,
       verificationHash: verification.receipt.verificationHash,
@@ -1739,7 +2072,7 @@ app.get('/api/education/receipts/:receiptNumber', (req, res) => {
   }
 });
 
-// 7. Admissions & Application Pipeline
+// 7. Admissions & Application Pipeline (Phase 5 & 10 Remediation)
 app.get('/api/education/admissions', (req, res) => {
   try {
     const { institutionId, status, applicantEmail } = req.query;
@@ -1755,7 +2088,7 @@ app.get('/api/education/admissions', (req, res) => {
   }
 });
 
-app.post('/api/education/admissions/apply', (req, res) => {
+app.post('/api/education/admissions/apply', authenticate, (req: AuthenticatedRequest, res) => {
   try {
     const appData = req.body;
     if (!appData.institutionId || !appData.applicantFullName || !appData.programmeName) {
@@ -1765,7 +2098,7 @@ app.post('/api/education/admissions/apply', (req, res) => {
 
     const application = educationRepo.submitAdmissionApplication({
       ...appData,
-      status: 'SUBMITTED',
+      applicantEmail: req.user?.username ? `${req.user.username}@pinova.hub` : appData.applicantEmail || 'applicant@pinova.hub',
       applicationFeePaid: Boolean(appData.applicationFeePaid),
       documents: appData.documents || []
     });
@@ -1773,6 +2106,30 @@ app.post('/api/education/admissions/apply', (req, res) => {
     res.json({ success: true, message: 'Admission application submitted successfully', application });
   } catch (err: any) {
     res.status(500).json({ success: false, error: 'ADMISSION_SUBMISSION_FAILED', message: err.message });
+  }
+});
+
+// Admissions State Machine Transition (Requires Institution Admin or Compliance Officer)
+app.post('/api/education/admissions/:id/status', authenticate, requireRole(['PLATFORM_ADMIN', 'INSTITUTION_ADMIN', 'COMPLIANCE_OFFICER']), (req: AuthenticatedRequest, res) => {
+  try {
+    const { id } = req.params;
+    const { status, reason } = req.body;
+
+    if (!status) {
+      res.status(400).json({ success: false, error: 'MISSING_STATUS', message: 'Status field is required' });
+      return;
+    }
+
+    const updatedBy = req.user?.username || 'Admissions_Committee';
+    const updated = educationRepo.updateAdmissionStatus(id, status, reason, updatedBy);
+
+    res.json({
+      success: true,
+      message: `Admission application status updated to ${status}`,
+      application: updated
+    });
+  } catch (err: any) {
+    res.status(400).json({ success: false, error: 'INVALID_ADMISSION_TRANSITION', message: err.message });
   }
 });
 
@@ -1789,7 +2146,7 @@ app.post('/api/education/admissions/:id/offer/accept', (req, res) => {
   }
 });
 
-// 8. Scholarships & Financial Aid
+// 8. Scholarships & Financial Aid (Phase 5 & 10 Remediation)
 app.get('/api/education/scholarships', (req, res) => {
   try {
     const { tier, countryCode } = req.query;
@@ -1797,6 +2154,15 @@ app.get('/api/education/scholarships', (req, res) => {
     res.json({ success: true, count: scholarships.length, scholarships });
   } catch (err: any) {
     res.status(500).json({ success: false, error: 'SCHOLARSHIPS_FETCH_FAILED', message: err.message });
+  }
+});
+
+app.post('/api/education/scholarships', authenticate, requireRole(['PLATFORM_ADMIN', 'INSTITUTION_ADMIN']), (req: AuthenticatedRequest, res) => {
+  try {
+    const scholarship = educationRepo.createScholarship(req.body);
+    res.json({ success: true, message: 'Scholarship created successfully', scholarship });
+  } catch (err: any) {
+    res.status(400).json({ success: false, error: 'SCHOLARSHIP_CREATION_FAILED', message: err.message });
   }
 });
 
@@ -1817,8 +2183,18 @@ app.get('/api/education/marketplace', (req, res) => {
   }
 });
 
-// 10. School Administrator Portal Endpoints
-app.post('/api/education/admin/institutions/:id/verify', (req, res) => {
+// 10. School Administrator Portal Endpoints (Phase 10 Remediation)
+app.post('/api/education/admin/institutions/:id/verify', async (req, res) => {
+  const auth = await checkAdminAuth(req);
+  if (!auth.authenticated) {
+    res.status(401).json({ success: false, error: 'UNAUTHORIZED', message: 'Authentication required.' });
+    return;
+  }
+  if (!auth.authorized) {
+    res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Admin privileges required.' });
+    return;
+  }
+
   try {
     const { status, notes } = req.body;
     if (!status) {
@@ -1836,7 +2212,13 @@ app.post('/api/education/admin/institutions/:id/verify', (req, res) => {
   }
 });
 
-app.get('/api/education/admin/institutions/:id/analytics', (req, res) => {
+app.get('/api/education/admin/institutions/:id/analytics', async (req, res) => {
+  const auth = await checkAdminAuth(req);
+  if (!auth.authenticated) {
+    res.status(401).json({ success: false, error: 'UNAUTHORIZED', message: 'Authentication required.' });
+    return;
+  }
+
   try {
     const analytics = educationRepo.getInstitutionAnalytics(req.params.id);
     res.json({ success: true, analytics });
@@ -1845,7 +2227,17 @@ app.get('/api/education/admin/institutions/:id/analytics', (req, res) => {
   }
 });
 
-app.get('/api/education/admin/audit-logs', (req, res) => {
+app.get('/api/education/admin/audit-logs', async (req, res) => {
+  const auth = await checkAdminAuth(req);
+  if (!auth.authenticated) {
+    res.status(401).json({ success: false, error: 'UNAUTHORIZED', message: 'Authentication required.' });
+    return;
+  }
+  if (!auth.authorized) {
+    res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Admin privileges required.' });
+    return;
+  }
+
   try {
     const logs = educationRepo.getAuditLogs(req.query.entityType as string);
     res.json({ success: true, count: logs.length, logs });

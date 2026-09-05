@@ -137,5 +137,53 @@
     "applicationNumber": "APP/2026/001/557",
     "submittedAt": "2026-09-04T09:21:09.550Z",
     "updatedAt": "2026-09-04T09:21:09.550Z"
+  },
+  {
+    "institutionId": "inst-unilag-01",
+    "institutionName": "University of Lagos",
+    "programmeId": "prog-cs",
+    "programmeName": "B.Sc. Computer Science",
+    "applicantFullName": "Emeka Okonkwo",
+    "applicantEmail": "emeka@example.com",
+    "academicSession": "2025/2026",
+    "documents": [],
+    "id": "adm-app-1788517321439",
+    "applicationNumber": "APP/2026/-01/136",
+    "status": "UNDER_REVIEW",
+    "submittedAt": "2026-09-04T10:22:01.439Z",
+    "updatedAt": "2026-09-04T10:22:01.439Z",
+    "decisionNotes": "admissions_officer"
+  },
+  {
+    "institutionId": "inst-unilag-01",
+    "institutionName": "University of Lagos",
+    "programmeId": "prog-cs",
+    "programmeName": "B.Sc. Computer Science",
+    "applicantFullName": "Emeka Okonkwo",
+    "applicantEmail": "emeka@example.com",
+    "academicSession": "2025/2026",
+    "documents": [],
+    "id": "adm-app-1788517407159",
+    "applicationNumber": "APP/2026/-01/621",
+    "status": "UNDER_REVIEW",
+    "submittedAt": "2026-09-04T10:23:27.159Z",
+    "updatedAt": "2026-09-04T10:23:27.160Z",
+    "decisionNotes": "admissions_officer"
+  },
+  {
+    "id": "adm-app-1788517466656",
+    "applicationNumber": "APP/2026/-01/454",
+    "institutionId": "inst-unilag-01",
+    "institutionName": "University of Lagos",
+    "programmeId": "prog-cs",
+    "programmeName": "B.Sc. Computer Science",
+    "applicantFullName": "Emeka Okonkwo",
+    "applicantEmail": "emeka@example.com",
+    "academicSession": "2025/2026",
+    "status": "ACCEPTED",
+    "submittedAt": "2026-09-04T10:24:26.656Z",
+    "updatedAt": "2026-09-04T10:24:26.658Z",
+    "documents": [],
+    "decisionNotes": "Candidate accepted offer"
   }
 ]

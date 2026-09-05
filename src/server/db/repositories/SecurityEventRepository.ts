@@ -30,6 +30,19 @@ const INITIAL_SECURITY_EVENTS: SecurityEventEntity[] = [
   }
 ];
 
+export const ALLOWED_SECURITY_EVENT_TYPES = [
+  'suspicious_login',
+  'large_transaction',
+  'failed_verification',
+  'rate_limit_hit',
+  'client_sdk_anomaly',
+  'tamper_detected',
+  'unauthorized_access_attempt',
+  'idempotency_collision',
+  'auth_failure',
+  'security_audit'
+] as const;
+
 export class SecurityEventRepository {
   private engine: StorageEngine<SecurityEventEntity>;
 
@@ -37,17 +50,29 @@ export class SecurityEventRepository {
     this.engine = new StorageEngine<SecurityEventEntity>('security_events', 'id', INITIAL_SECURITY_EVENTS);
   }
 
-  public recordEvent(event: Omit<SecurityEventEntity, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }): SecurityEventEntity {
+  public recordEvent(event: Omit<SecurityEventEntity, 'id' | 'createdAt' | 'updatedAt' | 'ip' | 'device' | 'resolved'> & { id?: string; ip?: string; device?: string; resolved?: boolean }): SecurityEventEntity {
+    // Validate event type against allowlist
+    const normalizedType = (event.eventType || '').toLowerCase().trim();
+    const isAllowed = ALLOWED_SECURITY_EVENT_TYPES.some((t) => t === normalizedType);
+    if (!isAllowed) {
+      throw new Error(`Invalid or disallowed security eventType: "${event.eventType}". Must match registered allowlist.`);
+    }
+
     const now = new Date().toISOString();
     const record: SecurityEventEntity = {
       id: event.id || `SEC-EVENT-${Date.now()}`,
-      eventType: event.eventType,
-      severity: event.severity,
+      eventType: normalizedType,
+      severity: event.severity || 'medium',
       username: event.username,
+      actorId: event.actorId,
+      correlationId: event.correlationId || `CORR-SEC-${Date.now()}`,
+      resourceType: event.resourceType,
+      resourceId: event.resourceId,
       ip: event.ip,
       device: event.device,
       location: event.location,
-      details: event.details,
+      details: event.details ? String(event.details).slice(0, 1000) : 'Security event recorded',
+      metadata: event.metadata,
       resolved: event.resolved ?? false,
       createdAt: now,
       updatedAt: now
