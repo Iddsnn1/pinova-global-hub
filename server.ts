@@ -1,5 +1,6 @@
 import express from 'express';
 import path from 'path';
+import fs from 'fs';
 import dotenv from 'dotenv';
 import crypto from 'crypto';
 import { GoogleGenAI } from '@google/genai';
@@ -38,7 +39,11 @@ import { EducationRepository } from './src/server/db/repositories/EducationRepos
 dotenv.config();
 
 const app = express();
-const PORT = Number(process.env.PORT) || 3000;
+// Bind port: In Google AI Studio environment, nginx reverse-proxies port 8080 to internal port 3000 (DEFAULT_APP_PORT=3000).
+// In standalone Cloud Run without nginx proxy, bind directly to process.env.PORT.
+const PORT = process.env.DEFAULT_APP_PORT 
+  ? Number(process.env.DEFAULT_APP_PORT) 
+  : (process.env.NGINX_PORT ? 3000 : (Number(process.env.PORT) || 3000));
 
 app.use(express.json());
 
@@ -120,9 +125,9 @@ app.use((req, res, next) => {
 
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Admin-Key, X-Idempotency-Key, Idempotency-Key');
-  // Allow Pi Browser iframe embedding strictly without wildcard leak
+  // Allow Pi Browser & Google AI Studio iframe embedding strictly without wildcard leak
   res.removeHeader('X-Frame-Options');
-  res.setHeader('Content-Security-Policy', "frame-ancestors 'self' https://*.minepi.com https://app-cdn.minepi.com pi:;");
+  res.setHeader('Content-Security-Policy', "frame-ancestors 'self' https://*.minepi.com https://app-cdn.minepi.com pi: https://ai.studio https://*.google.com https://*.run.app https://localhost.corp.google.com:26001;");
 
   if (req.method === 'OPTIONS') {
     res.sendStatus(200);
@@ -3971,7 +3976,11 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 });
 
 async function startServer() {
-  if (process.env.NODE_ENV !== 'production') {
+  const distPath = path.join(process.cwd(), 'dist');
+  const hasDist = fs.existsSync(path.join(distPath, 'index.html'));
+  const isProduction = process.env.NODE_ENV === 'production' || (hasDist && process.env.NODE_ENV !== 'development');
+
+  if (!isProduction) {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
@@ -3979,7 +3988,6 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
     app.get('*', (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
