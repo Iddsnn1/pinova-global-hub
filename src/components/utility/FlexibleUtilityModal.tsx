@@ -986,6 +986,11 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                                     {prov.state}
                                   </span>
                                 )}
+                                {prov.enabled === false && (
+                                  <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-700/50">
+                                    Gateway Pending
+                                  </span>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -997,6 +1002,19 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                   </div>
                 )}
               </div>
+
+              {/* UPSTREAM GATEWAY INTEGRATION STATUS NOTICE (IF SERVICE PENDING) */}
+              {selectedProvider && selectedProvider.enabled === false && (
+                <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/80 text-amber-900 dark:text-amber-200 text-xs space-y-1.5">
+                  <div className="flex items-center gap-2 font-black text-amber-800 dark:text-amber-300">
+                    <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                    <span>Upstream Gateway Integration Pending</span>
+                  </div>
+                  <p className="text-[11px] leading-relaxed text-slate-600 dark:text-slate-300">
+                    Direct automated API vending for <strong>{selectedProvider.name}</strong> is currently pending official portal gateway onboarding. Direct checkout is temporarily paused to protect Pioneers from unfulfillable orders.
+                  </p>
+                </div>
+              )}
 
               {/* DESIGNATION / SERVICE PLAN TYPE (IF APPLICABLE) */}
               {selectedProvider && activeDesignations.length > 0 && (
@@ -1289,10 +1307,15 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                 <button
                   type="button"
                   onClick={handleExecutePayment}
-                  disabled={isProcessingPayment || !selectedProvider || !accountNumber.trim() || !isWithinLimits || getActiveFiatPrice() <= 0}
+                  disabled={isProcessingPayment || !selectedProvider || selectedProvider.enabled === false || !accountNumber.trim() || !isWithinLimits || getActiveFiatPrice() <= 0}
                   className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-purple-600 via-indigo-600 to-amber-500 hover:opacity-95 disabled:opacity-50 text-white font-extrabold text-xs sm:text-sm shadow-xl shadow-purple-600/30 transition-all flex items-center justify-center gap-2"
                 >
-                  {isProcessingPayment ? (
+                  {selectedProvider?.enabled === false ? (
+                    <>
+                      <AlertCircle className="w-4 h-4 text-amber-300" />
+                      <span>Gateway Onboarding Pending — Direct Vending Paused</span>
+                    </>
+                  ) : isProcessingPayment ? (
                     <>
                       <RefreshCw className="w-4 h-4 animate-spin text-white" />
                       <span>Processing with Pi Wallet...</span>

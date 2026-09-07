@@ -28,13 +28,16 @@ import {
   Lock,
   Sparkles,
   Layers,
-  ArrowUpRight
+  ArrowUpRight,
+  Building2,
+  BookOpen,
+  Award
 } from 'lucide-react';
 import { UtilityCategory } from '../../types/navigation';
 import { UTILITY_CATEGORIES, UtilityCategoryDef } from '../../data/categoryData';
 import { PiConversionConfig, UtilityCategoryType } from '../../types/utility';
 import { FlexibleUtilityModal } from '../utility/FlexibleUtilityModal';
-import { EducationHub } from '../education/EducationHub';
+import { EducationHub, EducationTab } from '../education/EducationHub';
 
 const getMappedCategoryType = (utilityId: string | null): UtilityCategoryType => {
   if (!utilityId) return 'airtime';
@@ -43,13 +46,53 @@ const getMappedCategoryType = (utilityId: string | null): UtilityCategoryType =>
   if (utilityId === 'cable_tv' || utilityId === 'cable') return 'cable';
   if (utilityId === 'internet_services' || utilityId === 'internet') return 'internet';
   if (utilityId === 'exam_cards' || utilityId === 'exam') return 'exam';
-  if (utilityId === 'education_payments' || utilityId === 'education') return 'education';
+  if (
+    utilityId === 'education_payments' ||
+    utilityId === 'education' ||
+    utilityId === 'institution_registry' ||
+    utilityId === 'admissions_portal' ||
+    utilityId === 'receipt_verifier' ||
+    utilityId === 'scholarships_aid' ||
+    utilityId === 'education_marketplace'
+  ) return 'education';
   if (utilityId === 'gift_cards' || utilityId === 'giftcard') return 'giftcard';
   if (utilityId === 'vouchers' || utilityId === 'voucher') return 'voucher';
   if (utilityId === 'government_services' || utilityId === 'government') return 'government';
   if (utilityId === 'event_tickets' || utilityId === 'events') return 'events';
   if (utilityId === 'flight') return 'transport';
   return utilityId as UtilityCategoryType;
+};
+
+const isEducationService = (utilityId: string | null): boolean => {
+  if (!utilityId) return false;
+  return (
+    utilityId === 'education' ||
+    utilityId === 'education_payments' ||
+    utilityId === 'institution_registry' ||
+    utilityId === 'admissions_portal' ||
+    utilityId === 'receipt_verifier' ||
+    utilityId === 'scholarships_aid' ||
+    utilityId === 'education_marketplace'
+  );
+};
+
+const getEducationTabForService = (utilityId: string | null): EducationTab => {
+  switch (utilityId) {
+    case 'education_payments':
+      return 'fees';
+    case 'institution_registry':
+      return 'directory';
+    case 'admissions_portal':
+      return 'admissions';
+    case 'receipt_verifier':
+      return 'verifier';
+    case 'scholarships_aid':
+      return 'scholarships';
+    case 'education_marketplace':
+      return 'marketplace';
+    default:
+      return 'directory';
+  }
 };
 
 // Logical Service Families for the 18 Global Utilities
@@ -104,10 +147,18 @@ const UTILITY_FAMILIES: UtilityFamily[] = [
     id: 'education_exams',
     name: 'Education & Examination Portals',
     shortName: 'Education & Exams',
-    description: 'Official examination result checker scratch cards, test registration PINs, and school tuition portals.',
+    description: 'Official examination result checker scratch cards, test registration PINs, institution registry, admissions, and school tuition portals.',
     icon: GraduationCap,
     accentColor: 'pink',
-    serviceIds: ['exam_cards', 'education_payments']
+    serviceIds: [
+      'exam_cards',
+      'education_payments',
+      'institution_registry',
+      'admissions_portal',
+      'receipt_verifier',
+      'scholarships_aid',
+      'education_marketplace'
+    ]
   }
 ];
 
@@ -194,6 +245,10 @@ export const UtilitiesView: React.FC<UtilitiesViewProps> = ({
       case 'Ticket': return <Ticket className="w-5 h-5 text-amber-600 dark:text-amber-400" />;
       case 'Coins': return <Coins className="w-5 h-5 text-yellow-500 dark:text-yellow-400" />;
       case 'ShoppingBag': return <ShoppingBag className="w-5 h-5 text-rose-500 dark:text-rose-400" />;
+      case 'Building2': return <Building2 className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />;
+      case 'BookOpen': return <BookOpen className="w-5 h-5 text-blue-600 dark:text-blue-400" />;
+      case 'ShieldCheck': return <ShieldCheck className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />;
+      case 'Award': return <Award className="w-5 h-5 text-amber-500 dark:text-amber-400" />;
       default: return <Zap className="w-5 h-5 text-purple-500 dark:text-purple-400" />;
     }
   };
@@ -225,8 +280,13 @@ export const UtilitiesView: React.FC<UtilitiesViewProps> = ({
       case 'water_bills': return 'Settle municipal water utility balances with verified ledger receipts.';
       case 'cable_tv': return 'Renew digital satellite & decoder subscriptions directly in Pi Coin.';
       case 'internet_services': return 'Pay fiber optic broadband, Starlink, and ISP monthly subscription invoices.';
-      case 'exam_cards': return 'Purchase WAEC, NECO, and JAMB result checker scratch card PINs.';
-      case 'education_payments': return 'Pay university tuition deposits, cert fees and digital course passes.';
+      case 'exam_cards': return 'Purchase WAEC, NECO, JAMB, NABTEB, and NBAIS result checker scratch card PINs.';
+      case 'education_payments': return 'Pay school fees, university tuition deposits, and academic charges across 6 tiers in Pi Coin.';
+      case 'institution_registry': return 'Search verified universities, polytechnics, basic colleges, and schools across global jurisdictions.';
+      case 'admissions_portal': return 'Submit and track multi-institution academic admission applications and acceptance clearances.';
+      case 'receipt_verifier': return 'Cryptographically verify student tuition clearance certificates, digital bursary stamps, and audit hashes.';
+      case 'scholarships_aid': return 'Explore merit scholarships, Pioneer endowment grants, and need-based academic subsidies.';
+      case 'education_marketplace': return 'Official curriculum textbooks, JAMB/WAEC past questions, scientific calculators, and STEM kits.';
       case 'gift_cards': return 'Purchase international eGift cards for Apple, Amazon, Steam & Google Play.';
       case 'gaming': return 'Top up in-game currencies, battle passes, PUBG UC, Free Fire & Robux.';
       case 'streaming': return 'Manage subscriptions for Netflix, Spotify, YouTube Premium & Disney+.';
@@ -449,7 +509,7 @@ export const UtilitiesView: React.FC<UtilitiesViewProps> = ({
                   <span className={`px-1.5 py-0.2 rounded-md text-[10px] ${
                     activeFamilyFilter === 'all' ? 'bg-purple-700 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
                   }`}>
-                    18
+                    {UTILITY_CATEGORIES.length}
                   </span>
                 </button>
 
@@ -480,7 +540,7 @@ export const UtilitiesView: React.FC<UtilitiesViewProps> = ({
             </div>
 
             {/* ==================================================== */}
-            {/* 5. STRUCTURED CATEGORY SECTIONS (18 Services) */}
+            {/* 5. STRUCTURED CATEGORY SECTIONS */}
             {/* ==================================================== */}
             {visibleFamilies.length === 0 ? (
               /* No Search Match Empty State */
@@ -501,7 +561,7 @@ export const UtilitiesView: React.FC<UtilitiesViewProps> = ({
                   }}
                   className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold shadow transition-all"
                 >
-                  View All 18 Services
+                  View All {UTILITY_CATEGORIES.length} Services
                 </button>
               </div>
             ) : (
@@ -628,6 +688,21 @@ export const UtilitiesView: React.FC<UtilitiesViewProps> = ({
           </div>
 
         </div>
+      ) : isEducationService(selectedUtility) ? (
+        /* GLOBAL EDUCATION ECOSYSTEM MASTER HUB (FULL RESPONSIVE LAYOUT) */
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 space-y-4">
+          <button
+            onClick={handleBackToEcosystem}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-2xl bg-slate-800 text-amber-300 hover:bg-slate-700 text-xs font-bold transition-colors shadow-sm"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span>Back to Global Services Ecosystem</span>
+          </button>
+          <EducationHub
+            initialTab={getEducationTabForService(selectedUtility)}
+            onBackToUtilities={handleBackToEcosystem}
+          />
+        </div>
       ) : (
         /* CONTEXT-AWARE UTILITY STEP-BY-STEP PROGRESSIVE TRANSACTION FLOW */
         <div className="max-w-4xl mx-auto px-4 sm:px-6 space-y-6">
@@ -694,14 +769,6 @@ export const UtilitiesView: React.FC<UtilitiesViewProps> = ({
                   </button>
                 </div>
               </div>
-            ) : getMappedCategoryType(selectedUtility) === 'education' || selectedUtility === 'education_payments' ? (
-              /* GLOBAL EDUCATION ECOSYSTEM MASTER HUB */
-              <EducationHub
-                onBackToUtilities={() => {
-                  setSelectedUtility(null);
-                  if (onSelectCategory) onSelectCategory('all');
-                }}
-              />
             ) : (
               /* FLEXIBLE UTILITY MODAL IN EMBEDDED MODE */
               <FlexibleUtilityModal

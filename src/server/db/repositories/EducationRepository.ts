@@ -83,6 +83,7 @@ export class EducationRepository {
   // --- Institutions ---
   public getInstitutions(filter?: {
     countryCode?: string;
+    state?: string;
     tier?: string;
     institutionType?: string;
     isPublic?: boolean;
@@ -95,6 +96,9 @@ export class EducationRepository {
 
     if (filter.countryCode && filter.countryCode !== 'ALL' && filter.countryCode !== 'GLOBAL') {
       list = list.filter((i) => i.countryCode === filter.countryCode);
+    }
+    if (filter.state && filter.state !== 'all') {
+      list = list.filter((i) => i.state.toLowerCase() === filter.state?.toLowerCase());
     }
     if (filter.tier && filter.tier !== 'all') {
       list = list.filter((i) => i.supportedTiers.includes(filter.tier as any));

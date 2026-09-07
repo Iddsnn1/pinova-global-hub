@@ -24,6 +24,7 @@ import {
 export const educationService = {
   async getInstitutions(filter?: {
     countryCode?: string;
+    state?: string;
     tier?: string;
     institutionType?: string;
     isPublic?: boolean;
@@ -33,6 +34,7 @@ export const educationService = {
     try {
       const params = new URLSearchParams();
       if (filter?.countryCode) params.append('countryCode', filter.countryCode);
+      if (filter?.state) params.append('state', filter.state);
       if (filter?.tier) params.append('tier', filter.tier);
       if (filter?.institutionType) params.append('institutionType', filter.institutionType);
       if (filter?.isPublic !== undefined) params.append('isPublic', String(filter.isPublic));
@@ -47,8 +49,28 @@ export const educationService = {
     } catch (e) {
       console.warn('[educationService] Fallback to local institutions data:', e);
     }
-    // Fallback
-    return GLOBAL_EDUCATION_INSTITUTIONS;
+    // Fallback with client-side filtering
+    let list = GLOBAL_EDUCATION_INSTITUTIONS;
+    if (filter?.countryCode && filter.countryCode !== 'ALL') {
+      list = list.filter((i) => i.countryCode.toUpperCase() === filter.countryCode?.toUpperCase());
+    }
+    if (filter?.state && filter.state !== 'all') {
+      list = list.filter((i) => i.state.toLowerCase() === filter.state?.toLowerCase());
+    }
+    if (filter?.tier && filter.tier !== 'all') {
+      list = list.filter((i) => i.supportedTiers?.includes(filter.tier as any));
+    }
+    if (filter?.institutionType && filter.institutionType !== 'all') {
+      list = list.filter((i) => i.institutionType === filter.institutionType);
+    }
+    if (filter?.isPublic !== undefined) {
+      list = list.filter((i) => i.isPublic === filter.isPublic);
+    }
+    if (filter?.search) {
+      const q = filter.search.toLowerCase();
+      list = list.filter((i) => i.name.toLowerCase().includes(q) || i.institutionCode?.toLowerCase().includes(q) || i.city?.toLowerCase().includes(q));
+    }
+    return list;
   },
 
   async getInstitution(id: string): Promise<InstitutionProfile | null> {

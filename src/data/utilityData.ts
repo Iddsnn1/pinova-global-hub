@@ -29966,6 +29966,28 @@ export const SAMPLE_UTILITY_PROVIDERS: UtilityServiceProvider[] =
     ]
   },
   {
+    "id": "prov-exam-ng-nbais-result-pins",
+    "name": "NBAIS Result PIN",
+    "category": "exam",
+    "logo": "https://images.unsplash.com/photo-1556742049-0a67daf28d2a?auto=format&fit=crop&w=200&q=80",
+    "country": "Nigeria",
+    "countryCode": "NG",
+    "supportsCustomAmount": false,
+    "supportsFixedPackages": false,
+    "accountLabel": "Candidate Examination Number",
+    "accountPlaceholder": "Enter candidate NBAIS registration / exam number",
+    "minCustomFiat": 1,
+    "maxCustomFiat": 500,
+    "currency": "USD",
+    "enabled": false,
+    "hasDirectValidationApi": false,
+    "designations": [
+      "NBAIS National Board Result PIN",
+      "SAISSCE Portal E-PIN Voucher"
+    ],
+    "packages": []
+  },
+  {
     "id": "prov-exam-ke-knec-exam-verification-kenya",
     "name": "KNEC Exam Verification Kenya",
     "category": "exam",

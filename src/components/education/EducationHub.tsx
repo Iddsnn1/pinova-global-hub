@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { InstitutionDirectory } from './InstitutionDirectory';
 import { SchoolFeesEngine } from './SchoolFeesEngine';
 import { ParentDashboard } from './ParentDashboard';
@@ -47,6 +47,12 @@ export const EducationHub: React.FC<EducationHubProps> = ({
   const [activeTab, setActiveTab] = useState<EducationTab>(initialTab);
   const [preselectedInstitution, setPreselectedInstitution] = useState<InstitutionProfile | null>(null);
   const [preselectedInvoiceId, setPreselectedInvoiceId] = useState<string | undefined>(undefined);
+
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
 
   const handleSelectInstitutionForFees = (institution: InstitutionProfile) => {
     setPreselectedInstitution(institution);

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { InstitutionProfile, EducationTier } from '../../types/education';
 import { educationService } from '../../services/educationService';
+import { ALL_GLOBAL_COUNTRIES, getCountryFlag, getSubdivisionInfo } from '../../data/countrySubdivisions';
 import {
   Search,
   Building2,
@@ -32,20 +33,25 @@ export const InstitutionDirectory: React.FC<InstitutionDirectoryProps> = ({
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCountry, setSelectedCountry] = useState('ALL');
+  const [selectedSubdivision, setSelectedSubdivision] = useState<string>('all');
   const [selectedTier, setSelectedTier] = useState('all');
   const [selectedType, setSelectedType] = useState('all');
   const [isPublicFilter, setIsPublicFilter] = useState<string>('all');
   const [selectedInstitution, setSelectedInstitution] = useState<InstitutionProfile | null>(null);
 
+  const subdivisionInfo = selectedCountry !== 'ALL' ? getSubdivisionInfo(selectedCountry) : null;
+  const availableSubdivisions = subdivisionInfo ? subdivisionInfo.subdivisions : [];
+
   useEffect(() => {
     loadInstitutions();
-  }, [selectedCountry, selectedTier, selectedType, isPublicFilter]);
+  }, [selectedCountry, selectedSubdivision, selectedTier, selectedType, isPublicFilter]);
 
   const loadInstitutions = async () => {
     setLoading(true);
     try {
       const data = await educationService.getInstitutions({
         countryCode: selectedCountry === 'ALL' ? undefined : selectedCountry,
+        state: selectedSubdivision === 'all' ? undefined : selectedSubdivision,
         tier: selectedTier === 'all' ? undefined : selectedTier,
         institutionType: selectedType === 'all' ? undefined : selectedType,
         isPublic: isPublicFilter === 'all' ? undefined : isPublicFilter === 'public',
@@ -97,23 +103,57 @@ export const InstitutionDirectory: React.FC<InstitutionDirectoryProps> = ({
         </form>
 
         {/* Facet Filters */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 border-t border-slate-800 text-xs">
+        <div className={`grid grid-cols-2 ${availableSubdivisions.length > 0 ? 'sm:grid-cols-3 lg:grid-cols-5' : 'sm:grid-cols-4'} gap-3 pt-2 border-t border-slate-800 text-xs`}>
           {/* Country */}
           <div>
-            <label className="block text-slate-400 font-medium mb-1">Country</label>
+            <label className="block text-slate-400 font-medium mb-1 flex items-center justify-between">
+              <span>Country</span>
+              {selectedCountry !== 'ALL' && (
+                <span className="text-[10px] text-amber-400 font-mono">
+                  {getCountryFlag(selectedCountry)} {selectedCountry}
+                </span>
+              )}
+            </label>
             <select
               value={selectedCountry}
-              onChange={(e) => setSelectedCountry(e.target.value)}
+              onChange={(e) => {
+                setSelectedCountry(e.target.value);
+                setSelectedSubdivision('all');
+              }}
               className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 focus:outline-none focus:border-amber-500"
             >
-              <option value="ALL">All Countries (Global)</option>
-              <option value="NG">Nigeria (Deployment Phase 1)</option>
-              <option value="GB">United Kingdom</option>
-              <option value="US">United States</option>
-              <option value="GH">Ghana</option>
-              <option value="KE">Kenya</option>
+              <option value="ALL">🌐 All Countries (Global)</option>
+              <option value="NG">🇳🇬 Nigeria (Primary Deployment Hub)</option>
+              <optgroup label="Global Nations & Territories (190+ Countries)">
+                {ALL_GLOBAL_COUNTRIES.filter((c) => c.code !== 'NG').map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {getCountryFlag(c.code)} {c.name}
+                  </option>
+                ))}
+              </optgroup>
             </select>
           </div>
+
+          {/* State / Subdivision (Dynamic) */}
+          {availableSubdivisions.length > 0 && (
+            <div>
+              <label className="block text-slate-400 font-medium mb-1">
+                {subdivisionInfo?.subdivisionName || 'State / Region'}
+              </label>
+              <select
+                value={selectedSubdivision}
+                onChange={(e) => setSelectedSubdivision(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 focus:outline-none focus:border-amber-500"
+              >
+                <option value="all">All {subdivisionInfo?.subdivisionName ? `${subdivisionInfo.subdivisionName}s` : 'Regions'}</option>
+                {availableSubdivisions.map((sub) => (
+                  <option key={sub} value={sub}>
+                    {sub}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Education Tier */}
           <div>
@@ -197,6 +237,7 @@ export const InstitutionDirectory: React.FC<InstitutionDirectoryProps> = ({
             onClick={() => {
               setSearchQuery('');
               setSelectedCountry('ALL');
+              setSelectedSubdivision('all');
               setSelectedTier('all');
               setSelectedType('all');
               setIsPublicFilter('all');

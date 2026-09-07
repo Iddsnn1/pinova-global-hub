@@ -1722,9 +1722,10 @@ app.post('/api/v2/utility/vtu/webhook', (req, res) => {
 // 1. Institution Directory & Verification Registry
 app.get('/api/education/institutions', (req, res) => {
   try {
-    const { countryCode, tier, institutionType, isPublic, search, verificationStatus } = req.query;
+    const { countryCode, state, tier, institutionType, isPublic, search, verificationStatus } = req.query;
     const filter: any = {};
     if (countryCode) filter.countryCode = String(countryCode);
+    if (state) filter.state = String(state);
     if (tier) filter.tier = String(tier);
     if (institutionType) filter.institutionType = String(institutionType);
     if (isPublic !== undefined) filter.isPublic = isPublic === 'true';
