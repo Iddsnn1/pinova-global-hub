@@ -83,7 +83,7 @@ export const EducationHub: React.FC<EducationHubProps> = ({
   };
 
   const navTabs = [
-    { id: 'directory' as EducationTab, label: 'Institution Registry', icon: Building2, tag: 'Global' },
+    { id: 'directory' as EducationTab, label: 'Global Education Directory', icon: Building2, tag: 'Global' },
     { id: 'fees' as EducationTab, label: 'School Fees & Tuition Engine', icon: CreditCard, tag: 'Pi Pay' },
     { id: 'exam_cards' as EducationTab, label: 'Exam Cards & PINs', icon: FileCheck, tag: 'Instant PIN' },
     { id: 'admissions' as EducationTab, label: 'Admissions & Enrolment', icon: GraduationCap, tag: 'Pipeline' },
@@ -148,9 +148,9 @@ export const EducationHub: React.FC<EducationHubProps> = ({
             </div>
 
             <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800">
-              <span className="text-slate-400 block text-[11px]">Primary Deployment</span>
-              <span className="text-white font-bold text-sm">Nigeria (West Africa)</span>
-              <span className="text-[10px] text-slate-400 block mt-0.5">Global schema ready</span>
+              <span className="text-slate-400 block text-[11px]">Primary Deployment Hub</span>
+              <span className="text-white font-bold text-sm">🇳🇬 Nigeria</span>
+              <span className="text-[10px] text-amber-400 block mt-0.5">Global 190+ Countries Enabled</span>
             </div>
 
             <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800">

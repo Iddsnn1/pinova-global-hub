@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { InstitutionProfile, EducationTier } from '../../types/education';
 import { educationService } from '../../services/educationService';
 import { ALL_GLOBAL_COUNTRIES, getCountryFlag, getSubdivisionInfo } from '../../data/countrySubdivisions';
@@ -41,6 +41,12 @@ export const InstitutionDirectory: React.FC<InstitutionDirectoryProps> = ({
 
   const subdivisionInfo = selectedCountry !== 'ALL' ? getSubdivisionInfo(selectedCountry) : null;
   const availableSubdivisions = subdivisionInfo ? subdivisionInfo.subdivisions : [];
+
+  const sortedGlobalCountries = useMemo(() => {
+    return ALL_GLOBAL_COUNTRIES.filter((c) => c.code !== 'NG').slice().sort((a, b) =>
+      a.name.localeCompare(b.name)
+    );
+  }, []);
 
   useEffect(() => {
     loadInstitutions();
@@ -114,15 +120,16 @@ export const InstitutionDirectory: React.FC<InstitutionDirectoryProps> = ({
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by institution name, matric code, state, or city (e.g., Bayero, Lagos, Oxford)..."
+              placeholder="Search global institutions by name, code, state, or city (e.g., Oxford, Lagos, Bayero, Harvard)..."
               className="w-full bg-slate-950 border border-slate-700/80 rounded-xl pl-11 pr-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 transition"
             />
           </div>
           <button
+            id="education-search-directory-btn"
             type="submit"
-            className="px-6 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-sm transition shadow-lg shadow-amber-500/20"
+            className="px-6 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-sm transition shadow-lg shadow-amber-500/20 whitespace-nowrap"
           >
-            Search Directory
+            Search Global Directory
           </button>
         </form>
 
@@ -131,25 +138,37 @@ export const InstitutionDirectory: React.FC<InstitutionDirectoryProps> = ({
           {/* Country */}
           <div>
             <label className="block text-slate-400 font-medium mb-1 flex items-center justify-between">
-              <span>Country</span>
-              {selectedCountry !== 'ALL' && (
+              <span className="flex items-center gap-1.5">
+                <Globe className="w-3.5 h-3.5 text-amber-400" />
+                <span>Country</span>
+              </span>
+              {selectedCountry === 'NG' ? (
+                <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full font-semibold">
+                  Primary Deployment Hub
+                </span>
+              ) : selectedCountry !== 'ALL' ? (
                 <span className="text-[10px] text-amber-400 font-mono">
                   {getCountryFlag(selectedCountry)} {selectedCountry}
+                </span>
+              ) : (
+                <span className="text-[10px] text-emerald-400 font-medium">
+                  Worldwide Scope
                 </span>
               )}
             </label>
             <select
+              id="education-country-select"
               value={selectedCountry}
               onChange={(e) => {
                 setSelectedCountry(e.target.value);
                 setSelectedSubdivision('all');
               }}
-              className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 focus:outline-none focus:border-amber-500"
+              className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 focus:outline-none focus:border-amber-500 font-medium"
             >
-              <option value="ALL">🌐 All Countries (Global)</option>
+              <option value="ALL">🌍 All Countries (Global)</option>
               <option value="NG">🇳🇬 Nigeria (Primary Deployment Hub)</option>
               <optgroup label="Global Nations & Territories (190+ Countries)">
-                {ALL_GLOBAL_COUNTRIES.filter((c) => c.code !== 'NG').map((c) => (
+                {sortedGlobalCountries.map((c) => (
                   <option key={c.code} value={c.code}>
                     {getCountryFlag(c.code)} {c.name}
                   </option>
@@ -233,7 +252,7 @@ export const InstitutionDirectory: React.FC<InstitutionDirectoryProps> = ({
       {/* Directory Results Grid */}
       <div className="flex items-center justify-between">
         <h3 className="text-base font-bold text-white flex items-center gap-2">
-          <span>Verified Institutions Registry</span>
+          <span>Global Verified Institutions Directory</span>
           <span className="text-xs bg-slate-800 text-slate-300 font-normal px-2.5 py-0.5 rounded-full border border-slate-700">
             {institutions.length} Found
           </span>
