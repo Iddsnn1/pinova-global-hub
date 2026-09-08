@@ -49,14 +49,38 @@ export const InstitutionDirectory: React.FC<InstitutionDirectoryProps> = ({
   const loadInstitutions = async () => {
     setLoading(true);
     try {
+      // Validate that selectedSubdivision belongs to current country if a country is active
+      const validSubdivision =
+        selectedCountry !== 'ALL' && availableSubdivisions.includes(selectedSubdivision)
+          ? selectedSubdivision
+          : undefined;
+
       const data = await educationService.getInstitutions({
         countryCode: selectedCountry === 'ALL' ? undefined : selectedCountry,
-        state: selectedSubdivision === 'all' ? undefined : selectedSubdivision,
+        state: validSubdivision,
         tier: selectedTier === 'all' ? undefined : selectedTier,
         institutionType: selectedType === 'all' ? undefined : selectedType,
         isPublic: isPublicFilter === 'all' ? undefined : isPublicFilter === 'public',
-        search: searchQuery
+        search: searchQuery.trim() || undefined
       });
+      setInstitutions(data);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResetFilters = async () => {
+    setSearchQuery('');
+    setSelectedCountry('ALL');
+    setSelectedSubdivision('all');
+    setSelectedTier('all');
+    setSelectedType('all');
+    setIsPublicFilter('all');
+    setLoading(true);
+    try {
+      const data = await educationService.getInstitutions({});
       setInstitutions(data);
     } catch (e) {
       console.error(e);
@@ -229,19 +253,26 @@ export const InstitutionDirectory: React.FC<InstitutionDirectoryProps> = ({
       ) : institutions.length === 0 ? (
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-12 text-center">
           <Building2 className="w-12 h-12 text-slate-600 mx-auto mb-3" />
-          <h4 className="text-base font-bold text-white mb-1">No institutions matched your filter</h4>
-          <p className="text-xs text-slate-400 max-w-sm mx-auto mb-4">
-            Try adjusting your search criteria, switching country, or resetting the education tier filter.
+          <h4 className="text-base font-bold text-white mb-1">
+            {selectedCountry !== 'ALL'
+              ? 'No institutions are currently registered in this region.'
+              : 'No institutions matched your filter'}
+          </h4>
+          <p className="text-xs text-slate-400 max-w-md mx-auto mb-4">
+            {selectedCountry !== 'ALL' && selectedSubdivision !== 'all' ? (
+              `No institutions are currently registered in ${selectedSubdivision}, ${
+                ALL_GLOBAL_COUNTRIES.find((c) => c.code === selectedCountry)?.name || selectedCountry
+              }.`
+            ) : selectedCountry !== 'ALL' ? (
+              `No institutions are currently registered in ${
+                ALL_GLOBAL_COUNTRIES.find((c) => c.code === selectedCountry)?.name || selectedCountry
+              }.`
+            ) : (
+              'Try adjusting your search criteria, switching country, or resetting the education tier filter.'
+            )}
           </p>
           <button
-            onClick={() => {
-              setSearchQuery('');
-              setSelectedCountry('ALL');
-              setSelectedSubdivision('all');
-              setSelectedTier('all');
-              setSelectedType('all');
-              setIsPublicFilter('all');
-            }}
+            onClick={handleResetFilters}
             className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg transition"
           >
             Reset All Filters

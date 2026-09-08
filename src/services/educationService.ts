@@ -12,6 +12,7 @@ import {
 } from '../types/education';
 import { getTaxonomyByCountry } from '../data/educationTaxonomyData';
 import { GLOBAL_EDUCATION_INSTITUTIONS } from '../data/educationInstitutionsData';
+import { normalizeCountryCode, matchesSubdivision } from '../data/countrySubdivisions';
 import {
   SEED_CHILDREN_SUMMARIES,
   SEED_INVOICES,
@@ -24,6 +25,7 @@ import {
 export const educationService = {
   async getInstitutions(filter?: {
     countryCode?: string;
+    country?: string;
     state?: string;
     tier?: string;
     institutionType?: string;
@@ -34,6 +36,7 @@ export const educationService = {
     try {
       const params = new URLSearchParams();
       if (filter?.countryCode) params.append('countryCode', filter.countryCode);
+      if (filter?.country) params.append('country', filter.country);
       if (filter?.state) params.append('state', filter.state);
       if (filter?.tier) params.append('tier', filter.tier);
       if (filter?.institutionType) params.append('institutionType', filter.institutionType);
@@ -51,11 +54,13 @@ export const educationService = {
     }
     // Fallback with client-side filtering
     let list = GLOBAL_EDUCATION_INSTITUTIONS;
-    if (filter?.countryCode && filter.countryCode !== 'ALL') {
-      list = list.filter((i) => i.countryCode.toUpperCase() === filter.countryCode?.toUpperCase());
+    const rawCountry = filter?.countryCode || filter?.country;
+    const normalizedCountry = rawCountry ? normalizeCountryCode(rawCountry) : undefined;
+    if (normalizedCountry && normalizedCountry !== 'ALL' && normalizedCountry !== 'GLOBAL') {
+      list = list.filter((i) => i.countryCode.toUpperCase() === normalizedCountry.toUpperCase());
     }
     if (filter?.state && filter.state !== 'all') {
-      list = list.filter((i) => i.state.toLowerCase() === filter.state?.toLowerCase());
+      list = list.filter((i) => matchesSubdivision(i.countryCode, i.state, filter.state));
     }
     if (filter?.tier && filter.tier !== 'all') {
       list = list.filter((i) => i.supportedTiers?.includes(filter.tier as any));

@@ -13,6 +13,7 @@ import {
   EducationAuditLog
 } from '../../../types/education';
 import { GLOBAL_EDUCATION_INSTITUTIONS } from '../../../data/educationInstitutionsData';
+import { normalizeCountryCode, matchesSubdivision } from '../../../data/countrySubdivisions';
 import {
   SEED_STUDENTS,
   SEED_CHILDREN_SUMMARIES,
@@ -83,6 +84,7 @@ export class EducationRepository {
   // --- Institutions ---
   public getInstitutions(filter?: {
     countryCode?: string;
+    country?: string;
     state?: string;
     tier?: string;
     institutionType?: string;
@@ -94,11 +96,14 @@ export class EducationRepository {
 
     if (!filter) return list;
 
-    if (filter.countryCode && filter.countryCode !== 'ALL' && filter.countryCode !== 'GLOBAL') {
-      list = list.filter((i) => i.countryCode === filter.countryCode);
+    const rawCountry = filter.countryCode || filter.country;
+    const normalizedCountry = rawCountry ? normalizeCountryCode(rawCountry) : undefined;
+
+    if (normalizedCountry && normalizedCountry !== 'ALL' && normalizedCountry !== 'GLOBAL') {
+      list = list.filter((i) => i.countryCode.toUpperCase() === normalizedCountry.toUpperCase());
     }
     if (filter.state && filter.state !== 'all') {
-      list = list.filter((i) => i.state.toLowerCase() === filter.state?.toLowerCase());
+      list = list.filter((i) => matchesSubdivision(i.countryCode, i.state, filter.state));
     }
     if (filter.tier && filter.tier !== 'all') {
       list = list.filter((i) => i.supportedTiers.includes(filter.tier as any));

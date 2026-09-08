@@ -19,6 +19,7 @@ import {
 } from './src/server/db';
 import { vtuNgAdapter } from './src/server/integrations';
 import { getTaxonomyByCountry, GLOBAL_EDUCATION_TAXONOMIES } from './src/data/educationTaxonomyData';
+import { normalizeCountryCode } from './src/data/countrySubdivisions';
 import { SEED_MARKETPLACE_ITEMS } from './src/data/educationSeedData';
 import {
   authService,
@@ -1722,9 +1723,17 @@ app.post('/api/v2/utility/vtu/webhook', (req, res) => {
 // 1. Institution Directory & Verification Registry
 app.get('/api/education/institutions', (req, res) => {
   try {
-    const { countryCode, state, tier, institutionType, isPublic, search, verificationStatus } = req.query;
+    const { countryCode, country, state, tier, institutionType, isPublic, search, verificationStatus } = req.query;
     const filter: any = {};
-    if (countryCode) filter.countryCode = String(countryCode);
+
+    // Support both countryCode and country, preferring countryCode
+    const rawCountry = (countryCode !== undefined && countryCode !== '')
+      ? String(countryCode)
+      : (country !== undefined && country !== '' ? String(country) : undefined);
+
+    if (rawCountry) {
+      filter.countryCode = normalizeCountryCode(rawCountry);
+    }
     if (state) filter.state = String(state);
     if (tier) filter.tier = String(tier);
     if (institutionType) filter.institutionType = String(institutionType);
