@@ -7,7 +7,9 @@ import { DigitalReceiptVerifier } from './DigitalReceiptVerifier';
 import { ScholarshipsHub } from './ScholarshipsHub';
 import { InstitutionAdminPortal } from './InstitutionAdminPortal';
 import { EducationMarketplace } from './EducationMarketplace';
+import { ExamCardsPortal } from './ExamCardsPortal';
 import { InstitutionProfile, GuardianChildSummary, DigitalEducationReceipt } from '../../types/education';
+import { PiConversionConfig } from '../../types';
 import {
   GraduationCap,
   CreditCard,
@@ -22,12 +24,14 @@ import {
   FileCheck2,
   Globe2,
   CheckCircle2,
-  ArrowRight
+  ArrowRight,
+  FileCheck
 } from 'lucide-react';
 
 export type EducationTab =
   | 'directory'
   | 'fees'
+  | 'exam_cards'
   | 'children'
   | 'admissions'
   | 'verifier'
@@ -38,11 +42,19 @@ export type EducationTab =
 interface EducationHubProps {
   initialTab?: EducationTab;
   onBackToUtilities?: () => void;
+  utilityConfig?: PiConversionConfig;
+  userBalancePi?: number;
+  buyerUsername?: string;
+  onTransactionSuccess?: (receipt: any) => void;
 }
 
 export const EducationHub: React.FC<EducationHubProps> = ({
   initialTab = 'directory',
-  onBackToUtilities
+  onBackToUtilities,
+  utilityConfig,
+  userBalancePi,
+  buyerUsername,
+  onTransactionSuccess
 }) => {
   const [activeTab, setActiveTab] = useState<EducationTab>(initialTab);
   const [preselectedInstitution, setPreselectedInstitution] = useState<InstitutionProfile | null>(null);
@@ -72,13 +84,14 @@ export const EducationHub: React.FC<EducationHubProps> = ({
 
   const navTabs = [
     { id: 'directory' as EducationTab, label: 'Institution Registry', icon: Building2, tag: 'Global' },
-    { id: 'fees' as EducationTab, label: 'School Fees Engine', icon: CreditCard, tag: 'Pi Pay' },
-    { id: 'children' as EducationTab, label: 'My Children', icon: Users, tag: 'Family' },
+    { id: 'fees' as EducationTab, label: 'School Fees & Tuition Engine', icon: CreditCard, tag: 'Pi Pay' },
+    { id: 'exam_cards' as EducationTab, label: 'Exam Cards & PINs', icon: FileCheck, tag: 'Instant PIN' },
     { id: 'admissions' as EducationTab, label: 'Admissions & Enrolment', icon: GraduationCap, tag: 'Pipeline' },
     { id: 'verifier' as EducationTab, label: 'Verify Receipt', icon: ShieldCheck, tag: 'Public' },
-    { id: 'scholarships' as EducationTab, label: 'Scholarships & Grants', icon: Award, tag: 'Financial Aid' },
-    { id: 'admin' as EducationTab, label: 'Institution Portal', icon: FileCheck2, tag: 'Bursar' },
-    { id: 'marketplace' as EducationTab, label: 'Marketplace', icon: ShoppingBag, tag: 'Supplies' }
+    { id: 'scholarships' as EducationTab, label: 'Scholarships & Aid', icon: Award, tag: 'Financial Aid' },
+    { id: 'marketplace' as EducationTab, label: 'Education Marketplace', icon: ShoppingBag, tag: 'Supplies' },
+    { id: 'children' as EducationTab, label: 'My Children', icon: Users, tag: 'Family' },
+    { id: 'admin' as EducationTab, label: 'Institution Portal', icon: FileCheck2, tag: 'Bursar' }
   ];
 
   return (
@@ -194,6 +207,15 @@ export const EducationHub: React.FC<EducationHubProps> = ({
           <SchoolFeesEngine
             preselectedInvoiceId={preselectedInvoiceId}
             preselectedInstitution={preselectedInstitution}
+          />
+        )}
+
+        {activeTab === 'exam_cards' && (
+          <ExamCardsPortal
+            utilityConfig={utilityConfig}
+            userBalancePi={userBalancePi}
+            buyerUsername={buyerUsername}
+            onTransactionSuccess={onTransactionSuccess}
           />
         )}
 

@@ -702,7 +702,7 @@ function MainAppContent() {
         if (selectedUtilityCategory && selectedUtilityCategory !== 'all') {
           const utilDef = UTILITY_CATEGORIES.find((u) => u.id === selectedUtilityCategory);
           items.push({
-            label: utilDef?.name || selectedUtilityCategory,
+            label: utilDef?.name || (selectedUtilityCategory === 'education' ? 'Education & Examination Portals' : selectedUtilityCategory),
             section: 'utilities',
             category: selectedUtilityCategory as any
           });

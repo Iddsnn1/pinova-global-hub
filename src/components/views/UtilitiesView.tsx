@@ -67,6 +67,8 @@ const isEducationService = (utilityId: string | null): boolean => {
   if (!utilityId) return false;
   return (
     utilityId === 'education' ||
+    utilityId === 'education_exams' ||
+    utilityId === 'exam_cards' ||
     utilityId === 'education_payments' ||
     utilityId === 'institution_registry' ||
     utilityId === 'admissions_portal' ||
@@ -78,6 +80,8 @@ const isEducationService = (utilityId: string | null): boolean => {
 
 const getEducationTabForService = (utilityId: string | null): EducationTab => {
   switch (utilityId) {
+    case 'exam_cards':
+      return 'exam_cards';
     case 'education_payments':
       return 'fees';
     case 'institution_registry':
@@ -90,6 +94,8 @@ const getEducationTabForService = (utilityId: string | null): EducationTab => {
       return 'scholarships';
     case 'education_marketplace':
       return 'marketplace';
+    case 'education':
+    case 'education_exams':
     default:
       return 'directory';
   }
@@ -323,12 +329,19 @@ export const UtilitiesView: React.FC<UtilitiesViewProps> = ({
   // Filtered families based on active filter and search
   const visibleFamilies = useMemo(() => {
     const searchActive = serviceSearchQuery.trim().length > 0;
+    const q = serviceSearchQuery.toLowerCase().trim();
     const matchingIds = new Set(filteredCategories.map(c => c.id));
 
     return UTILITY_FAMILIES.map(family => {
+      const familyNameMatch = searchActive && (
+        family.name.toLowerCase().includes(q) ||
+        family.shortName.toLowerCase().includes(q) ||
+        family.description.toLowerCase().includes(q)
+      );
+
       const services = family.serviceIds
         .map(id => utilityMap.get(id))
-        .filter((cat): cat is UtilityCategoryDef => Boolean(cat) && (!searchActive || matchingIds.has(cat.id)));
+        .filter((cat): cat is UtilityCategoryDef => Boolean(cat) && (!searchActive || familyNameMatch || matchingIds.has(cat.id)));
       
       return {
         ...family,
@@ -568,9 +581,73 @@ export const UtilitiesView: React.FC<UtilitiesViewProps> = ({
               <div className="space-y-8">
                 {visibleFamilies.map((family) => {
                   const FamilyIcon = family.icon;
+                  const isEducationFamily = family.id === 'education_exams';
+
+                  if (isEducationFamily) {
+                    return (
+                      <button
+                        key={family.id}
+                        id="education-category-entry-card"
+                        onClick={() => {
+                          setSelectedUtility('education');
+                          setPurchaseReceipt(null);
+                          if (onSelectCategory) {
+                            onSelectCategory('education');
+                          }
+                        }}
+                        className="w-full p-5 sm:p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 hover:border-pink-500/80 dark:hover:border-pink-500/80 transition-all text-left flex flex-col justify-between space-y-4 group shadow-sm hover:shadow-lg hover:-translate-y-0.5 active:scale-[0.99]"
+                      >
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 w-full">
+                          <div className="flex items-start sm:items-center gap-3">
+                            <div className="w-12 h-12 rounded-2xl bg-pink-50 dark:bg-pink-950/60 border border-pink-200/70 dark:border-pink-800/70 flex items-center justify-center group-hover:scale-105 transition-transform shrink-0">
+                              <GraduationCap className="w-6 h-6 text-pink-600 dark:text-pink-400" />
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <h3 className="font-extrabold text-base text-slate-900 dark:text-slate-100 group-hover:text-pink-600 dark:group-hover:text-pink-400 transition-colors">
+                                  Education & Examination Portals
+                                </h3>
+                                <ArrowUpRight className="w-4 h-4 text-slate-400 group-hover:text-pink-600 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all opacity-0 group-hover:opacity-100" />
+                              </div>
+                              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-2 leading-relaxed">
+                                Unified ecosystem for official examination result scratch cards, test registration PINs, institution registry, admissions, clearance verifier, and school tuition portals.
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
+                            <span className="text-[11px] font-black px-3 py-1 rounded-full bg-pink-50 dark:bg-pink-950/80 text-pink-700 dark:text-pink-300 border border-pink-200/80 dark:border-pink-800/80">
+                              {family.serviceIds.length} Services
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* 7 Services Overview Modules Strip & CTA */}
+                        <div className="pt-3 border-t border-slate-100 dark:border-slate-800/80 flex flex-col md:flex-row md:items-center justify-between gap-3 w-full">
+                          <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
+                            <span className="font-bold text-slate-400 dark:text-slate-500 mr-1">{family.serviceIds.length} Modules:</span>
+                            <span className="px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-medium">Exam Cards & PINs</span>
+                            <span className="px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-medium">Tuition Fees</span>
+                            <span className="px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-medium">Institution Directory</span>
+                            <span className="px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-medium">Admissions Pipeline</span>
+                            <span className="px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-medium">Digital Receipt Verifier</span>
+                            <span className="px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-medium">Scholarships & Aid</span>
+                            <span className="px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-medium">Marketplace</span>
+                          </div>
+
+                          <div className="text-pink-600 dark:text-pink-400 text-xs font-black flex items-center gap-1.5 group-hover:translate-x-1 transition-transform shrink-0">
+                            <span>Open Service</span>
+                            <ChevronRight className="w-4 h-4" />
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  }
+
                   return (
                     <div
                       key={family.id}
+                      id={`family-${family.id}`}
                       className="p-5 sm:p-6 rounded-3xl bg-slate-50/70 dark:bg-slate-900/40 border border-slate-200/80 dark:border-slate-800/80 space-y-4 shadow-sm"
                     >
                       {/* Family Header */}
@@ -589,52 +666,53 @@ export const UtilitiesView: React.FC<UtilitiesViewProps> = ({
                           </p>
                         </div>
                         <span className="text-[11px] font-black px-2.5 py-1 rounded-full bg-white dark:bg-slate-800 text-purple-700 dark:text-purple-300 border border-slate-200 dark:border-slate-700 self-start sm:self-auto shrink-0">
-                          {family.services.length} {family.services.length === 1 ? 'Service' : 'Services'}
+                          {`${family.services.length} ${family.services.length === 1 ? 'Service' : 'Services'}`}
                         </span>
                       </div>
 
-                      {/* Service Grid for this Family */}
+                      {/* Service Grid for other Families */}
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
-                        {family.services.map((cat) => (
-                          <button
-                            key={cat.id}
-                            onClick={() => handleOpenUtility(cat)}
-                            className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 hover:border-purple-500 dark:hover:border-purple-500 transition-all text-left flex flex-col justify-between space-y-3 group shadow-xs hover:shadow-md hover:-translate-y-0.5 active:scale-[0.99]"
-                          >
-                            <div className="flex items-center justify-between">
-                              <div className="w-11 h-11 rounded-2xl bg-purple-50 dark:bg-purple-950/60 border border-purple-200/70 dark:border-purple-800/70 flex items-center justify-center group-hover:scale-105 transition-transform">
-                                {getUtilityIcon(cat.iconName)}
-                              </div>
-                              <span className="text-[10px] font-black px-2.5 py-0.5 rounded-full bg-purple-50 dark:bg-purple-950/80 text-purple-700 dark:text-purple-300 border border-purple-200/80 dark:border-purple-800/80">
-                                {cat.badgeText}
-                              </span>
-                            </div>
-
-                            <div className="space-y-1">
-                              <h4 className="font-extrabold text-sm text-slate-900 dark:text-slate-100 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors flex items-center justify-between">
-                                <span>{cat.name}</span>
-                                <ArrowUpRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-purple-600 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all opacity-0 group-hover:opacity-100" />
-                              </h4>
-                              <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed">
-                                {getCleanDescription(cat.id, cat.description)}
-                              </p>
-                            </div>
-
-                            {/* Providers preview & CTA */}
-                            <div className="pt-2 border-t border-slate-100 dark:border-slate-800/80 space-y-2">
-                              {cat.popularProviders && cat.popularProviders.length > 0 && (
-                                <div className="text-[10px] text-slate-400 dark:text-slate-500 truncate">
-                                  <span className="font-bold text-slate-500 dark:text-slate-400">Providers:</span> {cat.popularProviders.slice(0, 3).join(', ')}...
+                          {family.services.map((cat) => (
+                            <button
+                              key={cat.id}
+                              id={`service-card-${cat.id}`}
+                              onClick={() => handleOpenUtility(cat)}
+                              className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 hover:border-purple-500 dark:hover:border-purple-500 transition-all text-left flex flex-col justify-between space-y-3 group shadow-xs hover:shadow-md hover:-translate-y-0.5 active:scale-[0.99]"
+                            >
+                              <div className="flex items-center justify-between">
+                                <div className="w-11 h-11 rounded-2xl bg-purple-50 dark:bg-purple-950/60 border border-purple-200/70 dark:border-purple-800/70 flex items-center justify-center group-hover:scale-105 transition-transform">
+                                  {getUtilityIcon(cat.iconName)}
                                 </div>
-                              )}
-                              <div className="text-purple-600 dark:text-purple-400 text-xs font-black flex items-center gap-1 group-hover:translate-x-1 transition-transform">
-                                <span>Open Service</span>
-                                <ChevronRight className="w-3.5 h-3.5" />
+                                <span className="text-[10px] font-black px-2.5 py-0.5 rounded-full bg-purple-50 dark:bg-purple-950/80 text-purple-700 dark:text-purple-300 border border-purple-200/80 dark:border-purple-800/80">
+                                  {cat.badgeText}
+                                </span>
                               </div>
-                            </div>
-                          </button>
-                        ))}
-                      </div>
+
+                              <div className="space-y-1">
+                                <h4 className="font-extrabold text-sm text-slate-900 dark:text-slate-100 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors flex items-center justify-between">
+                                  <span>{cat.name}</span>
+                                  <ArrowUpRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-purple-600 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all opacity-0 group-hover:opacity-100" />
+                                </h4>
+                                <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed">
+                                  {getCleanDescription(cat.id, cat.description)}
+                                </p>
+                              </div>
+
+                              {/* Providers preview & CTA */}
+                              <div className="pt-2 border-t border-slate-100 dark:border-slate-800/80 space-y-2">
+                                {cat.popularProviders && cat.popularProviders.length > 0 && (
+                                  <div className="text-[10px] text-slate-400 dark:text-slate-500 truncate">
+                                    <span className="font-bold text-slate-500 dark:text-slate-400">Providers:</span> {cat.popularProviders.slice(0, 3).join(', ')}...
+                                  </div>
+                                )}
+                                <div className="text-purple-600 dark:text-purple-400 text-xs font-black flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+                                  <span>Open Service</span>
+                                  <ChevronRight className="w-3.5 h-3.5" />
+                                </div>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
                     </div>
                   );
                 })}
@@ -701,6 +779,10 @@ export const UtilitiesView: React.FC<UtilitiesViewProps> = ({
           <EducationHub
             initialTab={getEducationTabForService(selectedUtility)}
             onBackToUtilities={handleBackToEcosystem}
+            utilityConfig={utilityConfig}
+            userBalancePi={userBalancePi}
+            buyerUsername={buyerUsername}
+            onTransactionSuccess={onTransactionSuccess}
           />
         </div>
       ) : (
