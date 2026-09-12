@@ -42,10 +42,18 @@ export const InstitutionDirectory: React.FC<InstitutionDirectoryProps> = ({
   const subdivisionInfo = selectedCountry !== 'ALL' ? getSubdivisionInfo(selectedCountry) : null;
   const availableSubdivisions = subdivisionInfo ? subdivisionInfo.subdivisions : [];
 
-  const sortedGlobalCountries = useMemo(() => {
-    return ALL_GLOBAL_COUNTRIES.filter((c) => c.code !== 'NG').slice().sort((a, b) =>
-      a.name.localeCompare(b.name)
-    );
+  const { priorityCountries, remainingGlobalCountries } = useMemo(() => {
+    const priorityCodes = ['GH', 'KE', 'ZA', 'EG', 'RW', 'UG', 'TZ', 'US', 'GB', 'CA'];
+    const priority = priorityCodes
+      .map((code) => ALL_GLOBAL_COUNTRIES.find((c) => c.code === code))
+      .filter((c): c is (typeof ALL_GLOBAL_COUNTRIES)[0] => Boolean(c));
+
+    const remaining = ALL_GLOBAL_COUNTRIES
+      .filter((c) => c.code !== 'NG' && !priorityCodes.includes(c.code))
+      .slice()
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    return { priorityCountries: priority, remainingGlobalCountries: remaining };
   }, []);
 
   useEffect(() => {
@@ -152,7 +160,7 @@ export const InstitutionDirectory: React.FC<InstitutionDirectoryProps> = ({
                 </span>
               ) : (
                 <span className="text-[10px] text-emerald-400 font-medium">
-                  Worldwide Scope
+                  🌍 Global Scope
                 </span>
               )}
             </label>
@@ -167,8 +175,15 @@ export const InstitutionDirectory: React.FC<InstitutionDirectoryProps> = ({
             >
               <option value="ALL">🌍 All Countries (Global)</option>
               <option value="NG">🇳🇬 Nigeria (Primary Deployment Hub)</option>
+              <optgroup label="Supported Regional Hubs">
+                {priorityCountries.map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {getCountryFlag(c.code)} {c.name}
+                  </option>
+                ))}
+              </optgroup>
               <optgroup label="Global Nations & Territories (190+ Countries)">
-                {sortedGlobalCountries.map((c) => (
+                {remainingGlobalCountries.map((c) => (
                   <option key={c.code} value={c.code}>
                     {getCountryFlag(c.code)} {c.name}
                   </option>

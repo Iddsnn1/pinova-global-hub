@@ -30,12 +30,20 @@ export class AuthorizationService {
     const uid = typeof param === 'object' ? param.uid : undefined;
     const roles = typeof param === 'object' ? param.roles : undefined;
     const institutionId = typeof param === 'object' ? param.institutionId : undefined;
+    const isAuthorizedAdmin = typeof param === 'object' && 'isAuthorizedAdmin' in param
+      ? (param as any).isAuthorizedAdmin === true
+      : true;
+
+    // Filter out privileged roles unless the caller is an authorized administrator
+    const safeRoles = isAuthorizedAdmin
+      ? roles
+      : roles?.filter((r) => !['PLATFORM_ADMIN', 'COMPLIANCE_ADMIN', 'COMPLIANCE_OFFICER', 'BURSAR', 'FINANCE_ADMIN', 'INSTITUTION_ADMIN'].includes(r));
 
     let user = this.userRepo.findByUsername(username);
     if (!user) {
-      user = this.userRepo.upsertUser({ username, piUid: uid, roles, institutionId });
-    } else if (roles && roles.length > 0) {
-      user = this.userRepo.upsertUser({ username, piUid: uid || user.piUid, roles, institutionId: institutionId || user.institutionId });
+      user = this.userRepo.upsertUser({ username, piUid: uid, roles: safeRoles, institutionId });
+    } else if (isAuthorizedAdmin && safeRoles && safeRoles.length > 0) {
+      user = this.userRepo.upsertUser({ username, piUid: uid || user.piUid, roles: safeRoles, institutionId: institutionId || user.institutionId });
     }
 
     const token = `pinova_sess_${crypto.randomBytes(24).toString('hex')}`;
@@ -126,6 +134,11 @@ export class AuthorizationService {
 
     // 3. Check Test / Dev Signed Tokens (e.g. "pinova_test_token_<username>")
     if (token.startsWith('pinova_test_token_')) {
+      // In production mode: strictly disallow test tokens
+      if (process.env.NODE_ENV === 'production') {
+        return null;
+      }
+
       const username = token.replace('pinova_test_token_', '').trim();
       if (username) {
         const user = this.userRepo.findByUsername(username) || this.userRepo.upsertUser({ username });

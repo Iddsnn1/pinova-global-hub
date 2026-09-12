@@ -368,9 +368,10 @@ export class EducationRepository {
     }
 
     const timestamp = new Date().toISOString();
-    const paymentId = `PAY-EDU-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-    const receiptNumber = `RCP-EDU-${invoice.institutionId.slice(-3).toUpperCase()}-${Date.now().toString().slice(-6)}`;
-    const verificationRef = `VER-${invoice.institutionId.slice(-3).toUpperCase()}-${Date.now().toString().slice(-4)}`;
+    const entropyHex = crypto.randomBytes(3).toString('hex').toUpperCase();
+    const paymentId = `PAY-EDU-${Date.now()}-${entropyHex}`;
+    const receiptNumber = `RCP-EDU-${invoice.institutionId.slice(-3).toUpperCase()}-${Date.now().toString().slice(-6)}-${entropyHex}`;
+    const verificationRef = `VER-${invoice.institutionId.slice(-3).toUpperCase()}-${Date.now().toString().slice(-4)}-${entropyHex}`;
 
     // 3. Cryptographic Tamper-Proof Canonical SHA-256 Digest
     const auditHash = EducationRepository.computeReceiptDigest({

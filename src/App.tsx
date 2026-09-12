@@ -18,7 +18,8 @@ import {
   Flame,
   ChevronRight,
   Store,
-  AlertTriangle
+  AlertTriangle,
+  ArrowLeft
 } from 'lucide-react';
 
 import { Product, Order, OrderItem, Vendor, Review, Coupon, Notification, Message, PiUser, ProductCategory, PstpOrderStatus, UserRole } from './types';
@@ -48,6 +49,7 @@ import { EnterpriseSecurityView } from './components/views/EnterpriseSecurityVie
 import { DeveloperPlatformView } from './components/views/DeveloperPlatformView';
 import { FutureServicesView } from './components/views/FutureServicesView';
 import { PiDiagnosticView } from './components/PiDiagnosticView';
+import { EducationHub, EducationTab } from './components/education/EducationHub';
 
 import { UniversalSearchModal } from './components/UniversalSearchModal';
 import { PiBrowserBanner } from './components/PiBrowserBanner';
@@ -79,6 +81,7 @@ function MainAppContent() {
   const [activeSection, setActiveSection] = useState<MainSection>('home');
   const [selectedMarketplaceCategory, setSelectedMarketplaceCategory] = useState<MarketplaceCategory>('all');
   const [selectedUtilityCategory, setSelectedUtilityCategory] = useState<string>('all');
+  const [selectedEducationTab, setSelectedEducationTab] = useState<EducationTab>('directory');
   
   // Back navigation stack & History tracking
   const [navigationStack, setNavigationStack] = useState<{ section: MainSection; category: MarketplaceCategory }[]>([
@@ -386,6 +389,10 @@ function MainAppContent() {
       setSelectedMarketplaceCategory(newCategory as MarketplaceCategory);
     } else if (targetSection === 'utilities') {
       setSelectedUtilityCategory((newCategory && newCategory !== 'all' ? newCategory : 'all') as string);
+    } else if (targetSection === 'education') {
+      if (newCategory && newCategory !== 'all') {
+        setSelectedEducationTab(newCategory as EducationTab);
+      }
     }
     
     // Push onto navigation history stack if distinct
@@ -709,6 +716,25 @@ function MainAppContent() {
         }
         return items;
       }
+      case 'education': {
+        const tab = selectedEducationTab || 'directory';
+        const tabLabels: Record<string, string> = {
+          directory: 'Global Directory',
+          fees: 'Tuition & Fees',
+          exam_cards: 'Exam Cards & PINs',
+          admissions: 'Admissions Pipeline',
+          verifier: 'Receipt Verifier',
+          scholarships: 'Scholarships & Aid',
+          marketplace: 'Education Supplies',
+          children: 'My Children',
+          admin: 'Institution Portal'
+        };
+        return [
+          { label: 'Global Utilities', section: 'utilities', category: 'all' as any },
+          { label: 'Education & Examination Portals', section: 'education', category: tab as any },
+          ...(tab !== 'directory' ? [{ label: tabLabels[tab] || tab, section: 'education' as MainSection, category: tab as any }] : [])
+        ];
+      }
       case 'services':
         return [{ label: 'Services', section: 'services' }];
       case 'ai_search': {
@@ -853,6 +879,7 @@ function MainAppContent() {
             onQuickView={(p) => setQuickViewProduct(p)}
             onOpenAiSearch={() => handleNavigateSection('ai_search')}
             onOpenUniversalSearch={handleOpenUniversalSearch}
+            onOpenSellerStudio={() => handleNavigateSection('seller_studio' as any)}
             recentlyViewedProducts={recentlyViewedProducts}
           />
         )}
@@ -987,6 +1014,103 @@ function MainAppContent() {
           />
         )}
 
+        {activeSection === 'education' && (
+          <div className="max-w-7xl mx-auto px-3 sm:px-6 space-y-4 pb-16">
+            <button
+              onClick={() => handleNavigateSection('utilities')}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:text-pink-600 dark:hover:text-pink-400 text-xs font-bold transition-all shadow-sm group"
+            >
+              <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
+              <span>Back to Global Services Ecosystem</span>
+            </button>
+            <EducationHub
+              initialTab={selectedEducationTab}
+              onBackToUtilities={() => handleNavigateSection('utilities')}
+              utilityConfig={utilityConfig}
+              userBalancePi={userBalancePi}
+              buyerUsername={user.username}
+              onTransactionSuccess={(receipt) => {
+                const transactionId = receipt.transactionId || `EDU-TX-${Date.now()}`;
+                const orderId = transactionId.startsWith('ORD-') ? transactionId : `ORD-${transactionId}`;
+                const providerTitle = receipt.providerName || receipt.institutionName || 'Education Portal';
+                const pkgTitle = receipt.packageName ? ` (${receipt.packageName})` : '';
+
+                const newEduOrder: Order = {
+                  id: orderId,
+                  buyerUsername: user.username,
+                  items: [
+                    {
+                      product: {
+                        id: `prod-edu-${Date.now().toString().slice(-4)}`,
+                        title: `${providerTitle}${pkgTitle}`,
+                        description: `Education service fulfillment for ${receipt.studentMatricNumber || receipt.candidateId || user.username}. Category: Education & Examination.`,
+                        pricePi: receipt.amountPi || receipt.piAmount || 0,
+                        category: 'utility',
+                        subcategory: 'education',
+                        images: ['https://images.unsplash.com/photo-1523050854058-8df90110c9f1?auto=format&fit=crop&w=800&q=80'],
+                        stock: 999,
+                        rating: 5.0,
+                        reviewsCount: 1,
+                        sellerId: 'system-education-gateway',
+                        sellerName: providerTitle,
+                        sellerVerified: true,
+                        features: ['Verified Digital Receipt', 'Zero-Trust Verification Enabled'],
+                        shippingWeightKg: 0,
+                        tags: ['education', 'academic', providerTitle]
+                      },
+                      quantity: 1,
+                      customDetails: {
+                        accountNumber: receipt.studentMatricNumber || receipt.candidateId || user.username
+                      }
+                    }
+                  ],
+                  totalPi: receipt.amountPi || receipt.piAmount || 0,
+                  escrowStatus: 'released',
+                  pstpStatus: 'Completed',
+                  piPaymentId: receipt.piPaymentId || `pi_pay_edu_${Date.now()}`,
+                  piTxid: receipt.piTxid || `0x${Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('')}`,
+                  trackingNumber: receipt.receiptNumber || receipt.tokenOrCode || `EDU-REF-${transactionId}`,
+                  carrier: 'Digital Academic Fulfillment',
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString(),
+                  serverVerified: true,
+                  timeline: [
+                    {
+                      status: 'Completed',
+                      timestamp: new Date().toISOString(),
+                      actor: providerTitle,
+                      actorRole: 'seller',
+                      note: `Service fulfilled. Official receipt: ${receipt.receiptNumber || 'Recorded'}`
+                    }
+                  ]
+                };
+
+                setOrders((prev) => {
+                  const updated = [newEduOrder, ...prev];
+                  try {
+                    localStorage.setItem('pinova_user_orders', JSON.stringify(updated));
+                  } catch (e) {
+                    console.warn('Failed to persist orders:', e);
+                  }
+                  return updated;
+                });
+                setUserBalancePi((prev) => Math.max(0, prev - (receipt.amountPi || receipt.piAmount || 0)));
+                setNotifications((prev) => [
+                  {
+                    id: `notif-${Date.now()}`,
+                    title: 'Education Transaction Completed',
+                    message: `Payment of ${formatPiAmount(receipt.amountPi || receipt.piAmount || 0)} π recorded for ${providerTitle}.`,
+                    type: 'order_protection',
+                    timestamp: new Date().toISOString(),
+                    read: false
+                  },
+                  ...prev
+                ]);
+              }}
+            />
+          </div>
+        )}
+
         {activeSection === 'services' && (
           <ServicesView userBalancePi={userBalancePi} />
         )}
@@ -1076,7 +1200,7 @@ function MainAppContent() {
             orders={orders}
             coupons={coupons}
             vendorProfile={
-              vendors.find((v) => v.storeName.toLowerCase() === user.username.toLowerCase()) ||
+              vendors.find((v) => (v.storeName || '').toLowerCase() === (user?.username || '').toLowerCase()) ||
               vendors[0] || {
                 id: 'vendor-current',
                 sellerUsername: user.username,

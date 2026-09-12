@@ -52,7 +52,7 @@ export const CartView: React.FC<CartViewProps> = ({
             Your PiNova Cart is Empty
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto">
-            Browse our global marketplace catalog across 13 major categories and 15 utility services to add items to your cart.
+            Browse our global marketplace catalog across 18 major categories and verified utility services to add items to your cart.
           </p>
         </div>
         <button

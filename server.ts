@@ -378,12 +378,16 @@ app.get('/validation-key.txt', (req, res) => {
 app.post(['/api/auth/session', '/api/v1/auth/session'], authRateLimiter, async (req, res) => {
   try {
     const { accessToken, username, uid, roles } = req.body;
+    const adminAuth = await checkAdminAuth(req);
+    const isAuthorizedAdmin = adminAuth.authenticated && adminAuth.authorized;
+
     const session = await authService.createSession({
       accessToken,
       username: username || 'pioneer_user',
       uid: uid || `pi-uid-${Date.now()}`,
-      roles
-    });
+      roles,
+      isAuthorizedAdmin
+    } as any);
 
     res.json({
       success: true,
@@ -508,9 +512,48 @@ app.post(['/api/pstp/audit-logs', '/api/v1/pstp/audit-logs'], authenticate, asyn
 });
 
 // 2. Disputes API (Phase 2 Remediation)
-app.get(['/api/pstp/disputes', '/api/v1/pstp/disputes'], (req, res) => {
-  const disputes = pstpDisputeRepo.getAll();
-  res.json({ success: true, disputes });
+app.get(['/api/pstp/disputes', '/api/v1/pstp/disputes'], authenticate, async (req: AuthenticatedRequest, res) => {
+  const adminAuth = await checkAdminAuth(req);
+  const isAdmin = adminAuth.authenticated && adminAuth.authorized;
+  const currentUser = req.user?.username;
+
+  let disputes = pstpDisputeRepo.getAll();
+  if (isProduction && !isAdmin) {
+    if (!currentUser) {
+      res.status(401).json({ success: false, error: 'UNAUTHORIZED', message: 'Authentication required to view disputes.' });
+      return;
+    }
+    disputes = disputes.filter(
+      (d) =>
+        d.buyerUsername.toLowerCase() === currentUser.toLowerCase() ||
+        d.sellerUsername.toLowerCase() === currentUser.toLowerCase()
+    );
+  }
+  res.json({ success: true, count: disputes.length, disputes });
+});
+
+app.get(['/api/pstp/disputes/:id', '/api/v1/pstp/disputes/:id'], authenticate, async (req: AuthenticatedRequest, res) => {
+  const { id } = req.params;
+  const dispute = pstpDisputeRepo.findById(id);
+  if (!dispute) {
+    res.status(404).json({ success: false, error: 'DISPUTE_NOT_FOUND', message: 'Dispute not found' });
+    return;
+  }
+
+  const adminAuth = await checkAdminAuth(req);
+  const isAdmin = adminAuth.authenticated && adminAuth.authorized;
+  const currentUser = req.user?.username;
+  const isParty = currentUser && (
+    dispute.buyerUsername.toLowerCase() === currentUser.toLowerCase() ||
+    dispute.sellerUsername.toLowerCase() === currentUser.toLowerCase()
+  );
+
+  if (isProduction && !isAdmin && !isParty) {
+    res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Access denied: You are not authorized to view this dispute.' });
+    return;
+  }
+
+  res.json({ success: true, dispute });
 });
 
 app.post(['/api/pstp/disputes', '/api/v1/pstp/disputes'], disputeRateLimiter, authenticate, async (req: AuthenticatedRequest, res) => {
@@ -674,16 +717,29 @@ app.post(['/api/pstp/disputes/:id/resolve', '/api/v1/pstp/disputes/:id/resolve']
 });
 
 // 3. Vendor Application System Endpoints
-app.get(['/api/vendor/application/:username', '/api/v1/vendor/application/:username'], (req, res) => {
+app.get(['/api/vendor/application/:username', '/api/v1/vendor/application/:username'], authenticate, async (req: AuthenticatedRequest, res) => {
   const { username } = req.params;
+  const adminAuth = await checkAdminAuth(req);
+  const isAdmin = adminAuth.authenticated && adminAuth.authorized;
+  const isOwner = req.user?.username && req.user.username.toLowerCase() === username.toLowerCase();
+
+  if (isProduction && !isAdmin && !isOwner) {
+    res.status(403).json({
+      success: false,
+      error: 'FORBIDDEN',
+      message: 'Access denied: You do not have permission to inspect this vendor application.'
+    });
+    return;
+  }
+
   const application = vendorApplicationRepo.findByUsername(username);
   res.json({ success: true, application: application || null });
 });
 
-app.post(['/api/vendor/apply', '/api/v1/vendor/apply'], (req, res) => {
+app.post(['/api/vendor/apply', '/api/v1/vendor/apply'], authenticate, (req: AuthenticatedRequest, res) => {
   try {
+    const effectiveUsername = req.user?.username || req.body?.pioneerUsername;
     const {
-      pioneerUsername,
       pioneerUid,
       storeName,
       sellerType,
@@ -707,7 +763,7 @@ app.post(['/api/vendor/apply', '/api/v1/vendor/apply'], (req, res) => {
       pstpAgreementAccepted
     } = req.body || {};
 
-    if (!pioneerUsername || !storeName || !contactEmail) {
+    if (!effectiveUsername || !storeName || !contactEmail) {
       res.status(400).json({
         success: false,
         error: 'MISSING_REQUIRED_FIELDS',
@@ -716,13 +772,13 @@ app.post(['/api/vendor/apply', '/api/v1/vendor/apply'], (req, res) => {
       return;
     }
 
-    const existing = vendorApplicationRepo.findByUsername(pioneerUsername);
+    const existing = vendorApplicationRepo.findByUsername(effectiveUsername);
     const appId = existing?.id || `VAPP-${(countryCode || 'GL').toUpperCase()}-${Date.now().toString().slice(-6)}`;
 
     const applicationRecord = {
       id: appId,
-      pioneerUsername,
-      pioneerUid: pioneerUid || `UID_${pioneerUsername.toUpperCase()}`,
+      pioneerUsername: effectiveUsername,
+      pioneerUid: pioneerUid || `UID_${effectiveUsername.toUpperCase()}`,
       storeName,
       sellerType: (sellerType as any) || 'individual',
       country: country || 'Global',
@@ -755,7 +811,7 @@ app.post(['/api/vendor/apply', '/api/v1/vendor/apply'], (req, res) => {
 
     pstpAuditRepo.appendLog({
       orderId: appId,
-      actor: pioneerUsername,
+      actor: effectiveUsername,
       actorRole: 'seller',
       action: 'VENDOR_APPLICATION_SUBMITTED',
       details: `Vendor application submitted for store "${storeName}". Type: ${sellerType || 'individual'}`,
@@ -1089,6 +1145,19 @@ const handleApprovePayment = async (req: express.Request, res: express.Response)
 
     console.log(`[Pi Approval Started] Payment ID: ${cleanPaymentId} | Endpoint: ${req.path} | Time: ${timestamp} | Network: ${selectedNetwork} | HasKey: ${hasKey}`);
 
+    // Idempotency: Return existing approval if already processed
+    const existingApproval = paymentLedgerRepo.findByPaymentId(cleanPaymentId);
+    if (existingApproval && (existingApproval.status === 'APPROVED' || existingApproval.status === 'COMPLETED')) {
+      console.log(`[Pi Approval Idempotent Replay] Payment ID: ${cleanPaymentId} | Status: ${existingApproval.status}`);
+      res.json({
+        success: true,
+        paymentId: cleanPaymentId,
+        status: existingApproval.status.toLowerCase(),
+        message: 'Payment already approved (idempotent replay)'
+      });
+      return;
+    }
+
     // In production: Strictly enforce valid API key & do not allow dev payment bypass
     if (isProduction) {
       if (!hasKey) {
@@ -1210,6 +1279,20 @@ const handleCompletePayment = async (req: express.Request, res: express.Response
     const selectedNetwork = isDevPayment ? 'SANDBOX_DEV' : 'PI_PLATFORM';
 
     console.log(`[Pi Completion Started] Payment ID: ${cleanPaymentId} | Endpoint: ${req.path} | Time: ${timestamp} | Network: ${selectedNetwork}`);
+
+    // Idempotency: Return existing completion if already processed
+    const existingCompletion = paymentLedgerRepo.findByPaymentId(cleanPaymentId);
+    if (existingCompletion && existingCompletion.status === 'COMPLETED') {
+      console.log(`[Pi Completion Idempotent Replay] Payment ID: ${cleanPaymentId} | Txid: ${cleanTxid}`);
+      res.json({
+        success: true,
+        paymentId: cleanPaymentId,
+        txid: existingCompletion.txid || cleanTxid,
+        status: 'completed',
+        message: 'Payment already completed (idempotent replay)'
+      });
+      return;
+    }
 
     // In production: Strictly enforce valid API key & do not allow dev payment bypass
     if (isProduction) {
@@ -1413,15 +1496,15 @@ const handleGetPaymentConfig = (req: express.Request, res: express.Response) => 
   });
 };
 
-app.post(['/api/v2/payments/approve', '/api/pi-payment/approve', '/api/v1/pi-payment/approve'], handleApprovePayment);
-app.post(['/api/v2/payments/complete', '/api/pi-payment/complete', '/api/v1/pi-payment/complete'], handleCompletePayment);
-app.post(['/api/v2/payments/incomplete', '/api/pi-payment/incomplete', '/api/v1/pi-payment/incomplete'], handleIncompletePayment);
-app.post(['/api/v2/payments/cancel', '/api/pi-payment/cancel', '/api/v1/pi-payment/cancel'], handleCancelPayment);
-app.get(['/api/v2/payments/verify/:paymentId', '/api/pi-payment/verify/:paymentId', '/api/v2/pi/payments/verify', '/api/v2/payments/verify', '/api/pi-payment/verify'], handleVerifyPayment);
+app.post(['/api/v2/payments/approve', '/api/pi-payment/approve', '/api/v1/pi-payment/approve'], paymentRateLimiter, handleApprovePayment);
+app.post(['/api/v2/payments/complete', '/api/pi-payment/complete', '/api/v1/pi-payment/complete'], paymentRateLimiter, handleCompletePayment);
+app.post(['/api/v2/payments/incomplete', '/api/pi-payment/incomplete', '/api/v1/pi-payment/incomplete'], paymentRateLimiter, handleIncompletePayment);
+app.post(['/api/v2/payments/cancel', '/api/pi-payment/cancel', '/api/v1/pi-payment/cancel'], paymentRateLimiter, handleCancelPayment);
+app.get(['/api/v2/payments/verify/:paymentId', '/api/pi-payment/verify/:paymentId', '/api/v2/pi/payments/verify', '/api/v2/payments/verify', '/api/pi-payment/verify'], paymentRateLimiter, handleVerifyPayment);
 app.get(['/api/v2/payments/config', '/api/pi-payment/config', '/api/v2/pi/config', '/api/v2/pi/diagnostic', '/api/pi/diagnostic'], handleGetPaymentConfig);
 
 // Server-side Utility Fulfillment & Verification Endpoint
-app.post('/api/v2/utility/fulfill', async (req, res) => {
+app.post('/api/v2/utility/fulfill', paymentRateLimiter, async (req, res) => {
   const { paymentId, txid, category, country, countryCode, providerId, accountNumber, fiatAmount, piAmount, packageName, idempotencyKey } = req.body;
 
   if (!paymentId) {
@@ -1981,11 +2064,38 @@ app.post('/api/education/invoices/pay', paymentRateLimiter, authenticate, async 
       return;
     }
 
-    // Pi Network server verification: Check if paymentId was completed on ledger
+    // Enforce invoice ownership in production and for authenticated callers
+    const currentUser = req.user?.username;
+    const userRoles = req.user?.roles || [];
+    const isPlatformAdmin = userRoles.includes('PLATFORM_ADMIN') || userRoles.includes('BURSAR') || userRoles.includes('FINANCE_ADMIN');
+    const isInstitutionStaff = Boolean(req.user?.institutionId && req.user.institutionId === invoice.institutionId);
+    const isInvoiceOwner = Boolean(
+      currentUser && (
+        (invoice.guardianId && (invoice.guardianId.toLowerCase() === currentUser.toLowerCase() || req.user?.guardianId?.toLowerCase() === invoice.guardianId.toLowerCase())) ||
+        (invoice.studentId && (invoice.studentId.toLowerCase() === currentUser.toLowerCase() || (req.user as any)?.studentId?.toLowerCase() === invoice.studentId.toLowerCase())) ||
+        (invoice.studentName && invoice.studentName.toLowerCase() === currentUser.toLowerCase()) ||
+        (req.body.payerUsername && req.body.payerUsername.toLowerCase() === currentUser.toLowerCase())
+      )
+    );
+
+    if (isProduction && !isPlatformAdmin && !isInstitutionStaff && !isInvoiceOwner) {
+      res.status(403).json({
+        success: false,
+        error: 'FORBIDDEN',
+        message: 'Access denied: You are not authorized to settle or pay this invoice.'
+      });
+      return;
+    }
+
+    // Pi Network authoritative server verification
     if (piPaymentId) {
-      const ledgerEntry = paymentLedgerRepo.findByPaymentId(piPaymentId);
-      if (ledgerEntry && ledgerEntry.status === 'FAILED') {
-        res.status(400).json({ success: false, error: 'PI_PAYMENT_FAILED_ON_LEDGER', message: 'The referenced Pi payment failed verification.' });
+      const verification = await verifyPiPaymentAuthoritative(piPaymentId);
+      if (!verification.verified) {
+        res.status(400).json({
+          success: false,
+          error: 'PI_PAYMENT_UNVERIFIED',
+          message: verification.message || 'The referenced Pi payment could not be verified on the authoritative ledger.'
+        });
         return;
       }
     }
@@ -2148,13 +2258,27 @@ app.post('/api/education/admissions/:id/status', authenticate, requireRole(['PLA
   }
 });
 
-app.post('/api/education/admissions/:id/offer/accept', (req, res) => {
+app.post('/api/education/admissions/:id/offer/accept', authenticate, (req: AuthenticatedRequest, res) => {
   try {
-    const updated = educationRepo.acceptAdmissionOffer(req.params.id);
-    if (!updated) {
+    const admission = educationRepo.getAdmissionById(req.params.id);
+    if (!admission) {
       res.status(404).json({ success: false, error: 'APPLICATION_NOT_FOUND' });
       return;
     }
+
+    const currentUser = req.user?.username;
+    const isOwner = currentUser && admission.applicantEmail && (
+      admission.applicantEmail.toLowerCase().includes(currentUser.toLowerCase()) ||
+      admission.applicantFullName.toLowerCase().includes(currentUser.toLowerCase())
+    );
+    const isAdmin = req.user?.roles.some((r) => r === 'PLATFORM_ADMIN' || r === 'INSTITUTION_ADMIN');
+
+    if (isProduction && !isAdmin && !isOwner) {
+      res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Access denied: You are not authorized to accept this offer.' });
+      return;
+    }
+
+    const updated = educationRepo.acceptAdmissionOffer(req.params.id);
     res.json({ success: true, message: 'Admission offer accepted', application: updated });
   } catch (err: any) {
     res.status(500).json({ success: false, error: 'OFFER_ACCEPT_FAILED', message: err.message });
@@ -3964,6 +4088,15 @@ app.post('/api/v1/flight/revalidate', flightRateLimiter(60), handleFlightRevalid
 app.post('/api/flight/book', flightRateLimiter(10), handleFlightBook);
 app.post('/api/v1/flight/book', flightRateLimiter(10), handleFlightBook);
 
+// Process error handlers for production resilience
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[Unhandled Rejection at Promise]:', reason);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('[Uncaught Exception]:', err);
+});
+
 // Catch-all 404 Handler for ALL /api endpoints - Guarantees JSON response, never HTML
 app.use('/api', (req, res) => {
   res.setHeader('Content-Type', 'application/json');
@@ -3976,11 +4109,12 @@ app.use('/api', (req, res) => {
 
 // Global Error Handling Middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  console.error('[Global API Error Handler]:', err);
+  console.error('[Global API Error Handler]:', err.message || err);
   res.setHeader('Content-Type', 'application/json');
+  const safeMessage = isProduction ? 'Internal Server Error' : (err.message || 'Internal Server Error');
   res.status(err.status || 500).json({
     success: false,
-    error: err.message || 'Internal Server Error',
+    error: safeMessage,
     path: req.path
   });
 });

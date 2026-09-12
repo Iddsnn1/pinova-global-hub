@@ -148,9 +148,9 @@ export const EducationHub: React.FC<EducationHubProps> = ({
             </div>
 
             <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800">
-              <span className="text-slate-400 block text-[11px]">Primary Deployment Hub</span>
-              <span className="text-white font-bold text-sm">🇳🇬 Nigeria</span>
-              <span className="text-[10px] text-amber-400 block mt-0.5">Global 190+ Countries Enabled</span>
+              <span className="text-slate-400 block text-[11px]">Coverage Scope</span>
+              <span className="text-white font-bold text-sm">🌍 Global (190+ Nations)</span>
+              <span className="text-[10px] text-amber-400 block mt-0.5">🇳🇬 Nigeria: Primary Deployment Hub</span>
             </div>
 
             <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800">

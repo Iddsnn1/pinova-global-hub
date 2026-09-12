@@ -141,7 +141,16 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
   const [selectedState, setSelectedState] = useState<string>(initialState || '');
   const [countrySearchQuery, setCountrySearchQuery] = useState<string>('');
 
-  // Synchronize state when initialCountryCode or initialState props change
+  // Synchronize state when defaultCategory, initialCountryCode or initialState props change
+  useEffect(() => {
+    if (defaultCategory) {
+      setSelectedCategory(defaultCategory);
+      setSelectedProvider(null);
+      setSelectedPackage(null);
+      setAccountNumber('');
+    }
+  }, [defaultCategory]);
+
   useEffect(() => {
     if (initialCountryCode) {
       setSelectedCountryCode(initialCountryCode);

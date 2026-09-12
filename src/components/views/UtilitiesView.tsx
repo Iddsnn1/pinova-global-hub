@@ -19,6 +19,7 @@ import {
   ShoppingBag, 
   ArrowLeft, 
   CheckCircle2, 
+  Check,
   Copy, 
   ChevronRight,
   Search,
@@ -101,7 +102,7 @@ const getEducationTabForService = (utilityId: string | null): EducationTab => {
   }
 };
 
-// Logical Service Families for the 18 Global Utilities
+// Logical Service Families for the Global Utilities Ecosystem
 interface UtilityFamily {
   id: string;
   name: string;
@@ -221,6 +222,7 @@ export const UtilitiesView: React.FC<UtilitiesViewProps> = ({
     token: string;
     timestamp: string;
   } | null>(null);
+  const [copiedToken, setCopiedToken] = useState(false);
 
   // Sync prop changes
   React.useEffect(() => {
@@ -278,7 +280,7 @@ export const UtilitiesView: React.FC<UtilitiesViewProps> = ({
   };
 
   // Modernized Fintech Card Clean Descriptions
-  const getCleanDescription = (catId: string, defaultDesc: string): string => {
+  const getCleanDescription = (catId: string, defaultDesc?: string): string => {
     switch (catId) {
       case 'airtime': return 'Instant mobile talktime credit recharge across 140+ global telecom operators.';
       case 'mobile_data': return 'High-speed 4G & 5G internet data bundles directly credited to any line.';
@@ -303,7 +305,7 @@ export const UtilitiesView: React.FC<UtilitiesViewProps> = ({
       case 'vouchers': return 'Purchase digital retail, supermarket and dining discount vouchers.';
       case 'betting': return 'Instant wallet deposit to licensed sportsbooks and gaming accounts.';
       case 'ecommerce': return 'Load store credit for online shopping and merchant checkouts.';
-      default: return defaultDesc;
+      default: return defaultDesc || '';
     }
   };
 
@@ -319,10 +321,10 @@ export const UtilitiesView: React.FC<UtilitiesViewProps> = ({
     if (!serviceSearchQuery.trim()) return UTILITY_CATEGORIES;
     const q = serviceSearchQuery.toLowerCase().trim();
     return UTILITY_CATEGORIES.filter(cat => 
-      cat.name.toLowerCase().includes(q) ||
-      cat.description.toLowerCase().includes(q) ||
+      (cat.name || '').toLowerCase().includes(q) ||
+      (cat.description || '').toLowerCase().includes(q) ||
       getCleanDescription(cat.id, cat.description).toLowerCase().includes(q) ||
-      cat.popularProviders.some(p => p.toLowerCase().includes(q))
+      (Array.isArray(cat.popularProviders) && cat.popularProviders.some(p => typeof p === 'string' && p.toLowerCase().includes(q)))
     );
   }, [serviceSearchQuery]);
 
@@ -334,9 +336,9 @@ export const UtilitiesView: React.FC<UtilitiesViewProps> = ({
 
     return UTILITY_FAMILIES.map(family => {
       const familyNameMatch = searchActive && (
-        family.name.toLowerCase().includes(q) ||
-        family.shortName.toLowerCase().includes(q) ||
-        family.description.toLowerCase().includes(q)
+        (family.name || '').toLowerCase().includes(q) ||
+        (family.shortName || '').toLowerCase().includes(q) ||
+        (family.description || '').toLowerCase().includes(q)
       );
 
       const services = family.serviceIds
@@ -384,7 +386,7 @@ export const UtilitiesView: React.FC<UtilitiesViewProps> = ({
                     <Globe2 className="w-3.5 h-3.5 text-amber-400" />
                     <span>GLOBAL UTILITIES ECOSYSTEM</span>
                     <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-                    <span className="text-[11px] font-bold text-purple-200 lowercase">18 verified services</span>
+                    <span className="text-[11px] font-bold text-purple-200 lowercase">{UTILITY_CATEGORIES.length} verified services</span>
                   </div>
                   
                   <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-white">
@@ -610,7 +612,7 @@ export const UtilitiesView: React.FC<UtilitiesViewProps> = ({
                                 <ArrowUpRight className="w-4 h-4 text-slate-400 group-hover:text-pink-600 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all opacity-0 group-hover:opacity-100" />
                               </div>
                               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-2 leading-relaxed">
-                                Unified ecosystem for official examination result scratch cards, test registration PINs, institution registry, admissions, clearance verifier, and school tuition portals.
+                                {family.description}
                               </p>
                             </div>
                           </div>
@@ -626,13 +628,29 @@ export const UtilitiesView: React.FC<UtilitiesViewProps> = ({
                         <div className="pt-3 border-t border-slate-100 dark:border-slate-800/80 flex flex-col md:flex-row md:items-center justify-between gap-3 w-full">
                           <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
                             <span className="font-bold text-slate-400 dark:text-slate-500 mr-1">{family.serviceIds.length} Modules:</span>
-                            <span className="px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-medium">Exam Cards & PINs</span>
-                            <span className="px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-medium">Tuition Fees</span>
-                            <span className="px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-medium">Institution Directory</span>
-                            <span className="px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-medium">Admissions Pipeline</span>
-                            <span className="px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-medium">Digital Receipt Verifier</span>
-                            <span className="px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-medium">Scholarships & Aid</span>
-                            <span className="px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-medium">Marketplace</span>
+                            {[
+                              { id: 'exam_cards', label: 'Exam Cards & PINs' },
+                              { id: 'education_payments', label: 'Tuition Fees' },
+                              { id: 'institution_registry', label: 'Institution Directory' },
+                              { id: 'admissions_portal', label: 'Admissions Pipeline' },
+                              { id: 'receipt_verifier', label: 'Digital Receipt Verifier' },
+                              { id: 'scholarships_aid', label: 'Scholarships & Aid' },
+                              { id: 'education_marketplace', label: 'Marketplace' }
+                            ].map((mod) => (
+                              <span
+                                key={mod.id}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedUtility(mod.id as any);
+                                  if (onSelectCategory) {
+                                    onSelectCategory(mod.id);
+                                  }
+                                }}
+                                className="px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-medium hover:bg-purple-100 dark:hover:bg-purple-950/60 hover:text-purple-600 dark:hover:text-purple-300 cursor-pointer transition-colors"
+                              >
+                                {mod.label}
+                              </span>
+                            ))}
                           </div>
 
                           <div className="text-pink-600 dark:text-pink-400 text-xs font-black flex items-center gap-1.5 group-hover:translate-x-1 transition-transform shrink-0">
@@ -835,13 +853,16 @@ export const UtilitiesView: React.FC<UtilitiesViewProps> = ({
                 <div className="flex gap-2">
                   <button
                     onClick={() => {
-                      navigator.clipboard.writeText(purchaseReceipt.token);
-                      alert('Token copied to clipboard!');
+                      if (navigator?.clipboard?.writeText) {
+                        navigator.clipboard.writeText(purchaseReceipt.token).catch(() => {});
+                      }
+                      setCopiedToken(true);
+                      setTimeout(() => setCopiedToken(false), 2500);
                     }}
-                    className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl flex items-center gap-1.5"
+                    className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl flex items-center gap-1.5 transition-all text-xs"
                   >
-                    <Copy className="w-3.5 h-3.5" />
-                    Copy Code
+                    {copiedToken ? <Check className="w-3.5 h-3.5 text-emerald-300" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedToken ? 'Token Copied!' : 'Copy Code'}</span>
                   </button>
                   <button
                     onClick={() => setPurchaseReceipt(null)}
@@ -854,6 +875,7 @@ export const UtilitiesView: React.FC<UtilitiesViewProps> = ({
             ) : (
               /* FLEXIBLE UTILITY MODAL IN EMBEDDED MODE */
               <FlexibleUtilityModal
+                key={selectedUtility || 'utility'}
                 isEmbedded={true}
                 defaultCategory={getMappedCategoryType(selectedUtility)}
                 initialCountryCode="GLOBAL"

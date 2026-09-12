@@ -63,6 +63,7 @@ interface MarketplaceViewProps {
   onQuickView: (product: Product) => void;
   onOpenAiSearch: () => void;
   onOpenUniversalSearch?: (query?: string) => void;
+  onOpenSellerStudio?: () => void;
   recentlyViewedProducts: Product[];
 }
 
@@ -80,6 +81,7 @@ export const MarketplaceView: React.FC<MarketplaceViewProps> = ({
   onQuickView,
   onOpenAiSearch,
   onOpenUniversalSearch,
+  onOpenSellerStudio,
   recentlyViewedProducts
 }) => {
   // Search & Type state for primary discovery
@@ -342,6 +344,15 @@ export const MarketplaceView: React.FC<MarketplaceViewProps> = ({
                   <Lock className="w-4 h-4 text-emerald-400" />
                   <span>PSTP Escrow Protection</span>
                 </div>
+                {onOpenSellerStudio && (
+                  <button
+                    onClick={onOpenSellerStudio}
+                    className="sm:ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-900/60 hover:bg-purple-800/80 border border-purple-500/40 text-purple-200 transition-colors cursor-pointer"
+                  >
+                    <Store className="w-4 h-4 text-purple-300" />
+                    <span>Seller Studio</span>
+                  </button>
+                )}
               </div>
 
               {/* 2. PROMINENT UNIVERSAL MARKETPLACE SEARCH FIELD */}
@@ -633,9 +644,11 @@ export const MarketplaceView: React.FC<MarketplaceViewProps> = ({
                 {/* Visual Category Cards Grid */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                   {(showAllTaxonomy ? MARKETPLACE_CATEGORIES : MARKETPLACE_CATEGORIES.slice(0, 8)).map((cat) => {
+                    const catIdLower = (cat.id || '').toLowerCase();
+                    const catNameLower = (cat.name || '').toLowerCase();
                     const count = products.filter((p) => {
-                      const tagMatch = Array.isArray(p.tags) && p.tags.some(t => typeof t === 'string' && t.toLowerCase().includes(cat.id.toLowerCase()));
-                      const subMatch = (p.subcategory || '').toLowerCase().includes(cat.name.toLowerCase());
+                      const tagMatch = Boolean(catIdLower) && Array.isArray(p.tags) && p.tags.some(t => typeof t === 'string' && t.toLowerCase().includes(catIdLower));
+                      const subMatch = Boolean(catNameLower) && (p.subcategory || '').toLowerCase().includes(catNameLower);
                       return tagMatch || subMatch;
                     }).length;
 

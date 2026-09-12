@@ -167,10 +167,10 @@ export const BuyerOrderHub: React.FC<BuyerOrderHubProps> = ({
     if (!term) return;
 
     const matched = orders.find(o => 
-      o.id.toLowerCase() === term ||
-      (o.trackingNumber || '').toLowerCase() === term ||
-      (o.piPaymentId || '').toLowerCase() === term ||
-      (o.piTxid || '').toLowerCase() === term
+      (o?.id || '').toLowerCase() === term ||
+      (o?.trackingNumber || '').toLowerCase() === term ||
+      (o?.piPaymentId || '').toLowerCase() === term ||
+      (o?.piTxid || '').toLowerCase() === term
     );
 
     if (matched) {
