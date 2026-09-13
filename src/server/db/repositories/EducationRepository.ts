@@ -19,6 +19,7 @@ import {
   SEED_CHILDREN_SUMMARIES,
   SEED_INVOICES,
   SEED_RECEIPTS,
+  SEED_PAYMENTS,
   SEED_ADMISSION_APPLICATIONS,
   SEED_SCHOLARSHIPS,
   SEED_PARENT_USER_ID
@@ -58,7 +59,8 @@ export class EducationRepository {
     );
     this.paymentsEngine = new StorageEngine<EducationPaymentTransaction>(
       'education_payments',
-      'id'
+      'id',
+      SEED_PAYMENTS
     );
     this.receiptsEngine = new StorageEngine<DigitalEducationReceipt>(
       'education_receipts',
@@ -479,6 +481,22 @@ export class EducationRepository {
       invoice: updatedInvoice,
       receipt
     };
+  }
+
+  public getPaymentsByInvoiceId(invoiceId: string): EducationPaymentTransaction[] {
+    const cleanId = (invoiceId || '').trim();
+    return this.paymentsEngine
+      .filter((p) => p.invoiceId === cleanId)
+      .sort((a, b) => new Date(b.verifiedAt).getTime() - new Date(a.verifiedAt).getTime());
+  }
+
+  public getPaymentById(paymentId: string): EducationPaymentTransaction | null {
+    const cleanId = (paymentId || '').trim();
+    return this.paymentsEngine.get(cleanId) || null;
+  }
+
+  public getAllPayments(): EducationPaymentTransaction[] {
+    return this.paymentsEngine.getAll();
   }
 
   // --- Public Safe Receipt Verification with SHA-256 Recomputation ---

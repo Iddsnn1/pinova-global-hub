@@ -130,5 +130,29 @@
     "status": "ACTIVE",
     "createdAt": "2026-09-04T10:18:17.040Z",
     "updatedAt": "2026-09-04T10:24:26.644Z"
+  },
+  {
+    "id": "usr-1789296910318-t492d",
+    "username": "pioneer_parent",
+    "piUid": "pi-uid-1789296910317",
+    "email": "pioneer_parent@pioneer.network",
+    "roles": [
+      "PIONEER"
+    ],
+    "status": "ACTIVE",
+    "createdAt": "2026-09-13T10:55:10.318Z",
+    "updatedAt": "2026-09-13T10:55:10.318Z"
+  },
+  {
+    "id": "usr-1789296934534-4yhl9",
+    "username": "user-pioneer-parent-001",
+    "piUid": "pi-uid-1789296934534",
+    "email": "user-pioneer-parent-001@pioneer.network",
+    "roles": [
+      "PIONEER"
+    ],
+    "status": "ACTIVE",
+    "createdAt": "2026-09-13T10:55:34.534Z",
+    "updatedAt": "2026-09-13T10:55:34.534Z"
   }
 ]

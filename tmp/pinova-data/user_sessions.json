@@ -190,5 +190,25 @@
       "permissions": {},
       "authMethod": "SESSION"
     }
+  },
+  {
+    "token": "pinova_sess_67e28c87b12874a7f8c8ce9903e890045225e1b88107244d",
+    "userId": "usr-1789296910318-t492d",
+    "username": "pioneer_parent",
+    "roles": [
+      "PIONEER"
+    ],
+    "expiresAt": 1789901710318,
+    "createdAt": "2026-09-13T10:55:10.318Z"
+  },
+  {
+    "token": "pinova_sess_ee268deb60dfa4680f16249dc524867e291c7696d89ffacf",
+    "userId": "usr-1789296934534-4yhl9",
+    "username": "user-pioneer-parent-001",
+    "roles": [
+      "PIONEER"
+    ],
+    "expiresAt": 1789901734535,
+    "createdAt": "2026-09-13T10:55:34.535Z"
   }
 ]

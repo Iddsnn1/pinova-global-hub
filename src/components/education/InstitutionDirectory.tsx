@@ -487,25 +487,117 @@ export const InstitutionDirectory: React.FC<InstitutionDirectoryProps> = ({
 
               {/* Faculties & Academic Programmes */}
               {selectedInstitution.faculties && selectedInstitution.faculties.length > 0 && (
-                <div className="space-y-3">
-                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
-                    <GraduationCap className="w-4 h-4 text-amber-400" />
-                    <span>Faculties & Academic Departments</span>
-                  </h4>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+                      <GraduationCap className="w-4 h-4 text-amber-400" />
+                      <span>Faculties, Colleges & Academic Departments</span>
+                    </h4>
+                    <span className="text-xs text-slate-400">
+                      {selectedInstitution.faculties.length} {selectedInstitution.faculties.length === 1 ? 'Faculty' : 'Faculties'}
+                    </span>
+                  </div>
 
-                  <div className="space-y-3">
+                  <div className="space-y-4">
                     {selectedInstitution.faculties.map((fac) => (
-                      <div key={fac.id} className="bg-slate-800/60 p-4 rounded-xl border border-slate-700/60">
-                        <h5 className="text-sm font-bold text-white mb-2">{fac.name}</h5>
-                        <div className="space-y-2">
+                      <div key={fac.id} className="bg-slate-800/60 p-4 rounded-xl border border-slate-700/60 space-y-3">
+                        <div className="flex justify-between items-center border-b border-slate-700/60 pb-2">
+                          <h5 className="text-sm font-bold text-white">{fac.name}</h5>
+                          <span className="text-[11px] text-slate-400">
+                            {fac.departments.length} {fac.departments.length === 1 ? 'Department' : 'Departments'}
+                          </span>
+                        </div>
+
+                        <div className="space-y-3">
                           {fac.departments.map((dept) => (
-                            <div key={dept.id} className="bg-slate-950/70 p-3 rounded-lg border border-slate-800 text-xs">
-                              <span className="font-semibold text-slate-300 block mb-1">{dept.name}</span>
-                              <div className="space-y-1">
+                            <div key={dept.id} className="bg-slate-950/70 p-3.5 rounded-xl border border-slate-800 text-xs space-y-2">
+                              <span className="font-semibold text-amber-300/90 block">{dept.name}</span>
+                              <div className="space-y-2.5 divide-y divide-slate-800/80">
                                 {dept.programmes.map((prog) => (
-                                  <div key={prog.id} className="flex justify-between items-center text-slate-400 pt-1 border-t border-slate-800/80">
-                                    <span>{prog.name} ({prog.durationYears} Years)</span>
-                                    <span className="text-amber-400 font-semibold">${prog.tuitionPerPeriod} USD / Period</span>
+                                  <div key={prog.id} className="pt-2 first:pt-0 space-y-1.5">
+                                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-1">
+                                      <div>
+                                        <span className="font-bold text-white block">{prog.name}</span>
+                                        <span className="text-[11px] text-slate-400">
+                                          Award: {prog.credentialAwarded} • Duration: {prog.durationYears} {prog.durationYears === 1 ? 'Year' : 'Years'}
+                                        </span>
+                                      </div>
+                                      <div className="text-left sm:text-right">
+                                        <span className="text-amber-400 font-bold font-mono text-sm block">
+                                          ${prog.tuitionPerPeriod} {prog.currency}
+                                        </span>
+                                        <span className="text-[10px] text-slate-400 block capitalize">
+                                          {prog.feePeriod || 'per semester'}
+                                        </span>
+                                      </div>
+                                    </div>
+
+                                    {/* Itemized Institutional Fee Schedule */}
+                                    {prog.feeSchedule ? (
+                                      <div className="bg-slate-900/90 rounded-lg p-2.5 border border-slate-800 text-[11px] space-y-1">
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                                          Official Institutional Fee Schedule ({prog.feePeriod || 'per semester'})
+                                        </span>
+                                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+                                          <div>
+                                            <span className="text-slate-400 block">Tuition:</span>
+                                            <span className="font-semibold text-slate-200">${prog.feeSchedule.tuition}</span>
+                                          </div>
+                                          {prog.feeSchedule.registration !== undefined && (
+                                            <div>
+                                              <span className="text-slate-400 block">Registration:</span>
+                                              <span className="font-semibold text-slate-200">${prog.feeSchedule.registration}</span>
+                                            </div>
+                                          )}
+                                          {prog.feeSchedule.examination !== undefined && (
+                                            <div>
+                                              <span className="text-slate-400 block">Examination:</span>
+                                              <span className="font-semibold text-slate-200">${prog.feeSchedule.examination}</span>
+                                            </div>
+                                          )}
+                                          {prog.feeSchedule.laboratory !== undefined && (
+                                            <div>
+                                              <span className="text-slate-400 block">Laboratory:</span>
+                                              <span className="font-semibold text-slate-200">${prog.feeSchedule.laboratory}</span>
+                                            </div>
+                                          )}
+                                          {prog.feeSchedule.library !== undefined && (
+                                            <div>
+                                              <span className="text-slate-400 block">Library:</span>
+                                              <span className="font-semibold text-slate-200">${prog.feeSchedule.library}</span>
+                                            </div>
+                                          )}
+                                          {prog.feeSchedule.technology !== undefined && (
+                                            <div>
+                                              <span className="text-slate-400 block">Tech/Portal:</span>
+                                              <span className="font-semibold text-slate-200">${prog.feeSchedule.technology}</span>
+                                            </div>
+                                          )}
+                                          {prog.feeSchedule.association !== undefined && (
+                                            <div>
+                                              <span className="text-slate-400 block">Union/Assoc:</span>
+                                              <span className="font-semibold text-slate-200">${prog.feeSchedule.association}</span>
+                                            </div>
+                                          )}
+                                          {prog.feeSchedule.accommodation !== undefined && (
+                                            <div>
+                                              <span className="text-slate-400 block">Accommodation:</span>
+                                              <span className="font-semibold text-slate-200">${prog.feeSchedule.accommodation}</span>
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <div className="bg-slate-900/60 rounded-lg p-2 text-[11px] text-slate-400 italic">
+                                        Fee schedule not published for this programme/session.
+                                      </div>
+                                    )}
+
+                                    {prog.admissionRequirements && prog.admissionRequirements.length > 0 && (
+                                      <p className="text-[10px] text-slate-400 pt-0.5">
+                                        <strong className="text-slate-300">Admission Criteria:</strong> {prog.admissionRequirements.join(' • ')}
+                                      </p>
+                                    )}
                                   </div>
                                 ))}
                               </div>
@@ -521,21 +613,81 @@ export const InstitutionDirectory: React.FC<InstitutionDirectoryProps> = ({
               {/* Direct Programmes (for Secondary / Primary / Tech) */}
               {selectedInstitution.programmes && selectedInstitution.programmes.length > 0 && (
                 <div className="space-y-3">
-                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                  <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
                     <BookOpen className="w-4 h-4 text-amber-400" />
-                    <span>Programmes & Curricula</span>
+                    <span>Academic Programmes & Curricular Tracks</span>
                   </h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {selectedInstitution.programmes.map((p) => (
-                      <div key={p.id} className="bg-slate-800/70 p-3.5 rounded-xl border border-slate-700 text-xs space-y-1">
+                      <div key={p.id} className="bg-slate-800/70 p-4 rounded-xl border border-slate-700 text-xs space-y-2">
                         <div className="flex justify-between items-start">
-                          <span className="font-bold text-white">{p.name}</span>
-                          <span className="text-amber-400 font-bold">${p.tuitionPerPeriod} USD</span>
+                          <div>
+                            <span className="font-bold text-white block text-sm">{p.name}</span>
+                            <span className="text-[11px] text-slate-400">
+                              Credential: {p.credentialAwarded} ({p.durationYears < 1 ? `${Math.round(p.durationYears * 12)} Months` : `${p.durationYears} Years`})
+                            </span>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-amber-400 font-bold font-mono text-sm block">
+                              ${p.tuitionPerPeriod} {p.currency}
+                            </span>
+                            <span className="text-[10px] text-slate-400 capitalize">
+                              {p.feePeriod || (p.tier === 'technical_vocational' ? 'per programme' : 'per term')}
+                            </span>
+                          </div>
                         </div>
-                        <span className="text-slate-400 block">Credential: {p.credentialAwarded}</span>
+
+                        {p.feeSchedule ? (
+                          <div className="bg-slate-950/80 rounded-lg p-2.5 border border-slate-800 text-[11px] space-y-1">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                              Institutional Fee Breakdown ({p.feePeriod || 'per term'})
+                            </span>
+                            <div className="grid grid-cols-3 gap-1.5 pt-0.5">
+                              <div>
+                                <span className="text-slate-400 block text-[10px]">Tuition:</span>
+                                <span className="font-semibold text-slate-200">${p.feeSchedule.tuition}</span>
+                              </div>
+                              {p.feeSchedule.registration !== undefined && (
+                                <div>
+                                  <span className="text-slate-400 block text-[10px]">Registration:</span>
+                                  <span className="font-semibold text-slate-200">${p.feeSchedule.registration}</span>
+                                </div>
+                              )}
+                              {p.feeSchedule.examination !== undefined && (
+                                <div>
+                                  <span className="text-slate-400 block text-[10px]">Exam/Assessment:</span>
+                                  <span className="font-semibold text-slate-200">${p.feeSchedule.examination}</span>
+                                </div>
+                              )}
+                              {p.feeSchedule.laboratory !== undefined && (
+                                <div>
+                                  <span className="text-slate-400 block text-[10px]">Lab/Practical:</span>
+                                  <span className="font-semibold text-slate-200">${p.feeSchedule.laboratory}</span>
+                                </div>
+                              )}
+                              {p.feeSchedule.library !== undefined && (
+                                <div>
+                                  <span className="text-slate-400 block text-[10px]">Library:</span>
+                                  <span className="font-semibold text-slate-200">${p.feeSchedule.library}</span>
+                                </div>
+                              )}
+                              {p.feeSchedule.technology !== undefined && (
+                                <div>
+                                  <span className="text-slate-400 block text-[10px]">Tech Portal:</span>
+                                  <span className="font-semibold text-slate-200">${p.feeSchedule.technology}</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="bg-slate-950/60 rounded-lg p-2 text-[11px] text-slate-400 italic">
+                            Fee schedule not published for this programme/session.
+                          </div>
+                        )}
+
                         {p.admissionRequirements.length > 0 && (
                           <div className="text-[11px] text-slate-400 pt-1 border-t border-slate-700/60">
-                            Req: {p.admissionRequirements.join('; ')}
+                            <strong className="text-slate-300">Prerequisites:</strong> {p.admissionRequirements.join('; ')}
                           </div>
                         )}
                       </div>
@@ -543,6 +695,18 @@ export const InstitutionDirectory: React.FC<InstitutionDirectoryProps> = ({
                   </div>
                 </div>
               )}
+
+              {/* Truthful Empty State if No Faculties and No Programmes */}
+              {(!selectedInstitution.faculties || selectedInstitution.faculties.length === 0) &&
+                (!selectedInstitution.programmes || selectedInstitution.programmes.length === 0) && (
+                  <div className="bg-slate-800/40 border border-slate-700/60 rounded-xl p-6 text-center">
+                    <GraduationCap className="w-8 h-8 text-slate-500 mx-auto mb-2" />
+                    <h5 className="text-sm font-bold text-white">Academic departments are not yet published for this institution</h5>
+                    <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto">
+                      Official curriculum structures, departmental offerings, and fee schedules for this institution are currently undergoing accreditation review.
+                    </p>
+                  </div>
+                )}
 
               {/* Contact Information */}
               <div className="pt-2 border-t border-slate-800 flex flex-wrap gap-4 text-xs text-slate-400">

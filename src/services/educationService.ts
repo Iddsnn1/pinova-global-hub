@@ -17,6 +17,7 @@ import {
   SEED_CHILDREN_SUMMARIES,
   SEED_INVOICES,
   SEED_RECEIPTS,
+  SEED_PAYMENTS,
   SEED_ADMISSION_APPLICATIONS,
   SEED_SCHOLARSHIPS,
   SEED_MARKETPLACE_ITEMS
@@ -158,9 +159,15 @@ export const educationService = {
     receipt: DigitalEducationReceipt;
     message?: string;
   }> {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    const token = localStorage.getItem('auth_token') || localStorage.getItem('pi_auth_token') || localStorage.getItem('pinova_token');
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
     const res = await fetch('/api/education/invoices/pay', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify(payload)
     });
 
@@ -170,6 +177,24 @@ export const educationService = {
     }
 
     return await res.json();
+  },
+
+  async getInvoicePayments(invoiceId: string): Promise<EducationPaymentTransaction[]> {
+    try {
+      const headers: Record<string, string> = {};
+      const token = localStorage.getItem('auth_token') || localStorage.getItem('pi_auth_token') || localStorage.getItem('pinova_token');
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      const res = await fetch(`/api/education/invoices/${encodeURIComponent(invoiceId)}/payments`, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        return Array.isArray(data) ? data : [];
+      }
+    } catch (e) {
+      console.warn('[educationService] Failed fetching invoice payments from server:', e);
+    }
+    return SEED_PAYMENTS.filter((p) => p.invoiceId === invoiceId);
   },
 
   async verifyReceipt(receiptNumber: string): Promise<{

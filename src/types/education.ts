@@ -69,6 +69,17 @@ export interface EducationProgramme {
   credentialAwarded: string; // e.g., "B.Sc.", "HND", "SSCE", "Diploma", "Certification"
   tuitionPerPeriod: number;
   currency: string;
+  feePeriod?: 'per semester' | 'per session' | 'per term' | 'per year' | 'per programme' | string;
+  feeSchedule?: {
+    tuition: number;
+    registration?: number;
+    examination?: number;
+    laboratory?: number;
+    library?: number;
+    technology?: number;
+    association?: number;
+    accommodation?: number;
+  };
   admissionRequirements: string[];
   description?: string;
 }

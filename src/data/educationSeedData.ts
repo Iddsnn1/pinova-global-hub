@@ -5,7 +5,8 @@ import {
   AdmissionApplication,
   ScholarshipOpportunity,
   EducationMarketplaceItem,
-  DigitalEducationReceipt
+  DigitalEducationReceipt,
+  EducationPaymentTransaction
 } from '../types/education';
 
 export const SEED_PARENT_USER_ID = 'user-pioneer-parent-001';
@@ -350,6 +351,39 @@ export const SEED_RECEIPTS: DigitalEducationReceipt[] = [
     }
   },
   {
+    receiptNumber: 'RCP-EDU-NG-2025-002',
+    verificationReference: 'VER-KMA-2025-7732',
+    verificationHash: 'fa8211a7d65b1239ca41982b61f912a78129034f89123891ca719283f6192831',
+    invoiceId: 'inv-ng-2025-002',
+    invoiceNumber: 'INV/2025/KMA/002',
+    institutionId: 'inst-ng-kano-model-005',
+    institutionName: 'Kano Model Primary & Nursery Academy',
+    institutionLogo: 'https://images.unsplash.com/photo-1503676260728-1c00da094a0b?auto=format&fit=crop&w=240&q=80',
+    studentName: 'Ibrahim Idris',
+    studentMatricOrReg: 'KMA/2021/PRI-118',
+    educationLevel: 'Primary 4 (Basic Stage)',
+    academicSession: '2025/2026',
+    termOrSemester: '1st Term',
+    chargeDescription: 'Primary 4 Basic Stage 1st Term Installment',
+    amountPaid: 45,
+    currency: 'USD',
+    piAmount: 0.000143,
+    piPaymentId: 'pi-pay-edu-kma-002',
+    piTxid: 'pi-tx-771239841209',
+    paymentMethod: 'PI_NETWORK',
+    paymentDate: '2025-09-12T10:00:00Z',
+    verifiedByServer: true,
+    publicSafeSummary: {
+      receiptNumber: 'RCP-EDU-NG-2025-002',
+      institutionName: 'Kano Model Primary & Nursery Academy',
+      academicSession: '2025/2026',
+      termOrSemester: '1st Term',
+      amountPaidFormatted: '$45.00 USD (0.000143 π)',
+      verifiedAt: '2025-09-12T10:00:05Z',
+      isAuthentic: true
+    }
+  },
+  {
     receiptNumber: 'RCP-EDU-NG-2025-004',
     verificationReference: 'VER-BUK-2025-4421',
     verificationHash: 'ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb',
@@ -381,6 +415,63 @@ export const SEED_RECEIPTS: DigitalEducationReceipt[] = [
       verifiedAt: '2025-10-15T16:00:10Z',
       isAuthentic: true
     }
+  }
+];
+
+export const SEED_PAYMENTS: EducationPaymentTransaction[] = [
+  {
+    id: 'pay-edu-kma-001',
+    invoiceId: 'inv-ng-2025-001',
+    institutionId: 'inst-ng-kano-model-005',
+    studentId: 'std-child-1-fatima',
+    amountPaid: 60,
+    currency: 'USD',
+    piAmount: 0.000191,
+    piPaymentId: 'pi-pay-edu-kma-001',
+    piTxid: 'pi-tx-881928371829',
+    paymentMethod: 'PI_NETWORK',
+    status: 'VERIFIED_COMPLETED',
+    receiptNumber: 'RCP-EDU-NG-2025-001',
+    payerUsername: 'Idris Datti',
+    idempotencyKey: 'IDEM-KMA-2025-001',
+    verifiedAt: '2025-09-10T14:30:05Z',
+    auditHash: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'
+  },
+  {
+    id: 'pay-edu-kma-002',
+    invoiceId: 'inv-ng-2025-002',
+    institutionId: 'inst-ng-kano-model-005',
+    studentId: 'std-child-2-ibrahim',
+    amountPaid: 45,
+    currency: 'USD',
+    piAmount: 0.000143,
+    piPaymentId: 'pi-pay-edu-kma-002',
+    piTxid: 'pi-tx-771239841209',
+    paymentMethod: 'PI_NETWORK',
+    status: 'VERIFIED_COMPLETED',
+    receiptNumber: 'RCP-EDU-NG-2025-002',
+    payerUsername: 'Idris Datti',
+    idempotencyKey: 'IDEM-KMA-2025-002',
+    verifiedAt: '2025-09-12T10:00:05Z',
+    auditHash: 'fa8211a7d65b1239ca41982b61f912a78129034f89123891ca719283f6192831'
+  },
+  {
+    id: 'pay-edu-buk-004',
+    invoiceId: 'inv-ng-2025-004',
+    institutionId: 'inst-ng-buk-001',
+    studentId: 'std-child-4-farouk',
+    amountPaid: 75,
+    currency: 'USD',
+    piAmount: 0.000239,
+    piPaymentId: 'pi-pay-edu-buk-004',
+    piTxid: 'pi-tx-994820193821',
+    paymentMethod: 'PI_NETWORK',
+    status: 'VERIFIED_COMPLETED',
+    receiptNumber: 'RCP-EDU-NG-2025-004',
+    payerUsername: 'Idris Datti',
+    idempotencyKey: 'IDEM-BUK-2025-004',
+    verifiedAt: '2025-10-15T16:00:10Z',
+    auditHash: 'ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb'
   }
 ];
 

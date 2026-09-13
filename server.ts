@@ -2066,17 +2066,22 @@ app.post('/api/education/invoices/pay', paymentRateLimiter, authenticate, async 
 
     // Enforce invoice ownership in production and for authenticated callers
     const currentUser = req.user?.username;
+    const currentUserId = req.user?.id;
     const userRoles = req.user?.roles || [];
     const isPlatformAdmin = userRoles.includes('PLATFORM_ADMIN') || userRoles.includes('BURSAR') || userRoles.includes('FINANCE_ADMIN');
     const isInstitutionStaff = Boolean(req.user?.institutionId && req.user.institutionId === invoice.institutionId);
-    const isInvoiceOwner = Boolean(
-      currentUser && (
-        (invoice.guardianId && (invoice.guardianId.toLowerCase() === currentUser.toLowerCase() || req.user?.guardianId?.toLowerCase() === invoice.guardianId.toLowerCase())) ||
-        (invoice.studentId && (invoice.studentId.toLowerCase() === currentUser.toLowerCase() || (req.user as any)?.studentId?.toLowerCase() === invoice.studentId.toLowerCase())) ||
-        (invoice.studentName && invoice.studentName.toLowerCase() === currentUser.toLowerCase()) ||
-        (req.body.payerUsername && req.body.payerUsername.toLowerCase() === currentUser.toLowerCase())
-      )
+    const isGuardianOwner = Boolean(
+      (currentUser && invoice.guardianId && invoice.guardianId.toLowerCase() === currentUser.toLowerCase()) ||
+      (currentUserId && invoice.guardianId && invoice.guardianId === currentUserId) ||
+      (req.user?.guardianId && invoice.guardianId && req.user.guardianId.toLowerCase() === invoice.guardianId.toLowerCase())
     );
+    const isStudentOwner = Boolean(
+      (currentUser && invoice.studentId && invoice.studentId.toLowerCase() === currentUser.toLowerCase()) ||
+      (currentUserId && invoice.studentId && invoice.studentId === currentUserId) ||
+      (currentUser && invoice.studentName && invoice.studentName.toLowerCase() === currentUser.toLowerCase()) ||
+      ((req.user as any)?.studentId && invoice.studentId && (req.user as any).studentId.toLowerCase() === invoice.studentId.toLowerCase())
+    );
+    const isInvoiceOwner = isGuardianOwner || isStudentOwner;
 
     if (isProduction && !isPlatformAdmin && !isInstitutionStaff && !isInvoiceOwner) {
       res.status(403).json({
@@ -2088,7 +2093,25 @@ app.post('/api/education/invoices/pay', paymentRateLimiter, authenticate, async 
     }
 
     // Pi Network authoritative server verification
-    if (piPaymentId) {
+    if (paymentMethod === 'PI_NETWORK') {
+      if (!piPaymentId) {
+        res.status(400).json({
+          success: false,
+          error: 'MISSING_PI_PAYMENT_ID',
+          message: 'Authoritative Pi payment ID is required for Pi Network payment settlement.'
+        });
+        return;
+      }
+      const verification = await verifyPiPaymentAuthoritative(piPaymentId);
+      if (!verification.verified) {
+        res.status(400).json({
+          success: false,
+          error: 'PI_PAYMENT_UNVERIFIED',
+          message: verification.message || 'The referenced Pi payment could not be verified on the authoritative ledger.'
+        });
+        return;
+      }
+    } else if (piPaymentId) {
       const verification = await verifyPiPaymentAuthoritative(piPaymentId);
       if (!verification.verified) {
         res.status(400).json({
@@ -2139,6 +2162,52 @@ app.post('/api/education/invoices/pay', paymentRateLimiter, authenticate, async 
   } catch (err: any) {
     console.error('[Education Payment] Processing error:', err.message);
     res.status(500).json({ success: false, error: 'PAYMENT_PROCESSING_FAILED', message: err.message });
+  }
+});
+
+// 5b. Get Payment History for Specific Invoice (Ownership Protected)
+app.get('/api/education/invoices/:id/payments', authenticate, (req: AuthenticatedRequest, res) => {
+  try {
+    const { id } = req.params;
+    const invoice = educationRepo.getInvoiceById(id);
+    if (!invoice) {
+      res.status(404).json({ success: false, error: 'INVOICE_NOT_FOUND', message: `Invoice ${id} not found` });
+      return;
+    }
+
+    const currentUser = req.user?.username;
+    const currentUserId = req.user?.id;
+    const userRoles = req.user?.roles || [];
+    const isPlatformAdmin = userRoles.includes('PLATFORM_ADMIN') || userRoles.includes('BURSAR') || userRoles.includes('FINANCE_ADMIN');
+    const isInstitutionStaff = Boolean(req.user?.institutionId && req.user.institutionId === invoice.institutionId);
+
+    const isGuardianOwner = Boolean(
+      (currentUser && invoice.guardianId && invoice.guardianId.toLowerCase() === currentUser.toLowerCase()) ||
+      (currentUserId && invoice.guardianId && invoice.guardianId === currentUserId) ||
+      (req.user?.guardianId && invoice.guardianId && req.user.guardianId.toLowerCase() === invoice.guardianId.toLowerCase())
+    );
+    const isStudentOwner = Boolean(
+      (currentUser && invoice.studentId && invoice.studentId.toLowerCase() === currentUser.toLowerCase()) ||
+      (currentUserId && invoice.studentId && invoice.studentId === currentUserId) ||
+      (currentUser && invoice.studentName && invoice.studentName.toLowerCase() === currentUser.toLowerCase()) ||
+      ((req.user as any)?.studentId && invoice.studentId && (req.user as any).studentId.toLowerCase() === invoice.studentId.toLowerCase())
+    );
+    const isAuthorized = isPlatformAdmin || isInstitutionStaff || isGuardianOwner || isStudentOwner;
+
+    if (isProduction && !isAuthorized) {
+      res.status(403).json({
+        success: false,
+        error: 'FORBIDDEN',
+        message: 'Access denied: You are not authorized to view payment history for this invoice.'
+      });
+      return;
+    }
+
+    const payments = educationRepo.getPaymentsByInvoiceId(id);
+    res.json(payments);
+  } catch (err: any) {
+    console.error('[Education Payments History] Error:', err.message);
+    res.status(500).json({ success: false, error: 'SERVER_ERROR', message: err.message });
   }
 });
 
