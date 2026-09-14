@@ -1,4 +1,5 @@
 import type { InstitutionProfile } from '../types/education';
+import { educationService } from './educationService';
 import {
   buildGlobalEducationCoverageAudit,
   getGlobalEducationCoverageGaps,
@@ -42,6 +43,24 @@ export const globalEducationRegistryService = {
 
   mapVerificationStatus(status?: string) {
     return mapInstitutionVerificationStatus(status);
+  },
+
+  /**
+   * Loads the same directory dataset used by the Education UI, then derives
+   * global coverage metadata from that live service result. This keeps the
+   * governance layer attached to the real directory flow without changing
+   * institution records or bypassing the existing API/fallback logic.
+   */
+  async getDirectorySnapshot(filter?: Parameters<typeof educationService.getInstitutions>[0]) {
+    const institutions = await educationService.getInstitutions(filter);
+    return {
+      institutions,
+      coverage: buildGlobalEducationCoverageAudit(institutions),
+      gaps: getGlobalEducationCoverageGaps(institutions),
+      partialCoverage: getGlobalEducationPartialCoverage(institutions),
+      summary: getGlobalEducationCoverageSummary(institutions),
+      sourceQueue: buildGlobalEducationSourceQueue(institutions),
+    };
   },
 };
 
