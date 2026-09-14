@@ -258,7 +258,7 @@ export const InstitutionDirectory: React.FC<InstitutionDirectoryProps> = ({
               </span>
               {selectedCountry === 'NG' ? (
                 <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full font-semibold">
-                  Primary Deployment Hub
+                  Deployment Hub
                 </span>
               ) : selectedCountry !== 'ALL' ? (
                 <span className="text-[10px] text-amber-400 font-mono">
@@ -280,7 +280,7 @@ export const InstitutionDirectory: React.FC<InstitutionDirectoryProps> = ({
               className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 focus:outline-none focus:border-amber-500 font-medium"
             >
               <option value="ALL">🌍 All Countries (Global)</option>
-              <option value="NG">🇳🇬 Nigeria (Primary Deployment Hub)</option>
+              <option value="NG">🇳🇬 Nigeria (Deployment Hub)</option>
               <optgroup label="Supported Regional Hubs">
                 {priorityCountries.map((c) => (
                   <option key={c.code} value={c.code}>
