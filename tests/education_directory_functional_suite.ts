@@ -13,6 +13,7 @@ process.env.PINOVA_DATA_DIR = path.join(os.tmpdir(), `pinova_education_directory
 import { EducationRepository } from '../src/server/db/repositories/EducationRepository';
 import { applyEducationHierarchyVerificationOverrides } from '../src/data/educationHierarchyVerificationOverrides';
 import { applyYabatechHierarchyVerificationOverride } from '../src/data/yabatechHierarchyVerificationOverride';
+import { normalizeBukFacultyHierarchy } from '../src/data/bukHierarchyNormalization';
 
 function assert(condition: boolean, message: string, details?: string) {
   if (!condition) {
@@ -23,9 +24,9 @@ function assert(condition: boolean, message: string, details?: string) {
 
 function withHierarchyOverrides(institution: ReturnType<EducationRepository['getInstitutionById']>) {
   if (!institution) return null;
-  return applyYabatechHierarchyVerificationOverride(
-    applyEducationHierarchyVerificationOverrides(institution),
-  );
+  const corrected = applyEducationHierarchyVerificationOverrides(institution);
+  const withYabatechCorrection = applyYabatechHierarchyVerificationOverride(corrected);
+  return normalizeBukFacultyHierarchy(withYabatechCorrection);
 }
 
 async function run() {
