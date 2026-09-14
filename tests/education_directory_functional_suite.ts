@@ -29,6 +29,9 @@ function withHierarchyOverrides(institution: ReturnType<EducationRepository['get
   return normalizeBukFacultyHierarchy(withYabatechCorrection);
 }
 
+const normalizeFacultyName = (value: string): string =>
+  value.trim().toLowerCase().replace(/^faculty of\s+/, '');
+
 async function run() {
   console.log('============================================================');
   console.log('PINOVA EDUCATION DIRECTORY FUNCTIONAL VERIFICATION');
@@ -65,9 +68,9 @@ async function run() {
     (unilag!.faculties || []).every((faculty) => (faculty.departments || []).length > 0),
     'Every UNILAG faculty exposes at least one department',
   );
+  const bukFacultyNames = new Set((buk!.faculties || []).map((faculty) => normalizeFacultyName(faculty.name)));
   assert(
-    (buk!.faculties || []).some((faculty) => faculty.name === 'Life Sciences') &&
-      (buk!.faculties || []).some((faculty) => faculty.name === 'Physical Sciences'),
+    bukFacultyNames.has('life sciences') && bukFacultyNames.has('physical sciences'),
     'BUK science structure is split into Life Sciences and Physical Sciences',
   );
 
