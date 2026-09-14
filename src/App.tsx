@@ -1507,6 +1507,47 @@ function MainAppContent() {
           onClose={() => setIsVendorApplicationOpen(false)}
           pioneerUsername={user.username}
           onApplicationSubmitted={(app) => {
+            const logo = (app.storeLogo || app.logoUrl || '').trim() || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=200&q=80';
+            const banner = (app.storeBanner || app.bannerUrl || '').trim() || 'https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1200&q=80';
+
+            setVendors((prev) => {
+              const matchIdx = prev.findIndex(
+                (v) => (v.storeName || '').toLowerCase() === (app.storeName || '').toLowerCase() ||
+                       (v.sellerUsername || '').toLowerCase() === (app.pioneerUsername || '').toLowerCase()
+              );
+              if (matchIdx >= 0) {
+                const updated = [...prev];
+                updated[matchIdx] = {
+                  ...updated[matchIdx],
+                  logoImage: logo,
+                  bannerImage: banner,
+                  bio: app.storeDescription || updated[matchIdx].bio
+                };
+                return updated;
+              } else {
+                const newVendor: Vendor = {
+                  id: app.id || `vendor-${Date.now()}`,
+                  storeName: app.storeName,
+                  sellerUsername: app.pioneerUsername,
+                  bio: app.storeDescription || 'Official Pioneer Merchant Store on PiNova.',
+                  country: app.country,
+                  verified: false,
+                  verificationStatus: 'Unverified',
+                  sellerStatus: 'Probation',
+                  rating: 5.0,
+                  reviewsCount: 0,
+                  totalSalesPi: 0,
+                  logoImage: logo,
+                  bannerImage: banner,
+                  joinedDate: new Date().toISOString().split('T')[0],
+                  shippingCountries: [app.country || 'Global'],
+                  contactEmail: app.contactEmail,
+                  contactPhone: app.contactPhone
+                };
+                return [newVendor, ...prev];
+              }
+            });
+
             setNotifications((prev) => [
               {
                 id: `notif-vendor-app-${Date.now()}`,

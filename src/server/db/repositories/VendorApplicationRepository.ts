@@ -29,6 +29,8 @@ export interface VendorApplicationEntity {
   storeTagline?: string;
   logoUrl?: string;
   bannerUrl?: string;
+  storeLogo?: string;
+  storeBanner?: string;
   businessRegistrationNumber?: string;
   taxId?: string;
   websiteUrl?: string;

@@ -21,7 +21,8 @@ import {
   Lock,
   RefreshCw,
   Award,
-  Check
+  Check,
+  Trash2
 } from 'lucide-react';
 import { VendorApplication, SellerType, VendorApplicationStatus } from '../../types';
 
@@ -51,12 +52,29 @@ export const VendorApplicationModal: React.FC<VendorApplicationModalProps> = ({
   const [country, setCountry] = useState('Nigeria');
   const [stateRegion, setStateRegion] = useState('');
   const [city, setCity] = useState('');
+  const DEFAULT_PIONEER_AVATAR = 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=200&q=80';
+  const DEFAULT_STORE_BANNER = 'https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1200&q=80';
+
   const [contactEmail, setContactEmail] = useState('');
   const [contactPhone, setContactPhone] = useState('');
   const [socialHandle, setSocialHandle] = useState('');
   const [storeDescription, setStoreDescription] = useState('');
   const [storeLogo, setStoreLogo] = useState('');
   const [storeBanner, setStoreBanner] = useState('');
+
+  // Branding upload state
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string>('');
+  const [logoUploading, setLogoUploading] = useState(false);
+  const [logoError, setLogoError] = useState<string | null>(null);
+  const logoInputRef = React.useRef<HTMLInputElement | null>(null);
+
+  const [bannerFile, setBannerFile] = useState<File | null>(null);
+  const [bannerPreview, setBannerPreview] = useState<string>('');
+  const [bannerUploading, setBannerUploading] = useState(false);
+  const [bannerError, setBannerError] = useState<string | null>(null);
+  const bannerInputRef = React.useRef<HTMLInputElement | null>(null);
+
   const [businessRegNumber, setBusinessRegNumber] = useState('');
   const [taxId, setTaxId] = useState('');
   const [docType, setDocType] = useState<'national_id' | 'passport' | 'business_cert' | 'utility_bill'>('national_id');
@@ -94,8 +112,12 @@ export const VendorApplicationModal: React.FC<VendorApplicationModalProps> = ({
           setContactPhone(app.contactPhone || '');
           setSocialHandle(app.socialHandle || app.contactTelegram || '');
           setStoreDescription(app.storeDescription || '');
-          setStoreLogo(app.storeLogo || app.logoUrl || '');
-          setStoreBanner(app.storeBanner || app.bannerUrl || '');
+          const existingLogo = app.storeLogo || app.logoUrl || '';
+          const existingBanner = app.storeBanner || app.bannerUrl || '';
+          setStoreLogo(existingLogo);
+          setLogoPreview(existingLogo);
+          setStoreBanner(existingBanner);
+          setBannerPreview(existingBanner);
           setBusinessRegNumber(app.businessRegNumber || app.businessRegistrationNumber || '');
           setTaxId(app.taxId || '');
           const docs = app.requiredDocuments || app.documents;
@@ -215,6 +237,166 @@ export const VendorApplicationModal: React.FC<VendorApplicationModalProps> = ({
     await uploadDocumentFile(file, docType);
   };
 
+  /**
+   * Uploads a store branding image (logo or banner) to the public branding endpoint.
+   */
+  const uploadBrandingAsset = async (file: File, type: 'logo' | 'banner'): Promise<string> => {
+    const token = localStorage.getItem('auth_token') || localStorage.getItem('pi_auth_token') || localStorage.getItem('pinova_token');
+    const headers: Record<string, string> = {
+      'Content-Type': file.type || (file.name.endsWith('.png') ? 'image/png' : file.name.endsWith('.webp') ? 'image/webp' : 'image/jpeg'),
+      'X-Branding-Type': type,
+      'X-Filename': encodeURIComponent(file.name),
+      'X-Pioneer-Username': pioneerUsername || ''
+    };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const response = await fetch('/api/vendor/branding-upload', {
+      method: 'POST',
+      headers,
+      body: file
+    });
+
+    if (!response.ok) {
+      let errMsg = `Failed to upload ${type} image (${response.status})`;
+      try {
+        const errorJson = await response.json();
+        if (errorJson.message) errMsg = errorJson.message;
+      } catch {}
+      throw new Error(errMsg);
+    }
+
+    const result = await response.json();
+    if (!result.success || !result.url) {
+      throw new Error(result.message || `Failed to process ${type} image.`);
+    }
+
+    return result.url;
+  };
+
+  /**
+   * Validates client-side file requirements: PNG, JPG/JPEG, WebP, 5 MB limit.
+   */
+  const validateBrandingFile = (file: File | undefined | null): string | null => {
+    if (!file) return 'Please select a valid image file.';
+    if (file.size === 0) return 'The selected file is empty.';
+    const maxSizeBytes = 5 * 1024 * 1024;
+    if (file.size > maxSizeBytes) {
+      const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
+      return `File size is ${sizeMb} MB. Maximum allowed size is 5 MB.`;
+    }
+    const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
+    const ext = file.name.split('.').pop()?.toLowerCase();
+    const allowedExts = ['png', 'jpg', 'jpeg', 'webp'];
+    if (!allowedTypes.includes(file.type.toLowerCase()) && (!ext || !allowedExts.includes(ext))) {
+      return 'Invalid format. Supported formats are PNG, JPG, and WebP.';
+    }
+    return null;
+  };
+
+  const handleLogoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (e.target) e.target.value = '';
+    if (!file) return;
+
+    setLogoError(null);
+    const error = validateBrandingFile(file);
+    if (error) {
+      setLogoError(error);
+      return;
+    }
+
+    setLogoFile(file);
+    const objectUrl = URL.createObjectURL(file);
+    setLogoPreview(objectUrl);
+
+    setLogoUploading(true);
+    try {
+      const serverAssetUrl = await uploadBrandingAsset(file, 'logo');
+      setStoreLogo(serverAssetUrl);
+      setLogoPreview(serverAssetUrl);
+    } catch (err: any) {
+      setLogoError(err.message || 'Failed to upload store logo.');
+    } finally {
+      setLogoUploading(false);
+    }
+  };
+
+  const handleRemoveLogo = async () => {
+    if (storeLogo && storeLogo.startsWith('/api/vendor/branding-asset/')) {
+      const assetId = storeLogo.split('/').pop();
+      if (assetId) {
+        try {
+          const token = localStorage.getItem('auth_token') || localStorage.getItem('pi_auth_token') || localStorage.getItem('pinova_token');
+          await fetch(`/api/vendor/branding-asset/${assetId}`, {
+            method: 'DELETE',
+            headers: {
+              ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+              'X-Pioneer-Username': pioneerUsername || ''
+            }
+          });
+        } catch {}
+      }
+    }
+    setLogoFile(null);
+    setLogoPreview('');
+    setStoreLogo('');
+    setLogoError(null);
+    if (logoInputRef.current) logoInputRef.current.value = '';
+  };
+
+  const handleBannerSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (e.target) e.target.value = '';
+    if (!file) return;
+
+    setBannerError(null);
+    const error = validateBrandingFile(file);
+    if (error) {
+      setBannerError(error);
+      return;
+    }
+
+    setBannerFile(file);
+    const objectUrl = URL.createObjectURL(file);
+    setBannerPreview(objectUrl);
+
+    setBannerUploading(true);
+    try {
+      const serverAssetUrl = await uploadBrandingAsset(file, 'banner');
+      setStoreBanner(serverAssetUrl);
+      setBannerPreview(serverAssetUrl);
+    } catch (err: any) {
+      setBannerError(err.message || 'Failed to upload store banner.');
+    } finally {
+      setBannerUploading(false);
+    }
+  };
+
+  const handleRemoveBanner = async () => {
+    if (storeBanner && storeBanner.startsWith('/api/vendor/branding-asset/')) {
+      const assetId = storeBanner.split('/').pop();
+      if (assetId) {
+        try {
+          const token = localStorage.getItem('auth_token') || localStorage.getItem('pi_auth_token') || localStorage.getItem('pinova_token');
+          await fetch(`/api/vendor/branding-asset/${assetId}`, {
+            method: 'DELETE',
+            headers: {
+              ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+              'X-Pioneer-Username': pioneerUsername || ''
+            }
+          });
+        } catch {}
+      }
+    }
+    setBannerFile(null);
+    setBannerPreview('');
+    setStoreBanner('');
+    setBannerError(null);
+    if (bannerInputRef.current) bannerInputRef.current.value = '';
+  };
+
   const handleSubmitApplication = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!storeName.trim()) {
@@ -269,8 +451,10 @@ export const VendorApplicationModal: React.FC<VendorApplicationModalProps> = ({
       contactPhone: contactPhone.trim(),
       socialHandle: socialHandle.trim(),
       storeDescription: storeDescription.trim(),
-      storeLogo: storeLogo.trim() || 'https://images.unsplash.com/photo-1472851294608-062f824d29cc?auto=format&fit=crop&w=400&q=80',
-      storeBanner: storeBanner.trim() || 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=1200&q=80',
+      storeLogo: storeLogo.trim() || DEFAULT_PIONEER_AVATAR,
+      storeBanner: storeBanner.trim() || DEFAULT_STORE_BANNER,
+      logoUrl: storeLogo.trim() || DEFAULT_PIONEER_AVATAR,
+      bannerUrl: storeBanner.trim() || DEFAULT_STORE_BANNER,
       businessRegNumber: businessRegNumber.trim(),
       taxId: taxId.trim(),
       requiredDocuments: [
@@ -610,28 +794,212 @@ export const VendorApplicationModal: React.FC<VendorApplicationModalProps> = ({
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-1">Store Logo Image URL</label>
+                {/* Store Logo Upload */}
+                <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-200">Store Logo</label>
+                      <span className="text-[11px] text-slate-400">PNG, JPG, or WebP (max 5 MB)</span>
+                    </div>
+                    {logoUploading && (
+                      <span className="text-[11px] text-purple-400 font-semibold flex items-center gap-1.5 animate-pulse">
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        <span>Uploading...</span>
+                      </span>
+                    )}
+                    {!logoUploading && (logoPreview || storeLogo) && (
+                      <span className="text-[11px] text-emerald-400 font-semibold flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>Logo Attached</span>
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Hidden real file input */}
                   <input
-                    type="url"
-                    placeholder="https://.../logo.png"
-                    value={storeLogo}
-                    onChange={(e) => setStoreLogo(e.target.value)}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs font-bold text-white focus:outline-none focus:border-purple-500"
+                    ref={logoInputRef}
+                    id="store-logo-file-input"
+                    type="file"
+                    accept="image/png,image/jpeg,image/jpg,image/webp"
+                    className="hidden"
+                    onChange={handleLogoSelect}
                   />
-                  <span className="text-[10px] text-slate-400 mt-1 block">Leave empty to use automatic Pioneer avatar.</span>
+
+                  {/* Preview or Empty State */}
+                  {(logoPreview || storeLogo) ? (
+                    <div className="flex items-center gap-3 bg-slate-900/90 border border-purple-500/30 rounded-xl p-3">
+                      <div className="relative w-14 h-14 rounded-xl overflow-hidden bg-slate-950 border-2 border-purple-500/40 flex-shrink-0">
+                        <img
+                          src={logoPreview || storeLogo}
+                          alt="Store Logo Preview"
+                          referrerPolicy="no-referrer"
+                          onError={(e) => {
+                            (e.currentTarget as HTMLImageElement).src = DEFAULT_PIONEER_AVATAR;
+                          }}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                      <div className="flex-1 min-w-0 space-y-1">
+                        <p className="text-xs font-bold text-white truncate">
+                          {logoFile?.name || (storeLogo.includes('/api/vendor/branding-asset/') ? 'Custom Store Logo' : 'Uploaded Logo')}
+                        </p>
+                        <p className="text-[10px] text-slate-400">
+                          {logoFile ? `${(logoFile.size / 1024).toFixed(0)} KB • Ready for storefront` : 'Active on public storefront'}
+                        </p>
+                        <div className="flex items-center gap-2 pt-0.5">
+                          <button
+                            type="button"
+                            id="change-store-logo-btn"
+                            disabled={logoUploading}
+                            onClick={() => logoInputRef.current?.click()}
+                            className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-purple-300 hover:text-white border border-purple-500/30 transition-all flex items-center gap-1"
+                          >
+                            <Upload className="w-3 h-3" />
+                            <span>Change</span>
+                          </button>
+                          <button
+                            type="button"
+                            id="remove-store-logo-btn"
+                            disabled={logoUploading}
+                            onClick={handleRemoveLogo}
+                            className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 hover:text-white border border-rose-800/40 transition-all flex items-center gap-1"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                            <span>Remove</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="border-2 border-dashed border-slate-700 hover:border-purple-500/50 rounded-xl p-4 bg-slate-900/40 flex flex-col items-center justify-center text-center transition-colors">
+                      <div className="w-9 h-9 rounded-full bg-purple-950/60 border border-purple-800/50 flex items-center justify-center text-purple-300 mb-2">
+                        <Store className="w-4 h-4" />
+                      </div>
+                      <button
+                        type="button"
+                        id="upload-store-logo-btn"
+                        disabled={logoUploading}
+                        onClick={() => logoInputRef.current?.click()}
+                        className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-extrabold text-xs shadow-lg shadow-purple-900/30 transition-all flex items-center gap-1.5 mb-1 cursor-pointer"
+                      >
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>Upload Logo</span>
+                      </button>
+                      <span className="text-[10px] text-slate-400">Leave empty to use automatic Pioneer avatar.</span>
+                    </div>
+                  )}
+
+                  {logoError && (
+                    <div className="flex items-center gap-2 p-2 rounded-lg bg-rose-950/40 border border-rose-800/50 text-rose-300 text-[11px]">
+                      <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                      <span>{logoError}</span>
+                    </div>
+                  )}
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-1">Store Banner Image URL</label>
+                {/* Store Banner Upload */}
+                <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-200">Store Banner</label>
+                      <span className="text-[11px] text-slate-400">PNG, JPG, or WebP (max 5 MB)</span>
+                    </div>
+                    {bannerUploading && (
+                      <span className="text-[11px] text-purple-400 font-semibold flex items-center gap-1.5 animate-pulse">
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        <span>Uploading...</span>
+                      </span>
+                    )}
+                    {!bannerUploading && (bannerPreview || storeBanner) && (
+                      <span className="text-[11px] text-emerald-400 font-semibold flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>Banner Attached</span>
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Hidden real file input */}
                   <input
-                    type="url"
-                    placeholder="https://.../banner.jpg"
-                    value={storeBanner}
-                    onChange={(e) => setStoreBanner(e.target.value)}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs font-bold text-white focus:outline-none focus:border-purple-500"
+                    ref={bannerInputRef}
+                    id="store-banner-file-input"
+                    type="file"
+                    accept="image/png,image/jpeg,image/jpg,image/webp"
+                    className="hidden"
+                    onChange={handleBannerSelect}
                   />
-                  <span className="text-[10px] text-slate-400 mt-1 block">Leave empty for high-contrast default banner.</span>
+
+                  {/* Preview or Empty State */}
+                  {(bannerPreview || storeBanner) ? (
+                    <div className="space-y-2 bg-slate-900/90 border border-purple-500/30 rounded-xl p-3">
+                      <div className="relative w-full h-16 rounded-lg overflow-hidden bg-slate-950 border border-purple-500/40">
+                        <img
+                          src={bannerPreview || storeBanner}
+                          alt="Store Banner Preview"
+                          referrerPolicy="no-referrer"
+                          onError={(e) => {
+                            (e.currentTarget as HTMLImageElement).src = DEFAULT_STORE_BANNER;
+                          }}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                      <div className="flex items-center justify-between pt-0.5">
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-white truncate">
+                            {bannerFile?.name || (storeBanner.includes('/api/vendor/branding-asset/') ? 'Custom Store Banner' : 'Uploaded Banner')}
+                          </p>
+                          <p className="text-[10px] text-slate-400">
+                            {bannerFile ? `${(bannerFile.size / 1024).toFixed(0)} KB • Ready for storefront` : 'Active on public storefront'}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <button
+                            type="button"
+                            id="change-store-banner-btn"
+                            disabled={bannerUploading}
+                            onClick={() => bannerInputRef.current?.click()}
+                            className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-purple-300 hover:text-white border border-purple-500/30 transition-all flex items-center gap-1"
+                          >
+                            <Upload className="w-3 h-3" />
+                            <span>Change</span>
+                          </button>
+                          <button
+                            type="button"
+                            id="remove-store-banner-btn"
+                            disabled={bannerUploading}
+                            onClick={handleRemoveBanner}
+                            className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 hover:text-white border border-rose-800/40 transition-all flex items-center gap-1"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                            <span>Remove</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="border-2 border-dashed border-slate-700 hover:border-purple-500/50 rounded-xl p-4 bg-slate-900/40 flex flex-col items-center justify-center text-center transition-colors">
+                      <div className="w-9 h-9 rounded-full bg-indigo-950/60 border border-indigo-800/50 flex items-center justify-center text-indigo-300 mb-2">
+                        <Building2 className="w-4 h-4" />
+                      </div>
+                      <button
+                        type="button"
+                        id="upload-store-banner-btn"
+                        disabled={bannerUploading}
+                        onClick={() => bannerInputRef.current?.click()}
+                        className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-extrabold text-xs shadow-lg shadow-purple-900/30 transition-all flex items-center gap-1.5 mb-1 cursor-pointer"
+                      >
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>Upload Banner</span>
+                      </button>
+                      <span className="text-[10px] text-slate-400">Leave empty for high-contrast default banner.</span>
+                    </div>
+                  )}
+
+                  {bannerError && (
+                    <div className="flex items-center gap-2 p-2 rounded-lg bg-rose-950/40 border border-rose-800/50 text-rose-300 text-[11px]">
+                      <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                      <span>{bannerError}</span>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -869,6 +1237,34 @@ export const VendorApplicationModal: React.FC<VendorApplicationModalProps> = ({
                 <div className="flex justify-between text-slate-300">
                   <span>Contact:</span>
                   <span className="font-bold text-white">{contactEmail} ({contactPhone})</span>
+                </div>
+                <div className="flex items-center justify-between text-slate-300">
+                  <span>Store Logo:</span>
+                  <div className="flex items-center gap-2">
+                    <img
+                      src={logoPreview || storeLogo || DEFAULT_PIONEER_AVATAR}
+                      alt="Store Logo"
+                      referrerPolicy="no-referrer"
+                      className="w-6 h-6 rounded-md object-cover border border-purple-500/40"
+                    />
+                    <span className="font-bold text-white text-[11px]">
+                      {(logoPreview || storeLogo) ? 'Custom Attached' : 'Automatic Avatar'}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between text-slate-300">
+                  <span>Store Banner:</span>
+                  <div className="flex items-center gap-2">
+                    <img
+                      src={bannerPreview || storeBanner || DEFAULT_STORE_BANNER}
+                      alt="Store Banner"
+                      referrerPolicy="no-referrer"
+                      className="w-10 h-5 rounded object-cover border border-purple-500/40"
+                    />
+                    <span className="font-bold text-white text-[11px]">
+                      {(bannerPreview || storeBanner) ? 'Custom Attached' : 'Default Banner'}
+                    </span>
+                  </div>
                 </div>
                 {businessRegNumber && (
                   <div className="flex justify-between text-slate-300">

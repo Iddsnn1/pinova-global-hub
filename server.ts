@@ -818,6 +818,82 @@ const handleVendorDocRawBody = (req: express.Request, res: express.Response, nex
   });
 };
 
+/**
+ * Resolves the directory for storing public merchant storefront branding assets (logos and banners).
+ * Stored under PINOVA_DATA_DIR/vendor-branding/ with public-readable permissions.
+ */
+function getVendorBrandingDir(): string {
+  const base = process.env.PINOVA_DATA_DIR
+    ? path.resolve(process.env.PINOVA_DATA_DIR, 'vendor-branding')
+    : path.resolve(process.cwd(), 'data', 'vendor-branding');
+  try {
+    if (!fs.existsSync(base)) {
+      fs.mkdirSync(base, { recursive: true, mode: 0o755 });
+    }
+  } catch {
+    const fallback = path.resolve('/tmp', 'pinova_data', 'vendor-branding');
+    if (!fs.existsSync(fallback)) {
+      fs.mkdirSync(fallback, { recursive: true, mode: 0o755 });
+    }
+    return fallback;
+  }
+  return base;
+}
+
+/**
+ * Validates magic bytes / file signatures specifically for public storefront branding images.
+ * Supported formats: JPEG, PNG, WebP.
+ * Disallows executable binaries, HTML/script injection, SVG, and PDFs.
+ */
+function validateBrandingImageSignature(buffer: Buffer, mimeType: string): boolean {
+  if (!buffer || buffer.length < 12) return false;
+  if (mimeType === 'image/jpeg') {
+    return buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+  }
+  if (mimeType === 'image/png') {
+    return (
+      buffer.length >= 8 &&
+      buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47 &&
+      buffer[4] === 0x0d && buffer[5] === 0x0a && buffer[6] === 0x1a && buffer[7] === 0x0a
+    );
+  }
+  if (mimeType === 'image/webp') {
+    return (
+      buffer[0] === 0x52 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x46 &&
+      buffer[8] === 0x57 && buffer[9] === 0x45 && buffer[10] === 0x42 && buffer[11] === 0x50
+    );
+  }
+  return false;
+}
+
+// Raw body parser middleware specifically for vendor storefront branding uploads (max 5 MB)
+const vendorBrandingRawBodyParser = express.raw({
+  type: ['image/jpeg', 'image/png', 'image/jpg', 'image/webp', 'application/octet-stream'],
+  limit: '5mb'
+});
+
+const handleVendorBrandingRawBody = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  vendorBrandingRawBodyParser(req, res, (err: any) => {
+    if (err) {
+      if (err.type === 'entity.too.large' || err.status === 413) {
+        res.status(413).json({
+          success: false,
+          error: 'FILE_TOO_LARGE',
+          message: 'Storefront branding image exceeds maximum allowed size of 5 MB.'
+        });
+        return;
+      }
+      res.status(400).json({
+        success: false,
+        error: 'INVALID_REQUEST_BODY',
+        message: err.message || 'Failed to parse request body.'
+      });
+      return;
+    }
+    next();
+  });
+};
+
 // POST /api/vendor/document-upload & /api/v1/vendor/document-upload
 app.post(
   ['/api/vendor/document-upload', '/api/v1/vendor/document-upload'],
@@ -960,6 +1036,284 @@ app.post(
         success: false,
         error: 'DOCUMENT_UPLOAD_ERROR',
         message: 'Internal server error occurred while processing document upload.'
+      });
+    }
+  }
+);
+
+// ============================================================================
+// PUBLIC STOREFRONT BRANDING UPLOAD & ASSET RETRIEVAL (PI-HUB BRANDING)
+// Distinct from encrypted KYC document storage: branding is public for buyers
+// ============================================================================
+
+// POST /api/vendor/branding-upload & /api/v1/vendor/branding-upload
+app.post(
+  ['/api/vendor/branding-upload', '/api/v1/vendor/branding-upload'],
+  authenticate,
+  handleVendorBrandingRawBody,
+  async (req: AuthenticatedRequest, res) => {
+    try {
+      // 1. Authoritative caller authentication (strict - do NOT trust client-supplied owner)
+      let authUser = req.authenticatedUser || (req as any).user;
+      if (!authUser && !isProduction) {
+        const fallback = (req.headers['x-pioneer-username'] || req.headers['x-username']) as string | undefined;
+        if (fallback && typeof fallback === 'string' && fallback.trim()) {
+          authUser = {
+            id: `usr_${fallback.trim().toLowerCase()}`,
+            username: fallback.trim(),
+            roles: ['MERCHANT', 'BUYER']
+          };
+        }
+      }
+
+      if (!authUser || !authUser.username) {
+        res.status(401).json({
+          success: false,
+          error: 'UNAUTHORIZED',
+          message: 'Authentication required to upload merchant storefront branding.'
+        });
+        return;
+      }
+      const ownerUsername = authUser.username;
+
+      // 2. MIME type validation (PNG, JPEG, WebP only; disallow SVG, PDF, Executables, HTML)
+      const rawContentType = (req.headers['content-type'] || '').toString();
+      let mimeType = rawContentType.split(';')[0].trim().toLowerCase();
+      if (mimeType === 'image/jpg') mimeType = 'image/jpeg';
+      const allowedMimes = ['image/jpeg', 'image/png', 'image/webp'];
+      if (!allowedMimes.includes(mimeType)) {
+        res.status(400).json({
+          success: false,
+          error: 'INVALID_MIME_TYPE',
+          message: 'Invalid image format. Allowed branding image types are image/png, image/jpeg, and image/webp.'
+        });
+        return;
+      }
+
+      // 3. File buffer check
+      const fileBuffer: Buffer = req.body;
+      if (!Buffer.isBuffer(fileBuffer) || fileBuffer.length === 0) {
+        res.status(400).json({
+          success: false,
+          error: 'EMPTY_FILE',
+          message: 'Branding image content is empty or unreadable.'
+        });
+        return;
+      }
+
+      // 4. File size limit: 5 MB
+      const maxSizeBytes = 5 * 1024 * 1024;
+      if (fileBuffer.length > maxSizeBytes) {
+        res.status(400).json({
+          success: false,
+          error: 'FILE_TOO_LARGE',
+          message: 'Branding image exceeds maximum allowed size of 5 MB.'
+        });
+        return;
+      }
+
+      // 5. File signature / magic byte validation
+      if (!validateBrandingImageSignature(fileBuffer, mimeType)) {
+        res.status(400).json({
+          success: false,
+          error: 'FILE_SIGNATURE_MISMATCH',
+          message: 'File content does not match the declared image MIME signature. Executable, script, or SVG payloads are strictly forbidden.'
+        });
+        return;
+      }
+
+      // 6. Branding type ('logo' or 'banner')
+      const rawType = ((req.headers['x-branding-type'] as string) || (req.query?.type as string) || 'logo').toLowerCase().trim();
+      const brandingType: 'logo' | 'banner' = rawType === 'banner' ? 'banner' : 'logo';
+
+      // 7. Safe server-managed filename and asset identifier
+      const ext = mimeType === 'image/png' ? 'png' : mimeType === 'image/webp' ? 'webp' : 'jpg';
+      const randomId = crypto.randomBytes(16).toString('hex');
+      const assetId = `${brandingType}_${randomId}.${ext}`;
+
+      const brandingDir = getVendorBrandingDir();
+      const filePath = path.join(brandingDir, assetId);
+      const metaPath = path.join(brandingDir, `${assetId}.meta.json`);
+
+      // 8. Store public image asset with mode 0o644
+      fs.writeFileSync(filePath, fileBuffer, { mode: 0o644 });
+      try { fs.chmodSync(filePath, 0o644); } catch {}
+
+      // 9. Store metadata
+      const rawFilename = (req.headers['x-filename'] as string) || `store_${brandingType}`;
+      let originalFilename = `store_${brandingType}.${ext}`;
+      try { originalFilename = decodeURIComponent(rawFilename); } catch { originalFilename = rawFilename; }
+      const sanitizedFilename = sanitizeVendorFilename(originalFilename);
+
+      const metadata = {
+        assetId,
+        brandingType,
+        owner: ownerUsername.toLowerCase(),
+        mimeType,
+        originalFilename: sanitizedFilename,
+        size: fileBuffer.length,
+        uploadedAt: new Date().toISOString()
+      };
+      fs.writeFileSync(metaPath, JSON.stringify(metadata, null, 2), { mode: 0o644 });
+      try { fs.chmodSync(metaPath, 0o644); } catch {}
+
+      res.status(201).json({
+        success: true,
+        url: `/api/vendor/branding-asset/${assetId}`,
+        assetId,
+        brandingType,
+        message: `${brandingType === 'logo' ? 'Store logo' : 'Store banner'} uploaded successfully.`
+      });
+    } catch (err: any) {
+      res.status(500).json({
+        success: false,
+        error: 'BRANDING_UPLOAD_ERROR',
+        message: 'Internal server error occurred while processing branding upload.'
+      });
+    }
+  }
+);
+
+// GET /api/vendor/branding-asset/:assetId & /api/v1/vendor/branding-asset/:assetId
+// Publicly accessible to buyers and storefront visitors
+app.get(
+  ['/api/vendor/branding-asset/:assetId', '/api/v1/vendor/branding-asset/:assetId'],
+  (req, res) => {
+    try {
+      const { assetId } = req.params;
+      if (!assetId || !/^(logo|banner)_[a-f0-9]{32}\.(png|jpg|jpeg|webp)$/i.test(assetId)) {
+        res.status(400).json({
+          success: false,
+          error: 'INVALID_ASSET_ID',
+          message: 'Invalid branding asset identifier.'
+        });
+        return;
+      }
+
+      const brandingDir = getVendorBrandingDir();
+      const filePath = path.resolve(brandingDir, assetId);
+
+      // Path traversal prevention
+      if (!filePath.startsWith(brandingDir)) {
+        res.status(403).json({
+          success: false,
+          error: 'PATH_TRAVERSAL_DETECTED',
+          message: 'Access denied.'
+        });
+        return;
+      }
+
+      if (!fs.existsSync(filePath)) {
+        res.status(404).json({
+          success: false,
+          error: 'ASSET_NOT_FOUND',
+          message: 'Branding image asset not found.'
+        });
+        return;
+      }
+
+      const ext = path.extname(filePath).toLowerCase();
+      const contentType = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.setHeader('Cache-Control', 'public, max-age=86400, immutable');
+      res.setHeader('Content-Disposition', 'inline');
+
+      const stream = fs.createReadStream(filePath);
+      stream.pipe(res);
+    } catch (err: any) {
+      res.status(500).json({
+        success: false,
+        error: 'BRANDING_ASSET_READ_ERROR',
+        message: 'Internal server error occurred while retrieving branding image.'
+      });
+    }
+  }
+);
+
+// DELETE /api/vendor/branding-asset/:assetId & /api/v1/vendor/branding-asset/:assetId
+// Authenticated: Only the merchant owner or admin may delete
+app.delete(
+  ['/api/vendor/branding-asset/:assetId', '/api/v1/vendor/branding-asset/:assetId'],
+  authenticate,
+  async (req: AuthenticatedRequest, res) => {
+    try {
+      let authUser = req.authenticatedUser || (req as any).user;
+      if (!authUser && !isProduction) {
+        const fallback = (req.headers['x-pioneer-username'] || req.headers['x-username']) as string | undefined;
+        if (fallback && typeof fallback === 'string' && fallback.trim()) {
+          authUser = {
+            id: `usr_${fallback.trim().toLowerCase()}`,
+            username: fallback.trim(),
+            roles: ['MERCHANT', 'BUYER']
+          };
+        }
+      }
+
+      const adminAuth = await checkAdminAuth(req);
+      const isAdmin = adminAuth.authenticated && adminAuth.authorized;
+
+      if (!authUser && !isAdmin) {
+        res.status(401).json({
+          success: false,
+          error: 'UNAUTHORIZED',
+          message: 'Authentication required to delete storefront branding assets.'
+        });
+        return;
+      }
+
+      const { assetId } = req.params;
+      if (!assetId || !/^(logo|banner)_[a-f0-9]{32}\.(png|jpg|jpeg|webp)$/i.test(assetId)) {
+        res.status(400).json({
+          success: false,
+          error: 'INVALID_ASSET_ID',
+          message: 'Invalid branding asset identifier.'
+        });
+        return;
+      }
+
+      const brandingDir = getVendorBrandingDir();
+      const filePath = path.resolve(brandingDir, assetId);
+      const metaPath = path.resolve(brandingDir, `${assetId}.meta.json`);
+
+      if (!filePath.startsWith(brandingDir)) {
+        res.status(403).json({ success: false, error: 'PATH_TRAVERSAL_DETECTED', message: 'Access denied.' });
+        return;
+      }
+
+      if (!fs.existsSync(filePath)) {
+        res.status(404).json({ success: false, error: 'ASSET_NOT_FOUND', message: 'Branding asset not found.' });
+        return;
+      }
+
+      // Check ownership from metadata
+      if (fs.existsSync(metaPath)) {
+        try {
+          const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+          const isOwner = authUser?.username && meta.owner && authUser.username.toLowerCase() === meta.owner.toLowerCase();
+          if (!isOwner && !isAdmin) {
+            res.status(403).json({
+              success: false,
+              error: 'FORBIDDEN',
+              message: 'You are not authorized to remove another vendor\'s storefront branding asset.'
+            });
+            return;
+          }
+        } catch {}
+      }
+
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      if (fs.existsSync(metaPath)) fs.unlinkSync(metaPath);
+
+      res.json({
+        success: true,
+        message: 'Storefront branding asset removed successfully.'
+      });
+    } catch (err: any) {
+      res.status(500).json({
+        success: false,
+        error: 'BRANDING_DELETE_ERROR',
+        message: 'Internal server error while removing branding asset.'
       });
     }
   }
@@ -1131,6 +1485,8 @@ app.post(['/api/vendor/apply', '/api/v1/vendor/apply'], authenticate, (req: Auth
       storeTagline,
       logoUrl,
       bannerUrl,
+      storeLogo,
+      storeBanner,
       businessRegistrationNumber,
       taxId,
       websiteUrl,
@@ -1221,8 +1577,10 @@ app.post(['/api/vendor/apply', '/api/v1/vendor/apply'], authenticate, (req: Auth
       contactTelegram,
       storeDescription: storeDescription || '',
       storeTagline,
-      logoUrl: logoUrl || 'https://images.unsplash.com/photo-1534452203293-494d7ddbf7e0?auto=format&fit=crop&w=200&q=80',
-      bannerUrl: bannerUrl || 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=1200&q=80',
+      logoUrl: (storeLogo || logoUrl || '').trim() || 'https://images.unsplash.com/photo-1534452203293-494d7ddbf7e0?auto=format&fit=crop&w=200&q=80',
+      bannerUrl: (storeBanner || bannerUrl || '').trim() || 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=1200&q=80',
+      storeLogo: (storeLogo || logoUrl || '').trim() || 'https://images.unsplash.com/photo-1534452203293-494d7ddbf7e0?auto=format&fit=crop&w=200&q=80',
+      storeBanner: (storeBanner || bannerUrl || '').trim() || 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=1200&q=80',
       businessRegistrationNumber,
       taxId,
       websiteUrl,
