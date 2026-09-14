@@ -1,8 +1,10 @@
 name: Prepare Vendor KYC Remediation
 
 on:
-  pull_request:
-    branches: [main]
+  push:
+    branches:
+      - fix/vendor-kyc-document-upload
+  workflow_dispatch:
 
 permissions:
   contents: write
