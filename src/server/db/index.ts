@@ -22,6 +22,7 @@ import { PlatformConfigRepository } from './repositories/PlatformConfigRepositor
 import { VendorApplicationRepository } from './repositories/VendorApplicationRepository';
 import { EducationRepository } from './repositories/EducationRepository';
 import { applyEducationHierarchyVerificationOverrides } from '../../data/educationHierarchyVerificationOverrides';
+import { applyYabatechHierarchyVerificationOverride } from '../../data/yabatechHierarchyVerificationOverride';
 
 // Durable Singleton Repositories
 export const paymentLedgerRepo = new PaymentLedgerRepository();
@@ -36,14 +37,10 @@ export const vendorApplicationRepo = new VendorApplicationRepository();
 export const educationRepo = new EducationRepository();
 
 // Reconcile authoritative hierarchy corrections after durable snapshots load.
-// This repairs legacy/incomplete persisted faculty snapshots without changing
+// This repairs legacy/incomplete persisted academic snapshots without changing
 // payment, authentication, RBAC, or other repository behavior.
 for (const institution of educationRepo.getInstitutions()) {
   const corrected = applyEducationHierarchyVerificationOverrides(institution);
-  if (corrected !== institution) {
-    // getInstitutionById returns the live cached object; the repository's
-    // reconciliation has already persisted seed additions. The override is
-    // intentionally applied to the live runtime graph for every process.
-    Object.assign(institution, corrected);
-  }
+  const withYabatechCorrection = applyYabatechHierarchyVerificationOverride(corrected);
+  Object.assign(institution, withYabatechCorrection);
 }
