@@ -33,5 +33,8 @@ jobs:
       - name: Education ecosystem runtime test
         run: npm run test:edu
 
+      - name: Education directory functional test
+        run: npm run test:edu:directory
+
       - name: Production build
         run: npm run build
