@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { InstitutionDirectory } from './InstitutionDirectory';
+import { GlobalEducationCoverageBanner } from './GlobalEducationCoverageBanner';
 import { SchoolFeesEngine } from './SchoolFeesEngine';
 import { ParentDashboard } from './ParentDashboard';
 import { AdmissionsPipeline } from './AdmissionsPipeline';
@@ -77,7 +78,6 @@ export const EducationHub: React.FC<EducationHubProps> = ({
   };
 
   const handlePayForChild = (child: GuardianChildSummary) => {
-    // Look up child invoice or switch to fees
     setPreselectedInvoiceId(undefined);
     setActiveTab('fees');
   };
@@ -133,26 +133,22 @@ export const EducationHub: React.FC<EducationHubProps> = ({
             </p>
           </div>
 
-          {/* Quick Stats Ticker */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4 border-t border-slate-800/80 text-xs">
             <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800">
               <span className="text-slate-400 block text-[11px]">Supported Tiers</span>
               <span className="text-white font-bold text-sm">6 Complete Levels</span>
               <span className="text-[10px] text-amber-400 block mt-0.5">Creche to PhD & CPD</span>
             </div>
-
             <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800">
               <span className="text-slate-400 block text-[11px]">Receipt Validation</span>
               <span className="text-emerald-400 font-bold text-sm">SHA-256 Verified</span>
               <span className="text-[10px] text-slate-400 block mt-0.5">Zero-leak public audit</span>
             </div>
-
             <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800">
               <span className="text-slate-400 block text-[11px]">Coverage Scope</span>
               <span className="text-white font-bold text-sm">🌍 Global (190+ Nations)</span>
               <span className="text-[10px] text-amber-400 block mt-0.5">🇳🇬 Nigeria: Primary Deployment Hub</span>
             </div>
-
             <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800">
               <span className="text-slate-400 block text-[11px]">Payment Methods</span>
               <span className="text-amber-400 font-bold text-sm">Pi Network & Escrow</span>
@@ -167,7 +163,6 @@ export const EducationHub: React.FC<EducationHubProps> = ({
         {navTabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
-
           return (
             <button
               key={tab.id}
@@ -180,13 +175,7 @@ export const EducationHub: React.FC<EducationHubProps> = ({
             >
               <Icon className={`w-4 h-4 ${isActive ? 'text-slate-950' : 'text-amber-400'}`} />
               <span>{tab.label}</span>
-              <span
-                className={`text-[9px] px-1.5 py-0.5 rounded-full uppercase tracking-wider font-semibold ${
-                  isActive
-                    ? 'bg-slate-950/30 text-slate-950'
-                    : 'bg-slate-800 text-slate-400 border border-slate-700'
-                }`}
-              >
+              <span className={`text-[9px] px-1.5 py-0.5 rounded-full uppercase tracking-wider font-semibold ${isActive ? 'bg-slate-950/30 text-slate-950' : 'bg-slate-800 text-slate-400 border border-slate-700'}`}>
                 {tab.tag}
               </span>
             </button>
@@ -194,7 +183,9 @@ export const EducationHub: React.FC<EducationHubProps> = ({
         })}
       </div>
 
-      {/* Active Tab View */}
+      {/* Global Registry governance is now visible in the Education UI */}
+      {activeTab === 'directory' && <GlobalEducationCoverageBanner />}
+
       <div className="animate-in fade-in duration-200">
         {activeTab === 'directory' && (
           <InstitutionDirectory
@@ -202,14 +193,12 @@ export const EducationHub: React.FC<EducationHubProps> = ({
             onApplyForAdmission={handleApplyForAdmission}
           />
         )}
-
         {activeTab === 'fees' && (
           <SchoolFeesEngine
             preselectedInvoiceId={preselectedInvoiceId}
             preselectedInstitution={preselectedInstitution}
           />
         )}
-
         {activeTab === 'exam_cards' && (
           <ExamCardsPortal
             utilityConfig={utilityConfig}
@@ -218,30 +207,12 @@ export const EducationHub: React.FC<EducationHubProps> = ({
             onTransactionSuccess={onTransactionSuccess}
           />
         )}
-
-        {activeTab === 'children' && (
-          <ParentDashboard onPayForChild={handlePayForChild} />
-        )}
-
-        {activeTab === 'admissions' && (
-          <AdmissionsPipeline preselectedInstitution={preselectedInstitution} />
-        )}
-
-        {activeTab === 'verifier' && (
-          <DigitalReceiptVerifier />
-        )}
-
-        {activeTab === 'scholarships' && (
-          <ScholarshipsHub />
-        )}
-
-        {activeTab === 'admin' && (
-          <InstitutionAdminPortal />
-        )}
-
-        {activeTab === 'marketplace' && (
-          <EducationMarketplace />
-        )}
+        {activeTab === 'children' && <ParentDashboard onPayForChild={handlePayForChild} />}
+        {activeTab === 'admissions' && <AdmissionsPipeline preselectedInstitution={preselectedInstitution} />}
+        {activeTab === 'verifier' && <DigitalReceiptVerifier />}
+        {activeTab === 'scholarships' && <ScholarshipsHub />}
+        {activeTab === 'admin' && <InstitutionAdminPortal />}
+        {activeTab === 'marketplace' && <EducationMarketplace />}
       </div>
     </div>
   );
