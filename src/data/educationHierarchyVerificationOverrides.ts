@@ -250,7 +250,7 @@ export function applyEducationHierarchyVerificationOverrides(institution: Instit
     };
   }
 
-  if (institution.id === 'inst-ng-unilag-001') {
+  if (institution.id === 'inst-ng-unilag-002') {
     const existing = institution.faculties || [];
     const existingByName = new Map(existing.map((f) => [f.name.trim().toLowerCase(), f]));
     const corrected = UNILAG_FACULTIES.map((f) => mergeExistingProgrammes(f, existingByName.get(f.name.trim().toLowerCase())));
