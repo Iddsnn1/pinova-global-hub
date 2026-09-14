@@ -9,6 +9,7 @@ export interface VendorApplicationDoc {
   fileName: string;
   fileUrl: string;
   uploadedAt: string;
+  documentNumber?: string;
 }
 
 export interface VendorApplicationEntity {

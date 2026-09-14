@@ -716,26 +716,403 @@ app.post(['/api/pstp/disputes/:id/resolve', '/api/v1/pstp/disputes/:id/resolve']
   res.json({ success: true, dispute: updatedDispute });
 });
 
-// 3. Vendor Application System Endpoints
-app.get(['/api/vendor/application/:username', '/api/v1/vendor/application/:username'], authenticate, async (req: AuthenticatedRequest, res) => {
-  const { username } = req.params;
-  const adminAuth = await checkAdminAuth(req);
-  const isAdmin = adminAuth.authenticated && adminAuth.authorized;
-  const isOwner = req.user?.username && req.user.username.toLowerCase() === username.toLowerCase();
+// 3. Vendor Application System Endpoints (Secure KYC Storage & AES-256-GCM Encryption)
 
-  if (isProduction && !isAdmin && !isOwner) {
-    res.status(403).json({
-      success: false,
-      error: 'FORBIDDEN',
-      message: 'Access denied: You do not have permission to inspect this vendor application.'
-    });
-    return;
+/**
+ * Resolves the AES-256-GCM 32-byte encryption key from VENDOR_DOCUMENT_ENCRYPTION_KEY.
+ * Strictly requires exactly 64 hexadecimal characters.
+ * Never falls back to plaintext or insecure keys.
+ */
+function getVendorDocumentEncryptionKey(): Buffer | null {
+  const hexKey = process.env.VENDOR_DOCUMENT_ENCRYPTION_KEY;
+  if (!hexKey || typeof hexKey !== 'string') {
+    return null;
   }
+  const trimmed = hexKey.trim();
+  if (!/^[0-9a-fA-F]{64}$/.test(trimmed)) {
+    return null;
+  }
+  return Buffer.from(trimmed, 'hex');
+}
 
-  const application = vendorApplicationRepo.findByUsername(username);
-  res.json({ success: true, application: application || null });
+/**
+ * Resolves the directory for storing encrypted vendor verification documents.
+ * Stored under PINOVA_DATA_DIR/vendor-documents/ with restricted directory permissions.
+ */
+function getVendorDocumentsDir(): string {
+  const base = process.env.PINOVA_DATA_DIR
+    ? path.resolve(process.env.PINOVA_DATA_DIR, 'vendor-documents')
+    : path.resolve(process.cwd(), 'data', 'vendor-documents');
+  try {
+    if (!fs.existsSync(base)) {
+      fs.mkdirSync(base, { recursive: true, mode: 0o700 });
+    }
+  } catch {
+    const fallback = path.resolve('/tmp', 'pinova_data', 'vendor-documents');
+    if (!fs.existsSync(fallback)) {
+      fs.mkdirSync(fallback, { recursive: true, mode: 0o700 });
+    }
+    return fallback;
+  }
+  return base;
+}
+
+/**
+ * Validates magic bytes / file signatures to prevent MIME spoofing.
+ */
+function validateVendorFileSignature(buffer: Buffer, mimeType: string): boolean {
+  if (!buffer || buffer.length < 4) return false;
+  if (mimeType === 'application/pdf') {
+    // %PDF- (0x25 0x50 0x44 0x46 0x2D)
+    return buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46;
+  }
+  if (mimeType === 'image/jpeg') {
+    // 0xFF 0xD8 0xFF
+    return buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+  }
+  if (mimeType === 'image/png') {
+    // 0x89 0x50 0x4E 0x47 0x0D 0x0A 0x1A 0x0A
+    return (
+      buffer.length >= 8 &&
+      buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47 &&
+      buffer[4] === 0x0d && buffer[5] === 0x0a && buffer[6] === 0x1a && buffer[7] === 0x0a
+    );
+  }
+  return false;
+}
+
+/**
+ * Sanitizes original filenames to prevent path traversal or injection.
+ */
+function sanitizeVendorFilename(raw: string): string {
+  const base = path.basename(raw || 'document');
+  const clean = base.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 100);
+  return clean || 'document';
+}
+
+// Raw body parser middleware specifically for vendor document uploads (max 5 MB)
+const vendorDocRawBodyParser = express.raw({
+  type: ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg', 'application/octet-stream'],
+  limit: '5mb'
 });
 
+const handleVendorDocRawBody = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  vendorDocRawBodyParser(req, res, (err: any) => {
+    if (err) {
+      if (err.type === 'entity.too.large' || err.status === 413) {
+        res.status(413).json({
+          success: false,
+          error: 'FILE_TOO_LARGE',
+          message: 'Document exceeds maximum size of 5 MB.'
+        });
+        return;
+      }
+      res.status(400).json({
+        success: false,
+        error: 'INVALID_REQUEST_BODY',
+        message: err.message || 'Failed to parse request body.'
+      });
+      return;
+    }
+    next();
+  });
+};
+
+// POST /api/vendor/document-upload & /api/v1/vendor/document-upload
+app.post(
+  ['/api/vendor/document-upload', '/api/v1/vendor/document-upload'],
+  authenticate,
+  handleVendorDocRawBody,
+  async (req: AuthenticatedRequest, res) => {
+    try {
+      // 1. Authoritative caller authentication (strict - do NOT trust client-supplied owner)
+      const authUser = req.authenticatedUser || (req as any).user;
+      if (!authUser || !authUser.username) {
+        res.status(401).json({
+          success: false,
+          error: 'UNAUTHORIZED',
+          message: 'Authentication required to upload merchant verification documents.'
+        });
+        return;
+      }
+      const ownerUsername = authUser.username;
+
+      // 2. MIME type validation
+      const rawContentType = (req.headers['content-type'] || '').toString();
+      let mimeType = rawContentType.split(';')[0].trim().toLowerCase();
+      if (mimeType === 'image/jpg') mimeType = 'image/jpeg';
+
+      const allowedMimes = ['application/pdf', 'image/jpeg', 'image/png'];
+      if (!allowedMimes.includes(mimeType)) {
+        res.status(400).json({
+          success: false,
+          error: 'INVALID_MIME_TYPE',
+          message: 'Allowed document types are application/pdf, image/jpeg, and image/png.'
+        });
+        return;
+      }
+
+      // 3. Body validation & size check (max 5 MB)
+      const fileBuffer: Buffer = req.body;
+      if (!Buffer.isBuffer(fileBuffer) || fileBuffer.length === 0) {
+        res.status(400).json({
+          success: false,
+          error: 'EMPTY_FILE',
+          message: 'Document file content is empty or unreadable.'
+        });
+        return;
+      }
+      const maxSizeBytes = 5 * 1024 * 1024;
+      if (fileBuffer.length > maxSizeBytes) {
+        res.status(400).json({
+          success: false,
+          error: 'FILE_TOO_LARGE',
+          message: 'Document exceeds maximum size of 5 MB.'
+        });
+        return;
+      }
+
+      // 4. Validate file signature / magic bytes
+      if (!validateVendorFileSignature(fileBuffer, mimeType)) {
+        res.status(400).json({
+          success: false,
+          error: 'FILE_SIGNATURE_MISMATCH',
+          message: 'File content does not match the declared MIME type signature.'
+        });
+        return;
+      }
+
+      // 5. Check AES-256-GCM encryption key
+      const encryptionKey = getVendorDocumentEncryptionKey();
+      if (!encryptionKey) {
+        res.status(500).json({
+          success: false,
+          error: 'ENCRYPTION_KEY_INVALID_OR_MISSING',
+          message: 'Server encryption key is missing or invalid. Upload cannot proceed.'
+        });
+        return;
+      }
+
+      // 6. Filename & document type extraction
+      const rawFilename = (req.headers['x-filename'] as string) || 'verification_document';
+      let originalFilename = 'verification_document';
+      try {
+        originalFilename = decodeURIComponent(rawFilename);
+      } catch {
+        originalFilename = rawFilename;
+      }
+      const sanitizedFilename = sanitizeVendorFilename(originalFilename);
+
+      const rawDocType = (req.headers['x-document-type'] as string) || 'national_id';
+      const allowedDocTypes = [
+        'national_id',
+        'passport',
+        'business_cert',
+        'utility_bill',
+        'identity_proof',
+        'address_proof',
+        'business_registration',
+        'tax_cert',
+        'store_license'
+      ];
+      const docType = allowedDocTypes.includes(rawDocType) ? rawDocType : 'national_id';
+
+      // 7. AES-256-GCM encryption (12-byte nonce, 16-byte auth tag)
+      const iv = crypto.randomBytes(12);
+      const cipher = crypto.createCipheriv('aes-256-gcm', encryptionKey, iv);
+      const encryptedBytes = Buffer.concat([cipher.update(fileBuffer), cipher.final()]);
+      const authTag = cipher.getAuthTag();
+
+      // 8. Generate cryptographically random document ID
+      const randomDocId = crypto.randomBytes(16).toString('hex');
+
+      // 9. Store encrypted binary and metadata with restricted permissions (0600)
+      const docsDir = getVendorDocumentsDir();
+      const encPath = path.join(docsDir, `${randomDocId}.enc`);
+      const metaPath = path.join(docsDir, `${randomDocId}.meta.json`);
+
+      // Write raw ciphertext bytes (no base64 storage)
+      fs.writeFileSync(encPath, encryptedBytes, { mode: 0o600 });
+      try { fs.chmodSync(encPath, 0o600); } catch {}
+
+      const metadata = {
+        id: randomDocId,
+        originalFilename: sanitizedFilename,
+        mimeType,
+        documentType: docType,
+        owner: ownerUsername.toLowerCase(),
+        uploadedAt: new Date().toISOString(),
+        iv: iv.toString('hex'),
+        authTag: authTag.toString('hex'),
+        encryptedByteLength: encryptedBytes.length,
+        originalSize: fileBuffer.length
+      };
+      fs.writeFileSync(metaPath, JSON.stringify(metadata, null, 2), { mode: 0o600 });
+      try { fs.chmodSync(metaPath, 0o600); } catch {}
+
+      // 10. Return only private reference (never expose filesystem path)
+      res.status(201).json({
+        success: true,
+        reference: `private://vendor-documents/${randomDocId}`
+      });
+    } catch (err: any) {
+      res.status(500).json({
+        success: false,
+        error: 'DOCUMENT_UPLOAD_ERROR',
+        message: 'Internal server error occurred while processing document upload.'
+      });
+    }
+  }
+);
+
+// GET /api/vendor/document/:id & /api/v1/vendor/document/:id
+app.get(
+  ['/api/vendor/document/:id', '/api/v1/vendor/document/:id'],
+  authenticate,
+  async (req: AuthenticatedRequest, res) => {
+    try {
+      const authUser = req.authenticatedUser || (req as any).user;
+      const adminAuth = await checkAdminAuth(req);
+      const isAdmin = adminAuth.authenticated && adminAuth.authorized;
+
+      if (!authUser && !isAdmin) {
+        res.status(401).json({
+          success: false,
+          error: 'UNAUTHORIZED',
+          message: 'Authentication required to retrieve verification documents.'
+        });
+        return;
+      }
+
+      const { id } = req.params;
+      if (!id || !/^[a-zA-Z0-9_-]{10,64}$/.test(id)) {
+        res.status(400).json({
+          success: false,
+          error: 'INVALID_DOCUMENT_ID',
+          message: 'Invalid document identifier format.'
+        });
+        return;
+      }
+
+      const docsDir = getVendorDocumentsDir();
+      const metaPath = path.join(docsDir, `${id}.meta.json`);
+      const encPath = path.join(docsDir, `${id}.enc`);
+
+      if (!fs.existsSync(metaPath) || !fs.existsSync(encPath)) {
+        res.status(404).json({
+          success: false,
+          error: 'DOCUMENT_NOT_FOUND',
+          message: 'The requested document does not exist.'
+        });
+        return;
+      }
+
+      let meta: any;
+      try {
+        meta = JSON.parse(fs.readFileSync(metaPath, 'utf-8'));
+      } catch {
+        res.status(500).json({
+          success: false,
+          error: 'DOCUMENT_METADATA_ERROR',
+          message: 'Failed to read document metadata.'
+        });
+        return;
+      }
+
+      // Authorization: Only document owner or authorized compliance/governance admin
+      const callerUsername = authUser?.username?.toLowerCase();
+      const docOwner = meta.owner?.toLowerCase();
+      const isOwner = Boolean(callerUsername && docOwner && callerUsername === docOwner);
+      const isGovernanceAdmin =
+        isAdmin ||
+        Boolean(
+          authUser?.roles &&
+          authUser.roles.some((r: string) =>
+            ['PLATFORM_ADMIN', 'COMPLIANCE_OFFICER', 'COMPLIANCE_ADMIN'].includes(r)
+          )
+        );
+
+      if (!isOwner && !isGovernanceAdmin) {
+        res.status(403).json({
+          success: false,
+          error: 'FORBIDDEN',
+          message: 'Access denied: You do not have permission to retrieve this merchant document.'
+        });
+        return;
+      }
+
+      const encryptionKey = getVendorDocumentEncryptionKey();
+      if (!encryptionKey) {
+        res.status(500).json({
+          success: false,
+          error: 'ENCRYPTION_KEY_INVALID_OR_MISSING',
+          message: 'Server decryption configuration error.'
+        });
+        return;
+      }
+
+      const iv = Buffer.from(meta.iv, 'hex');
+      const authTag = Buffer.from(meta.authTag, 'hex');
+      const encryptedBytes = fs.readFileSync(encPath);
+
+      const decipher = crypto.createDecipheriv('aes-256-gcm', encryptionKey, iv);
+      decipher.setAuthTag(authTag);
+      const decryptedBytes = Buffer.concat([decipher.update(encryptedBytes), decipher.final()]);
+
+      res.setHeader('Content-Type', meta.mimeType || 'application/octet-stream');
+      res.setHeader('Cache-Control', 'private, no-store');
+      const dispositionFilename = (meta.originalFilename || 'verification-document').replace(/[^a-zA-Z0-9._-]/g, '_');
+      res.setHeader('Content-Disposition', `inline; filename="${dispositionFilename}"`);
+      res.send(decryptedBytes);
+    } catch (err: any) {
+      res.status(500).json({
+        success: false,
+        error: 'DOCUMENT_DECRYPTION_ERROR',
+        message: 'Unable to decrypt document or verify authentication tag.'
+      });
+    }
+  }
+);
+
+// GET /api/vendor/application/:username & /api/v1/vendor/application/:username
+app.get(
+  ['/api/vendor/application/:username', '/api/v1/vendor/application/:username'],
+  authenticate,
+  async (req: AuthenticatedRequest, res) => {
+    const { username } = req.params;
+    const adminAuth = await checkAdminAuth(req);
+    const isAdmin = adminAuth.authenticated && adminAuth.authorized;
+    const isOwner = req.user?.username && req.user.username.toLowerCase() === username.toLowerCase();
+
+    if (isProduction && !isAdmin && !isOwner) {
+      res.status(403).json({
+        success: false,
+        error: 'FORBIDDEN',
+        message: 'Access denied: You do not have permission to inspect this vendor application.'
+      });
+      return;
+    }
+
+    const application = vendorApplicationRepo.findByUsername(username);
+    if (!application) {
+      res.json({ success: true, application: null });
+      return;
+    }
+
+    // Protect sensitive document numbers from non-owner/non-admin callers
+    const sanitizedApplication = {
+      ...application,
+      documents: application.documents.map((doc) => ({
+        ...doc,
+        documentNumber: (isAdmin || isOwner) ? doc.documentNumber : undefined
+      }))
+    };
+
+    res.json({ success: true, application: sanitizedApplication });
+  }
+);
+
+// POST /api/vendor/apply & /api/v1/vendor/apply
 app.post(['/api/vendor/apply', '/api/v1/vendor/apply'], authenticate, (req: AuthenticatedRequest, res) => {
   try {
     const effectiveUsername = req.user?.username || req.body?.pioneerUsername;
@@ -758,6 +1135,7 @@ app.post(['/api/vendor/apply', '/api/v1/vendor/apply'], authenticate, (req: Auth
       taxId,
       websiteUrl,
       categoriesToSell,
+      requiredDocuments,
       documents,
       policies,
       pstpAgreementAccepted
@@ -771,6 +1149,59 @@ app.post(['/api/vendor/apply', '/api/v1/vendor/apply'], authenticate, (req: Auth
       });
       return;
     }
+
+    // Normalize requiredDocuments or documents
+    const rawSubmittedDocs = Array.isArray(requiredDocuments)
+      ? requiredDocuments
+      : Array.isArray(documents)
+      ? documents
+      : [];
+
+    // Reject request if no verification document supplied
+    if (rawSubmittedDocs.length === 0) {
+      res.status(400).json({
+        success: false,
+        error: 'VERIFICATION_DOCUMENT_REQUIRED',
+        message: 'A securely uploaded verification document is required.'
+      });
+      return;
+    }
+
+    // Validate that every document reference starts with private://vendor-documents/
+    // Rejects http://, https://, arbitrary external URLs, base64 data URLs, or fake references
+    const hasInvalidDoc = rawSubmittedDocs.some((doc: any) => {
+      const ref = (doc?.fileUrl || doc?.url || '').trim();
+      return !ref.startsWith('private://vendor-documents/');
+    });
+
+    if (hasInvalidDoc) {
+      res.status(400).json({
+        success: false,
+        error: 'VERIFICATION_DOCUMENT_REQUIRED',
+        message: 'A securely uploaded verification document is required. Public URLs and external references are strictly prohibited.'
+      });
+      return;
+    }
+
+    // Normalize into canonical internal VendorApplicationDoc representation
+    const canonicalDocs = rawSubmittedDocs.map((doc: any, idx: number) => {
+      const rawType = doc.type || doc.docType || 'identity_proof';
+      let mappedType: 'identity_proof' | 'address_proof' | 'business_registration' | 'tax_cert' | 'store_license' = 'identity_proof';
+      if (rawType === 'business_cert' || rawType === 'business_registration') mappedType = 'business_registration';
+      else if (rawType === 'utility_bill' || rawType === 'address_proof') mappedType = 'address_proof';
+      else if (rawType === 'tax_cert') mappedType = 'tax_cert';
+      else if (rawType === 'store_license') mappedType = 'store_license';
+      else mappedType = 'identity_proof';
+
+      return {
+        id: doc.id || `doc_${Date.now()}_${idx}`,
+        docType: mappedType,
+        fileName: sanitizeVendorFilename(doc.name || doc.fileName || 'KYC_Verification_Document'),
+        fileUrl: (doc.fileUrl || doc.url || '').trim(),
+        uploadedAt: doc.uploadedAt || new Date().toISOString(),
+        documentNumber: doc.documentNumber ? String(doc.documentNumber).trim() : undefined
+      };
+    });
 
     const existing = vendorApplicationRepo.findByUsername(effectiveUsername);
     const appId = existing?.id || `VAPP-${(countryCode || 'GL').toUpperCase()}-${Date.now().toString().slice(-6)}`;
@@ -796,7 +1227,7 @@ app.post(['/api/vendor/apply', '/api/v1/vendor/apply'], authenticate, (req: Auth
       taxId,
       websiteUrl,
       categoriesToSell: Array.isArray(categoriesToSell) ? categoriesToSell : ['physical'],
-      documents: Array.isArray(documents) ? documents : [],
+      documents: canonicalDocs,
       policies: policies || {
         returnRefundPolicy: '14-day standard return on unused goods under PSTP buyer protection.',
         deliveryShippingPolicy: 'Standard dispatch within 24-48 business hours with tracking.'

@@ -61,7 +61,10 @@ export const VendorApplicationModal: React.FC<VendorApplicationModalProps> = ({
   const [taxId, setTaxId] = useState('');
   const [docType, setDocType] = useState<'national_id' | 'passport' | 'business_cert' | 'utility_bill'>('national_id');
   const [docNumber, setDocNumber] = useState('');
-  const [docFileUrl, setDocFileUrl] = useState('');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'uploaded' | 'error'>('idle');
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadedDocRef, setUploadedDocRef] = useState<string>('');
   const [returnPolicy, setReturnPolicy] = useState('Standard 7-Day Return for defective items under PSTP Escrow Protection.');
   const [deliveryTerms, setDeliveryTerms] = useState('Dispatched within 24-48 business hours with verified tracking number.');
   const [agreedTerms, setAgreedTerms] = useState(false);
@@ -97,9 +100,22 @@ export const VendorApplicationModal: React.FC<VendorApplicationModalProps> = ({
           setTaxId(app.taxId || '');
           const docs = app.requiredDocuments || app.documents;
           if (docs && docs.length > 0) {
-            setDocType(docs[0].type || 'national_id');
-            setDocNumber(docs[0].documentNumber || '');
-            setDocFileUrl(docs[0].fileUrl || '');
+            const firstDoc = docs[0];
+            const rawType = firstDoc.type || firstDoc.docType;
+            if (rawType === 'business_cert' || rawType === 'business_registration') {
+              setDocType('business_cert');
+            } else if (rawType === 'utility_bill' || rawType === 'address_proof') {
+              setDocType('utility_bill');
+            } else if (rawType === 'passport') {
+              setDocType('passport');
+            } else {
+              setDocType('national_id');
+            }
+            setDocNumber(firstDoc.documentNumber || '');
+            if (firstDoc.fileUrl && firstDoc.fileUrl.startsWith('private://vendor-documents/')) {
+              setUploadedDocRef(firstDoc.fileUrl);
+              setUploadStatus('uploaded');
+            }
           }
           if (app.policies?.returnRefundPolicy) {
             setReturnPolicy(app.policies.returnRefundPolicy);
@@ -127,6 +143,78 @@ export const VendorApplicationModal: React.FC<VendorApplicationModalProps> = ({
 
   if (!isOpen) return null;
 
+  const uploadDocumentFile = async (file: File, currentDocType: string) => {
+    setUploadStatus('uploading');
+    setUploadError(null);
+
+    try {
+      let resolvedMime = file.type || '';
+      if (!resolvedMime) {
+        if (/\.pdf$/i.test(file.name)) resolvedMime = 'application/pdf';
+        else if (/\.png$/i.test(file.name)) resolvedMime = 'image/png';
+        else if (/\.jpe?g$/i.test(file.name)) resolvedMime = 'image/jpeg';
+        else resolvedMime = 'application/pdf';
+      }
+
+      const headers: Record<string, string> = {
+        'Content-Type': resolvedMime,
+        'X-Filename': encodeURIComponent(file.name),
+        'X-Document-Type': currentDocType
+      };
+
+      const token = localStorage.getItem('auth_token') || localStorage.getItem('pi_auth_token') || localStorage.getItem('pinova_token');
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const fileBuffer = await file.arrayBuffer();
+
+      const res = await fetch('/api/vendor/document-upload', {
+        method: 'POST',
+        headers,
+        body: fileBuffer
+      });
+
+      const data = await res.json();
+      if (data.success && data.reference && data.reference.startsWith('private://vendor-documents/')) {
+        setUploadedDocRef(data.reference);
+        setUploadStatus('uploaded');
+      } else {
+        setUploadStatus('error');
+        setUploadError(data.message || data.error || 'Failed to securely upload verification document.');
+      }
+    } catch (err: any) {
+      setUploadStatus('error');
+      setUploadError(err.message || 'Network error occurred while uploading document.');
+    }
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadError(null);
+
+    const allowedMimes = ['application/pdf', 'image/jpeg', 'image/png'];
+    const isAllowedMime = allowedMimes.includes(file.type.toLowerCase()) || /\.(pdf|jpe?g|png)$/i.test(file.name);
+    if (!isAllowedMime) {
+      setUploadError('Invalid file format. Only PDF, JPG, and PNG files are accepted.');
+      setSelectedFile(null);
+      return;
+    }
+
+    const maxSize = 5 * 1024 * 1024;
+    if (file.size > maxSize) {
+      const sizeMb = (file.size / (1024 * 1024)).toFixed(2);
+      setUploadError(`File is too large (${sizeMb} MB). Maximum allowed size is 5 MB.`);
+      setSelectedFile(null);
+      return;
+    }
+
+    setSelectedFile(file);
+    await uploadDocumentFile(file, docType);
+  };
+
   const handleSubmitApplication = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!storeName.trim()) {
@@ -144,6 +232,16 @@ export const VendorApplicationModal: React.FC<VendorApplicationModalProps> = ({
       setStep(2);
       return;
     }
+    if (!docNumber.trim()) {
+      setErrorMessage('Please enter your official Document Number in Step 3.');
+      setStep(3);
+      return;
+    }
+    if (!uploadedDocRef || !uploadedDocRef.startsWith('private://vendor-documents/')) {
+      setErrorMessage('A securely uploaded verification document is required. Please upload your document in Step 3.');
+      setStep(3);
+      return;
+    }
     if (!agreedTerms) {
       setErrorMessage('You must agree to PiNova Merchant Governance & Escrow Rules.');
       return;
@@ -152,6 +250,13 @@ export const VendorApplicationModal: React.FC<VendorApplicationModalProps> = ({
     setLoading(true);
     setErrorMessage(null);
     setSuccessMessage(null);
+
+    const docNameMap: Record<string, string> = {
+      national_id: 'National ID Card / NIN',
+      passport: 'International Passport',
+      business_cert: 'Business Incorporation Certificate',
+      utility_bill: 'Municipal Utility Bill'
+    };
 
     const payload = {
       pioneerUsername: pioneerUsername || 'Pioneer_User',
@@ -171,9 +276,9 @@ export const VendorApplicationModal: React.FC<VendorApplicationModalProps> = ({
       requiredDocuments: [
         {
           type: docType,
-          name: docType === 'national_id' ? 'National Identity Card' : docType === 'passport' ? 'International Passport' : docType === 'business_cert' ? 'Business Incorporation Certificate' : 'Municipal Utility Bill',
-          fileUrl: docFileUrl.trim() || 'https://pinova.hub/docs/verified_id.pdf',
-          documentNumber: docNumber.trim() || 'DOC-VERIFIED'
+          name: docNameMap[docType] || 'Identity Verification Document',
+          fileUrl: uploadedDocRef,
+          documentNumber: docNumber.trim()
         }
       ],
       returnPolicy: returnPolicy.trim(),
@@ -181,9 +286,15 @@ export const VendorApplicationModal: React.FC<VendorApplicationModalProps> = ({
     };
 
     try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      const token = localStorage.getItem('auth_token') || localStorage.getItem('pi_auth_token') || localStorage.getItem('pinova_token');
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const res = await fetch('/api/vendor/apply', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify(payload)
       });
       const data = await res.json();
@@ -563,17 +674,23 @@ export const VendorApplicationModal: React.FC<VendorApplicationModalProps> = ({
                 </div>
               )}
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-300 mb-1">Document Type *</label>
                   <select
                     value={docType}
-                    onChange={(e) => setDocType(e.target.value as any)}
+                    onChange={(e) => {
+                      const newType = e.target.value as any;
+                      setDocType(newType);
+                      if (selectedFile) {
+                        uploadDocumentFile(selectedFile, newType);
+                      }
+                    }}
                     className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-xs font-bold text-white focus:outline-none focus:border-purple-500"
                   >
                     <option value="national_id">National ID Card / NIN</option>
                     <option value="passport">International Passport</option>
-                    <option value="business_cert">Business Incorporation Cert</option>
+                    <option value="business_cert">Business Incorporation Certificate</option>
                     <option value="utility_bill">Municipal Utility Bill</option>
                   </select>
                 </div>
@@ -583,22 +700,108 @@ export const VendorApplicationModal: React.FC<VendorApplicationModalProps> = ({
                   <input
                     type="text"
                     required
-                    placeholder="e.g. 9823481234"
+                    placeholder="e.g. Official NIN, Passport No, RC No"
                     value={docNumber}
                     onChange={(e) => setDocNumber(e.target.value)}
                     className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs font-mono font-bold text-white focus:outline-none focus:border-purple-500"
                   />
                 </div>
+              </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-1">Document File Reference</label>
+              {/* Secure Document File Upload Control */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-slate-300">
+                    Verification Document File *
+                  </label>
+                  <span className="text-[11px] text-slate-400 font-medium">Max 5 MB (PDF, JPG, PNG)</span>
+                </div>
+
+                {/* Upload Zone */}
+                <div className={`relative p-5 rounded-2xl border-2 border-dashed transition-all ${
+                  uploadStatus === 'uploaded'
+                    ? 'bg-emerald-950/20 border-emerald-500/50'
+                    : uploadStatus === 'error'
+                    ? 'bg-rose-950/20 border-rose-500/50'
+                    : uploadStatus === 'uploading'
+                    ? 'bg-purple-950/20 border-purple-500/50'
+                    : 'bg-slate-800/60 border-slate-700 hover:border-purple-500/60'
+                }`}>
                   <input
-                    type="text"
-                    placeholder="Doc Upload Reference or URL"
-                    value={docFileUrl}
-                    onChange={(e) => setDocFileUrl(e.target.value)}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs font-bold text-white focus:outline-none focus:border-purple-500"
+                    type="file"
+                    id="vendorDocUploadInput"
+                    accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+                    onChange={handleFileSelect}
+                    disabled={uploadStatus === 'uploading'}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed z-10"
                   />
+
+                  <div className="flex flex-col items-center justify-center text-center space-y-2 py-2">
+                    {uploadStatus === 'uploading' ? (
+                      <>
+                        <div className="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center text-purple-400">
+                          <RefreshCw className="w-5 h-5 animate-spin" />
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-xs font-bold text-purple-300">Uploading verification document securely…</p>
+                          {selectedFile && (
+                            <p className="text-[11px] text-slate-400 font-mono">{selectedFile.name}</p>
+                          )}
+                        </div>
+                      </>
+                    ) : uploadStatus === 'uploaded' ? (
+                      <>
+                        <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center text-emerald-400">
+                          <CheckCircle2 className="w-5 h-5" />
+                        </div>
+                        <div className="space-y-0.5">
+                          <p className="text-xs font-bold text-emerald-300">Document uploaded securely.</p>
+                          {selectedFile ? (
+                            <p className="text-[11px] text-slate-300 font-mono">{selectedFile.name}</p>
+                          ) : uploadedDocRef ? (
+                            <p className="text-[11px] text-slate-400 font-mono">{uploadedDocRef}</p>
+                          ) : null}
+                        </div>
+                        <p className="text-[10px] text-slate-400">Click or drop a new file to replace</p>
+                      </>
+                    ) : uploadStatus === 'error' ? (
+                      <>
+                        <div className="w-10 h-10 rounded-xl bg-rose-500/20 flex items-center justify-center text-rose-400">
+                          <AlertCircle className="w-5 h-5" />
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-xs font-bold text-rose-300">Upload failed</p>
+                          {uploadError && (
+                            <p className="text-[11px] text-rose-400 max-w-sm">{uploadError}</p>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-slate-400">Click or drop a file to retry</p>
+                      </>
+                    ) : (
+                      <>
+                        <div className="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center text-purple-400">
+                          <Upload className="w-5 h-5" />
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-xs font-bold text-white">
+                            Click to select document or drag and drop
+                          </p>
+                          <p className="text-[11px] text-slate-400">
+                            Accepted: PDF / JPG / JPEG / PNG • Maximum: 5 MB
+                          </p>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* Stored Protection Notice */}
+                <div className="flex items-start gap-2 p-2.5 rounded-xl bg-slate-950/70 border border-slate-800 text-[11px] text-slate-400">
+                  <Lock className="w-3.5 h-3.5 text-purple-400 mt-0.5 shrink-0" />
+                  <div className="leading-relaxed">
+                    <span className="font-semibold text-slate-300">Protected Server-Side Storage: </span>
+                    KYC files are stored with AES-256-GCM server-side encryption under strict governance control. Public URLs and plaintext files are strictly prohibited.
+                  </div>
                 </div>
               </div>
             </div>
@@ -673,6 +876,29 @@ export const VendorApplicationModal: React.FC<VendorApplicationModalProps> = ({
                     <span className="font-mono font-bold text-amber-300">{businessRegNumber}</span>
                   </div>
                 )}
+                <div className="flex justify-between text-slate-300">
+                  <span>KYC Document Type:</span>
+                  <span className="font-bold text-white">
+                    {docType === 'national_id' ? 'National ID Card / NIN' : docType === 'passport' ? 'International Passport' : docType === 'business_cert' ? 'Business Incorporation Certificate' : 'Municipal Utility Bill'}
+                  </span>
+                </div>
+                <div className="flex justify-between text-slate-300">
+                  <span>Document Number:</span>
+                  <span className="font-mono font-bold text-white">{docNumber || '—'}</span>
+                </div>
+                <div className="flex justify-between text-slate-300">
+                  <span>KYC Security Status:</span>
+                  <span className="font-mono text-emerald-400 font-bold flex items-center gap-1">
+                    {uploadedDocRef.startsWith('private://vendor-documents/') ? (
+                      <>
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Encrypted (AES-256-GCM)</span>
+                      </>
+                    ) : (
+                      <span className="text-rose-400">Missing Upload</span>
+                    )}
+                  </span>
+                </div>
               </div>
 
               {/* Agreement Checkbox */}
