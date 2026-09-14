@@ -11,6 +11,7 @@
     "lint": "tsc --noEmit",
     "test": "tsx tests/education_ecosystem_verification_suite.ts && tsx tests/audit_v2_remediation_suite.ts && tsx tests/duffel_flight_audit_suite.ts && tsx tests/vendor_kyc_document_upload_suite.ts && tsx tests/vendor_branding_upload_suite.ts",
     "test:edu": "tsx tests/education_ecosystem_verification_suite.ts",
+    "test:edu:directory": "tsx tests/education_directory_functional_suite.ts",
     "test:audit": "tsx tests/audit_v2_remediation_suite.ts",
     "test:flight": "tsx tests/duffel_flight_audit_suite.ts",
     "test:kyc": "tsx tests/vendor_kyc_document_upload_suite.ts",
