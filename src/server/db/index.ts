@@ -23,6 +23,7 @@ import { VendorApplicationRepository } from './repositories/VendorApplicationRep
 import { EducationRepository } from './repositories/EducationRepository';
 import { applyEducationHierarchyVerificationOverrides } from '../../data/educationHierarchyVerificationOverrides';
 import { applyYabatechHierarchyVerificationOverride } from '../../data/yabatechHierarchyVerificationOverride';
+import { normalizeBukFacultyHierarchy } from '../../data/bukHierarchyNormalization';
 
 // Durable Singleton Repositories
 export const paymentLedgerRepo = new PaymentLedgerRepository();
@@ -42,5 +43,6 @@ export const educationRepo = new EducationRepository();
 for (const institution of educationRepo.getInstitutions()) {
   const corrected = applyEducationHierarchyVerificationOverrides(institution);
   const withYabatechCorrection = applyYabatechHierarchyVerificationOverride(corrected);
-  Object.assign(institution, withYabatechCorrection);
+  const withBukNormalization = normalizeBukFacultyHierarchy(withYabatechCorrection);
+  Object.assign(institution, withBukNormalization);
 }
