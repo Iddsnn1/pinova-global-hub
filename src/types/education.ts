@@ -84,15 +84,24 @@ export interface EducationProgramme {
   description?: string;
 }
 
+export interface AcademicDepartment {
+  id: string;
+  name: string;
+  code?: string;
+  verificationStatus?: 'VERIFIED' | 'PARTIALLY_VERIFIED' | 'UNVERIFIED';
+  programmes: EducationProgramme[];
+}
+
 export interface UniversityFaculty {
   id: string;
   name: string;
-  departments: {
-    id: string;
-    name: string;
-    programmes: EducationProgramme[];
-  }[];
+  code?: string;
+  unitType?: 'faculty' | 'school' | 'college' | 'division' | 'institute';
+  verificationStatus?: 'VERIFIED' | 'PARTIALLY_VERIFIED' | 'UNVERIFIED';
+  departments: AcademicDepartment[];
 }
+
+export type HierarchyVerificationStatus = 'VERIFIED' | 'PARTIALLY_VERIFIED' | 'PENDING' | 'NOT_APPLICABLE';
 
 export interface InstitutionProfile {
   id: string;
@@ -128,6 +137,7 @@ export interface InstitutionProfile {
   activeSessions: AcademicSessionConfig[];
   programmes?: EducationProgramme[];
   faculties?: UniversityFaculty[];
+  hierarchyVerificationStatus?: HierarchyVerificationStatus;
   featuredBadge?: string;
   overviewDescription: string;
 }

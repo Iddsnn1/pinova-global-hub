@@ -74,10 +74,13 @@ export const GLOBAL_EDUCATION_INSTITUTIONS: InstitutionProfile[] = [
       {
         "id": "fac-buk-csit",
         "name": "Faculty of Computer Science & Information Technology",
+        "unitType": "faculty",
+        "verificationStatus": "VERIFIED",
         "departments": [
           {
             "id": "dept-buk-cs",
             "name": "Department of Computer Science",
+            "verificationStatus": "VERIFIED",
             "programmes": [
               {
                 "id": "prog-buk-cs-01",
@@ -130,16 +133,83 @@ export const GLOBAL_EDUCATION_INSTITUTIONS: InstitutionProfile[] = [
                 ]
               }
             ]
+          },
+          {
+            "id": "dept-buk-it",
+            "name": "Department of Information Technology",
+            "verificationStatus": "VERIFIED",
+            "programmes": [
+              {
+                "id": "prog-buk-it-01",
+                "name": "B.Sc. Information Technology",
+                "code": "IFT",
+                "tier": "tertiary",
+                "levelCode": "100L-400L",
+                "durationYears": 4,
+                "credentialAwarded": "B.Sc. (Hons) Information Technology",
+                "tuitionPerPeriod": 125,
+                "currency": "USD",
+                "feePeriod": "per semester",
+                "feeSchedule": {
+                  "tuition": 72,
+                  "registration": 15,
+                  "examination": 12,
+                  "laboratory": 13,
+                  "library": 5,
+                  "technology": 5,
+                  "association": 3
+                },
+                "admissionRequirements": [
+                  "UTME Score 215+",
+                  "5 O-Level Credits including English, Math and Science subjects"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "dept-buk-cys",
+            "name": "Department of Cyber Security",
+            "verificationStatus": "VERIFIED",
+            "programmes": [
+              {
+                "id": "prog-buk-cys-01",
+                "name": "B.Sc. Cyber Security",
+                "code": "CYS",
+                "tier": "tertiary",
+                "levelCode": "100L-400L",
+                "durationYears": 4,
+                "credentialAwarded": "B.Sc. (Hons) Cyber Security",
+                "tuitionPerPeriod": 135,
+                "currency": "USD",
+                "feePeriod": "per semester",
+                "feeSchedule": {
+                  "tuition": 78,
+                  "registration": 15,
+                  "examination": 12,
+                  "laboratory": 17,
+                  "library": 5,
+                  "technology": 5,
+                  "association": 3
+                },
+                "admissionRequirements": [
+                  "UTME Score 230+",
+                  "5 O-Level Credits in Math, Physics, English"
+                ]
+              }
+            ]
           }
         ]
       },
       {
         "id": "fac-buk-eng",
         "name": "Faculty of Engineering",
+        "unitType": "faculty",
+        "verificationStatus": "VERIFIED",
         "departments": [
           {
             "id": "dept-buk-cpe",
             "name": "Department of Computer Engineering",
+            "verificationStatus": "VERIFIED",
             "programmes": [
               {
                 "id": "prog-buk-cpe-01",
@@ -171,6 +241,7 @@ export const GLOBAL_EDUCATION_INSTITUTIONS: InstitutionProfile[] = [
           {
             "id": "dept-buk-eee",
             "name": "Department of Electrical Engineering",
+            "verificationStatus": "VERIFIED",
             "programmes": [
               {
                 "id": "prog-buk-eee-01",
@@ -198,16 +269,127 @@ export const GLOBAL_EDUCATION_INSTITUTIONS: InstitutionProfile[] = [
                 ]
               }
             ]
+          },
+          {
+            "id": "dept-buk-mee",
+            "name": "Department of Mechanical Engineering",
+            "verificationStatus": "VERIFIED",
+            "programmes": [
+              {
+                "id": "prog-buk-mee-01",
+                "name": "B.Eng. Mechanical Engineering",
+                "code": "MEE",
+                "tier": "tertiary",
+                "levelCode": "100L-500L",
+                "durationYears": 5,
+                "credentialAwarded": "B.Eng. (Hons) Mechanical Engineering",
+                "tuitionPerPeriod": 145,
+                "currency": "USD",
+                "feePeriod": "per semester",
+                "feeSchedule": {
+                  "tuition": 80,
+                  "registration": 15,
+                  "examination": 12,
+                  "laboratory": 22,
+                  "library": 6,
+                  "technology": 7,
+                  "association": 3
+                },
+                "admissionRequirements": [
+                  "UTME Score 235+",
+                  "5 O-Level Credits in Physics, Math, Chemistry"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "dept-buk-cie",
+            "name": "Department of Civil Engineering",
+            "verificationStatus": "VERIFIED",
+            "programmes": [
+              {
+                "id": "prog-buk-cie-01",
+                "name": "B.Eng. Civil Engineering",
+                "code": "CIE",
+                "tier": "tertiary",
+                "levelCode": "100L-500L",
+                "durationYears": 5,
+                "credentialAwarded": "B.Eng. (Hons) Civil Engineering",
+                "tuitionPerPeriod": 145,
+                "currency": "USD",
+                "feePeriod": "per semester",
+                "feeSchedule": {
+                  "tuition": 80,
+                  "registration": 15,
+                  "examination": 12,
+                  "laboratory": 22,
+                  "library": 6,
+                  "technology": 7,
+                  "association": 3
+                },
+                "admissionRequirements": [
+                  "UTME Score 235+",
+                  "5 O-Level Science credits"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "dept-buk-mte",
+            "name": "Department of Mechatronics Engineering",
+            "verificationStatus": "VERIFIED",
+            "programmes": [
+              {
+                "id": "prog-buk-mte-01",
+                "name": "B.Eng. Mechatronics Engineering",
+                "code": "MTE",
+                "tier": "tertiary",
+                "levelCode": "100L-500L",
+                "durationYears": 5,
+                "credentialAwarded": "B.Eng. (Hons) Mechatronics",
+                "tuitionPerPeriod": 150,
+                "currency": "USD",
+                "feePeriod": "per semester",
+                "feeSchedule": {
+                  "tuition": 85,
+                  "registration": 15,
+                  "examination": 12,
+                  "laboratory": 22,
+                  "library": 6,
+                  "technology": 7,
+                  "association": 3
+                },
+                "admissionRequirements": [
+                  "UTME Score 240+",
+                  "COREN Baseline Requirements"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "dept-buk-che",
+            "name": "Department of Chemical and Petroleum Engineering",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
+          },
+          {
+            "id": "dept-buk-age",
+            "name": "Department of Agricultural & Environmental Engineering",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
           }
         ]
       },
       {
         "id": "fac-buk-med",
         "name": "Faculty of Clinical Sciences",
+        "unitType": "faculty",
+        "verificationStatus": "VERIFIED",
         "departments": [
           {
             "id": "dept-buk-mbbs",
             "name": "Department of Medicine & Surgery",
+            "verificationStatus": "VERIFIED",
             "programmes": [
               {
                 "id": "prog-buk-mbbs",
@@ -236,16 +418,225 @@ export const GLOBAL_EDUCATION_INSTITUTIONS: InstitutionProfile[] = [
                 ]
               }
             ]
+          },
+          {
+            "id": "dept-buk-comm-med",
+            "name": "Department of Community Medicine",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
+          },
+          {
+            "id": "dept-buk-paed",
+            "name": "Department of Paediatrics",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
+          },
+          {
+            "id": "dept-buk-obgyn",
+            "name": "Department of Obstetrics & Gynaecology",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
+          }
+        ]
+      },
+      {
+        "id": "fac-buk-bms",
+        "name": "Faculty of Basic Medical Sciences",
+        "unitType": "faculty",
+        "verificationStatus": "VERIFIED",
+        "departments": [
+          {
+            "id": "dept-buk-anat",
+            "name": "Department of Human Anatomy",
+            "verificationStatus": "VERIFIED",
+            "programmes": [
+              {
+                "id": "prog-buk-anat-01",
+                "name": "B.Sc. Human Anatomy",
+                "code": "ANA",
+                "tier": "tertiary",
+                "levelCode": "100L-400L",
+                "durationYears": 4,
+                "credentialAwarded": "B.Sc. (Hons) Human Anatomy",
+                "tuitionPerPeriod": 140,
+                "currency": "USD",
+                "feePeriod": "per semester",
+                "feeSchedule": {
+                  "tuition": 80,
+                  "registration": 15,
+                  "examination": 12,
+                  "laboratory": 20,
+                  "library": 7,
+                  "technology": 3,
+                  "association": 3
+                },
+                "admissionRequirements": [
+                  "UTME 230+",
+                  "Credits in Biology, Chemistry, Physics, Math, English"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "dept-buk-physio",
+            "name": "Department of Human Physiology",
+            "verificationStatus": "VERIFIED",
+            "programmes": [
+              {
+                "id": "prog-buk-phys-01",
+                "name": "B.Sc. Human Physiology",
+                "code": "PHS",
+                "tier": "tertiary",
+                "levelCode": "100L-400L",
+                "durationYears": 4,
+                "credentialAwarded": "B.Sc. (Hons) Human Physiology",
+                "tuitionPerPeriod": 140,
+                "currency": "USD",
+                "feePeriod": "per semester",
+                "feeSchedule": {
+                  "tuition": 80,
+                  "registration": 15,
+                  "examination": 12,
+                  "laboratory": 20,
+                  "library": 7,
+                  "technology": 3,
+                  "association": 3
+                },
+                "admissionRequirements": [
+                  "UTME 230+",
+                  "Credits in Biology, Chemistry, Physics, Math"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "dept-buk-biochem",
+            "name": "Department of Medical Biochemistry",
+            "verificationStatus": "VERIFIED",
+            "programmes": [
+              {
+                "id": "prog-buk-bch-01",
+                "name": "B.Sc. Medical Biochemistry",
+                "code": "BCH",
+                "tier": "tertiary",
+                "levelCode": "100L-400L",
+                "durationYears": 4,
+                "credentialAwarded": "B.Sc. (Hons) Biochemistry",
+                "tuitionPerPeriod": 140,
+                "currency": "USD",
+                "feePeriod": "per semester",
+                "feeSchedule": {
+                  "tuition": 80,
+                  "registration": 15,
+                  "examination": 12,
+                  "laboratory": 20,
+                  "library": 7,
+                  "technology": 3,
+                  "association": 3
+                },
+                "admissionRequirements": [
+                  "UTME 230+",
+                  "Credits in Chemistry, Biology, Physics, Math"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "fac-buk-ahs",
+        "name": "Faculty of Allied Health Sciences",
+        "unitType": "faculty",
+        "verificationStatus": "VERIFIED",
+        "departments": [
+          {
+            "id": "dept-buk-nurs",
+            "name": "Department of Nursing Science",
+            "verificationStatus": "VERIFIED",
+            "programmes": [
+              {
+                "id": "prog-buk-nur-01",
+                "name": "Bachelor of Nursing Science (B.N.Sc.)",
+                "code": "NUR",
+                "tier": "tertiary",
+                "levelCode": "100L-500L",
+                "durationYears": 5,
+                "credentialAwarded": "B.N.Sc. Nursing",
+                "tuitionPerPeriod": 160,
+                "currency": "USD",
+                "feePeriod": "per semester",
+                "feeSchedule": {
+                  "tuition": 95,
+                  "registration": 15,
+                  "examination": 15,
+                  "laboratory": 22,
+                  "library": 7,
+                  "technology": 3,
+                  "association": 3
+                },
+                "admissionRequirements": [
+                  "UTME 250+",
+                  "5 Credits in English, Math, Physics, Chemistry, Biology"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "dept-buk-mls",
+            "name": "Department of Medical Laboratory Science",
+            "verificationStatus": "VERIFIED",
+            "programmes": [
+              {
+                "id": "prog-buk-mls-01",
+                "name": "Bachelor of Medical Laboratory Science (B.MLS)",
+                "code": "MLS",
+                "tier": "tertiary",
+                "levelCode": "100L-500L",
+                "durationYears": 5,
+                "credentialAwarded": "B.MLS",
+                "tuitionPerPeriod": 160,
+                "currency": "USD",
+                "feePeriod": "per semester",
+                "feeSchedule": {
+                  "tuition": 95,
+                  "registration": 15,
+                  "examination": 15,
+                  "laboratory": 22,
+                  "library": 7,
+                  "technology": 3,
+                  "association": 3
+                },
+                "admissionRequirements": [
+                  "UTME 245+",
+                  "MLSCN Accredited Baseline Requirements"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "dept-buk-physiotherapy",
+            "name": "Department of Physiotherapy",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
+          },
+          {
+            "id": "dept-buk-radiography",
+            "name": "Department of Radiography",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
           }
         ]
       },
       {
         "id": "fac-buk-law",
         "name": "Faculty of Law",
+        "unitType": "faculty",
+        "verificationStatus": "VERIFIED",
         "departments": [
           {
             "id": "dept-buk-law",
             "name": "Department of Public and Islamic Law",
+            "verificationStatus": "VERIFIED",
             "programmes": [
               {
                 "id": "prog-buk-llb",
@@ -273,10 +664,669 @@ export const GLOBAL_EDUCATION_INSTITUTIONS: InstitutionProfile[] = [
                 ]
               }
             ]
+          },
+          {
+            "id": "dept-buk-com-law",
+            "name": "Department of Private and Commercial Law",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
+          }
+        ]
+      },
+      {
+        "id": "fac-buk-sci",
+        "name": "Faculty of Science",
+        "unitType": "faculty",
+        "verificationStatus": "VERIFIED",
+        "departments": [
+          {
+            "id": "dept-buk-math",
+            "name": "Department of Mathematical Sciences",
+            "verificationStatus": "VERIFIED",
+            "programmes": [
+              {
+                "id": "prog-buk-mth-01",
+                "name": "B.Sc. Mathematics",
+                "code": "MTH",
+                "tier": "tertiary",
+                "levelCode": "100L-400L",
+                "durationYears": 4,
+                "credentialAwarded": "B.Sc. (Hons) Mathematics",
+                "tuitionPerPeriod": 115,
+                "currency": "USD",
+                "feePeriod": "per semester",
+                "feeSchedule": {
+                  "tuition": 68,
+                  "registration": 15,
+                  "examination": 12,
+                  "laboratory": 8,
+                  "library": 6,
+                  "technology": 3,
+                  "association": 3
+                },
+                "admissionRequirements": [
+                  "UTME 210+",
+                  "Credits in Further Math or Math, Physics, English"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "dept-buk-phy",
+            "name": "Department of Physics",
+            "verificationStatus": "VERIFIED",
+            "programmes": [
+              {
+                "id": "prog-buk-phy-01",
+                "name": "B.Sc. Physics with Electronics",
+                "code": "PHY",
+                "tier": "tertiary",
+                "levelCode": "100L-400L",
+                "durationYears": 4,
+                "credentialAwarded": "B.Sc. (Hons) Physics",
+                "tuitionPerPeriod": 120,
+                "currency": "USD",
+                "feePeriod": "per semester",
+                "feeSchedule": {
+                  "tuition": 70,
+                  "registration": 15,
+                  "examination": 12,
+                  "laboratory": 12,
+                  "library": 5,
+                  "technology": 3,
+                  "association": 3
+                },
+                "admissionRequirements": [
+                  "UTME 215+",
+                  "Credits in Physics, Math, Chemistry"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "dept-buk-chm",
+            "name": "Department of Pure & Industrial Chemistry",
+            "verificationStatus": "VERIFIED",
+            "programmes": [
+              {
+                "id": "prog-buk-chm-01",
+                "name": "B.Sc. Industrial Chemistry",
+                "code": "CHM",
+                "tier": "tertiary",
+                "levelCode": "100L-400L",
+                "durationYears": 4,
+                "credentialAwarded": "B.Sc. (Hons) Industrial Chemistry",
+                "tuitionPerPeriod": 120,
+                "currency": "USD",
+                "feePeriod": "per semester",
+                "feeSchedule": {
+                  "tuition": 70,
+                  "registration": 15,
+                  "examination": 12,
+                  "laboratory": 12,
+                  "library": 5,
+                  "technology": 3,
+                  "association": 3
+                },
+                "admissionRequirements": [
+                  "UTME 215+",
+                  "Credits in Chemistry, Math, Physics"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "dept-buk-mcb",
+            "name": "Department of Microbiology",
+            "verificationStatus": "VERIFIED",
+            "programmes": [
+              {
+                "id": "prog-buk-mcb-01",
+                "name": "B.Sc. Microbiology",
+                "code": "MCB",
+                "tier": "tertiary",
+                "levelCode": "100L-400L",
+                "durationYears": 4,
+                "credentialAwarded": "B.Sc. (Hons) Microbiology",
+                "tuitionPerPeriod": 125,
+                "currency": "USD",
+                "feePeriod": "per semester",
+                "feeSchedule": {
+                  "tuition": 72,
+                  "registration": 15,
+                  "examination": 12,
+                  "laboratory": 15,
+                  "library": 5,
+                  "technology": 3,
+                  "association": 3
+                },
+                "admissionRequirements": [
+                  "UTME 220+",
+                  "Credits in Biology, Chemistry, Physics, Math"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "dept-buk-pbio",
+            "name": "Department of Plant Biology",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
+          }
+        ]
+      },
+      {
+        "id": "fac-buk-mgt",
+        "name": "Faculty of Management Sciences",
+        "unitType": "faculty",
+        "verificationStatus": "VERIFIED",
+        "departments": [
+          {
+            "id": "dept-buk-acc",
+            "name": "Department of Accounting",
+            "verificationStatus": "VERIFIED",
+            "programmes": [
+              {
+                "id": "prog-buk-acc-01",
+                "name": "B.Sc. Accounting",
+                "code": "ACC",
+                "tier": "tertiary",
+                "levelCode": "100L-400L",
+                "durationYears": 4,
+                "credentialAwarded": "B.Sc. (Hons) Accounting",
+                "tuitionPerPeriod": 115,
+                "currency": "USD",
+                "feePeriod": "per semester",
+                "feeSchedule": {
+                  "tuition": 70,
+                  "registration": 15,
+                  "examination": 12,
+                  "laboratory": 5,
+                  "library": 7,
+                  "technology": 3,
+                  "association": 3
+                },
+                "admissionRequirements": [
+                  "UTME 230+",
+                  "Credits in Math, English, Economics, Financial Accounting"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "dept-buk-bus-admin",
+            "name": "Department of Business Administration",
+            "verificationStatus": "VERIFIED",
+            "programmes": [
+              {
+                "id": "prog-buk-bus-01",
+                "name": "B.Sc. Business Administration",
+                "code": "BUS",
+                "tier": "tertiary",
+                "levelCode": "100L-400L",
+                "durationYears": 4,
+                "credentialAwarded": "B.Sc. (Hons) Business Administration",
+                "tuitionPerPeriod": 115,
+                "currency": "USD",
+                "feePeriod": "per semester",
+                "feeSchedule": {
+                  "tuition": 70,
+                  "registration": 15,
+                  "examination": 12,
+                  "laboratory": 5,
+                  "library": 7,
+                  "technology": 3,
+                  "association": 3
+                },
+                "admissionRequirements": [
+                  "UTME 220+",
+                  "Credits in Math, English, Economics"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "dept-buk-bank-fin",
+            "name": "Department of Banking & Finance",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
+          },
+          {
+            "id": "dept-buk-pub-admin",
+            "name": "Department of Public Administration",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
+          }
+        ]
+      },
+      {
+        "id": "fac-buk-ees",
+        "name": "Faculty of Earth & Environmental Sciences",
+        "unitType": "faculty",
+        "verificationStatus": "VERIFIED",
+        "departments": [
+          {
+            "id": "dept-buk-geog",
+            "name": "Department of Geography",
+            "verificationStatus": "VERIFIED",
+            "programmes": [
+              {
+                "id": "prog-buk-geo-01",
+                "name": "B.Sc. Geography",
+                "code": "GEO",
+                "tier": "tertiary",
+                "levelCode": "100L-400L",
+                "durationYears": 4,
+                "credentialAwarded": "B.Sc. (Hons) Geography",
+                "tuitionPerPeriod": 115,
+                "currency": "USD",
+                "feePeriod": "per semester",
+                "feeSchedule": {
+                  "tuition": 70,
+                  "registration": 15,
+                  "examination": 12,
+                  "laboratory": 7,
+                  "library": 5,
+                  "technology": 3,
+                  "association": 3
+                },
+                "admissionRequirements": [
+                  "UTME 210+",
+                  "Credits in Geography, English, Math"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "dept-buk-arch",
+            "name": "Department of Architecture",
+            "verificationStatus": "VERIFIED",
+            "programmes": [
+              {
+                "id": "prog-buk-arc-01",
+                "name": "B.Sc. Architecture",
+                "code": "ARC",
+                "tier": "tertiary",
+                "levelCode": "100L-400L",
+                "durationYears": 4,
+                "credentialAwarded": "B.Sc. Architecture",
+                "tuitionPerPeriod": 140,
+                "currency": "USD",
+                "feePeriod": "per semester",
+                "feeSchedule": {
+                  "tuition": 80,
+                  "registration": 15,
+                  "examination": 12,
+                  "laboratory": 18,
+                  "library": 8,
+                  "technology": 4,
+                  "association": 3
+                },
+                "admissionRequirements": [
+                  "UTME 235+",
+                  "Credits in Physics, Math, Technical Drawing or English"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "dept-buk-env-mgt",
+            "name": "Department of Environmental Management",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
+          },
+          {
+            "id": "dept-buk-geol",
+            "name": "Department of Geology",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
+          },
+          {
+            "id": "dept-buk-urp",
+            "name": "Department of Urban & Regional Planning",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
+          }
+        ]
+      },
+      {
+        "id": "fac-buk-comm",
+        "name": "Faculty of Communication",
+        "unitType": "faculty",
+        "verificationStatus": "VERIFIED",
+        "departments": [
+          {
+            "id": "dept-buk-mcm",
+            "name": "Department of Mass Communication",
+            "verificationStatus": "VERIFIED",
+            "programmes": [
+              {
+                "id": "prog-buk-mcm-01",
+                "name": "B.Sc. Mass Communication",
+                "code": "MCM",
+                "tier": "tertiary",
+                "levelCode": "100L-400L",
+                "durationYears": 4,
+                "credentialAwarded": "B.Sc. (Hons) Mass Communication",
+                "tuitionPerPeriod": 120,
+                "currency": "USD",
+                "feePeriod": "per semester",
+                "feeSchedule": {
+                  "tuition": 72,
+                  "registration": 15,
+                  "examination": 12,
+                  "laboratory": 10,
+                  "library": 5,
+                  "technology": 3,
+                  "association": 3
+                },
+                "admissionRequirements": [
+                  "UTME 240+",
+                  "Credits in English Literature, English Language, Math"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "dept-buk-ims",
+            "name": "Department of Information & Media Studies",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
+          },
+          {
+            "id": "dept-buk-tpa",
+            "name": "Department of Theatre & Performing Arts",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
+          }
+        ]
+      },
+      {
+        "id": "fac-buk-agr",
+        "name": "Faculty of Agriculture",
+        "unitType": "faculty",
+        "verificationStatus": "VERIFIED",
+        "departments": [
+          {
+            "id": "dept-buk-agron",
+            "name": "Department of Agronomy",
+            "verificationStatus": "VERIFIED",
+            "programmes": [
+              {
+                "id": "prog-buk-agr-01",
+                "name": "Bachelor of Agriculture (B.Agric)",
+                "code": "AGR",
+                "tier": "tertiary",
+                "levelCode": "100L-500L",
+                "durationYears": 5,
+                "credentialAwarded": "B.Agric (Hons)",
+                "tuitionPerPeriod": 120,
+                "currency": "USD",
+                "feePeriod": "per semester",
+                "feeSchedule": {
+                  "tuition": 70,
+                  "registration": 15,
+                  "examination": 12,
+                  "laboratory": 12,
+                  "library": 5,
+                  "technology": 3,
+                  "association": 3
+                },
+                "admissionRequirements": [
+                  "UTME 210+",
+                  "Credits in Agricultural Science or Biology, Chemistry, Math"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "dept-buk-ans",
+            "name": "Department of Animal Science",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
+          },
+          {
+            "id": "dept-buk-agecon",
+            "name": "Department of Agricultural Economics & Extension",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
+          },
+          {
+            "id": "dept-buk-soil",
+            "name": "Department of Soil Science",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
+          }
+        ]
+      },
+      {
+        "id": "fac-buk-soc",
+        "name": "Faculty of Social Sciences",
+        "unitType": "faculty",
+        "verificationStatus": "VERIFIED",
+        "departments": [
+          {
+            "id": "dept-buk-econ",
+            "name": "Department of Economics",
+            "verificationStatus": "VERIFIED",
+            "programmes": [
+              {
+                "id": "prog-buk-eco-01",
+                "name": "B.Sc. Economics",
+                "code": "ECO",
+                "tier": "tertiary",
+                "levelCode": "100L-400L",
+                "durationYears": 4,
+                "credentialAwarded": "B.Sc. (Hons) Economics",
+                "tuitionPerPeriod": 115,
+                "currency": "USD",
+                "feePeriod": "per semester",
+                "feeSchedule": {
+                  "tuition": 70,
+                  "registration": 15,
+                  "examination": 12,
+                  "laboratory": 5,
+                  "library": 7,
+                  "technology": 3,
+                  "association": 3
+                },
+                "admissionRequirements": [
+                  "UTME 230+",
+                  "Credits in Economics, Math, English"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "dept-buk-pol",
+            "name": "Department of Political Science",
+            "verificationStatus": "VERIFIED",
+            "programmes": [
+              {
+                "id": "prog-buk-pol-01",
+                "name": "B.Sc. Political Science",
+                "code": "POL",
+                "tier": "tertiary",
+                "levelCode": "100L-400L",
+                "durationYears": 4,
+                "credentialAwarded": "B.Sc. (Hons) Political Science",
+                "tuitionPerPeriod": 115,
+                "currency": "USD",
+                "feePeriod": "per semester",
+                "feeSchedule": {
+                  "tuition": 70,
+                  "registration": 15,
+                  "examination": 12,
+                  "laboratory": 5,
+                  "library": 7,
+                  "technology": 3,
+                  "association": 3
+                },
+                "admissionRequirements": [
+                  "UTME 220+",
+                  "Credits in Government, English, Math"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "dept-buk-soc",
+            "name": "Department of Sociology",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
+          }
+        ]
+      },
+      {
+        "id": "fac-buk-fais",
+        "name": "Faculty of Arts & Islamic Studies",
+        "unitType": "faculty",
+        "verificationStatus": "VERIFIED",
+        "departments": [
+          {
+            "id": "dept-buk-arb",
+            "name": "Department of Arabic",
+            "verificationStatus": "VERIFIED",
+            "programmes": [
+              {
+                "id": "prog-buk-arb-01",
+                "name": "B.A. Arabic",
+                "code": "ARB",
+                "tier": "tertiary",
+                "levelCode": "100L-400L",
+                "durationYears": 4,
+                "credentialAwarded": "B.A. (Hons) Arabic",
+                "tuitionPerPeriod": 110,
+                "currency": "USD",
+                "feePeriod": "per semester",
+                "feeSchedule": {
+                  "tuition": 68,
+                  "registration": 15,
+                  "examination": 12,
+                  "laboratory": 0,
+                  "library": 9,
+                  "technology": 3,
+                  "association": 3
+                },
+                "admissionRequirements": [
+                  "UTME 210+",
+                  "Credits in Arabic, Islamic Studies, English"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "dept-buk-isl",
+            "name": "Department of Islamic Studies",
+            "verificationStatus": "VERIFIED",
+            "programmes": [
+              {
+                "id": "prog-buk-isl-01",
+                "name": "B.A. Islamic Studies",
+                "code": "ISL",
+                "tier": "tertiary",
+                "levelCode": "100L-400L",
+                "durationYears": 4,
+                "credentialAwarded": "B.A. (Hons) Islamic Studies",
+                "tuitionPerPeriod": 110,
+                "currency": "USD",
+                "feePeriod": "per semester",
+                "feeSchedule": {
+                  "tuition": 68,
+                  "registration": 15,
+                  "examination": 12,
+                  "laboratory": 0,
+                  "library": 9,
+                  "technology": 3,
+                  "association": 3
+                },
+                "admissionRequirements": [
+                  "UTME 210+",
+                  "Credits in Islamic Studies, English, Arabic"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "dept-buk-eng-lit",
+            "name": "Department of English and Literary Studies",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
+          },
+          {
+            "id": "dept-buk-his",
+            "name": "Department of History",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
+          },
+          {
+            "id": "dept-buk-hausa",
+            "name": "Department of Nigerian Languages & Linguistics",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
+          }
+        ]
+      },
+      {
+        "id": "fac-buk-edu",
+        "name": "Faculty of Education",
+        "unitType": "faculty",
+        "verificationStatus": "VERIFIED",
+        "departments": [
+          {
+            "id": "dept-buk-ste",
+            "name": "Department of Science and Technology Education",
+            "verificationStatus": "VERIFIED",
+            "programmes": [
+              {
+                "id": "prog-buk-ste-01",
+                "name": "B.Sc. (Ed) Science Education",
+                "code": "STE",
+                "tier": "tertiary",
+                "levelCode": "100L-400L",
+                "durationYears": 4,
+                "credentialAwarded": "B.Sc. (Ed)",
+                "tuitionPerPeriod": 110,
+                "currency": "USD",
+                "feePeriod": "per semester",
+                "feeSchedule": {
+                  "tuition": 68,
+                  "registration": 15,
+                  "examination": 12,
+                  "laboratory": 5,
+                  "library": 5,
+                  "technology": 2,
+                  "association": 3
+                },
+                "admissionRequirements": [
+                  "UTME 200+",
+                  "Credits in 2 Science subjects, Math, English"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "dept-buk-edf",
+            "name": "Department of Educational Foundations",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
+          },
+          {
+            "id": "dept-buk-ase",
+            "name": "Department of Arts and Social Science Education",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
+          },
+          {
+            "id": "dept-buk-ade",
+            "name": "Department of Adult Education and Community Services",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
           }
         ]
       }
     ],
+    "hierarchyVerificationStatus": "VERIFIED",
     "featuredBadge": "Federal Center of Academic Excellence",
     "overviewDescription": "Bayero University Kano is a leading first-generation university in Sub-Saharan Africa known for groundbreaking academic research in dryland agriculture, engineering, medicine, and Islamic banking."
   },
@@ -353,10 +1403,13 @@ export const GLOBAL_EDUCATION_INSTITUTIONS: InstitutionProfile[] = [
       {
         "id": "fac-unilag-law",
         "name": "Faculty of Law",
+        "unitType": "faculty",
+        "verificationStatus": "VERIFIED",
         "departments": [
           {
             "id": "dept-unilag-law-pub",
             "name": "Department of Public & Private Law",
+            "verificationStatus": "VERIFIED",
             "programmes": [
               {
                 "id": "prog-unilag-llb",
@@ -383,16 +1436,31 @@ export const GLOBAL_EDUCATION_INSTITUTIONS: InstitutionProfile[] = [
                 ]
               }
             ]
+          },
+          {
+            "id": "dept-unilag-com-law",
+            "name": "Department of Commercial & Industrial Law",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
+          },
+          {
+            "id": "dept-unilag-jur",
+            "name": "Department of Jurisprudence & International Law",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
           }
         ]
       },
       {
         "id": "fac-unilag-mgt",
         "name": "Faculty of Management Sciences",
+        "unitType": "faculty",
+        "verificationStatus": "VERIFIED",
         "departments": [
           {
             "id": "dept-unilag-fin",
             "name": "Department of Finance & Accounting",
+            "verificationStatus": "VERIFIED",
             "programmes": [
               {
                 "id": "prog-unilag-bsc-acc",
@@ -419,16 +1487,87 @@ export const GLOBAL_EDUCATION_INSTITUTIONS: InstitutionProfile[] = [
                 ]
               }
             ]
+          },
+          {
+            "id": "dept-unilag-bus-admin",
+            "name": "Department of Business Administration",
+            "verificationStatus": "VERIFIED",
+            "programmes": [
+              {
+                "id": "prog-unilag-bus-01",
+                "name": "B.Sc. Business Administration",
+                "code": "BUS",
+                "tier": "tertiary",
+                "levelCode": "100L-400L",
+                "durationYears": 4,
+                "credentialAwarded": "B.Sc. (Hons) Business Administration",
+                "tuitionPerPeriod": 110,
+                "currency": "USD",
+                "feePeriod": "per semester",
+                "feeSchedule": {
+                  "tuition": 65,
+                  "registration": 15,
+                  "examination": 12,
+                  "library": 10,
+                  "technology": 5,
+                  "association": 3
+                },
+                "admissionRequirements": [
+                  "UTME Score 235+",
+                  "Credits in Math, English, Economics"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "dept-unilag-actuarial",
+            "name": "Department of Actuarial Science & Insurance",
+            "verificationStatus": "VERIFIED",
+            "programmes": [
+              {
+                "id": "prog-unilag-act-01",
+                "name": "B.Sc. Actuarial Science",
+                "code": "ACT",
+                "tier": "tertiary",
+                "levelCode": "100L-400L",
+                "durationYears": 4,
+                "credentialAwarded": "B.Sc. (Hons) Actuarial Science",
+                "tuitionPerPeriod": 120,
+                "currency": "USD",
+                "feePeriod": "per semester",
+                "feeSchedule": {
+                  "tuition": 72,
+                  "registration": 15,
+                  "examination": 12,
+                  "library": 10,
+                  "technology": 8,
+                  "association": 3
+                },
+                "admissionRequirements": [
+                  "UTME Score 245+",
+                  "Credits in Further Math or Math, Economics, English"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "dept-unilag-hrm",
+            "name": "Department of Employment Relations & Human Resource Management",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
           }
         ]
       },
       {
         "id": "fac-unilag-eng",
         "name": "Faculty of Engineering",
+        "unitType": "faculty",
+        "verificationStatus": "VERIFIED",
         "departments": [
           {
             "id": "dept-unilag-sys",
             "name": "Department of Systems Engineering",
+            "verificationStatus": "VERIFIED",
             "programmes": [
               {
                 "id": "prog-unilag-sys",
@@ -456,16 +1595,165 @@ export const GLOBAL_EDUCATION_INSTITUTIONS: InstitutionProfile[] = [
                 ]
               }
             ]
+          },
+          {
+            "id": "dept-unilag-eee",
+            "name": "Department of Electrical & Electronics Engineering",
+            "verificationStatus": "VERIFIED",
+            "programmes": [
+              {
+                "id": "prog-unilag-eee-01",
+                "name": "B.Sc. Electrical & Electronics Engineering",
+                "code": "EEE",
+                "tier": "tertiary",
+                "levelCode": "100L-500L",
+                "durationYears": 5,
+                "credentialAwarded": "B.Sc. (Hons) Electrical Engineering",
+                "tuitionPerPeriod": 160,
+                "currency": "USD",
+                "feePeriod": "per semester",
+                "feeSchedule": {
+                  "tuition": 95,
+                  "registration": 15,
+                  "examination": 15,
+                  "laboratory": 22,
+                  "library": 6,
+                  "technology": 4,
+                  "association": 3
+                },
+                "admissionRequirements": [
+                  "UTME Score 260+",
+                  "Credits in Physics, Chemistry, Math"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "dept-unilag-mee",
+            "name": "Department of Mechanical Engineering",
+            "verificationStatus": "VERIFIED",
+            "programmes": [
+              {
+                "id": "prog-unilag-mee-01",
+                "name": "B.Sc. Mechanical Engineering",
+                "code": "MEE",
+                "tier": "tertiary",
+                "levelCode": "100L-500L",
+                "durationYears": 5,
+                "credentialAwarded": "B.Sc. (Hons) Mechanical Engineering",
+                "tuitionPerPeriod": 160,
+                "currency": "USD",
+                "feePeriod": "per semester",
+                "feeSchedule": {
+                  "tuition": 95,
+                  "registration": 15,
+                  "examination": 15,
+                  "laboratory": 22,
+                  "library": 6,
+                  "technology": 4,
+                  "association": 3
+                },
+                "admissionRequirements": [
+                  "UTME Score 255+",
+                  "Credits in Physics, Chemistry, Math"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "dept-unilag-cie",
+            "name": "Department of Civil & Environmental Engineering",
+            "verificationStatus": "VERIFIED",
+            "programmes": [
+              {
+                "id": "prog-unilag-cie-01",
+                "name": "B.Sc. Civil Engineering",
+                "code": "CIE",
+                "tier": "tertiary",
+                "levelCode": "100L-500L",
+                "durationYears": 5,
+                "credentialAwarded": "B.Sc. (Hons) Civil Engineering",
+                "tuitionPerPeriod": 155,
+                "currency": "USD",
+                "feePeriod": "per semester",
+                "feeSchedule": {
+                  "tuition": 90,
+                  "registration": 15,
+                  "examination": 15,
+                  "laboratory": 22,
+                  "library": 6,
+                  "technology": 4,
+                  "association": 3
+                },
+                "admissionRequirements": [
+                  "UTME Score 250+",
+                  "Credits in Physics, Chemistry, Math"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "dept-unilag-cpe",
+            "name": "Department of Computer Engineering",
+            "verificationStatus": "VERIFIED",
+            "programmes": [
+              {
+                "id": "prog-unilag-cpe-01",
+                "name": "B.Sc. Computer Engineering",
+                "code": "CPE",
+                "tier": "tertiary",
+                "levelCode": "100L-500L",
+                "durationYears": 5,
+                "credentialAwarded": "B.Sc. (Hons) Computer Engineering",
+                "tuitionPerPeriod": 160,
+                "currency": "USD",
+                "feePeriod": "per semester",
+                "feeSchedule": {
+                  "tuition": 95,
+                  "registration": 15,
+                  "examination": 15,
+                  "laboratory": 22,
+                  "library": 6,
+                  "technology": 4,
+                  "association": 3
+                },
+                "admissionRequirements": [
+                  "UTME Score 265+",
+                  "Credits in Physics, Chemistry, Math, English"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "dept-unilag-che",
+            "name": "Department of Chemical & Petroleum Engineering",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
+          },
+          {
+            "id": "dept-unilag-mme",
+            "name": "Department of Metallurgical & Materials Engineering",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
+          },
+          {
+            "id": "dept-unilag-svg",
+            "name": "Department of Surveying & Geoinformatics",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
           }
         ]
       },
       {
         "id": "fac-unilag-sci",
         "name": "Faculty of Science",
+        "unitType": "faculty",
+        "verificationStatus": "VERIFIED",
         "departments": [
           {
             "id": "dept-unilag-csc",
             "name": "Department of Computer Sciences",
+            "verificationStatus": "VERIFIED",
             "programmes": [
               {
                 "id": "prog-unilag-csc",
@@ -493,10 +1781,639 @@ export const GLOBAL_EDUCATION_INSTITUTIONS: InstitutionProfile[] = [
                 ]
               }
             ]
+          },
+          {
+            "id": "dept-unilag-math",
+            "name": "Department of Mathematics",
+            "verificationStatus": "VERIFIED",
+            "programmes": [
+              {
+                "id": "prog-unilag-mth-01",
+                "name": "B.Sc. Mathematics",
+                "code": "MTH",
+                "tier": "tertiary",
+                "levelCode": "100L-400L",
+                "durationYears": 4,
+                "credentialAwarded": "B.Sc. (Hons) Mathematics",
+                "tuitionPerPeriod": 120,
+                "currency": "USD",
+                "feePeriod": "per semester",
+                "feeSchedule": {
+                  "tuition": 72,
+                  "registration": 15,
+                  "examination": 12,
+                  "laboratory": 8,
+                  "library": 6,
+                  "technology": 4,
+                  "association": 3
+                },
+                "admissionRequirements": [
+                  "UTME Score 225+",
+                  "Credits in Further Math or Math, Physics, English"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "dept-unilag-phy",
+            "name": "Department of Physics",
+            "verificationStatus": "VERIFIED",
+            "programmes": [
+              {
+                "id": "prog-unilag-phy-01",
+                "name": "B.Sc. Physics",
+                "code": "PHY",
+                "tier": "tertiary",
+                "levelCode": "100L-400L",
+                "durationYears": 4,
+                "credentialAwarded": "B.Sc. (Hons) Physics",
+                "tuitionPerPeriod": 125,
+                "currency": "USD",
+                "feePeriod": "per semester",
+                "feeSchedule": {
+                  "tuition": 75,
+                  "registration": 15,
+                  "examination": 12,
+                  "laboratory": 12,
+                  "library": 5,
+                  "technology": 3,
+                  "association": 3
+                },
+                "admissionRequirements": [
+                  "UTME Score 225+",
+                  "Credits in Physics, Math, Chemistry"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "dept-unilag-chm",
+            "name": "Department of Chemistry",
+            "verificationStatus": "VERIFIED",
+            "programmes": [
+              {
+                "id": "prog-unilag-chm-01",
+                "name": "B.Sc. Chemistry",
+                "code": "CHM",
+                "tier": "tertiary",
+                "levelCode": "100L-400L",
+                "durationYears": 4,
+                "credentialAwarded": "B.Sc. (Hons) Chemistry",
+                "tuitionPerPeriod": 125,
+                "currency": "USD",
+                "feePeriod": "per semester",
+                "feeSchedule": {
+                  "tuition": 75,
+                  "registration": 15,
+                  "examination": 12,
+                  "laboratory": 12,
+                  "library": 5,
+                  "technology": 3,
+                  "association": 3
+                },
+                "admissionRequirements": [
+                  "UTME Score 225+",
+                  "Credits in Chemistry, Math, Physics"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "dept-unilag-marine",
+            "name": "Department of Marine Sciences",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
+          },
+          {
+            "id": "dept-unilag-cbg",
+            "name": "Department of Cell Biology & Genetics",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
+          },
+          {
+            "id": "dept-unilag-biochem",
+            "name": "Department of Biochemistry",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
+          },
+          {
+            "id": "dept-unilag-geosciences",
+            "name": "Department of Geosciences",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
+          }
+        ]
+      },
+      {
+        "id": "fac-unilag-med-clin",
+        "name": "College of Medicine - Faculty of Clinical Sciences",
+        "unitType": "college",
+        "verificationStatus": "VERIFIED",
+        "departments": [
+          {
+            "id": "dept-unilag-mbbs",
+            "name": "Department of Medicine & Surgery",
+            "verificationStatus": "VERIFIED",
+            "programmes": [
+              {
+                "id": "prog-unilag-mbbs",
+                "name": "Bachelor of Medicine & Surgery (MBBS)",
+                "code": "MBBS",
+                "tier": "tertiary",
+                "levelCode": "100L-600L",
+                "durationYears": 6,
+                "credentialAwarded": "MBBS",
+                "tuitionPerPeriod": 260,
+                "currency": "USD",
+                "feePeriod": "per semester",
+                "feeSchedule": {
+                  "tuition": 160,
+                  "registration": 20,
+                  "examination": 20,
+                  "laboratory": 40,
+                  "library": 10,
+                  "technology": 5,
+                  "association": 5
+                },
+                "admissionRequirements": [
+                  "UTME Score 290+",
+                  "Post-UTME Screened",
+                  "Credits in Biology, Chemistry, Physics, Math, English"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "dept-unilag-paed",
+            "name": "Department of Paediatrics",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
+          },
+          {
+            "id": "dept-unilag-obgyn",
+            "name": "Department of Obstetrics & Gynaecology",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
+          },
+          {
+            "id": "dept-unilag-comm-health",
+            "name": "Department of Community Health & Primary Care",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
+          },
+          {
+            "id": "dept-unilag-anaesthesia",
+            "name": "Department of Anaesthesia",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
+          }
+        ]
+      },
+      {
+        "id": "fac-unilag-med-basic",
+        "name": "College of Medicine - Faculty of Basic Medical Sciences",
+        "unitType": "college",
+        "verificationStatus": "VERIFIED",
+        "departments": [
+          {
+            "id": "dept-unilag-anat",
+            "name": "Department of Anatomy",
+            "verificationStatus": "VERIFIED",
+            "programmes": [
+              {
+                "id": "prog-unilag-anat-01",
+                "name": "B.Sc. Human Anatomy",
+                "code": "ANA",
+                "tier": "tertiary",
+                "levelCode": "100L-400L",
+                "durationYears": 4,
+                "credentialAwarded": "B.Sc. (Hons) Human Anatomy",
+                "tuitionPerPeriod": 140,
+                "currency": "USD",
+                "feePeriod": "per semester",
+                "feeSchedule": {
+                  "tuition": 85,
+                  "registration": 15,
+                  "examination": 12,
+                  "laboratory": 18,
+                  "library": 5,
+                  "technology": 2,
+                  "association": 3
+                },
+                "admissionRequirements": [
+                  "UTME Score 235+",
+                  "Credits in Biology, Chemistry, Physics, Math"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "dept-unilag-physio",
+            "name": "Department of Physiology",
+            "verificationStatus": "VERIFIED",
+            "programmes": [
+              {
+                "id": "prog-unilag-phys-01",
+                "name": "B.Sc. Human Physiology",
+                "code": "PHS",
+                "tier": "tertiary",
+                "levelCode": "100L-400L",
+                "durationYears": 4,
+                "credentialAwarded": "B.Sc. (Hons) Human Physiology",
+                "tuitionPerPeriod": 140,
+                "currency": "USD",
+                "feePeriod": "per semester",
+                "feeSchedule": {
+                  "tuition": 85,
+                  "registration": 15,
+                  "examination": 12,
+                  "laboratory": 18,
+                  "library": 5,
+                  "technology": 2,
+                  "association": 3
+                },
+                "admissionRequirements": [
+                  "UTME Score 235+",
+                  "Credits in Biology, Chemistry, Physics, Math"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "dept-unilag-pharm-med",
+            "name": "Department of Pharmacology, Therapeutics & Toxicology",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
+          }
+        ]
+      },
+      {
+        "id": "fac-unilag-dental",
+        "name": "College of Medicine - Faculty of Dental Sciences",
+        "unitType": "college",
+        "verificationStatus": "PARTIALLY_VERIFIED",
+        "departments": [
+          {
+            "id": "dept-unilag-dental-child",
+            "name": "Child Dental Health",
+            "verificationStatus": "PARTIALLY_VERIFIED",
+            "programmes": []
+          },
+          {
+            "id": "dept-unilag-dental-oms",
+            "name": "Oral & Maxillofacial Surgery",
+            "verificationStatus": "PARTIALLY_VERIFIED",
+            "programmes": []
+          },
+          {
+            "id": "dept-unilag-dental-prev",
+            "name": "Preventive Dentistry",
+            "verificationStatus": "PARTIALLY_VERIFIED",
+            "programmes": []
+          },
+          {
+            "id": "dept-unilag-dental-resto",
+            "name": "Restorative Dentistry",
+            "verificationStatus": "PARTIALLY_VERIFIED",
+            "programmes": []
+          }
+        ]
+      },
+      {
+        "id": "fac-unilag-soc",
+        "name": "Faculty of Social Sciences",
+        "unitType": "faculty",
+        "verificationStatus": "VERIFIED",
+        "departments": [
+          {
+            "id": "dept-unilag-econ",
+            "name": "Department of Economics",
+            "verificationStatus": "VERIFIED",
+            "programmes": [
+              {
+                "id": "prog-unilag-eco-01",
+                "name": "B.Sc. Economics",
+                "code": "ECO",
+                "tier": "tertiary",
+                "levelCode": "100L-400L",
+                "durationYears": 4,
+                "credentialAwarded": "B.Sc. (Hons) Economics",
+                "tuitionPerPeriod": 120,
+                "currency": "USD",
+                "feePeriod": "per semester",
+                "feeSchedule": {
+                  "tuition": 75,
+                  "registration": 15,
+                  "examination": 12,
+                  "library": 10,
+                  "technology": 5,
+                  "association": 3
+                },
+                "admissionRequirements": [
+                  "UTME Score 245+",
+                  "Credits in Economics, Math, English"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "dept-unilag-pol",
+            "name": "Department of Political Science",
+            "verificationStatus": "VERIFIED",
+            "programmes": [
+              {
+                "id": "prog-unilag-pol-01",
+                "name": "B.Sc. Political Science",
+                "code": "POL",
+                "tier": "tertiary",
+                "levelCode": "100L-400L",
+                "durationYears": 4,
+                "credentialAwarded": "B.Sc. (Hons) Political Science",
+                "tuitionPerPeriod": 115,
+                "currency": "USD",
+                "feePeriod": "per semester",
+                "feeSchedule": {
+                  "tuition": 70,
+                  "registration": 15,
+                  "examination": 12,
+                  "library": 10,
+                  "technology": 5,
+                  "association": 3
+                },
+                "admissionRequirements": [
+                  "UTME Score 230+",
+                  "Credits in Government, English, Math"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "dept-unilag-mcm",
+            "name": "Department of Mass Communication",
+            "verificationStatus": "VERIFIED",
+            "programmes": [
+              {
+                "id": "prog-unilag-mcm-01",
+                "name": "B.Sc. Mass Communication",
+                "code": "MCM",
+                "tier": "tertiary",
+                "levelCode": "100L-400L",
+                "durationYears": 4,
+                "credentialAwarded": "B.Sc. (Hons) Mass Communication",
+                "tuitionPerPeriod": 125,
+                "currency": "USD",
+                "feePeriod": "per semester",
+                "feeSchedule": {
+                  "tuition": 75,
+                  "registration": 15,
+                  "examination": 12,
+                  "laboratory": 12,
+                  "library": 6,
+                  "technology": 2,
+                  "association": 3
+                },
+                "admissionRequirements": [
+                  "UTME Score 255+",
+                  "Credits in English Literature, English Language, Math"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "dept-unilag-soc",
+            "name": "Department of Sociology",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
+          },
+          {
+            "id": "dept-unilag-psych",
+            "name": "Department of Psychology",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
+          }
+        ]
+      },
+      {
+        "id": "fac-unilag-arts",
+        "name": "Faculty of Arts",
+        "unitType": "faculty",
+        "verificationStatus": "VERIFIED",
+        "departments": [
+          {
+            "id": "dept-unilag-eng-lit",
+            "name": "Department of English",
+            "verificationStatus": "VERIFIED",
+            "programmes": [
+              {
+                "id": "prog-unilag-eng-01",
+                "name": "B.A. English Language & Literature",
+                "code": "ENG",
+                "tier": "tertiary",
+                "levelCode": "100L-400L",
+                "durationYears": 4,
+                "credentialAwarded": "B.A. (Hons) English",
+                "tuitionPerPeriod": 110,
+                "currency": "USD",
+                "feePeriod": "per semester",
+                "feeSchedule": {
+                  "tuition": 68,
+                  "registration": 15,
+                  "examination": 12,
+                  "library": 10,
+                  "technology": 2,
+                  "association": 3
+                },
+                "admissionRequirements": [
+                  "UTME Score 235+",
+                  "Credits in Literature in English, English Language"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "dept-unilag-hist",
+            "name": "Department of History & Strategic Studies",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
+          },
+          {
+            "id": "dept-unilag-creative-arts",
+            "name": "Department of Creative Arts",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
+          },
+          {
+            "id": "dept-unilag-phil",
+            "name": "Department of Philosophy",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
+          }
+        ]
+      },
+      {
+        "id": "fac-unilag-env",
+        "name": "Faculty of Environmental Sciences",
+        "unitType": "faculty",
+        "verificationStatus": "VERIFIED",
+        "departments": [
+          {
+            "id": "dept-unilag-arch",
+            "name": "Department of Architecture",
+            "verificationStatus": "VERIFIED",
+            "programmes": [
+              {
+                "id": "prog-unilag-arc-01",
+                "name": "B.Sc. Architecture",
+                "code": "ARC",
+                "tier": "tertiary",
+                "levelCode": "100L-400L",
+                "durationYears": 4,
+                "credentialAwarded": "B.Sc. Architecture",
+                "tuitionPerPeriod": 150,
+                "currency": "USD",
+                "feePeriod": "per semester",
+                "feeSchedule": {
+                  "tuition": 90,
+                  "registration": 15,
+                  "examination": 12,
+                  "laboratory": 20,
+                  "library": 6,
+                  "technology": 4,
+                  "association": 3
+                },
+                "admissionRequirements": [
+                  "UTME Score 245+",
+                  "Credits in Physics, Math, Technical Drawing or English"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "dept-unilag-building",
+            "name": "Department of Building",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
+          },
+          {
+            "id": "dept-unilag-estate",
+            "name": "Department of Estate Management",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
+          },
+          {
+            "id": "dept-unilag-urp",
+            "name": "Department of Urban & Regional Planning",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
+          },
+          {
+            "id": "dept-unilag-qs",
+            "name": "Department of Quantity Surveying",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
+          }
+        ]
+      },
+      {
+        "id": "fac-unilag-pharm",
+        "name": "Faculty of Pharmacy",
+        "unitType": "faculty",
+        "verificationStatus": "VERIFIED",
+        "departments": [
+          {
+            "id": "dept-unilag-pharm-tech",
+            "name": "Department of Pharmaceutics & Pharmaceutical Technology",
+            "verificationStatus": "VERIFIED",
+            "programmes": [
+              {
+                "id": "prog-unilag-pharmd-01",
+                "name": "Doctor of Pharmacy (Pharm.D)",
+                "code": "PHD",
+                "tier": "tertiary",
+                "levelCode": "100L-600L",
+                "durationYears": 6,
+                "credentialAwarded": "Pharm.D",
+                "tuitionPerPeriod": 200,
+                "currency": "USD",
+                "feePeriod": "per semester",
+                "feeSchedule": {
+                  "tuition": 125,
+                  "registration": 15,
+                  "examination": 15,
+                  "laboratory": 30,
+                  "library": 8,
+                  "technology": 4,
+                  "association": 3
+                },
+                "admissionRequirements": [
+                  "UTME Score 270+",
+                  "Credits in Biology, Chemistry, Physics, Math, English"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "dept-unilag-clin-pharm",
+            "name": "Department of Clinical Pharmacy & Biopharmacy",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
+          }
+        ]
+      },
+      {
+        "id": "fac-unilag-edu",
+        "name": "Faculty of Education",
+        "unitType": "faculty",
+        "verificationStatus": "VERIFIED",
+        "departments": [
+          {
+            "id": "dept-unilag-ste",
+            "name": "Department of Science & Technology Education",
+            "verificationStatus": "VERIFIED",
+            "programmes": [
+              {
+                "id": "prog-unilag-ste-01",
+                "name": "B.Sc. (Ed) Science Education",
+                "code": "STE",
+                "tier": "tertiary",
+                "levelCode": "100L-400L",
+                "durationYears": 4,
+                "credentialAwarded": "B.Sc. (Ed)",
+                "tuitionPerPeriod": 110,
+                "currency": "USD",
+                "feePeriod": "per semester",
+                "feeSchedule": {
+                  "tuition": 68,
+                  "registration": 15,
+                  "examination": 12,
+                  "laboratory": 5,
+                  "library": 5,
+                  "technology": 2,
+                  "association": 3
+                },
+                "admissionRequirements": [
+                  "UTME Score 210+",
+                  "Credits in 2 Science subjects, Math, English"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "dept-unilag-edf",
+            "name": "Department of Educational Foundations",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
+          },
+          {
+            "id": "dept-unilag-edm",
+            "name": "Department of Educational Management",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
           }
         ]
       }
     ],
+    "hierarchyVerificationStatus": "VERIFIED",
     "featuredBadge": "University of First Choice",
     "overviewDescription": "The University of Lagos is globally acknowledged as a center of enterprise, legal prowess, finance, and engineering innovation."
   },
@@ -573,10 +2490,13 @@ export const GLOBAL_EDUCATION_INSTITUTIONS: InstitutionProfile[] = [
       {
         "id": "fac-yabatech-tech",
         "name": "School of Technology",
+        "unitType": "school",
+        "verificationStatus": "VERIFIED",
         "departments": [
           {
             "id": "dept-yabatech-cs",
             "name": "Department of Computer Technology",
+            "verificationStatus": "VERIFIED",
             "programmes": [
               {
                 "id": "prog-yaba-nd-cs",
@@ -627,16 +2547,67 @@ export const GLOBAL_EDUCATION_INSTITUTIONS: InstitutionProfile[] = [
                 ]
               }
             ]
+          },
+          {
+            "id": "dept-yabatech-food-tech",
+            "name": "Department of Food Technology",
+            "verificationStatus": "VERIFIED",
+            "programmes": [
+              {
+                "id": "prog-yaba-nd-food",
+                "name": "National Diploma in Food Technology",
+                "code": "ND-FST",
+                "tier": "tertiary",
+                "levelCode": "ND 1 - ND 2",
+                "durationYears": 2,
+                "credentialAwarded": "National Diploma (ND)",
+                "tuitionPerPeriod": 85,
+                "currency": "USD",
+                "feePeriod": "per semester",
+                "feeSchedule": {
+                  "tuition": 50,
+                  "registration": 12,
+                  "examination": 10,
+                  "laboratory": 10,
+                  "library": 3
+                },
+                "admissionRequirements": [
+                  "JAMB Score 160+",
+                  "Credits in Chemistry, Biology/Agric, Math, English"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "dept-yabatech-hospitality",
+            "name": "Department of Hospitality Management",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
+          },
+          {
+            "id": "dept-yabatech-polymer",
+            "name": "Department of Polymer & Textile Technology",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
+          },
+          {
+            "id": "dept-yabatech-agric",
+            "name": "Department of Agricultural Technology",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
           }
         ]
       },
       {
         "id": "fac-yabatech-eng",
         "name": "School of Engineering",
+        "unitType": "school",
+        "verificationStatus": "VERIFIED",
         "departments": [
           {
             "id": "dept-yabatech-eee",
             "name": "Department of Electrical/Electronics Engineering",
+            "verificationStatus": "VERIFIED",
             "programmes": [
               {
                 "id": "prog-yaba-nd-eee",
@@ -663,10 +2634,389 @@ export const GLOBAL_EDUCATION_INSTITUTIONS: InstitutionProfile[] = [
                 ]
               }
             ]
+          },
+          {
+            "id": "dept-yabatech-mee",
+            "name": "Department of Mechanical Engineering",
+            "verificationStatus": "VERIFIED",
+            "programmes": [
+              {
+                "id": "prog-yaba-nd-mee",
+                "name": "National Diploma in Mechanical Engineering",
+                "code": "ND-MEE",
+                "tier": "tertiary",
+                "levelCode": "ND 1 - ND 2",
+                "durationYears": 2,
+                "credentialAwarded": "National Diploma (ND)",
+                "tuitionPerPeriod": 90,
+                "currency": "USD",
+                "feePeriod": "per semester",
+                "feeSchedule": {
+                  "tuition": 52,
+                  "registration": 12,
+                  "examination": 10,
+                  "laboratory": 11,
+                  "library": 3,
+                  "technology": 2
+                },
+                "admissionRequirements": [
+                  "JAMB Score 160+",
+                  "Credits in Physics, Chemistry, Math"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "dept-yabatech-cie",
+            "name": "Department of Civil Engineering",
+            "verificationStatus": "VERIFIED",
+            "programmes": [
+              {
+                "id": "prog-yaba-nd-cie",
+                "name": "National Diploma in Civil Engineering",
+                "code": "ND-CIE",
+                "tier": "tertiary",
+                "levelCode": "ND 1 - ND 2",
+                "durationYears": 2,
+                "credentialAwarded": "National Diploma (ND)",
+                "tuitionPerPeriod": 90,
+                "currency": "USD",
+                "feePeriod": "per semester",
+                "feeSchedule": {
+                  "tuition": 52,
+                  "registration": 12,
+                  "examination": 10,
+                  "laboratory": 11,
+                  "library": 3,
+                  "technology": 2
+                },
+                "admissionRequirements": [
+                  "JAMB Score 160+",
+                  "Credits in Physics, Chemistry, Math"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "dept-yabatech-che",
+            "name": "Department of Chemical Engineering",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
+          },
+          {
+            "id": "dept-yabatech-cpe",
+            "name": "Department of Computer Engineering",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
+          },
+          {
+            "id": "dept-yabatech-ime",
+            "name": "Department of Industrial Maintenance Engineering",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
+          },
+          {
+            "id": "dept-yabatech-mme",
+            "name": "Department of Metallurgical Engineering",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
+          }
+        ]
+      },
+      {
+        "id": "fac-yabatech-art",
+        "name": "School of Art, Design & Printing",
+        "unitType": "school",
+        "verificationStatus": "VERIFIED",
+        "departments": [
+          {
+            "id": "dept-yabatech-graphic",
+            "name": "Department of Graphic Design",
+            "verificationStatus": "VERIFIED",
+            "programmes": [
+              {
+                "id": "prog-yaba-nd-art",
+                "name": "National Diploma in General Art & Industrial Design",
+                "code": "ND-ART",
+                "tier": "tertiary",
+                "levelCode": "ND 1 - ND 2",
+                "durationYears": 2,
+                "credentialAwarded": "National Diploma (ND)",
+                "tuitionPerPeriod": 85,
+                "currency": "USD",
+                "feePeriod": "per semester",
+                "feeSchedule": {
+                  "tuition": 50,
+                  "registration": 12,
+                  "examination": 10,
+                  "laboratory": 10,
+                  "library": 3
+                },
+                "admissionRequirements": [
+                  "JAMB Score 160+",
+                  "Credit in Fine Art or Visual Art, English"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "dept-yabatech-fine-art",
+            "name": "Department of Fine Art",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
+          },
+          {
+            "id": "dept-yabatech-print",
+            "name": "Department of Printing Technology",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
+          },
+          {
+            "id": "dept-yabatech-fashion",
+            "name": "Department of Fashion Design & Clothing Technology",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
+          }
+        ]
+      },
+      {
+        "id": "fac-yabatech-mgt",
+        "name": "School of Management & Business Studies",
+        "unitType": "school",
+        "verificationStatus": "VERIFIED",
+        "departments": [
+          {
+            "id": "dept-yabatech-acc",
+            "name": "Department of Accountancy",
+            "verificationStatus": "VERIFIED",
+            "programmes": [
+              {
+                "id": "prog-yaba-nd-acc",
+                "name": "National Diploma in Accountancy",
+                "code": "ND-ACC",
+                "tier": "tertiary",
+                "levelCode": "ND 1 - ND 2",
+                "durationYears": 2,
+                "credentialAwarded": "National Diploma (ND)",
+                "tuitionPerPeriod": 80,
+                "currency": "USD",
+                "feePeriod": "per semester",
+                "feeSchedule": {
+                  "tuition": 48,
+                  "registration": 12,
+                  "examination": 10,
+                  "library": 5,
+                  "technology": 5
+                },
+                "admissionRequirements": [
+                  "JAMB Score 160+",
+                  "Credits in Math, English, Economics, Financial Accounting"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "dept-yabatech-bam",
+            "name": "Department of Business Administration & Management",
+            "verificationStatus": "VERIFIED",
+            "programmes": [
+              {
+                "id": "prog-yaba-nd-bam",
+                "name": "National Diploma in Business Administration",
+                "code": "ND-BAM",
+                "tier": "tertiary",
+                "levelCode": "ND 1 - ND 2",
+                "durationYears": 2,
+                "credentialAwarded": "National Diploma (ND)",
+                "tuitionPerPeriod": 80,
+                "currency": "USD",
+                "feePeriod": "per semester",
+                "feeSchedule": {
+                  "tuition": 48,
+                  "registration": 12,
+                  "examination": 10,
+                  "library": 5,
+                  "technology": 5
+                },
+                "admissionRequirements": [
+                  "JAMB Score 160+",
+                  "Credits in Math, English, Economics"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "dept-yabatech-bf",
+            "name": "Department of Banking & Finance",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
+          },
+          {
+            "id": "dept-yabatech-mkt",
+            "name": "Department of Marketing",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
+          },
+          {
+            "id": "dept-yabatech-otm",
+            "name": "Department of Office Technology & Management",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
+          }
+        ]
+      },
+      {
+        "id": "fac-yabatech-env",
+        "name": "School of Environmental Studies",
+        "unitType": "school",
+        "verificationStatus": "VERIFIED",
+        "departments": [
+          {
+            "id": "dept-yabatech-arch",
+            "name": "Department of Architecture",
+            "verificationStatus": "VERIFIED",
+            "programmes": [
+              {
+                "id": "prog-yaba-nd-arch",
+                "name": "National Diploma in Architectural Technology",
+                "code": "ND-ARC",
+                "tier": "tertiary",
+                "levelCode": "ND 1 - ND 2",
+                "durationYears": 2,
+                "credentialAwarded": "National Diploma (ND)",
+                "tuitionPerPeriod": 85,
+                "currency": "USD",
+                "feePeriod": "per semester",
+                "feeSchedule": {
+                  "tuition": 50,
+                  "registration": 12,
+                  "examination": 10,
+                  "laboratory": 10,
+                  "library": 3
+                },
+                "admissionRequirements": [
+                  "JAMB Score 160+",
+                  "Credits in Physics, Math, Technical Drawing or English"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "dept-yabatech-bld",
+            "name": "Department of Building Technology",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
+          },
+          {
+            "id": "dept-yabatech-estate",
+            "name": "Department of Estate Management & Valuation",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
+          },
+          {
+            "id": "dept-yabatech-qs",
+            "name": "Department of Quantity Surveying",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
+          },
+          {
+            "id": "dept-yabatech-urp",
+            "name": "Department of Urban & Regional Planning",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
+          }
+        ]
+      },
+      {
+        "id": "fac-yabatech-sci",
+        "name": "School of Science",
+        "unitType": "school",
+        "verificationStatus": "VERIFIED",
+        "departments": [
+          {
+            "id": "dept-yabatech-slt",
+            "name": "Department of Science Laboratory Technology",
+            "verificationStatus": "VERIFIED",
+            "programmes": [
+              {
+                "id": "prog-yaba-nd-slt",
+                "name": "National Diploma in Science Laboratory Technology",
+                "code": "ND-SLT",
+                "tier": "tertiary",
+                "levelCode": "ND 1 - ND 2",
+                "durationYears": 2,
+                "credentialAwarded": "National Diploma (ND)",
+                "tuitionPerPeriod": 85,
+                "currency": "USD",
+                "feePeriod": "per semester",
+                "feeSchedule": {
+                  "tuition": 50,
+                  "registration": 12,
+                  "examination": 10,
+                  "laboratory": 10,
+                  "library": 3
+                },
+                "admissionRequirements": [
+                  "JAMB Score 160+",
+                  "Credits in Biology, Chemistry, Physics, Math"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "dept-yabatech-stat",
+            "name": "Department of Mathematics & Statistics",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
+          }
+        ]
+      },
+      {
+        "id": "fac-yabatech-lib",
+        "name": "School of Liberal Studies",
+        "unitType": "school",
+        "verificationStatus": "VERIFIED",
+        "departments": [
+          {
+            "id": "dept-yabatech-mcm",
+            "name": "Department of Mass Communication",
+            "verificationStatus": "VERIFIED",
+            "programmes": [
+              {
+                "id": "prog-yaba-nd-mcm",
+                "name": "National Diploma in Mass Communication",
+                "code": "ND-MCM",
+                "tier": "tertiary",
+                "levelCode": "ND 1 - ND 2",
+                "durationYears": 2,
+                "credentialAwarded": "National Diploma (ND)",
+                "tuitionPerPeriod": 80,
+                "currency": "USD",
+                "feePeriod": "per semester",
+                "feeSchedule": {
+                  "tuition": 48,
+                  "registration": 12,
+                  "examination": 10,
+                  "laboratory": 7,
+                  "library": 3
+                },
+                "admissionRequirements": [
+                  "JAMB Score 165+",
+                  "Credits in English Literature, English Language, Math"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "dept-yabatech-lang",
+            "name": "Department of Languages",
+            "verificationStatus": "VERIFIED",
+            "programmes": []
           }
         ]
       }
     ],
+    "hierarchyVerificationStatus": "VERIFIED",
     "featuredBadge": "Pioneer Polytechnic of Nigeria",
     "overviewDescription": "Established in 1947, Yaba College of Technology is Nigeria's premier polytechnic recognized for technical innovation, arts, and industrial design."
   },

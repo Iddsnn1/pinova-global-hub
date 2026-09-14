@@ -2,6 +2,9 @@ import crypto from 'crypto';
 import { StorageEngine } from '../StorageEngine';
 import {
   InstitutionProfile,
+  UniversityFaculty,
+  AcademicDepartment,
+  EducationProgramme,
   StudentIdentity,
   GuardianChildSummary,
   EducationInvoice,
@@ -81,6 +84,135 @@ export class EducationRepository {
       'education_audit_logs',
       'id'
     );
+
+    this.reconcileInstitutionsWithSeed();
+  }
+
+  /**
+   * Reconciles persisted education institution records with authoritative seed data.
+   * Ensures newly added faculties, departments, and programmes in GLOBAL_EDUCATION_INSTITUTIONS
+   * are seamlessly available at runtime without wiping existing persisted state or user data.
+   */
+  private reconcileInstitutionsWithSeed(): void {
+    try {
+      for (const seedInst of GLOBAL_EDUCATION_INSTITUTIONS) {
+        const existing = this.institutionsEngine.get(seedInst.id);
+        if (!existing) {
+          this.institutionsEngine.set(seedInst.id, seedInst);
+          continue;
+        }
+
+        let hasChanges = false;
+
+        // Check if existing snapshot has legacy/incomplete hierarchy compared to authoritative seed
+        const seedFacCount = seedInst.faculties?.length || 0;
+        const existingFacCount = existing.faculties?.length || 0;
+        const legacyFacultyIds = ['fac-eng', 'fac-science', 'fac-med', 'fac-law', 'fac-bus-admin', 'fac-tech'];
+        const hasLegacyIds = existing.faculties?.some((f) => legacyFacultyIds.includes(f.id));
+
+        if (seedFacCount > 0 && (existingFacCount === 0 || hasLegacyIds || existingFacCount < seedFacCount)) {
+          // Update faculties to the authoritative seed hierarchy
+          existing.faculties = seedInst.faculties;
+          existing.hierarchyVerificationStatus = seedInst.hierarchyVerificationStatus || existing.hierarchyVerificationStatus;
+          hasChanges = true;
+        } else if (seedInst.faculties && seedInst.faculties.length > 0 && existing.faculties) {
+          // Reconcile missing faculties, departments, or programmes incrementally
+          const facMap = new Map<string, UniversityFaculty>(
+            existing.faculties.map((f) => [f.id, f])
+          );
+
+          for (const seedFac of seedInst.faculties) {
+            const existingFac = facMap.get(seedFac.id);
+            if (!existingFac) {
+              existing.faculties.push(seedFac);
+              facMap.set(seedFac.id, seedFac);
+              hasChanges = true;
+            } else {
+              if (seedFac.unitType && existingFac.unitType !== seedFac.unitType) {
+                existingFac.unitType = seedFac.unitType;
+                hasChanges = true;
+              }
+              if (!existingFac.verificationStatus && seedFac.verificationStatus) {
+                existingFac.verificationStatus = seedFac.verificationStatus;
+                hasChanges = true;
+              }
+
+              if (seedFac.departments && seedFac.departments.length > 0) {
+                if (!existingFac.departments || existingFac.departments.length === 0) {
+                  existingFac.departments = seedFac.departments;
+                  hasChanges = true;
+                } else {
+                  const deptMap = new Map<string, AcademicDepartment>(
+                    existingFac.departments.map((d) => [d.id, d])
+                  );
+
+                  for (const seedDept of seedFac.departments) {
+                    const existingDept = deptMap.get(seedDept.id);
+                    if (!existingDept) {
+                      existingFac.departments.push(seedDept);
+                      deptMap.set(seedDept.id, seedDept);
+                      hasChanges = true;
+                    } else {
+                      if (seedDept.programmes && seedDept.programmes.length > 0) {
+                        if (!existingDept.programmes || existingDept.programmes.length === 0) {
+                          existingDept.programmes = seedDept.programmes;
+                          hasChanges = true;
+                        } else {
+                          const progMap = new Map<string, EducationProgramme>(
+                            existingDept.programmes.map((p) => [p.id, p])
+                          );
+                          for (const seedProg of seedDept.programmes) {
+                            if (!progMap.has(seedProg.id)) {
+                              existingDept.programmes.push(seedProg);
+                              progMap.set(seedProg.id, seedProg);
+                              hasChanges = true;
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        // Reconcile top-level programmes (e.g. for non-tertiary institutions)
+        if (seedInst.programmes && seedInst.programmes.length > 0) {
+          if (!existing.programmes || existing.programmes.length === 0) {
+            existing.programmes = seedInst.programmes;
+            hasChanges = true;
+          } else {
+            const progMap = new Map<string, EducationProgramme>(
+              existing.programmes.map((p) => [p.id, p])
+            );
+            for (const seedProg of seedInst.programmes) {
+              if (!progMap.has(seedProg.id)) {
+                existing.programmes.push(seedProg);
+                progMap.set(seedProg.id, seedProg);
+                hasChanges = true;
+              }
+            }
+          }
+        }
+
+        // Reconcile hierarchyVerificationStatus
+        if (
+          seedInst.hierarchyVerificationStatus &&
+          existing.hierarchyVerificationStatus !== seedInst.hierarchyVerificationStatus
+        ) {
+          existing.hierarchyVerificationStatus = seedInst.hierarchyVerificationStatus;
+          hasChanges = true;
+        }
+
+        if (hasChanges) {
+          this.institutionsEngine.set(existing.id, existing);
+        }
+      }
+    } catch (err) {
+      console.warn('[EducationRepository] Error reconciling institutions with seed:', err);
+    }
   }
 
   // --- Institutions ---
@@ -166,6 +298,64 @@ export class EducationRepository {
     });
 
     return updated;
+  }
+
+  // --- Academic Hierarchy (Faculties, Colleges, Departments, Programmes) ---
+  public getFacultiesByInstitution(institutionId: string): UniversityFaculty[] {
+    const inst = this.institutionsEngine.get(institutionId);
+    if (!inst || !inst.faculties) return [];
+    return inst.faculties;
+  }
+
+  public getFacultyById(institutionId: string, facultyId: string): UniversityFaculty | null {
+    const faculties = this.getFacultiesByInstitution(institutionId);
+    return faculties.find((f) => f.id === facultyId) || null;
+  }
+
+  public getDepartmentsByFaculty(institutionId: string, facultyId: string): AcademicDepartment[] {
+    const faculty = this.getFacultyById(institutionId, facultyId);
+    if (!faculty || !faculty.departments) return [];
+    return faculty.departments;
+  }
+
+  public getDepartmentById(institutionId: string, facultyId: string, departmentId: string): AcademicDepartment | null {
+    const departments = this.getDepartmentsByFaculty(institutionId, facultyId);
+    return departments.find((d) => d.id === departmentId) || null;
+  }
+
+  public getProgrammesByDepartment(
+    institutionId: string,
+    facultyId: string,
+    departmentId: string
+  ): EducationProgramme[] {
+    const dept = this.getDepartmentById(institutionId, facultyId, departmentId);
+    if (!dept || !dept.programmes) return [];
+    return dept.programmes;
+  }
+
+  public getAllProgrammesByInstitution(institutionId: string): EducationProgramme[] {
+    const inst = this.institutionsEngine.get(institutionId);
+    if (!inst) return [];
+
+    // If institution has direct programmes (e.g. secondary school, vocational institute)
+    if (inst.programmes && inst.programmes.length > 0) {
+      return inst.programmes;
+    }
+
+    // Otherwise aggregate from faculties -> departments -> programmes
+    const allProgs: EducationProgramme[] = [];
+    if (inst.faculties) {
+      for (const fac of inst.faculties) {
+        if (fac.departments) {
+          for (const dept of fac.departments) {
+            if (dept.programmes) {
+              allProgs.push(...dept.programmes);
+            }
+          }
+        }
+      }
+    }
+    return allProgs;
   }
 
   // --- Students & Guardian ---

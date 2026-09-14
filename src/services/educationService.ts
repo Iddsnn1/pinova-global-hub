@@ -1,5 +1,8 @@
 import {
   InstitutionProfile,
+  UniversityFaculty,
+  AcademicDepartment,
+  EducationProgramme,
   CountryEducationTaxonomy,
   StudentIdentity,
   GuardianChildSummary,
@@ -90,6 +93,88 @@ export const educationService = {
       console.warn('[educationService] Failed fetching institution by ID:', e);
     }
     return GLOBAL_EDUCATION_INSTITUTIONS.find((i) => i.id === id) || null;
+  },
+
+  async getFaculties(institutionId: string): Promise<UniversityFaculty[]> {
+    try {
+      const res = await fetch(`/api/education/institutions/${encodeURIComponent(institutionId)}/faculties`);
+      if (res.ok) {
+        const data = await res.json();
+        return data.faculties || [];
+      }
+    } catch (e) {
+      console.warn('[educationService] Failed fetching faculties via API:', e);
+    }
+    const inst = GLOBAL_EDUCATION_INSTITUTIONS.find((i) => i.id === institutionId);
+    return inst?.faculties || [];
+  },
+
+  async getDepartments(institutionId: string, facultyId: string): Promise<AcademicDepartment[]> {
+    try {
+      const res = await fetch(`/api/education/institutions/${encodeURIComponent(institutionId)}/faculties/${encodeURIComponent(facultyId)}/departments`);
+      if (res.ok) {
+        const data = await res.json();
+        return data.departments || [];
+      }
+    } catch (e) {
+      console.warn('[educationService] Failed fetching departments via API:', e);
+    }
+    const inst = GLOBAL_EDUCATION_INSTITUTIONS.find((i) => i.id === institutionId);
+    const faculty = inst?.faculties?.find((f) => f.id === facultyId);
+    return faculty?.departments || [];
+  },
+
+  async getProgrammes(
+    institutionId: string,
+    facultyId?: string,
+    departmentId?: string
+  ): Promise<EducationProgramme[]> {
+    try {
+      if (facultyId && departmentId) {
+        const res = await fetch(
+          `/api/education/institutions/${encodeURIComponent(institutionId)}/faculties/${encodeURIComponent(facultyId)}/departments/${encodeURIComponent(departmentId)}/programmes`
+        );
+        if (res.ok) {
+          const data = await res.json();
+          return data.programmes || [];
+        }
+      } else {
+        const res = await fetch(`/api/education/institutions/${encodeURIComponent(institutionId)}/programmes`);
+        if (res.ok) {
+          const data = await res.json();
+          return data.programmes || [];
+        }
+      }
+    } catch (e) {
+      console.warn('[educationService] Failed fetching programmes via API:', e);
+    }
+
+    const inst = GLOBAL_EDUCATION_INSTITUTIONS.find((i) => i.id === institutionId);
+    if (!inst) return [];
+
+    if (facultyId && departmentId) {
+      const faculty = inst.faculties?.find((f) => f.id === facultyId);
+      const dept = faculty?.departments?.find((d) => d.id === departmentId);
+      return dept?.programmes || [];
+    }
+
+    if (inst.programmes && inst.programmes.length > 0) {
+      return inst.programmes;
+    }
+
+    const allProgs: EducationProgramme[] = [];
+    if (inst.faculties) {
+      for (const f of inst.faculties) {
+        if (f.departments) {
+          for (const d of f.departments) {
+            if (d.programmes) {
+              allProgs.push(...d.programmes);
+            }
+          }
+        }
+      }
+    }
+    return allProgs;
   },
 
   async getTaxonomy(countryCode: string = 'NG'): Promise<CountryEducationTaxonomy> {

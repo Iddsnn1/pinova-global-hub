@@ -1849,6 +1849,85 @@ app.get('/api/education/institutions/:id', (req, res) => {
   }
 });
 
+// Academic Hierarchy Endpoints (Cascading Faculties/Schools -> Departments -> Programmes)
+app.get('/api/education/institutions/:id/faculties', (req, res) => {
+  try {
+    const inst = educationRepo.getInstitutionById(req.params.id);
+    if (!inst) {
+      res.status(404).json({ success: false, error: 'INSTITUTION_NOT_FOUND', message: `Institution ${req.params.id} not found` });
+      return;
+    }
+    const faculties = educationRepo.getFacultiesByInstitution(req.params.id);
+    res.json({
+      success: true,
+      institutionId: req.params.id,
+      institutionName: inst.name,
+      count: faculties.length,
+      faculties
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: 'FACULTIES_FETCH_FAILED', message: err.message });
+  }
+});
+
+app.get('/api/education/institutions/:id/faculties/:facultyId/departments', (req, res) => {
+  try {
+    const faculty = educationRepo.getFacultyById(req.params.id, req.params.facultyId);
+    if (!faculty) {
+      res.status(404).json({ success: false, error: 'FACULTY_NOT_FOUND', message: `Faculty ${req.params.facultyId} not found` });
+      return;
+    }
+    const departments = educationRepo.getDepartmentsByFaculty(req.params.id, req.params.facultyId);
+    res.json({
+      success: true,
+      institutionId: req.params.id,
+      facultyId: req.params.facultyId,
+      facultyName: faculty.name,
+      unitType: faculty.unitType || 'faculty',
+      count: departments.length,
+      departments
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: 'DEPARTMENTS_FETCH_FAILED', message: err.message });
+  }
+});
+
+app.get('/api/education/institutions/:id/faculties/:facultyId/departments/:deptId/programmes', (req, res) => {
+  try {
+    const dept = educationRepo.getDepartmentById(req.params.id, req.params.facultyId, req.params.deptId);
+    if (!dept) {
+      res.status(404).json({ success: false, error: 'DEPARTMENT_NOT_FOUND', message: `Department ${req.params.deptId} not found` });
+      return;
+    }
+    const programmes = educationRepo.getProgrammesByDepartment(req.params.id, req.params.facultyId, req.params.deptId);
+    res.json({
+      success: true,
+      institutionId: req.params.id,
+      facultyId: req.params.facultyId,
+      departmentId: req.params.deptId,
+      departmentName: dept.name,
+      count: programmes.length,
+      programmes
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: 'PROGRAMMES_FETCH_FAILED', message: err.message });
+  }
+});
+
+app.get('/api/education/institutions/:id/programmes', (req, res) => {
+  try {
+    const programmes = educationRepo.getAllProgrammesByInstitution(req.params.id);
+    res.json({
+      success: true,
+      institutionId: req.params.id,
+      count: programmes.length,
+      programmes
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: 'ALL_PROGRAMMES_FETCH_FAILED', message: err.message });
+  }
+});
+
 // 2. Global Education Taxonomy / Classification (Phase 6 Remediation)
 app.get(['/api/education/taxonomy', '/api/education/taxonomy/:countryCode?'], (req, res) => {
   try {
