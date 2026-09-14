@@ -1,0 +1,161 @@
+name: Prepare Vendor KYC Remediation
+
+on:
+  push:
+    branches: [fix/vendor-kyc-document-upload]
+
+permissions:
+  contents: write
+
+jobs:
+  remediate-and-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/vendor-kyc-document-upload
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Patch KYC sources
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          import re
+
+          component = Path('src/components/vendor/VendorApplicationModal.tsx')
+          s = component.read_text()
+          if 'const [docFile, setDocFile] = useState<File | null>(null);' not in s:
+              s = s.replace("  const [docFileUrl, setDocFileUrl] = useState('');", "  const [docFileUrl, setDocFileUrl] = useState('');\n  const [docFile, setDocFile] = useState<File | null>(null);\n  const [docUploadStatus, setDocUploadStatus] = useState<string | null>(null);")
+
+          if 'uploadedDocumentReference' not in s:
+              marker = '      const payload = {'
+              upload = '''      if (!docNumber.trim()) {
+        setErrorMessage('Document number is required.');
+        setLoading(false);
+        return;
+      }
+      if (!docFile && !docFileUrl.startsWith('private://vendor-documents/')) {
+        setErrorMessage('Please upload the verification document.');
+        setLoading(false);
+        return;
+      }
+      let uploadedDocumentReference = docFileUrl;
+      if (docFile) {
+        try {
+          setDocUploadStatus('Uploading verification document securely…');
+          const uploadRes = await fetch('/api/vendor/document-upload', {
+            method: 'POST',
+            headers: { 'Content-Type': docFile.type, 'X-Filename': encodeURIComponent(docFile.name), 'X-Document-Type': docType },
+            body: docFile
+          });
+          const uploadData = await uploadRes.json();
+          if (!uploadRes.ok || !uploadData.success || !uploadData.reference) throw new Error(uploadData.message || 'Verification document upload failed.');
+          uploadedDocumentReference = uploadData.reference;
+          setDocFileUrl(uploadedDocumentReference);
+          setDocUploadStatus('Document uploaded securely.');
+        } catch (uploadError: any) {
+          setErrorMessage(uploadError?.message || 'Verification document upload failed.');
+          setDocUploadStatus(null);
+          setLoading(false);
+          return;
+        }
+      }
+
+'''
+              if marker in s: s = s.replace(marker, upload + marker, 1)
+
+          s = s.replace("fileUrl: docFileUrl.trim() || 'https://pinova.hub/docs/verified_id.pdf',", "fileUrl: uploadedDocumentReference,")
+          s = s.replace("documentNumber: docNumber.trim() || 'DOC-VERIFIED'", "documentNumber: docNumber.trim()")
+
+          if 'Upload Verification Document *' not in s:
+              p = re.compile(r'<div>\s*<label className="block text-xs font-bold text-slate-300 mb-1">Document File Reference</label>\s*<input[\s\S]*?</div>', re.M)
+              repl = '''<div>
+                <label className="block text-xs font-bold text-slate-300 mb-1">Upload Verification Document *</label>
+                <input type="file" accept="application/pdf,image/jpeg,image/png" onChange={(e) => {
+                  const file = e.target.files?.[0] || null;
+                  if (!file) return;
+                  if (!['application/pdf','image/jpeg','image/png'].includes(file.type)) { setErrorMessage('Only PDF, JPG/JPEG, or PNG verification documents are allowed.'); e.currentTarget.value = ''; return; }
+                  if (file.size > 5 * 1024 * 1024) { setErrorMessage('Verification document must be 5 MB or smaller.'); e.currentTarget.value = ''; return; }
+                  setErrorMessage(null); setDocFile(file); setDocFileUrl(''); setDocUploadStatus(null);
+                }} className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs font-bold text-white focus:outline-none focus:border-purple-500" />
+                <p className="mt-1 text-[10px] text-slate-400">PDF, JPG/JPEG or PNG · max 5 MB · uploaded to protected server storage</p>
+                {docFile && <p className="mt-1 text-[10px] text-emerald-400 truncate">Selected: {docFile.name}</p>}
+                {docUploadStatus && <p className="mt-1 text-[10px] text-sky-400">{docUploadStatus}</p>}
+              </div>'''
+              s, n = p.subn(repl, s, count=1)
+              if n != 1: raise SystemExit('KYC document field not found')
+          component.write_text(s)
+
+          server = Path('server.ts')
+          s = server.read_text()
+          apply_marker = "app.post(['/api/vendor/apply', '/api/v1/vendor/apply'], authenticate,"
+          if '/api/vendor/document-upload' not in s:
+              idx = s.find(apply_marker)
+              if idx < 0: raise SystemExit('Vendor apply route not found')
+              route = '''app.post(['/api/vendor/document-upload', '/api/v1/vendor/document-upload'], authenticate, async (req: AuthenticatedRequest, res) => {
+  const allowedTypes = new Set(['application/pdf', 'image/jpeg', 'image/png']);
+  const contentType = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
+  const maxBytes = 5 * 1024 * 1024;
+  const keyHex = String(process.env.VENDOR_DOCUMENT_ENCRYPTION_KEY || '').trim();
+  if (!allowedTypes.has(contentType)) { res.status(415).json({ success: false, message: 'Only PDF, JPG/JPEG, or PNG verification documents are allowed.' }); return; }
+  if (!/^[0-9a-fA-F]{64}$/.test(keyHex)) { res.status(503).json({ success: false, message: 'Secure document storage is not configured.' }); return; }
+  const chunks: Buffer[] = []; let total = 0;
+  try {
+    for await (const chunk of req) { const part = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk); total += part.length; if (total > maxBytes) { res.status(413).json({ success: false, message: 'Verification document must be 5 MB or smaller.' }); return; } chunks.push(part); }
+    if (!total) { res.status(400).json({ success: false, message: 'Verification document is required.' }); return; }
+    const id = crypto.randomBytes(18).toString('hex');
+    const iv = crypto.randomBytes(12); const cipher = crypto.createCipheriv('aes-256-gcm', Buffer.from(keyHex, 'hex'), iv);
+    const encrypted = Buffer.concat([cipher.update(Buffer.concat(chunks)), cipher.final()]);
+    const filenameHeader = String(req.headers['x-filename'] || 'verification-document');
+    let originalName = 'verification-document'; try { originalName = decodeURIComponent(filenameHeader).replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 120) || originalName; } catch {}
+    const root = process.env.PINOVA_DATA_DIR || path.join(process.cwd(), 'data', 'db');
+    const dir = path.join(root, 'vendor-documents'); fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+    const filePath = path.join(dir, `${id}.json`); const tempPath = `${filePath}.${crypto.randomBytes(6).toString('hex')}.tmp`;
+    fs.writeFileSync(tempPath, JSON.stringify({ id, ownerId: req.user?.id || null, ownerUsername: req.user?.username || null, documentType: String(req.headers['x-document-type'] || 'unknown'), contentType, originalName, uploadedAt: new Date().toISOString(), iv: iv.toString('base64'), authTag: cipher.getAuthTag().toString('base64'), ciphertext: encrypted.toString('base64') }), { mode: 0o600 });
+    fs.renameSync(tempPath, filePath); try { fs.chmodSync(filePath, 0o600); } catch {}
+    res.status(201).json({ success: true, reference: `private://vendor-documents/${id}` });
+  } catch (error: any) { console.error('[Vendor KYC Upload] Failed:', error?.message || error); res.status(500).json({ success: false, message: 'Verification document upload failed.' }); }
+});
+
+'''
+              s = s[:idx] + route + s[idx:]
+
+          if 'requiredDocuments,' not in s[s.find(apply_marker):s.find(apply_marker)+4000]:
+              s = s.replace('      documents,\n      policies,', '      documents,\n      requiredDocuments,\n      policies,', 1)
+          s = s.replace('documents: Array.isArray(documents) ? documents : [],', "documents: Array.isArray(documents) ? documents : (Array.isArray(requiredDocuments) ? requiredDocuments.map((doc: any) => ({ id: doc.id || `DOC-${crypto.randomBytes(8).toString('hex')}`, docType: doc.type === 'passport' ? 'identity_proof' : doc.type === 'business_cert' ? 'business_registration' : doc.type === 'utility_bill' ? 'address_proof' : 'identity_proof', fileName: doc.fileName || doc.name || 'verification-document', fileUrl: String(doc.fileUrl || ''), uploadedAt: doc.uploadedAt || new Date().toISOString(), documentNumber: String(doc.documentNumber || '') })) : []),", 1)
+          if 'VERIFICATION_DOCUMENT_REQUIRED' not in s[s.find(apply_marker):s.find(apply_marker)+8000]:
+              anchor = "    const effectiveUsername = req.user?.username || req.body?.pioneerUsername;"
+              pos = s.find(anchor, s.find(apply_marker))
+              if pos < 0: raise SystemExit('Vendor apply anchor not found')
+              validation = "    const submittedDocuments = Array.isArray(req.body?.documents) ? req.body.documents : (Array.isArray(req.body?.requiredDocuments) ? req.body.requiredDocuments : []);\n    if (!submittedDocuments.length || submittedDocuments.some((doc: any) => !String(doc?.fileUrl || '').startsWith('private://vendor-documents/'))) { res.status(400).json({ success: false, error: 'VERIFICATION_DOCUMENT_REQUIRED', message: 'A securely uploaded verification document is required.' }); return; }\n\n"
+              s = s[:pos] + validation + s[pos:]
+          server.write_text(s)
+
+          assert 'Upload Verification Document *' in component.read_text()
+          assert '/api/vendor/document-upload' in server.read_text()
+          PY
+
+      - name: Install dependencies and create lockfile
+        run: npm install --no-audit --no-fund
+
+      - name: TypeScript check
+        run: npm run lint
+
+      - name: Production build
+        run: npm run build
+
+      - name: Test suites
+        run: npm test
+
+      - name: Commit verified changes
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/components/vendor/VendorApplicationModal.tsx server.ts package-lock.json
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'fix(vendor): secure KYC document upload and dependency lockfile'
+          git push origin HEAD:fix/vendor-kyc-document-upload
