@@ -1,0 +1,38 @@
+name: Education Runtime Verification
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  education-runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript check
+        run: npm run lint
+
+      - name: Global registry runtime test
+        run: npx tsx tests/global_education_registry_coverage_suite.ts
+
+      - name: Education ecosystem runtime test
+        run: npm run test:edu
+
+      - name: Production build
+        run: npm run build
