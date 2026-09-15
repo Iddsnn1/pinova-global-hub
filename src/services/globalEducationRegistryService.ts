@@ -3,6 +3,7 @@ import { educationService } from './educationService';
 import { buildGlobalEducationCoverageAudit, getGlobalEducationCoverageGaps, getGlobalEducationPartialCoverage, getGlobalEducationCoverageSummary, mapInstitutionVerificationStatus } from '../data/globalEducationCoverageEngine';
 import { buildGlobalEducationSourceQueue } from '../data/globalEducationSourceQueue';
 import { GLOBAL_EDUCATION_REGISTRY_POLICY } from '../data/globalEducationRegistry';
+import { loadCanadaDliInstitutions } from './globalEducationNationalAdapters';
 
 const NCES_IPEDS_ENDPOINT = 'https://nces.ed.gov/arcgis/rest/services/IPEDS/IPEDS/MapServer/0/query';
 const US_STATE_CODES = new Set('AL AK AZ AR CA CO CT DE FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY DC'.split(' '));
@@ -45,19 +46,33 @@ async function loadNcesUsInstitutions(): Promise<InstitutionProfile[]> {
   ncesCache = { expiresAt: Date.now() + 15 * 60 * 1000, institutions }; return institutions;
 }
 
+function applyDirectoryFilters(institutions: InstitutionProfile[], filter: Parameters<typeof educationService.getInstitutions>[0]): InstitutionProfile[] {
+  let merged = institutions;
+  if (filter?.state && filter.state !== 'all') merged = merged.filter((item) => item.state?.toUpperCase() === String(filter.state).toUpperCase());
+  if (filter?.institutionType && filter.institutionType !== 'all') merged = merged.filter((item) => item.institutionType === filter.institutionType);
+  if (filter?.isPublic !== undefined) merged = merged.filter((item) => item.isPublic === filter.isPublic);
+  if (filter?.search) { const q = filter.search.toLowerCase(); merged = merged.filter((item) => `${item.name} ${item.city} ${item.state}`.toLowerCase().includes(q)); }
+  return merged;
+}
+
 const originalGetInstitutions = educationService.getInstitutions.bind(educationService);
 educationService.getInstitutions = async (filter) => {
   const country = String(filter?.countryCode || filter?.country || '').toUpperCase();
-  if (country !== 'US' && country !== 'USA' && country !== 'UNITED STATES') return originalGetInstitutions(filter);
+  const adapter = country === 'US' || country === 'USA' || country === 'UNITED STATES'
+    ? loadNcesUsInstitutions
+    : country === 'CA' || country === 'CAN' || country === 'CANADA'
+      ? loadCanadaDliInstitutions
+      : null;
+  if (!adapter) return originalGetInstitutions(filter);
   try {
-    const local = await originalGetInstitutions(filter), remote = await loadNcesUsInstitutions();
-    let merged = [...local, ...remote.filter((item) => !local.some((existing) => existing.id === item.id))];
-    if (filter?.state && filter.state !== 'all') merged = merged.filter((item) => item.state?.toUpperCase() === String(filter.state).toUpperCase());
-    if (filter?.institutionType && filter.institutionType !== 'all') merged = merged.filter((item) => item.institutionType === filter.institutionType);
-    if (filter?.isPublic !== undefined) merged = merged.filter((item) => item.isPublic === filter.isPublic);
-    if (filter?.search) { const q = filter.search.toLowerCase(); merged = merged.filter((item) => `${item.name} ${item.city} ${item.state}`.toLowerCase().includes(q)); }
-    return merged;
-  } catch (error) { console.warn('[Global Education Registry] NCES IPEDS unavailable; retaining existing U.S. directory:', error); return originalGetInstitutions(filter); }
+    const local = await originalGetInstitutions(filter);
+    const remote = await adapter();
+    const merged = [...local, ...remote.filter((item) => !local.some((existing) => existing.id === item.id))];
+    return applyDirectoryFilters(merged, filter);
+  } catch (error) {
+    console.warn(`[Global Education Registry] authoritative ${country} adapter unavailable; retaining existing directory:`, error);
+    return originalGetInstitutions(filter);
+  }
 };
 
 export const globalEducationRegistryService = {
