@@ -10,7 +10,6 @@ permissions:
 
 jobs:
   patch:
-    if: github.event.head_commit.message != 'fix(vendor): harden branding storage on Vercel'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -41,7 +40,7 @@ jobs:
 }'''
           new = '''function getVendorBrandingDir(): string {
   // Vercel serverless functions have a read-only deployed filesystem; only /tmp is writable.
-  // Prefer configured durable storage elsewhere, but actively verify write access before using it.
+  // Prefer configured storage outside Vercel, but actively verify write access before using it.
   const configured = process.env.PINOVA_DATA_DIR
     ? path.resolve(process.env.PINOVA_DATA_DIR, 'vendor-branding')
     : path.resolve(process.cwd(), 'data', 'vendor-branding');
@@ -51,7 +50,6 @@ jobs:
   for (const candidate of candidates) {
     try {
       fs.mkdirSync(candidate, { recursive: true, mode: 0o755 });
-      // Probe actual write access; exists()/mkdir() alone is insufficient on read-only deployments.
       const probe = path.join(candidate, `.write-probe-${process.pid}-${Date.now()}`);
       fs.writeFileSync(probe, 'ok', { encoding: 'utf8', mode: 0o600 });
       fs.unlinkSync(probe);
@@ -65,11 +63,14 @@ jobs:
 }'''
           if old not in s:
               raise SystemExit('Expected getVendorBrandingDir implementation was not found')
-          s = s.replace(old, new, 1)
-          p.write_text(s)
+          p.write_text(s.replace(old, new, 1))
           PY
       - name: Commit patch
         run: |
+          if git diff --quiet -- server.ts; then
+            echo 'No server.ts patch needed.'
+            exit 0
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add server.ts
