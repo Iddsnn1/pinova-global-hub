@@ -42,4 +42,9 @@ const accessAfterRejection = repo.getMerchantAccess('pi_artisan_hub');
 assert(accessAfterRejection.canSell === false, 'Rejected vendor must not be allowed to sell');
 assert(accessAfterRejection.canReceivePstpOrders === false, 'Rejected vendor must not receive PSTP orders');
 
+// Keep the seeded fixture in its original production-safe state after the suite.
+const restored = repo.updateStatus('VAPP-NG-9081', 'APPROVED', 'Seed fixture restored after lifecycle test', 'test-suite');
+assert(restored?.verificationStatus === 'Verified', 'Seed fixture must be restored to Verified');
+assert(restored?.sellerStatus === 'Active', 'Seed fixture must be restored to Active');
+
 console.log('Vendor governance lifecycle suite: PASS');
