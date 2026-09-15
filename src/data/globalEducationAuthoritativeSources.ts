@@ -36,8 +36,8 @@ export const GLOBAL_EDUCATION_AUTHORITATIVE_SOURCES: GlobalEducationAuthoritativ
   {
     countryCode: 'GB', countryName: 'United Kingdom', layer: 'HIGHER_EDUCATION',
     authorityName: 'HESA / UK Register of Learning Providers / Office for Students',
-    sourceKind: 'NATIONAL_AUTHORITY', sourceUrl: 'https://www.hesa.ac.uk/collection/provider-tools/',
-    sourceRole: 'UK higher-education provider metadata and regulatory reference', machineReadable: true, ingestionStatus: 'SOURCE_READY',
+    sourceKind: 'NATIONAL_AUTHORITY', sourceUrl: 'https://www.hesa.ac.uk/collection/provider-tools/all_hesa_providers',
+    sourceRole: 'UK higher-education provider metadata; current-provider CSV uses UKPRN/INSTID identifiers', machineReadable: true, ingestionStatus: 'LIVE_ADAPTER',
   },
   {
     countryCode: 'AU', countryName: 'Australia', layer: 'HIGHER_EDUCATION',
