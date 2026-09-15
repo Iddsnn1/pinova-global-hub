@@ -41,11 +41,11 @@ function makeInstitution(overrides: Partial<InstitutionProfile> = {}): Instituti
     supportsPiPayment: false,
     supportsInstallments: false,
     activeSessions: [],
+    overviewDescription: 'Test fixture only',
     ...overrides,
   };
 }
 
-// Placeholder hierarchy must never survive the integrity gate.
 assert.equal(hasFabricatedPlaceholderName('Faculty 1'), true);
 assert.equal(hasFabricatedPlaceholderName('Department 12'), true);
 assert.equal(hasFabricatedPlaceholderName('Faculty of Science'), false);
@@ -66,6 +66,7 @@ const partiallyVerified = makeInstitution({
           programmes: [{
             id: 'prog-verified',
             name: 'B.Sc. Verified Studies',
+            code: 'BSC-VERIFIED',
             tier: 'tertiary',
             levelCode: '100L-400L',
             durationYears: 4,
