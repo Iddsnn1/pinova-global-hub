@@ -21,9 +21,19 @@ function getStoredSessionToken(): string | null {
   }
 }
 
-async function establishVendorSession(): Promise<string | null> {
-  const existing = getStoredSessionToken();
-  if (existing) return existing;
+function clearStoredSessionTokens(): void {
+  try {
+    localStorage.removeItem('auth_token');
+    localStorage.removeItem('pinova_token');
+    localStorage.removeItem('pi_auth_token');
+  } catch {}
+}
+
+async function establishVendorSession(forceRefresh = false): Promise<string | null> {
+  if (!forceRefresh) {
+    const existing = getStoredSessionToken();
+    if (existing) return existing;
+  }
 
   if (typeof window === 'undefined' || typeof window.Pi?.authenticate !== 'function') {
     return null;
@@ -93,7 +103,10 @@ export function installVendorAuthBridge(): void {
       return response;
     }
 
-    const token = await establishVendorSession();
+    // A stored session can be stale. Clear it and establish a fresh,
+    // server-verified Pi session before retrying the protected request.
+    clearStoredSessionTokens();
+    const token = await establishVendorSession(true);
     if (!token) return response;
 
     const retryHeaders = new Headers(
