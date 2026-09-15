@@ -2,6 +2,8 @@ import { StorageEngine } from '../StorageEngine';
 
 export type VendorApplicationStatus = 'PENDING_REVIEW' | 'UNDER_REVIEW' | 'APPROVED' | 'REJECTED' | 'ACTION_REQUIRED';
 export type SellerType = 'individual' | 'business';
+export type MerchantVerificationStatus = 'Verified' | 'Pending Verification' | 'Unverified' | 'Suspended';
+export type MerchantSellerStatus = 'Active' | 'Inactive' | 'Probation' | 'Suspended';
 
 export interface VendorApplicationDoc {
   id: string;
@@ -43,6 +45,9 @@ export interface VendorApplicationEntity {
   };
   pstpAgreementAccepted: boolean;
   status: VendorApplicationStatus;
+  /** Authoritative merchant lifecycle derived from governance status. */
+  verificationStatus: MerchantVerificationStatus;
+  sellerStatus: MerchantSellerStatus;
   adminReviewNotes?: string;
   reviewedBy?: string;
   reviewedAt?: string;
@@ -94,6 +99,8 @@ const INITIAL_VENDOR_APPLICATIONS: VendorApplicationEntity[] = [
     },
     pstpAgreementAccepted: true,
     status: 'APPROVED',
+    verificationStatus: 'Verified',
+    sellerStatus: 'Active',
     adminReviewNotes: 'Verified against CAC business registry and verified Pioneer KYC credentials.',
     reviewedBy: 'PiNova Chief Compliance Officer',
     reviewedAt: new Date(Date.now() - 86400000).toISOString(),
@@ -140,9 +147,15 @@ export class VendorApplicationRepository {
     const existing = this.engine.get(id);
     if (!existing) return undefined;
 
+    // Governance status is the single authoritative source for merchant activation.
+    // Never activate a seller from a client-side role, badge, or localStorage flag.
+    const lifecycle = this.lifecycleForStatus(status);
+
     const updated: VendorApplicationEntity = {
       ...existing,
       status,
+      verificationStatus: lifecycle.verificationStatus,
+      sellerStatus: lifecycle.sellerStatus,
       adminReviewNotes: adminNotes ?? existing.adminReviewNotes,
       reviewedBy: reviewedBy ?? 'Platform Compliance Lead',
       reviewedAt: new Date().toISOString(),
@@ -151,5 +164,57 @@ export class VendorApplicationRepository {
 
     this.engine.set(id, updated);
     return updated;
+  }
+
+  public getMerchantAccess(username: string): {
+    applicationFound: boolean;
+    applicationStatus: VendorApplicationStatus | null;
+    verificationStatus: MerchantVerificationStatus;
+    sellerStatus: MerchantSellerStatus;
+    canSell: boolean;
+    canReceivePstpOrders: boolean;
+  } {
+    const application = this.findByUsername(username);
+    if (!application) {
+      return {
+        applicationFound: false,
+        applicationStatus: null,
+        verificationStatus: 'Unverified',
+        sellerStatus: 'Inactive',
+        canSell: false,
+        canReceivePstpOrders: false
+      };
+    }
+
+    const canSell = application.status === 'APPROVED'
+      && application.verificationStatus === 'Verified'
+      && application.sellerStatus === 'Active';
+
+    return {
+      applicationFound: true,
+      applicationStatus: application.status,
+      verificationStatus: application.verificationStatus,
+      sellerStatus: application.sellerStatus,
+      canSell,
+      canReceivePstpOrders: canSell && application.pstpAgreementAccepted
+    };
+  }
+
+  private lifecycleForStatus(status: VendorApplicationStatus): {
+    verificationStatus: MerchantVerificationStatus;
+    sellerStatus: MerchantSellerStatus;
+  } {
+    switch (status) {
+      case 'APPROVED':
+        return { verificationStatus: 'Verified', sellerStatus: 'Active' };
+      case 'REJECTED':
+        return { verificationStatus: 'Unverified', sellerStatus: 'Suspended' };
+      case 'ACTION_REQUIRED':
+        return { verificationStatus: 'Pending Verification', sellerStatus: 'Probation' };
+      case 'UNDER_REVIEW':
+      case 'PENDING_REVIEW':
+      default:
+        return { verificationStatus: 'Pending Verification', sellerStatus: 'Probation' };
+    }
   }
 }
