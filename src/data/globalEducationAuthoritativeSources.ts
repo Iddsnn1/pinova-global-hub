@@ -29,9 +29,9 @@ export const GLOBAL_EDUCATION_AUTHORITATIVE_SOURCES: GlobalEducationAuthoritativ
   },
   {
     countryCode: 'CA', countryName: 'Canada', layer: 'HIGHER_EDUCATION',
-    authorityName: 'Government of Canada — Designated Learning Institutions',
-    sourceKind: 'NATIONAL_AUTHORITY', sourceUrl: 'https://www.canada.ca/en/immigration-refugees-citizenship/services/study-canada/study-permit/prepare/designated-learning-institutions-list.html',
-    sourceRole: 'Federal directory of designated postsecondary institutions', machineReadable: false, ingestionStatus: 'SOURCE_READY',
+    authorityName: 'Government of Canada — Immigration, Refugees and Citizenship Canada (IRCC)', sourceKind: 'NATIONAL_AUTHORITY',
+    sourceUrl: 'https://www.canada.ca/en/immigration-refugees-citizenship/services/study-canada/study-permit/prepare/designated-learning-institutions-list.html',
+    sourceRole: 'Federal designated postsecondary institution directory; DLI records are ingested from the official IRCC open-data feed', machineReadable: true, ingestionStatus: 'LIVE_ADAPTER',
   },
   {
     countryCode: 'GB', countryName: 'United Kingdom', layer: 'HIGHER_EDUCATION',
