@@ -3,7 +3,7 @@ import { educationService } from './educationService';
 import { buildGlobalEducationCoverageAudit, getGlobalEducationCoverageGaps, getGlobalEducationPartialCoverage, getGlobalEducationCoverageSummary, mapInstitutionVerificationStatus } from '../data/globalEducationCoverageEngine';
 import { buildGlobalEducationSourceQueue } from '../data/globalEducationSourceQueue';
 import { GLOBAL_EDUCATION_REGISTRY_POLICY } from '../data/globalEducationRegistry';
-import { loadCanadaDliInstitutions } from './globalEducationNationalAdapters';
+import { loadCanadaDliInstitutions, loadUkHesaInstitutions } from './globalEducationNationalAdapters';
 
 const NCES_IPEDS_ENDPOINT = 'https://nces.ed.gov/arcgis/rest/services/IPEDS/IPEDS/MapServer/0/query';
 const US_STATE_CODES = new Set('AL AK AZ AR CA CO CT DE FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY DC'.split(' '));
@@ -62,7 +62,9 @@ educationService.getInstitutions = async (filter) => {
     ? loadNcesUsInstitutions
     : country === 'CA' || country === 'CAN' || country === 'CANADA'
       ? loadCanadaDliInstitutions
-      : null;
+      : country === 'GB' || country === 'UK' || country === 'UNITED KINGDOM'
+        ? loadUkHesaInstitutions
+        : null;
   if (!adapter) return originalGetInstitutions(filter);
   try {
     const local = await originalGetInstitutions(filter);
