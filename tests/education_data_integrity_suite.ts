@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { GLOBAL_EDUCATION_INSTITUTIONS } from '../src/data/educationInstitutionsData';
+import { applyYabatechHierarchyVerificationOverride } from '../src/data/yabatechHierarchyVerificationOverride';
 import {
   filterVerifiedFaculties,
   filterVerifiedDepartments,
@@ -32,10 +33,16 @@ for (const institution of GLOBAL_EDUCATION_INSTITUTIONS) {
   }
 }
 
-const yabatech = GLOBAL_EDUCATION_INSTITUTIONS.find((i) => i.id === 'inst-ng-yabatech-003');
-assert.ok(yabatech, 'YABATECH must exist');
-assert.equal(yabatech!.faculties?.length, 8, 'YABATECH must retain 8 Schools');
-assert.ok((yabatech!.faculties || []).every((unit) => unit.unitType === 'school'), 'YABATECH hierarchy must use Schools');
+// YABATECH's verified School of Technical Education is maintained as an
+// explicit source-backed verification override because the seed dataset does
+// not contain that verified unit. Test the effective published hierarchy, not
+// the uncorrected seed snapshot.
+const yabatechSeed = GLOBAL_EDUCATION_INSTITUTIONS.find((i) => i.id === 'inst-ng-yabatech-003');
+assert.ok(yabatechSeed, 'YABATECH must exist');
+const yabatech = applyYabatechHierarchyVerificationOverride(yabatechSeed!);
+assert.equal(yabatech.faculties?.length, 8, 'YABATECH must expose 8 verified Schools after the source-backed override');
+assert.ok((yabatech.faculties || []).every((unit) => unit.unitType === 'school'), 'YABATECH hierarchy must use Schools');
+assert.ok((yabatech.faculties || []).every((unit) => unit.verificationStatus === 'VERIFIED'), 'YABATECH Schools must be verified');
 
 for (const institution of GLOBAL_EDUCATION_INSTITUTIONS) {
   const verifiedFaculties = filterVerifiedFaculties(institution.faculties);
