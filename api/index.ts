@@ -1,5 +1,8 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import { createRequire } from 'module';
+import { authService } from '../src/server/auth';
+import { vendorApplicationRepo } from '../src/server/db';
+import { requireVendorPstpSellerAccess, requireVendorSellerAccess } from '../src/server/services/VendorAccessService';
 
 const require = createRequire(import.meta.url);
 
@@ -18,18 +21,95 @@ function getApp() {
   }
 }
 
+function getBearerToken(req: IncomingMessage): string | null {
+  const raw = Array.isArray(req.headers.authorization) ? req.headers.authorization[0] : req.headers.authorization;
+  if (!raw) return null;
+  return raw.startsWith('Bearer ') ? raw.slice(7).trim() : raw.trim();
+}
+
+function isVendorSellerPath(reqUrl: string): boolean {
+  try {
+    const url = new URL(reqUrl, 'http://localhost');
+    return [
+      '/api/vendor/seller/access',
+      '/api/vendor/seller/authorize',
+      '/api/vendor/seller/authorize-pstp',
+      '/api/v1/vendor/seller/access',
+      '/api/v1/vendor/seller/authorize',
+      '/api/v1/vendor/seller/authorize-pstp'
+    ].includes(url.pathname);
+  } catch {
+    return false;
+  }
+}
+
+async function handleVendorSellerAuthorization(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
+  if (!isVendorSellerPath(req.url || '')) return false;
+
+  res.setHeader('Content-Type', 'application/json');
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('Access-Control-Allow-Origin', 'https://app-cdn.minepi.com');
+  res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+
+  if (req.method === 'OPTIONS') {
+    res.statusCode = 204;
+    res.end();
+    return true;
+  }
+
+  const token = getBearerToken(req);
+  if (!token) {
+    res.statusCode = 401;
+    res.end(JSON.stringify({ success: false, authorized: false, error: 'AUTHENTICATION_REQUIRED' }));
+    return true;
+  }
+
+  const user = await authService.authenticateToken(token);
+  if (!user?.username) {
+    res.statusCode = 401;
+    res.end(JSON.stringify({ success: false, authorized: false, error: 'INVALID_SESSION' }));
+    return true;
+  }
+
+  const pathname = new URL(req.url || '/', 'http://localhost').pathname;
+  try {
+    if (pathname.endsWith('/access')) {
+      const access = vendorApplicationRepo.getMerchantAccess(user.username);
+      res.statusCode = 200;
+      res.end(JSON.stringify({ success: true, access }));
+      return true;
+    }
+
+    const access = pathname.endsWith('/authorize-pstp')
+      ? requireVendorPstpSellerAccess(vendorApplicationRepo, user.username)
+      : requireVendorSellerAccess(vendorApplicationRepo, user.username);
+
+    res.statusCode = 200;
+    res.end(JSON.stringify({ success: true, authorized: true, access }));
+  } catch (error: any) {
+    const statusCode = error?.statusCode === 403 ? 403 : 500;
+    res.statusCode = statusCode;
+    res.end(JSON.stringify({
+      success: false,
+      authorized: false,
+      error: error?.code || 'SELLER_ACCESS_DENIED',
+      message: error?.message || 'Seller access denied.'
+    }));
+  }
+  return true;
+}
+
 let cachedApp: any = null;
 
-export default function handler(req: IncomingMessage, res: ServerResponse) {
+export default async function handler(req: IncomingMessage, res: ServerResponse) {
   const reqUrl = req.url || '';
 
   // Isolated validation key endpoint
   const rawUrl = req.url || '';
   const decodedUrl = decodeURIComponent(rawUrl).toLowerCase();
 
-  if (
-    decodedUrl.includes('validation-key')
-  ) {
+  if (decodedUrl.includes('validation-key')) {
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.statusCode = 200;
@@ -37,43 +117,23 @@ export default function handler(req: IncomingMessage, res: ServerResponse) {
     return;
   }
 
+  if (await handleVendorSellerAuthorization(req, res)) return;
+
   // Isolated zero-dependency health endpoint execution
-  if (
-    reqUrl === '/api/health' ||
-    reqUrl === '/health' ||
-    reqUrl.startsWith('/api/health?') ||
-    reqUrl.startsWith('/health?') ||
-    reqUrl.includes('__path=/health') ||
-    reqUrl.includes('__path=%2Fhealth')
-  ) {
+  if (reqUrl === '/api/health' || reqUrl === '/health' || reqUrl.startsWith('/api/health?') || reqUrl.startsWith('/health?') || reqUrl.includes('__path=/health') || reqUrl.includes('__path=%2Fhealth')) {
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.statusCode = 200;
-    res.end(JSON.stringify({
-      status: 'ok',
-      runtime: 'vercel'
-    }));
+    res.end(JSON.stringify({ status: 'ok', runtime: 'vercel' }));
     return;
   }
 
   // Isolated diagnostic endpoint
-  if (
-    reqUrl === '/api/debug/runtime' ||
-    reqUrl === '/debug/runtime' ||
-    reqUrl.startsWith('/api/debug/runtime?') ||
-    reqUrl.startsWith('/debug/runtime?') ||
-    reqUrl.includes('__path=/debug/runtime') ||
-    reqUrl.includes('__path=%2Fdebug%2Fruntime')
-  ) {
+  if (reqUrl === '/api/debug/runtime' || reqUrl === '/debug/runtime' || reqUrl.startsWith('/api/debug/runtime?') || reqUrl.startsWith('/debug/runtime?') || reqUrl.includes('__path=/debug/runtime') || reqUrl.includes('__path=%2Fdebug%2Fruntime')) {
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.statusCode = 200;
-    res.end(JSON.stringify({
-      ok: true,
-      runtime: 'vercel',
-      nodeVersion: process.version,
-      requestUrl: reqUrl
-    }));
+    res.end(JSON.stringify({ ok: true, runtime: 'vercel', nodeVersion: process.version, requestUrl: reqUrl }));
     return;
   }
 
@@ -85,9 +145,7 @@ export default function handler(req: IncomingMessage, res: ServerResponse) {
       if (pathQuery) {
         let cleanPath = pathQuery;
         if (!cleanPath.startsWith('/')) cleanPath = '/' + cleanPath;
-        if (!cleanPath.startsWith('/api/') && cleanPath !== '/api') {
-          cleanPath = '/api' + cleanPath;
-        }
+        if (!cleanPath.startsWith('/api/') && cleanPath !== '/api') cleanPath = '/api' + cleanPath;
         parsedUrl.searchParams.delete('__path');
         const searchStr = parsedUrl.searchParams.toString();
         req.url = cleanPath + (searchStr ? '?' + searchStr : '');
@@ -98,23 +156,12 @@ export default function handler(req: IncomingMessage, res: ServerResponse) {
   }
 
   try {
-    if (!cachedApp) {
-      cachedApp = getApp();
-    }
+    if (!cachedApp) cachedApp = getApp();
     return cachedApp(req, res);
   } catch (err: any) {
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.statusCode = 500;
-    res.end(JSON.stringify({
-      success: false,
-      error: 'SERVER_HANDLER_EXCEPTION',
-      message: err?.message || String(err),
-      stack: err?.stack || null
-    }));
+    res.end(JSON.stringify({ success: false, error: 'SERVER_HANDLER_EXCEPTION', message: err?.message || String(err), stack: err?.stack || null }));
   }
 }
-
-
-
-
