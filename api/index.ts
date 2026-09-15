@@ -120,16 +120,15 @@ async function handleVendorBrandingUpload(req: IncomingMessage, res: ServerRespo
     const assetId = `${brandingType}_${crypto.randomBytes(16).toString('hex')}.${ext}`;
     const { put } = await import('@vercel/blob');
     const blobToken = process.env.BLOB_READ_WRITE_TOKEN;
-    if (!blobToken) {
-      throw Object.assign(new Error('BLOB_READ_WRITE_TOKEN is not configured for Vercel branding uploads.'), { code: 'BLOB_CONFIGURATION_ERROR' });
-    }
-    const blob = await put(`vendor-branding/${assetId}`, body, { access:'public', contentType:mime, addRandomSuffix:false, token: blobToken });
+    const blobOptions: Record<string, unknown> = { access:'public', contentType:mime, addRandomSuffix:false };
+    if (blobToken) blobOptions.token = blobToken;
+    const blob = await put(`vendor-branding/${assetId}`, body, blobOptions as any);
 
     res.statusCode = 201;
     res.end(JSON.stringify({ success:true, url:blob.url, assetId, brandingType, storage:'vercel-blob', owner:user.username, message:`Store ${brandingType} uploaded successfully.` }));
   } catch (err: any) {
     console.error('[Vercel Branding] Upload failed', { name:err?.name, code:err?.code, message:err?.message });
-    const code = err?.code === 'FILE_TOO_LARGE' ? 'FILE_TOO_LARGE' : err?.code === 'BLOB_CONFIGURATION_ERROR' ? 'BLOB_CONFIGURATION_ERROR' : 'BLOB_UPLOAD_FAILED';
+    const code = err?.code === 'FILE_TOO_LARGE' ? 'FILE_TOO_LARGE' : 'BLOB_UPLOAD_FAILED';
     res.statusCode = code === 'FILE_TOO_LARGE' ? 413 : 500;
     res.end(JSON.stringify({ success:false, error:code, message:code === 'FILE_TOO_LARGE' ? 'Branding image exceeds maximum allowed size of 5 MB.' : 'Branding image storage is temporarily unavailable.' }));
   }
