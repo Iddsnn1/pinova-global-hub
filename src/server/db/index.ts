@@ -24,6 +24,7 @@ import { EducationRepository } from './repositories/EducationRepository';
 import { applyEducationHierarchyVerificationOverrides } from '../../data/educationHierarchyVerificationOverrides';
 import { applyYabatechHierarchyVerificationOverride } from '../../data/yabatechHierarchyVerificationOverride';
 import { normalizeBukFacultyHierarchy } from '../../data/bukHierarchyNormalization';
+import { getSafeEducationHierarchy } from '../../data/educationDataIntegrity';
 
 // Durable Singleton Repositories
 export const paymentLedgerRepo = new PaymentLedgerRepository();
@@ -38,11 +39,11 @@ export const vendorApplicationRepo = new VendorApplicationRepository();
 export const educationRepo = new EducationRepository();
 
 // Reconcile authoritative hierarchy corrections after durable snapshots load.
-// This repairs legacy/incomplete persisted academic snapshots without changing
-// payment, authentication, RBAC, or other repository behavior.
+// The final integrity pass is intentionally server-side: API consumers must not
+// be able to bypass the same anti-fabrication rules enforced by UI read paths.
 for (const institution of educationRepo.getInstitutions()) {
   const corrected = applyEducationHierarchyVerificationOverrides(institution);
   const withYabatechCorrection = applyYabatechHierarchyVerificationOverride(corrected);
   const withBukNormalization = normalizeBukFacultyHierarchy(withYabatechCorrection);
-  Object.assign(institution, withBukNormalization);
+  Object.assign(institution, getSafeEducationHierarchy(withBukNormalization));
 }
