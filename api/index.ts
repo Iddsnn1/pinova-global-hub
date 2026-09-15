@@ -8,6 +8,13 @@ const require = createRequire(import.meta.url);
 
 function getApp() {
   try {
+    // Vercel serverless filesystems are read-only except for /tmp. Set the runtime
+    // storage root before loading the Express server so branding uploads never try
+    // to write into the deployed project filesystem.
+    if (process.env.VERCEL === '1') {
+      process.env.PINOVA_DATA_DIR = '/tmp/pinova_data';
+    }
+
     const mod = require('../dist/server.cjs');
     return mod.default || mod;
   } catch (err1: any) {
