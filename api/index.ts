@@ -119,15 +119,19 @@ async function handleVendorBrandingUpload(req: IncomingMessage, res: ServerRespo
     const ext = mime === 'image/png' ? 'png' : mime === 'image/webp' ? 'webp' : 'jpg';
     const assetId = `${brandingType}_${crypto.randomBytes(16).toString('hex')}.${ext}`;
     const { put } = await import('@vercel/blob');
-    const blob = await put(`vendor-branding/${assetId}`, body, { access:'public', contentType:mime, addRandomSuffix:false });
+    const blobToken = process.env.BLOB_READ_WRITE_TOKEN;
+    if (!blobToken) {
+      throw Object.assign(new Error('BLOB_READ_WRITE_TOKEN is not configured for Vercel branding uploads.'), { code: 'BLOB_CONFIGURATION_ERROR' });
+    }
+    const blob = await put(`vendor-branding/${assetId}`, body, { access:'public', contentType:mime, addRandomSuffix:false, token: blobToken });
 
     res.statusCode = 201;
     res.end(JSON.stringify({ success:true, url:blob.url, assetId, brandingType, storage:'vercel-blob', owner:user.username, message:`Store ${brandingType} uploaded successfully.` }));
   } catch (err: any) {
     console.error('[Vercel Branding] Upload failed', { name:err?.name, code:err?.code, message:err?.message });
-    const code = err?.code === 'FILE_TOO_LARGE' ? 'FILE_TOO_LARGE' : 'BRANDING_UPLOAD_ERROR';
+    const code = err?.code === 'FILE_TOO_LARGE' ? 'FILE_TOO_LARGE' : err?.code === 'BLOB_CONFIGURATION_ERROR' ? 'BLOB_CONFIGURATION_ERROR' : 'BLOB_UPLOAD_FAILED';
     res.statusCode = code === 'FILE_TOO_LARGE' ? 413 : 500;
-    res.end(JSON.stringify({ success:false, error:code, message:code === 'FILE_TOO_LARGE' ? 'Branding image exceeds maximum allowed size of 5 MB.' : 'Internal server error occurred while processing branding upload.' }));
+    res.end(JSON.stringify({ success:false, error:code, message:code === 'FILE_TOO_LARGE' ? 'Branding image exceeds maximum allowed size of 5 MB.' : 'Branding image storage is temporarily unavailable.' }));
   }
   return true;
 }
@@ -177,6 +181,6 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     return cachedApp(req, res);
   } catch (err: any) {
     res.setHeader('Content-Type', 'application/json'); res.setHeader('Access-Control-Allow-Origin', '*'); res.statusCode = 500;
-    res.end(JSON.stringify({ success:false, error:'SERVER_HANDLER_EXCEPTION', message:err?.message || String(err), stack:err?.stack || null }));
+    res.end(JSON.stringify({ success:false, error:'SERVER_HANDLER_EXCEPTION', message:'Internal server error.' }));
   }
 }
