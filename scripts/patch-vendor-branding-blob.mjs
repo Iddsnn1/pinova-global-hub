@@ -28,8 +28,8 @@ app.post(['/api/vendor/branding-upload', '/api/v1/vendor/branding-upload'], auth
     if (process.env.VERCEL === '1') {
       const { put } = await import('@vercel/blob');
       const blobToken = process.env.BLOB_READ_WRITE_TOKEN;
-      if (!blobToken) throw new Error('BLOB_READ_WRITE_TOKEN is not configured for Vercel branding uploads.');
-      const blob = await put('vendor-branding/' + assetId, fileBuffer, { access: 'public', contentType: mimeType, addRandomSuffix: false, token: blobToken });
+      const blobOptions = { access: 'public', contentType: mimeType, addRandomSuffix: false, ...(blobToken ? { token: blobToken } : {}) };
+      const blob = await put('vendor-branding/' + assetId, fileBuffer, blobOptions);
       return res.status(201).json({ success: true, url: blob.url, assetId, brandingType, storage: 'vercel-blob', message: 'Store ' + brandingType + ' uploaded successfully.' });
     }
 
@@ -44,4 +44,4 @@ app.post(['/api/vendor/branding-upload', '/api/v1/vendor/branding-upload'], auth
 
 `;
 fs.writeFileSync(file, source.slice(0, start) + route + source.slice(end), 'utf8');
-console.log('Durable branding route patched with explicit BLOB_READ_WRITE_TOKEN support.');
+console.log('Durable branding route patched with Vercel Blob OIDC/static-token compatibility.');
