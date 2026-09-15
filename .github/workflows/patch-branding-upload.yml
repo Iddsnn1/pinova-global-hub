@@ -1,0 +1,77 @@
+name: Apply branding upload runtime fix
+
+on:
+  push:
+    branches:
+      - fix/vendor-branding-upload-500
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.event.head_commit.message != 'fix(vendor): harden branding storage on Vercel'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Patch branding storage
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('server.ts')
+          s = p.read_text()
+          old = '''function getVendorBrandingDir(): string {
+  const base = process.env.PINOVA_DATA_DIR
+    ? path.resolve(process.env.PINOVA_DATA_DIR, 'vendor-branding')
+    : path.resolve(process.cwd(), 'data', 'vendor-branding');
+  try {
+    if (!fs.existsSync(base)) {
+      fs.mkdirSync(base, { recursive: true, mode: 0o755 });
+    }
+  } catch {
+    const fallback = path.resolve('/tmp', 'pinova_data', 'vendor-branding');
+    if (!fs.existsSync(fallback)) {
+      fs.mkdirSync(fallback, { recursive: true, mode: 0o755 });
+    }
+    return fallback;
+  }
+  return base;
+}'''
+          new = '''function getVendorBrandingDir(): string {
+  // Vercel serverless functions have a read-only deployed filesystem; only /tmp is writable.
+  // Prefer configured durable storage elsewhere, but actively verify write access before using it.
+  const configured = process.env.PINOVA_DATA_DIR
+    ? path.resolve(process.env.PINOVA_DATA_DIR, 'vendor-branding')
+    : path.resolve(process.cwd(), 'data', 'vendor-branding');
+  const fallback = path.resolve('/tmp', 'pinova_data', 'vendor-branding');
+  const candidates = process.env.VERCEL === '1' ? [fallback] : [configured, fallback];
+
+  for (const candidate of candidates) {
+    try {
+      fs.mkdirSync(candidate, { recursive: true, mode: 0o755 });
+      // Probe actual write access; exists()/mkdir() alone is insufficient on read-only deployments.
+      const probe = path.join(candidate, `.write-probe-${process.pid}-${Date.now()}`);
+      fs.writeFileSync(probe, 'ok', { encoding: 'utf8', mode: 0o600 });
+      fs.unlinkSync(probe);
+      return candidate;
+    } catch (err: any) {
+      console.warn(`[Vendor Branding] Storage candidate unavailable: ${candidate} (${err?.code || err?.message || 'unknown'})`);
+    }
+  }
+
+  throw new Error('No writable storage directory is available for merchant branding assets.');
+}'''
+          if old not in s:
+              raise SystemExit('Expected getVendorBrandingDir implementation was not found')
+          s = s.replace(old, new, 1)
+          p.write_text(s)
+          PY
+      - name: Commit patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add server.ts
+          git commit -m "fix(vendor): harden branding storage on Vercel"
+          git push
