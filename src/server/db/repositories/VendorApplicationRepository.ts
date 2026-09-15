@@ -55,6 +55,9 @@ export interface VendorApplicationEntity {
   updatedAt: string;
 }
 
+type VendorApplicationInput = Omit<VendorApplicationEntity, 'verificationStatus' | 'sellerStatus'> &
+  Partial<Pick<VendorApplicationEntity, 'verificationStatus' | 'sellerStatus'>>;
+
 const INITIAL_VENDOR_APPLICATIONS: VendorApplicationEntity[] = [
   {
     id: 'VAPP-NG-9081',
@@ -133,9 +136,18 @@ export class VendorApplicationRepository {
     return list.find(app => app.pioneerUsername.toLowerCase() === username.toLowerCase());
   }
 
-  public save(application: VendorApplicationEntity): VendorApplicationEntity {
-    this.engine.set(application.id, application);
-    return application;
+  public save(application: VendorApplicationInput): VendorApplicationEntity {
+    // Lifecycle fields are server-authoritative. If an older caller omits them,
+    // derive both values from the governance status before persistence.
+    const lifecycle = this.lifecycleForStatus(application.status);
+    const normalized: VendorApplicationEntity = {
+      ...application,
+      verificationStatus: application.verificationStatus ?? lifecycle.verificationStatus,
+      sellerStatus: application.sellerStatus ?? lifecycle.sellerStatus
+    };
+
+    this.engine.set(normalized.id, normalized);
+    return normalized;
   }
 
   public updateStatus(
