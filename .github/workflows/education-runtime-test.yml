@@ -30,6 +30,9 @@ jobs:
       - name: Global registry runtime test
         run: npx tsx tests/global_education_registry_coverage_suite.ts
 
+      - name: Authoritative source coverage test
+        run: npx tsx tests/global_education_authoritative_sources_suite.ts
+
       - name: Education ecosystem runtime test
         run: npm run test:edu
 
