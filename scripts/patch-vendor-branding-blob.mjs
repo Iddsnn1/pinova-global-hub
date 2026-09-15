@@ -26,9 +26,8 @@ app.post(['/api/vendor/branding-upload', '/api/v1/vendor/branding-upload'], auth
     const assetId = brandingType + '_' + crypto.randomBytes(16).toString('hex') + '.' + ext;
 
     if (process.env.VERCEL === '1') {
-      if (!process.env.BLOB_READ_WRITE_TOKEN) return res.status(503).json({ success: false, error: 'BRANDING_STORAGE_NOT_CONFIGURED', message: 'Merchant branding storage is not configured.' });
       const { put } = await import('@vercel/blob');
-      const blob = await put('vendor-branding/' + assetId, fileBuffer, { access: 'public', token: process.env.BLOB_READ_WRITE_TOKEN, contentType: mimeType, addRandomSuffix: false });
+      const blob = await put('vendor-branding/' + assetId, fileBuffer, { access: 'public', contentType: mimeType, addRandomSuffix: false });
       return res.status(201).json({ success: true, url: blob.url, assetId, brandingType, storage: 'vercel-blob', message: 'Store ' + brandingType + ' uploaded successfully.' });
     }
 
@@ -43,4 +42,4 @@ app.post(['/api/vendor/branding-upload', '/api/v1/vendor/branding-upload'], auth
 
 `;
 fs.writeFileSync(file, source.slice(0, start) + route + source.slice(end), 'utf8');
-console.log('Durable branding route patched.');
+console.log('Durable branding route patched with Vercel Blob OIDC support.');
