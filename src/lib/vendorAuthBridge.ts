@@ -2,9 +2,8 @@
  * Vendor authentication bridge
  *
  * Protected vendor endpoints require the server-issued session token, not the
- * raw Pi SDK access token. When a vendor request receives 401, this bridge
- * performs Pi authentication, exchanges the Pi access token for a server
- * session, stores the session token, and lets the original request retry.
+ * raw Pi SDK access token. Before sensitive vendor uploads, this bridge makes
+ * sure a fresh server session exists so the file is never sent unauthenticated.
  */
 
 let sessionPromise: Promise<string | null> | null = null;
@@ -97,27 +96,47 @@ export function installVendorAuthBridge(): void {
       requestUrl.includes('/api/vendor/branding-upload') ||
       requestUrl.includes('/api/v1/vendor/branding-upload');
 
-    const response = await nativeFetch(input, init);
-
-    if (!isProtectedVendorRequest || response.status !== 401) {
-      return response;
+    if (!isProtectedVendorRequest) {
+      return nativeFetch(input, init);
     }
 
-    // A stored session can be stale. Clear it and establish a fresh,
-    // server-verified Pi session before retrying the protected request.
-    clearStoredSessionTokens();
-    const token = await establishVendorSession(true);
-    if (!token) return response;
+    // Sensitive vendor uploads must have a fresh server session BEFORE the
+    // file is transmitted. This avoids sending KYC/branding data unauthenticated.
+    // The server-side authenticate middleware remains mandatory.
+    let token = await establishVendorSession(true);
 
-    const retryHeaders = new Headers(
-      init?.headers || (input instanceof Request ? input.headers : undefined)
-    );
-    retryHeaders.set('Authorization', `Bearer ${token}`);
+    if (token) {
+      const requestHeaders = new Headers(
+        init?.headers || (input instanceof Request ? input.headers : undefined)
+      );
+      requestHeaders.set('Authorization', `Bearer ${token}`);
 
-    return nativeFetch(input, {
-      ...init,
-      headers: retryHeaders
-    });
+      const response = await nativeFetch(input, {
+        ...init,
+        headers: requestHeaders
+      });
+
+      if (response.status !== 401) {
+        return response;
+      }
+
+      // Session may have expired between preflight and upload. Refresh once
+      // and retry without ever falling back to an unauthenticated upload.
+      clearStoredSessionTokens();
+      token = await establishVendorSession(true);
+      if (!token) return response;
+
+      requestHeaders.set('Authorization', `Bearer ${token}`);
+      return nativeFetch(input, {
+        ...init,
+        headers: requestHeaders
+      });
+    }
+
+    // No Pi/server session could be established. Preserve the original request
+    // semantics but do NOT invent or weaken authentication credentials.
+    // The protected server endpoint will return its normal 401 response.
+    return nativeFetch(input, init);
   };
 
   (window as any).__PINOVA_VENDOR_AUTH_BRIDGE__ = true;
