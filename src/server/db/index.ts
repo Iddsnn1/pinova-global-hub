@@ -11,6 +11,7 @@ export * from './repositories/PlatformConfigRepository';
 export * from './repositories/VendorApplicationRepository';
 export * from './repositories/EducationRepository';
 export * from './repositories/ProductRepository';
+export * from './repositories/OrderRepository';
 
 import { PaymentLedgerRepository } from './repositories/PaymentLedgerRepository';
 import { PstpAuditRepository } from './repositories/PstpAuditRepository';
@@ -23,6 +24,7 @@ import { PlatformConfigRepository } from './repositories/PlatformConfigRepositor
 import { VendorApplicationRepository } from './repositories/VendorApplicationRepository';
 import { EducationRepository } from './repositories/EducationRepository';
 import { ProductRepository } from './repositories/ProductRepository';
+import { OrderRepository } from './repositories/OrderRepository';
 import { applyEducationHierarchyVerificationOverrides } from '../../data/educationHierarchyVerificationOverrides';
 import { applyYabatechHierarchyVerificationOverride } from '../../data/yabatechHierarchyVerificationOverride';
 import { normalizeBukFacultyHierarchy } from '../../data/bukHierarchyNormalization';
@@ -40,6 +42,7 @@ export const platformConfigRepo = new PlatformConfigRepository();
 export const vendorApplicationRepo = new VendorApplicationRepository();
 export const educationRepo = new EducationRepository();
 export const productRepo = new ProductRepository();
+export const orderRepo = new OrderRepository();
 
 // Reconcile authoritative hierarchy corrections after durable snapshots load.
 // The final integrity pass is intentionally server-side: API consumers must not
