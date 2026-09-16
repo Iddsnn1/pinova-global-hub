@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'http';
 import { randomBytes } from 'crypto';
 import { productRepo } from '../src/server/db';
 import { authService } from '../src/server/auth';
+import type { Product } from '../src/types';
 
 function json(res: ServerResponse, status: number, body: unknown) {
   res.statusCode = status;
@@ -18,11 +19,13 @@ function bearer(req: IncomingMessage): string | null {
   return raw.startsWith('Bearer ') ? raw.slice(7).trim() : raw.trim();
 }
 
-async function readJson(req: IncomingMessage): Promise<any> {
+async function readJson(req: IncomingMessage): Promise<Record<string, any>> {
   const chunks: Buffer[] = [];
-  for await (const chunk of req as any) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  for await (const chunk of req as any) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
   if (!chunks.length) return {};
-  return JSON.parse(Buffer.concat(chunks).toString('utf8'));
+  return JSON.parse(Buffer.concat(chunks).toString('utf8')) as Record<string, any>;
 }
 
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
@@ -39,15 +42,17 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     if (req.method === 'GET') {
       if (path) {
         const product = productRepo.findById(path);
-        if (!product || product.isActive !== true) return json(res, 404, { ok: false, error: 'PRODUCT_NOT_FOUND' });
+        if (!product || product.isActive !== true) {
+          return json(res, 404, { ok: false, error: 'PRODUCT_NOT_FOUND' });
+        }
         return json(res, 200, { ok: true, product });
       }
 
-      const q = typeof url.searchParams.get('q') === 'string' ? url.searchParams.get('q') || '' : '';
+      const q = url.searchParams.get('q') || '';
       const category = url.searchParams.get('category') || undefined;
       const products = q
-        ? productRepo.search(q, { activeOnly: true, category: category as any })
-        : productRepo.getAll({ activeOnly: true, category: category as any });
+        ? productRepo.search(q, { activeOnly: true, category: category as Product['category'] | undefined })
+        : productRepo.getAll({ activeOnly: true, category: category as Product['category'] | undefined });
       return json(res, 200, { ok: true, products });
     }
 
@@ -59,21 +64,41 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     if (req.method === 'POST' && !path) {
       const body = await readJson(req);
       const sellerId = String(user.username).trim();
-      const product = productRepo.save({
-        ...body,
+      const stock = Number.isInteger(body.stock) && body.stock >= 0 ? body.stock : 0;
+      const product: Product = {
         id: String(body.id || `prd_${Date.now()}_${randomBytes(5).toString('hex')}`),
+        title: String(body.title || ''),
+        description: String(body.description || ''),
+        pricePi: Number(body.pricePi ?? 0),
+        category: body.category || 'physical',
+        subcategory: String(body.subcategory || ''),
+        images: Array.isArray(body.images) ? body.images.filter(Boolean) : [],
+        stock,
+        rating: Number(body.rating ?? 0),
+        reviewsCount: Number(body.reviewsCount ?? 0),
         sellerId,
         sellerName: String(body.sellerName || user.username),
+        sellerVerified: false,
+        features: Array.isArray(body.features) ? body.features.filter(Boolean) : [],
+        specs: body.specs,
+        productType: body.productType,
+        fulfillmentType: body.fulfillmentType,
+        availabilityStatus: body.availabilityStatus || (stock > 0 ? 'in_stock' : 'out_of_stock'),
+        tags: Array.isArray(body.tags) ? body.tags.filter(Boolean) : [],
         isActive: false,
         moderationStatus: 'PENDING_REVIEW'
-      });
-      return json(res, 201, { ok: true, product });
+      };
+      const saved = productRepo.save(product);
+      return json(res, 201, { ok: true, product: saved });
     }
 
     if ((req.method === 'PATCH' || req.method === 'DELETE') && path) {
       const existing = productRepo.findById(path);
       if (!existing) return json(res, 404, { ok: false, error: 'PRODUCT_NOT_FOUND' });
-      if (existing.sellerId !== user.username && !user.roles.includes('PLATFORM_ADMIN')) {
+
+      const roles = Array.isArray(user.roles) ? user.roles : [];
+      const isAdmin = roles.includes('PLATFORM_ADMIN');
+      if (existing.sellerId !== user.username && !isAdmin) {
         return json(res, 403, { ok: false, error: 'PRODUCT_ACCESS_DENIED' });
       }
 
@@ -83,14 +108,23 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       }
 
       const body = await readJson(req);
-      if (typeof body.isActive === 'boolean') productRepo.updateAvailability(path, body.isActive);
-      const updated = productRepo.findById(path);
+      const updated = productRepo.save({
+        ...existing,
+        ...body,
+        id: existing.id,
+        sellerId: existing.sellerId,
+        sellerName: existing.sellerName,
+        sellerVerified: existing.sellerVerified
+      });
       return json(res, 200, { ok: true, product: updated });
     }
 
     return json(res, 405, { ok: false, error: 'METHOD_NOT_ALLOWED' });
   } catch (error) {
     console.error('[products-api]', error);
-    return json(res, 400, { ok: false, error: error instanceof Error ? error.message : 'PRODUCT_API_FAILED' });
+    return json(res, 400, {
+      ok: false,
+      error: error instanceof Error ? error.message : 'PRODUCT_API_FAILED'
+    });
   }
 }
