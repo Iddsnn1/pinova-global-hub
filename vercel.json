@@ -20,6 +20,14 @@
       "destination": "/api/products"
     },
     {
+      "source": "/api/v1/orders",
+      "destination": "/api/orders"
+    },
+    {
+      "source": "/api/v1/orders/(.*)",
+      "destination": "/api/orders"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "/api/index?__path=/$1"
     },
