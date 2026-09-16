@@ -1,10 +1,12 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import { createRequire } from 'module';
+import { randomBytes } from 'crypto';
 import { authService } from '../src/server/auth';
 import { vendorApplicationRepo } from '../src/server/db';
 import { requireVendorPstpSellerAccess, requireVendorSellerAccess } from '../src/server/services/VendorAccessService';
 
 const require = createRequire(import.meta.url);
+const MAX_BRANDING_BYTES = 5 * 1024 * 1024;
 
 function getApp() {
   try {
@@ -53,6 +55,124 @@ function isVendorSellerPath(reqUrl: string): boolean {
   } catch { return false; }
 }
 
+function isVendorBrandingPath(reqUrl: string): boolean {
+  try {
+    const url = new URL(reqUrl, 'http://localhost');
+    return ['/api/vendor/branding-upload','/api/v1/vendor/branding-upload'].includes(url.pathname);
+  } catch { return false; }
+}
+
+function validateBrandingImageSignature(body: Buffer, mime: string): boolean {
+  if (mime === 'image/jpeg') return body.length >= 3 && body[0] === 0xff && body[1] === 0xd8 && body[2] === 0xff;
+  if (mime === 'image/png') return body.length >= 8 && body.subarray(0, 8).equals(Buffer.from([0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a]));
+  if (mime === 'image/webp') return body.length >= 12 && body.subarray(0, 4).toString('ascii') === 'RIFF' && body.subarray(8, 12).toString('ascii') === 'WEBP';
+  return false;
+}
+
+async function readRawRequestBody(req: IncomingMessage): Promise<Buffer> {
+  const prebuffered = (req as any).body;
+  if (Buffer.isBuffer(prebuffered)) return prebuffered;
+  if (prebuffered instanceof Uint8Array) return Buffer.from(prebuffered);
+  if (typeof prebuffered === 'string') return Buffer.from(prebuffered);
+
+  const chunks: Buffer[] = [];
+  let total = 0;
+  for await (const chunk of req as any) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    total += buffer.length;
+    if (total > MAX_BRANDING_BYTES) {
+      const error: any = new Error('Branding image exceeds maximum allowed size of 5 MB.');
+      error.code = 'FILE_TOO_LARGE';
+      throw error;
+    }
+    chunks.push(buffer);
+  }
+  return Buffer.concat(chunks, total);
+}
+
+async function handleVendorBrandingUpload(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
+  if (!isVendorBrandingPath(req.url || '')) return false;
+
+  res.setHeader('Content-Type', 'application/json');
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type, X-Branding-Type, X-Filename');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+
+  if (req.method === 'OPTIONS') { res.statusCode = 204; res.end(); return true; }
+  if (req.method !== 'POST') { res.statusCode = 405; res.end(JSON.stringify({ success:false, error:'METHOD_NOT_ALLOWED' })); return true; }
+
+  try {
+    const token = getBearerToken(req);
+    if (!token) {
+      res.statusCode = 401;
+      res.end(JSON.stringify({ success:false, error:'AUTHENTICATION_REQUIRED', message:'Authentication required to upload merchant storefront branding.' }));
+      return true;
+    }
+
+    const user = await authService.authenticateToken(token);
+    if (!user?.username) {
+      res.statusCode = 401;
+      res.end(JSON.stringify({ success:false, error:'INVALID_SESSION', message:'Authentication required to upload merchant storefront branding.' }));
+      return true;
+    }
+
+    let mime = String(Array.isArray(req.headers['content-type']) ? req.headers['content-type'][0] : req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
+    if (mime === 'image/jpg') mime = 'image/jpeg';
+    if (!['image/jpeg','image/png','image/webp'].includes(mime)) {
+      res.statusCode = 400;
+      res.end(JSON.stringify({ success:false, error:'INVALID_MIME_TYPE', message:'Invalid branding image format.' }));
+      return true;
+    }
+
+    const body = await readRawRequestBody(req);
+    if (!body.length) {
+      res.statusCode = 400;
+      res.end(JSON.stringify({ success:false, error:'EMPTY_FILE', message:'Branding image content is empty or unreadable.' }));
+      return true;
+    }
+    if (body.length > MAX_BRANDING_BYTES) {
+      res.statusCode = 413;
+      res.end(JSON.stringify({ success:false, error:'FILE_TOO_LARGE', message:'Branding image exceeds maximum allowed size of 5 MB.' }));
+      return true;
+    }
+    if (!validateBrandingImageSignature(body, mime)) {
+      res.statusCode = 400;
+      res.end(JSON.stringify({ success:false, error:'FILE_SIGNATURE_MISMATCH', message:'File content does not match the declared image signature.' }));
+      return true;
+    }
+
+    const url = new URL(req.url || '/', 'http://localhost');
+    const brandingType = String(req.headers['x-branding-type'] || url.searchParams.get('type') || 'logo').toLowerCase() === 'banner' ? 'banner' : 'logo';
+    const ext = mime === 'image/png' ? 'png' : mime === 'image/webp' ? 'webp' : 'jpg';
+    const assetId = `${brandingType}_${randomBytes(16).toString('hex')}.${ext}`;
+
+    if (process.env.VERCEL !== '1') return false;
+
+    const { put } = await import('@vercel/blob');
+    const blobToken = process.env.BLOB_READ_WRITE_TOKEN;
+    const options: any = { access:'public', contentType:mime, addRandomSuffix:false };
+    let blob: any;
+
+    try {
+      blob = await put(`vendor-branding/${assetId}`, body, blobToken ? { ...options, token:blobToken } : options);
+    } catch (firstError: any) {
+      if (!blobToken) throw firstError;
+      blob = await put(`vendor-branding/${assetId}`, body, options);
+    }
+
+    res.statusCode = 201;
+    res.end(JSON.stringify({ success:true, url:blob.url, assetId, brandingType, storage:'vercel-blob', message:`Store ${brandingType} uploaded successfully.` }));
+    return true;
+  } catch (error: any) {
+    console.error('[Vendor Branding Vercel] Upload failed', { name:error?.name, code:error?.code, message:error?.message });
+    const status = error?.code === 'FILE_TOO_LARGE' ? 413 : 500;
+    res.statusCode = status;
+    res.end(JSON.stringify({ success:false, error:error?.code === 'FILE_TOO_LARGE' ? 'FILE_TOO_LARGE' : 'BLOB_UPLOAD_FAILED', message:error?.code === 'FILE_TOO_LARGE' ? 'Branding image exceeds maximum allowed size of 5 MB.' : 'Branding image storage is temporarily unavailable.' }));
+    return true;
+  }
+}
+
 async function handleVendorSellerAuthorization(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
   if (!isVendorSellerPath(req.url || '')) return false;
   res.setHeader('Content-Type', 'application/json');
@@ -94,11 +214,11 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     return;
   }
 
-  // Vercel rewrites /api/* to /api/index?__path=/*. Normalize first so every
-  // API route sees the same canonical path. Branding uploads are deliberately
-  // NOT handled here; the bundled Express server is the single authoritative
-  // branding route and applies its raw-body, validation, auth, and Blob logic.
   normalizeRewrittenPath(req);
+
+  // Vercel branding uploads are handled here so the request body reaches Blob directly,
+  // without depending on Express raw-body parsing inside the bundled server.
+  if (await handleVendorBrandingUpload(req, res)) return;
 
   if (await handleVendorSellerAuthorization(req, res)) return;
 
