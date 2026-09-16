@@ -12,6 +12,14 @@
       "destination": "/api/index?__path=/validation-key.txt"
     },
     {
+      "source": "/api/v1/products",
+      "destination": "/api/products"
+    },
+    {
+      "source": "/api/v1/products/(.*)",
+      "destination": "/api/products"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "/api/index?__path=/$1"
     },
