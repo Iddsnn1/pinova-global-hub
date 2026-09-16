@@ -10,6 +10,7 @@ export * from './repositories/IdempotencyRepository';
 export * from './repositories/PlatformConfigRepository';
 export * from './repositories/VendorApplicationRepository';
 export * from './repositories/EducationRepository';
+export * from './repositories/ProductRepository';
 
 import { PaymentLedgerRepository } from './repositories/PaymentLedgerRepository';
 import { PstpAuditRepository } from './repositories/PstpAuditRepository';
@@ -21,6 +22,7 @@ import { IdempotencyRepository } from './repositories/IdempotencyRepository';
 import { PlatformConfigRepository } from './repositories/PlatformConfigRepository';
 import { VendorApplicationRepository } from './repositories/VendorApplicationRepository';
 import { EducationRepository } from './repositories/EducationRepository';
+import { ProductRepository } from './repositories/ProductRepository';
 import { applyEducationHierarchyVerificationOverrides } from '../../data/educationHierarchyVerificationOverrides';
 import { applyYabatechHierarchyVerificationOverride } from '../../data/yabatechHierarchyVerificationOverride';
 import { normalizeBukFacultyHierarchy } from '../../data/bukHierarchyNormalization';
@@ -37,6 +39,7 @@ export const idempotencyRepo = new IdempotencyRepository();
 export const platformConfigRepo = new PlatformConfigRepository();
 export const vendorApplicationRepo = new VendorApplicationRepository();
 export const educationRepo = new EducationRepository();
+export const productRepo = new ProductRepository();
 
 // Reconcile authoritative hierarchy corrections after durable snapshots load.
 // The final integrity pass is intentionally server-side: API consumers must not
