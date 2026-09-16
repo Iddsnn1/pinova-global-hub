@@ -93,6 +93,7 @@ async function readRawRequestBody(req: IncomingMessage): Promise<Buffer> {
 async function handleVendorBrandingUpload(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
   if (!isVendorBrandingPath(req.url || '')) return false;
 
+  console.info('[Vendor Branding Vercel] Request reached branding handler', { method: req.method });
   res.setHeader('Content-Type', 'application/json');
   res.setHeader('Cache-Control', 'no-store');
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -105,12 +106,14 @@ async function handleVendorBrandingUpload(req: IncomingMessage, res: ServerRespo
   try {
     const token = getBearerToken(req);
     if (!token) {
+      console.info('[Vendor Branding Vercel] Authentication', { usernamePresent: false });
       res.statusCode = 401;
       res.end(JSON.stringify({ success:false, error:'AUTHENTICATION_REQUIRED', message:'Authentication required to upload merchant storefront branding.' }));
       return true;
     }
 
     const user = await authService.authenticateToken(token);
+    console.info('[Vendor Branding Vercel] Authentication', { usernamePresent: Boolean(user?.username) });
     if (!user?.username) {
       res.statusCode = 401;
       res.end(JSON.stringify({ success:false, error:'INVALID_SESSION', message:'Authentication required to upload merchant storefront branding.' }));
@@ -124,8 +127,10 @@ async function handleVendorBrandingUpload(req: IncomingMessage, res: ServerRespo
       res.end(JSON.stringify({ success:false, error:'INVALID_MIME_TYPE', message:'Invalid branding image format.' }));
       return true;
     }
+    console.info('[Vendor Branding Vercel] MIME accepted', { mime });
 
     const body = await readRawRequestBody(req);
+    console.info('[Vendor Branding Vercel] File received', { size: body.length });
     if (!body.length) {
       res.statusCode = 400;
       res.end(JSON.stringify({ success:false, error:'EMPTY_FILE', message:'Branding image content is empty or unreadable.' }));
@@ -141,6 +146,7 @@ async function handleVendorBrandingUpload(req: IncomingMessage, res: ServerRespo
       res.end(JSON.stringify({ success:false, error:'FILE_SIGNATURE_MISMATCH', message:'File content does not match the declared image signature.' }));
       return true;
     }
+    console.info('[Vendor Branding Vercel] Signature accepted', { accepted: true });
 
     const url = new URL(req.url || '/', 'http://localhost');
     const brandingType = String(req.headers['x-branding-type'] || url.searchParams.get('type') || 'logo').toLowerCase() === 'banner' ? 'banner' : 'logo';
@@ -151,24 +157,43 @@ async function handleVendorBrandingUpload(req: IncomingMessage, res: ServerRespo
 
     const { put } = await import('@vercel/blob');
     const blobToken = process.env.BLOB_READ_WRITE_TOKEN;
-    const options: any = { access:'public', contentType:mime, addRandomSuffix:false };
-    let blob: any;
-
-    try {
-      blob = await put(`vendor-branding/${assetId}`, body, blobToken ? { ...options, token:blobToken } : options);
-    } catch (firstError: any) {
-      if (!blobToken) throw firstError;
-      blob = await put(`vendor-branding/${assetId}`, body, options);
+    console.info('[Vendor Branding Vercel] Blob configuration', { configured: Boolean(blobToken) });
+    if (!blobToken) {
+      const error: any = new Error('BLOB_READ_WRITE_TOKEN is not configured for Vercel branding uploads.');
+      error.code = 'BLOB_CONFIGURATION_ERROR';
+      throw error;
     }
+
+    console.info('[Vendor Branding Vercel] Blob put started', { assetId, size: body.length });
+    const blob = await put(`vendor-branding/${assetId}`, body, {
+      access: 'public',
+      contentType: mime,
+      addRandomSuffix: false,
+      token: blobToken
+    });
+    console.info('[Vendor Branding Vercel] Blob put succeeded', { assetId, urlPresent: Boolean(blob?.url) });
 
     res.statusCode = 201;
     res.end(JSON.stringify({ success:true, url:blob.url, assetId, brandingType, storage:'vercel-blob', message:`Store ${brandingType} uploaded successfully.` }));
     return true;
   } catch (error: any) {
-    console.error('[Vendor Branding Vercel] Upload failed', { name:error?.name, code:error?.code, message:error?.message });
-    const status = error?.code === 'FILE_TOO_LARGE' ? 413 : 500;
+    console.error('[Vendor Branding Vercel] Blob operation failed', { name:error?.name, code:error?.code, message:error?.message });
+    const code = error?.code === 'BLOB_CONFIGURATION_ERROR'
+      ? 'BLOB_CONFIGURATION_ERROR'
+      : error?.code === 'FILE_TOO_LARGE'
+        ? 'FILE_TOO_LARGE'
+        : 'BLOB_UPLOAD_FAILED';
+    const status = code === 'FILE_TOO_LARGE' ? 413 : 500;
     res.statusCode = status;
-    res.end(JSON.stringify({ success:false, error:error?.code === 'FILE_TOO_LARGE' ? 'FILE_TOO_LARGE' : 'BLOB_UPLOAD_FAILED', message:error?.code === 'FILE_TOO_LARGE' ? 'Branding image exceeds maximum allowed size of 5 MB.' : 'Branding image storage is temporarily unavailable.' }));
+    res.end(JSON.stringify({
+      success:false,
+      error:code,
+      message:code === 'FILE_TOO_LARGE'
+        ? 'Branding image exceeds maximum allowed size of 5 MB.'
+        : code === 'BLOB_CONFIGURATION_ERROR'
+          ? 'Branding image storage is not configured.'
+          : 'Branding image storage is temporarily unavailable.'
+    }));
     return true;
   }
 }
