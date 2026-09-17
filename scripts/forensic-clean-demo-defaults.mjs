@@ -12,7 +12,7 @@ const replacements = [
   [/return 250\.00;/g, 'return 0;'],
   [/buyerUsername\s*=\s*['"]Pioneer_User['"]/g, "buyerUsername = ''"],
   [/buyerUsername\s*\|\|\s*['"]Pioneer_User['"]/g, "buyerUsername || ''"],
-  [/pioneerUsername:\s*pioneerUsername\s*\|\|\s*['"]pioneer_user['"]/g, "pioneerUsername: pioneerUsername || ''"],
+  [/pioneerUsername:\s*pioneerUsername\s*\|\|\s*['"]Pioneer_User['"]/g, "pioneerUsername: pioneerUsername || ''"],
   [/username:\s*username\s*\|\|\s*['"]pioneer_user['"]/g, "username: username || ''"],
   [/const buyerUsername = req\.user\?\.username \|\| req\.body\.buyerUsername \|\| ['"]Pioneer_User['"]/g, "const buyerUsername = req.user?.username || ''"],
   [/const sellerUsername = req\.body\.sellerUsername \|\| ['"]Seller_Merchant['"]/g, "const sellerUsername = req.body.sellerUsername || ''"],
