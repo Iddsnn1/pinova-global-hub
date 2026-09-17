@@ -4,7 +4,10 @@ import { MerchantStore, InventoryRecord, StockTransfer, CrmCustomer } from '../t
  * Production-safe empty merchant state.
  * Real merchant/store data must come from authenticated server-side persistence.
  * No fictional merchants, staff, warehouses, customers, sales or inventory are seeded here.
+ * Transparent assets prevent broken-image UI while a verified merchant profile is unavailable.
  */
+const EMPTY_MERCHANT_ASSET = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
+
 export const INITIAL_MERCHANT_STORES: MerchantStore[] = [
   {
     id: 'pending-store',
@@ -12,8 +15,8 @@ export const INITIAL_MERCHANT_STORES: MerchantStore[] = [
     storeName: '',
     storeType: 'individual',
     description: '',
-    logoImage: '',
-    bannerImage: '',
+    logoImage: EMPTY_MERCHANT_ASSET,
+    bannerImage: EMPTY_MERCHANT_ASSET,
     email: '',
     phone: '',
     businessHours: '',
