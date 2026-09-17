@@ -1,8 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import { createRequire } from 'module';
 import path from 'path';
-import { authService } from '../src/server/auth';
-import { vendorApplicationRepo } from '../src/server/db';
 
 // Ensure serverless environment flag is set before loading server module
 process.env.VERCEL = process.env.VERCEL || '1';
@@ -68,37 +66,55 @@ async function handleVendorStatus(req: IncomingMessage, res: ServerResponse): Pr
     return true;
   }
 
-  const user = await authService.authenticateToken(token);
-  if (!user?.username) {
-    res.statusCode = 401;
-    res.end(JSON.stringify({ success: false, error: 'INVALID_SESSION' }));
-    return true;
+  try {
+    // Keep the public status endpoint isolated from the large server/database barrel.
+    const [{ authService }, { VendorApplicationRepository }] = await Promise.all([
+      import('../src/server/auth/index'),
+      import('../src/server/db/repositories/VendorApplicationRepository')
+    ]);
+
+    const user = await authService.authenticateToken(token);
+    if (!user?.username) {
+      res.statusCode = 401;
+      res.end(JSON.stringify({ success: false, error: 'INVALID_SESSION' }));
+      return true;
+    }
+
+    const vendorApplicationRepo = new VendorApplicationRepository();
+    const application = vendorApplicationRepo.findByUsername(user.username);
+    const access = vendorApplicationRepo.getMerchantAccess(user.username);
+    const status = access.applicationStatus || 'UNREGISTERED';
+
+    res.statusCode = 200;
+    res.end(JSON.stringify({
+      success: true,
+      status,
+      verified: access.verificationStatus === 'Verified',
+      pstpAuthorized: access.canReceivePstpOrders,
+      sellerLifecycle: access.sellerStatus === 'Active' ? 'ACTIVE' : 'INACTIVE',
+      storeName: application?.storeName || null,
+      application: application ? {
+        id: application.id,
+        storeName: application.storeName,
+        storeDescription: application.storeDescription,
+        storeLogo: application.storeLogo || application.logoUrl || '',
+        storeBanner: application.storeBanner || application.bannerUrl || '',
+        status: application.status,
+        verificationStatus: application.verificationStatus,
+        sellerStatus: application.sellerStatus,
+        pstpAgreementAccepted: application.pstpAgreementAccepted
+      } : null
+    }));
+  } catch (error: any) {
+    console.error('[vendor/status] isolated handler failed', {
+      name: error?.name,
+      message: error?.message,
+      stack: error?.stack
+    });
+    res.statusCode = 500;
+    res.end(JSON.stringify({ success: false, error: 'VENDOR_STATUS_UNAVAILABLE' }));
   }
 
-  const application = vendorApplicationRepo.findByUsername(user.username);
-  const access = vendorApplicationRepo.getMerchantAccess(user.username);
-  const status = access.applicationStatus || 'UNREGISTERED';
-
-  res.statusCode = 200;
-  res.end(JSON.stringify({
-    success: true,
-    status,
-    verified: access.verificationStatus === 'Verified',
-    pstpAuthorized: access.canReceivePstpOrders,
-    sellerLifecycle: access.sellerStatus === 'Active' ? 'ACTIVE' : 'INACTIVE',
-    storeName: application?.storeName || null,
-    application: application ? {
-      id: application.id,
-      storeName: application.storeName,
-      storeDescription: application.storeDescription,
-      storeLogo: application.storeLogo || application.logoUrl || '',
-      storeBanner: application.storeBanner || application.bannerUrl || '',
-      status: application.status,
-      verificationStatus: application.verificationStatus,
-      sellerStatus: application.sellerStatus,
-      pstpAgreementAccepted: application.pstpAgreementAccepted
-    } : null
-  }));
   return true;
 }
 
