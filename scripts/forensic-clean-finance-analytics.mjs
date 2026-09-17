@@ -41,6 +41,23 @@ const targets = [
         'private scheduledReportsState: ScheduledReportConfig[] = [];'
       ],
     ]
+  },
+  {
+    file: 'src/components/merchant/MerchantEcosystemHub.tsx',
+    replacements: [
+      [
+        /setCsvStatusMessage\('Successfully processed catalog CSV file: 128 products updated\/created\.'\)/g,
+        "setCsvStatusMessage('CSV import is not connected to a verified server-side catalog workflow yet.')"
+      ],
+      [
+        /Simulate Catalog CSV Processing/g,
+        'CSV Import (Server Workflow Required)'
+      ],
+      [
+        /setCsvStatusMessage\(`Export generated successfully for \$\{exp\.name\}\.`\)/g,
+        "setCsvStatusMessage('Export requires a connected server-side report job; no file was generated.')"
+      ],
+    ]
   }
 ];
 
@@ -62,4 +79,4 @@ for (const target of targets) {
   }
 }
 
-console.log(`[forensic-clean-finance] completed; ${changed} finance file(s) sanitized before build`);
+console.log(`[forensic-clean-finance] completed; ${changed} source file(s) sanitized before build`);
