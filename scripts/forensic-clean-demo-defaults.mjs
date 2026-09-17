@@ -65,6 +65,27 @@ const replacements = [
   [/Your order ORD-PI-892341 was authorized and confirmed via official Pi Network platform API\./g, 'No active order is currently available.'],
   [/PiNova_Invoice_ORD-PI-892341\.pdf/g, ''],
 
+  // Merchant Studio store/product creation must not invent identity, location, contact, ratings or media.
+  [/description: newStoreDesc \|\| ['"]New PiNova Merchant Store\.['"]/g, "description: newStoreDesc || ''"],
+  [/logoImage: ['"]https:\/\/images\.unsplash\.com\/photo-1572021335469-31706a17aaef[^'"\\]*['"]/g, "logoImage: EMPTY_MERCHANT_LOGO"],
+  [/bannerImage: ['"]https:\/\/images\.unsplash\.com\/photo-1441986300917-64674bd600d8[^'"\\]*['"]/g, "bannerImage: EMPTY_MERCHANT_BANNER"],
+  [/email: `info@\$\{newStoreName\.toLowerCase\(\)\.replace\(\/\\s\+\/g, ''\)\}\.com`/g, "email: ''"],
+  [/phone: ['"]\+1 \(555\) 000-1122['"]/g, "phone: ''"],
+  [/businessHours: ['"]Mon - Fri: 09:00 - 18:00 UTC['"]/g, "businessHours: ''"],
+  [/location: \{ address: ['"]100 Global Plaza['"], city: ['"]Silicon Valley['"], country: ['"]United States['"], postalCode: ['"]94025['"] \}/g, "location: { address: '', city: '', country: '', postalCode: '' }"],
+  [/verificationLevel: newStoreType === ['"]brand['"] \? ['"]official_brand['"] : ['"]registered_business['"]/g, "verificationLevel: 'individual'"],
+  [/followersCount: 1/g, 'followersCount: 0'],
+  [/shippingCountries: \[['"]Worldwide['"]\]/g, 'shippingCountries: []'],
+  [/description: newProdDesc \|\| ['"]Official quality product available on PiNova Global Hub\.['"]/g, "description: newProdDesc || ''"],
+  [/images: \[['"]https:\/\/images\.unsplash\.com\/photo-1526374965328-7f61d4dc18c5[^'"\\]*['"]\]/g, 'images: []'],
+  [/rating: 5\.0,/g, 'rating: 0,'],
+  [/features: \[['"]Official Pi Platform Order Protection['"], ['"]Express Courier Delivery['"], ['"]Quality Guaranteed['"]\]/g, 'features: []'],
+  [/tags: \[newProdCat, newProdSubcat, ['"]Merchant Featured['"]\]/g, 'tags: [newProdCat, newProdSubcat]'],
+
+  // Verification state must not manufacture a compliance record from a filename-only form.
+  [/if \(!docFileName\) return;/g, "if (!docFileName || !docFileName.trim()) return;"],
+  [/note: ['"]Under active review by PiNova Enterprise Compliance Verification Engine['"]/g, "note: 'Pending server-side verification'"],
+
   // Final identity guard: exact fabricated demo identities must never survive the production build.
   [/['"]Pioneer_User['"]/g, "''"],
   [/['"]pioneer_user['"]/g, "''"],
