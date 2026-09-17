@@ -1,16 +1,9 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import { randomBytes } from 'crypto';
+import { ProductRepository } from '../src/server/db/repositories/ProductRepository';
 import type { Product } from '../src/types';
 
-type ProductRepo = import('../src/server/db/repositories/ProductRepository.ts').ProductRepository;
-let productRepo: ProductRepo | null = null;
-
-async function getProductRepo(): Promise<ProductRepo> {
-  if (productRepo) return productRepo;
-  const { ProductRepository } = await import('../src/server/db/repositories/ProductRepository.ts');
-  productRepo = new ProductRepository();
-  return productRepo;
-}
+const productRepo = new ProductRepository();
 
 function json(res: ServerResponse, status: number, body: unknown) {
   res.statusCode = status;
@@ -39,7 +32,7 @@ async function readJson(req: IncomingMessage): Promise<Record<string, any>> {
 async function authenticate(req: IncomingMessage) {
   const token = bearer(req);
   if (!token) return null;
-  const { authService } = await import('../src/server/auth/index.ts');
+  const { authService } = await import('../src/server/auth/index');
   return authService.authenticateToken(token);
 }
 
@@ -55,11 +48,10 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     const path = url.pathname
       .replace(/^\/api\/(?:v1\/)?products\/?/, '')
       .replace(/\/$/, '');
-    const repo = await getProductRepo();
 
     if (req.method === 'GET') {
       if (path) {
-        const product = repo.findById(path);
+        const product = productRepo.findById(path);
         if (!product || product.isActive !== true) {
           return json(res, 404, { ok: false, error: 'PRODUCT_NOT_FOUND' });
         }
@@ -69,8 +61,8 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       const q = url.searchParams.get('q') || '';
       const category = url.searchParams.get('category') || undefined;
       const products = q
-        ? repo.search(q, { activeOnly: true, category: category as Product['category'] | undefined })
-        : repo.getAll({ activeOnly: true, category: category as Product['category'] | undefined });
+        ? productRepo.search(q, { activeOnly: true, category: category as Product['category'] | undefined })
+        : productRepo.getAll({ activeOnly: true, category: category as Product['category'] | undefined });
       return json(res, 200, { ok: true, products });
     }
 
@@ -104,12 +96,12 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         isActive: false,
         moderationStatus: 'PENDING_REVIEW'
       };
-      const saved = repo.save(product);
+      const saved = productRepo.save(product);
       return json(res, 201, { ok: true, product: saved });
     }
 
     if ((req.method === 'PATCH' || req.method === 'DELETE') && path) {
-      const existing = repo.findById(path);
+      const existing = productRepo.findById(path);
       if (!existing) return json(res, 404, { ok: false, error: 'PRODUCT_NOT_FOUND' });
 
       const roles = Array.isArray(user.roles) ? user.roles : [];
@@ -119,13 +111,13 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       }
 
       if (req.method === 'DELETE') {
-        repo.softDelete(path);
+        productRepo.softDelete(path);
         return json(res, 200, { ok: true, deleted: true });
       }
 
       const body = await readJson(req);
       const { id: _id, sellerId: _sellerId, sellerName: _sellerName, sellerVerified: _sellerVerified, rating: _rating, reviewsCount: _reviewsCount, isActive: _isActive, moderationStatus: _moderationStatus, ...safePatch } = body;
-      const updated = repo.save({
+      const updated = productRepo.save({
         ...existing,
         ...safePatch,
         id: existing.id,
