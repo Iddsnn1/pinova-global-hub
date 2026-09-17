@@ -1,4 +1,4 @@
-import { Product, ProductCategory, AvailabilityStatus } from '../../../types';
+import type { Product, ProductCategory, AvailabilityStatus } from '../../../types';
 import { StorageEngine } from '../StorageEngine';
 
 export class ProductRepository {
@@ -71,7 +71,6 @@ export class ProductRepository {
     return () => { this.stockLocks.delete(id); unlock(); };
   }
 
-  /** All-or-nothing reservation for physical inventory in the current runtime. */
   public async reserveStockBatch(requests: Array<{ id: string; quantity: number }>): Promise<Product[] | undefined> {
     const merged = new Map<string, number>();
     for (const request of requests) {
