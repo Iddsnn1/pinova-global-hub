@@ -43,22 +43,26 @@
   scrollbar-width: none;
 }
 
-/* Seller Studio: expose all module tabs on narrow screens without changing component logic. */
+/* Seller Studio: mobile-safe module navigation.
+   Targets the actual module nav by structure instead of a brittle nth-child selector. */
 @media (max-width: 639px) {
-  .max-w-7xl.mx-auto > div:nth-child(3).border-b {
+  .max-w-7xl.mx-auto > div.border-b:has(> button) {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    overflow-x: visible;
+    gap: 0.5rem;
+    overflow: visible;
     align-items: stretch;
+    padding-bottom: 0.75rem;
   }
 
-  .max-w-7xl.mx-auto > div:nth-child(3).border-b > button {
+  .max-w-7xl.mx-auto > div.border-b:has(> button) > button {
     width: 100%;
     min-width: 0;
     min-height: 44px;
     white-space: normal;
     justify-content: flex-start;
     text-align: left;
+    line-height: 1.25;
   }
 }
 
@@ -80,4 +84,3 @@
 .animate-pulse-glow {
   animation: pulseGlow 3s infinite ease-in-out;
 }
-
