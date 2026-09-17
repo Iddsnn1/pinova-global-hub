@@ -1,6 +1,8 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import { randomBytes } from 'crypto';
 import { ProductRepository } from '../src/server/db/repositories/ProductRepository';
+import { vendorApplicationRepo } from '../src/server/db';
+import { requireVendorSellerAccess } from '../src/server/services/VendorAccessService';
 import type { Product } from '../src/types';
 
 const productRepo = new ProductRepository();
@@ -70,6 +72,18 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     if (!user?.username) return json(res, 401, { ok: false, error: 'INVALID_SESSION' });
 
     if (req.method === 'POST' && !path) {
+      try {
+        requireVendorSellerAccess(vendorApplicationRepo, user.username);
+      } catch (error) {
+        const statusCode = error && typeof error === 'object' && 'statusCode' in error
+          ? Number((error as { statusCode?: number }).statusCode) || 403
+          : 403;
+        const code = error && typeof error === 'object' && 'code' in error
+          ? String((error as { code?: string }).code || 'MERCHANT_SELLER_ACCESS_REQUIRED')
+          : 'MERCHANT_SELLER_ACCESS_REQUIRED';
+        return json(res, statusCode, { ok: false, error: code });
+      }
+
       const body = await readJson(req);
       const sellerId = String(user.username).trim();
       const stock = Number.isInteger(body.stock) && body.stock >= 0 ? body.stock : 0;
@@ -124,7 +138,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         sellerId: existing.sellerId,
         sellerName: existing.sellerName,
         sellerVerified: existing.sellerVerified,
-        rating: existing.rating,
+        rating: existing.sellerVerified,
         reviewsCount: existing.reviewsCount,
         isActive: existing.isActive,
         moderationStatus: existing.moderationStatus
