@@ -16,6 +16,13 @@ const replacements = [
   [/const buyerUsername = req\.user\?\.username \|\| req\.body\.buyerUsername \|\| ['"]Pioneer_User['"]/g, "const buyerUsername = req.user?.username || ''"],
   [/const sellerUsername = req\.body\.sellerUsername \|\| ['"]Seller_Merchant['"]/g, "const sellerUsername = req.body.sellerUsername || ''"],
 
+  // Remaining fabricated Pioneer identity/wallet defaults must never ship to production.
+  [/['"]Pi_Pioneer_01['"]/g, "''"],
+  [/['"]user-uid-892341['"]/g, "''"],
+  [/['"]GD5X\.\.\.PINOVA_KEY['"]/g, "''"],
+  [/return 250\.00;/g, 'return 0;'],
+  [/currentAdminUsername\s*=\s*['"]['"]/g, "currentAdminUsername = ''"],
+
   // Education marketplace must not silently fall back to fabricated catalog items.
   [/\s*SEED_MARKETPLACE_ITEMS,\n/gs, '\n'],
   [/\s*return SEED_MARKETPLACE_ITEMS;/g, '    return [];'],
@@ -38,9 +45,13 @@ const files = [
   'src/components/vendor/VendorApplicationModal.tsx',
   'src/components/views/AiSearchView.tsx',
   'src/App.tsx',
+  'src/modules/security/engine.ts',
+  'src/modules/platform_admin/services.ts',
+  'src/components/social/SocialCommunityHub.tsx',
+  'src/components/views/PlatformAdminView.tsx',
+  'src/components/views/EnterpriseSecurityView.tsx',
   'server.ts',
-  'src/services/educationService.ts',
-  'src/modules/platform_admin/services.ts'
+  'src/services/educationService.ts'
 ];
 
 let changed = 0;
