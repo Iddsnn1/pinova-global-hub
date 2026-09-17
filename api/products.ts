@@ -1,7 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import { randomBytes } from 'crypto';
 import { ProductRepository } from '../src/server/db/repositories/ProductRepository.ts';
-import { authService } from '../src/server/auth/index.ts';
 import type { Product } from '../src/types';
 
 const productRepo = new ProductRepository();
@@ -28,6 +27,15 @@ async function readJson(req: IncomingMessage): Promise<Record<string, any>> {
   }
   if (!chunks.length) return {};
   return JSON.parse(Buffer.concat(chunks).toString('utf8')) as Record<string, any>;
+}
+
+async function authenticate(req: IncomingMessage) {
+  const token = bearer(req);
+  if (!token) return null;
+  // Keep the authentication/security dependency out of the module's top-level
+  // initialization so public GET requests cannot crash on auth repository startup.
+  const { authService } = await import('../src/server/auth/index.ts');
+  return authService.authenticateToken(token);
 }
 
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
@@ -60,9 +68,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       return json(res, 200, { ok: true, products });
     }
 
-    const token = bearer(req);
-    if (!token) return json(res, 401, { ok: false, error: 'AUTHENTICATION_REQUIRED' });
-    const user = await authService.authenticateToken(token);
+    const user = await authenticate(req);
     if (!user?.username) return json(res, 401, { ok: false, error: 'INVALID_SESSION' });
 
     if (req.method === 'POST' && !path) {
