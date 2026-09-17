@@ -1,8 +1,10 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import { randomBytes } from 'crypto';
-import { productRepo } from '../src/server/db';
+import { ProductRepository } from '../src/server/db/repositories/ProductRepository';
 import { authService } from '../src/server/auth';
 import type { Product } from '../src/types';
+
+const productRepo = new ProductRepository();
 
 function json(res: ServerResponse, status: number, body: unknown) {
   res.statusCode = status;
@@ -37,7 +39,9 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
 
   try {
     const url = new URL(req.url || '/', 'http://localhost');
-    const path = url.pathname.replace(/^\/api\/v1\/products\/?/, '').replace(/\/$/, '');
+    const path = url.pathname
+      .replace(/^\/api\/(?:v1\/)?products\/?/, '')
+      .replace(/\/$/, '');
 
     if (req.method === 'GET') {
       if (path) {
@@ -66,18 +70,18 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       const sellerId = String(user.username).trim();
       const stock = Number.isInteger(body.stock) && body.stock >= 0 ? body.stock : 0;
       const product: Product = {
-        id: String(body.id || `prd_${Date.now()}_${randomBytes(5).toString('hex')}`),
-        title: String(body.title || ''),
-        description: String(body.description || ''),
+        id: `prd_${Date.now()}_${randomBytes(5).toString('hex')}`,
+        title: String(body.title || '').trim(),
+        description: String(body.description || '').trim(),
         pricePi: Number(body.pricePi ?? 0),
         category: body.category || 'physical',
         subcategory: String(body.subcategory || ''),
         images: Array.isArray(body.images) ? body.images.filter(Boolean) : [],
         stock,
-        rating: Number(body.rating ?? 0),
-        reviewsCount: Number(body.reviewsCount ?? 0),
+        rating: 0,
+        reviewsCount: 0,
         sellerId,
-        sellerName: String(body.sellerName || user.username),
+        sellerName: String(user.username),
         sellerVerified: false,
         features: Array.isArray(body.features) ? body.features.filter(Boolean) : [],
         specs: body.specs,
@@ -108,13 +112,18 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       }
 
       const body = await readJson(req);
+      const { id: _id, sellerId: _sellerId, sellerName: _sellerName, sellerVerified: _sellerVerified, rating: _rating, reviewsCount: _reviewsCount, isActive: _isActive, moderationStatus: _moderationStatus, ...safePatch } = body;
       const updated = productRepo.save({
         ...existing,
-        ...body,
+        ...safePatch,
         id: existing.id,
         sellerId: existing.sellerId,
         sellerName: existing.sellerName,
-        sellerVerified: existing.sellerVerified
+        sellerVerified: existing.sellerVerified,
+        rating: existing.rating,
+        reviewsCount: existing.reviewsCount,
+        isActive: existing.isActive,
+        moderationStatus: existing.moderationStatus
       });
       return json(res, 200, { ok: true, product: updated });
     }
