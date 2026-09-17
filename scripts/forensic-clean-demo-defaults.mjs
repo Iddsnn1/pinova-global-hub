@@ -62,9 +62,9 @@ const replacements = [
   [/PiNova_Invoice_ORD-PI-892341\.pdf/g, ''],
 
   // Final identity guard: exact fabricated demo identities must never survive the production build.
-  /['"]Pioneer_User['"]/g, "''",
-  /['"]pioneer_user['"]/g, "''",
-  /['"]Seller_Merchant['"]/g, "''",
+  [/['"]Pioneer_User['"]/g, "''"],
+  [/['"]pioneer_user['"]/g, "''"],
+  [/['"]Seller_Merchant['"]/g, "''"],
 ];
 
 const files = [
