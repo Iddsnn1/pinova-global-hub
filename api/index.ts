@@ -1,6 +1,8 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import { createRequire } from 'module';
 import path from 'path';
+import { authService } from '../src/server/auth';
+import { vendorApplicationRepo } from '../src/server/db';
 
 // Ensure serverless environment flag is set before loading server module
 process.env.VERCEL = process.env.VERCEL || '1';
@@ -31,9 +33,78 @@ function getApp() {
   }
 }
 
+function getBearerToken(req: IncomingMessage): string | null {
+  const raw = Array.isArray(req.headers.authorization) ? req.headers.authorization[0] : req.headers.authorization;
+  if (!raw) return null;
+  return raw.startsWith('Bearer ') ? raw.slice(7).trim() : raw.trim();
+}
+
+async function handleVendorStatus(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
+  const pathname = new URL(req.url || '/', 'http://localhost').pathname;
+  if (pathname !== '/api/vendor/status' && pathname !== '/vendor/status') return false;
+
+  res.setHeader('Content-Type', 'application/json');
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type, X-Pioneer-Username');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+
+  if (req.method === 'OPTIONS') {
+    res.statusCode = 204;
+    res.end();
+    return true;
+  }
+
+  if (req.method !== 'GET') {
+    res.statusCode = 405;
+    res.end(JSON.stringify({ success: false, error: 'METHOD_NOT_ALLOWED' }));
+    return true;
+  }
+
+  const token = getBearerToken(req);
+  if (!token) {
+    res.statusCode = 401;
+    res.end(JSON.stringify({ success: false, error: 'AUTHENTICATION_REQUIRED' }));
+    return true;
+  }
+
+  const user = await authService.authenticateToken(token);
+  if (!user?.username) {
+    res.statusCode = 401;
+    res.end(JSON.stringify({ success: false, error: 'INVALID_SESSION' }));
+    return true;
+  }
+
+  const application = vendorApplicationRepo.findByUsername(user.username);
+  const access = vendorApplicationRepo.getMerchantAccess(user.username);
+  const status = access.applicationStatus || 'UNREGISTERED';
+
+  res.statusCode = 200;
+  res.end(JSON.stringify({
+    success: true,
+    status,
+    verified: access.verificationStatus === 'Verified',
+    pstpAuthorized: access.canReceivePstpOrders,
+    sellerLifecycle: access.sellerStatus === 'Active' ? 'ACTIVE' : 'INACTIVE',
+    storeName: application?.storeName || null,
+    application: application ? {
+      id: application.id,
+      storeName: application.storeName,
+      storeDescription: application.storeDescription,
+      storeLogo: application.storeLogo || application.logoUrl || '',
+      storeBanner: application.storeBanner || application.bannerUrl || '',
+      status: application.status,
+      verificationStatus: application.verificationStatus,
+      sellerStatus: application.sellerStatus,
+      pstpAgreementAccepted: application.pstpAgreementAccepted
+    } : null
+  }));
+  return true;
+}
+
 let cachedApp: any = null;
 
-export default function handler(req: IncomingMessage, res: ServerResponse) {
+export default async function handler(req: IncomingMessage, res: ServerResponse) {
   const reqUrl = req.url || '';
 
   // Handle preflight OPTIONS requests immediately
@@ -50,15 +121,15 @@ export default function handler(req: IncomingMessage, res: ServerResponse) {
   const rawUrl = req.url || '';
   const decodedUrl = decodeURIComponent(rawUrl).toLowerCase();
 
-  if (
-    decodedUrl.includes('validation-key')
-  ) {
+  if (decodedUrl.includes('validation-key')) {
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.statusCode = 200;
     res.end('8a6a4b885d34141bb2512da532760394d83de4673574b82de61c4a0895e00cb11dacc69b4618c84393a5518a75ca356597e3df7ed67a9d884baa7b8edd3f7cca');
     return;
   }
+
+  if (await handleVendorStatus(req, res)) return;
 
   // Isolated zero-dependency health endpoint execution
   if (
@@ -72,10 +143,7 @@ export default function handler(req: IncomingMessage, res: ServerResponse) {
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.statusCode = 200;
-    res.end(JSON.stringify({
-      status: 'ok',
-      runtime: 'vercel'
-    }));
+    res.end(JSON.stringify({ status: 'ok', runtime: 'vercel' }));
     return;
   }
 
@@ -91,12 +159,7 @@ export default function handler(req: IncomingMessage, res: ServerResponse) {
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.statusCode = 200;
-    res.end(JSON.stringify({
-      ok: true,
-      runtime: 'vercel',
-      nodeVersion: process.version,
-      requestUrl: reqUrl
-    }));
+    res.end(JSON.stringify({ ok: true, runtime: 'vercel', nodeVersion: process.version, requestUrl: reqUrl }));
     return;
   }
 
@@ -108,9 +171,7 @@ export default function handler(req: IncomingMessage, res: ServerResponse) {
       if (pathQuery) {
         let cleanPath = pathQuery;
         if (!cleanPath.startsWith('/')) cleanPath = '/' + cleanPath;
-        if (!cleanPath.startsWith('/api/') && cleanPath !== '/api') {
-          cleanPath = '/api' + cleanPath;
-        }
+        if (!cleanPath.startsWith('/api/') && cleanPath !== '/api') cleanPath = '/api' + cleanPath;
         parsedUrl.searchParams.delete('__path');
         const searchStr = parsedUrl.searchParams.toString();
         req.url = cleanPath + (searchStr ? '?' + searchStr : '');
@@ -121,18 +182,12 @@ export default function handler(req: IncomingMessage, res: ServerResponse) {
   }
 
   try {
-    if (!cachedApp) {
-      cachedApp = getApp();
-    }
+    if (!cachedApp) cachedApp = getApp();
     return cachedApp(req, res);
   } catch (err: any) {
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.statusCode = 500;
-    res.end(JSON.stringify({
-      success: false,
-      error: 'SERVER_HANDLER_EXCEPTION',
-      message: 'An unexpected internal server error occurred.'
-    }));
+    res.end(JSON.stringify({ success: false, error: 'SERVER_HANDLER_EXCEPTION', message: 'An unexpected internal server error occurred.' }));
   }
 }
