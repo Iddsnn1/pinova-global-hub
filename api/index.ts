@@ -1,6 +1,8 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import { createRequire } from 'module';
 import path from 'path';
+import { authService } from '../src/server/auth/index';
+import { VendorApplicationRepository } from '../src/server/db/repositories/VendorApplicationRepository';
 
 // Ensure serverless environment flag is set before loading server module
 process.env.VERCEL = process.env.VERCEL || '1';
@@ -67,12 +69,6 @@ async function handleVendorStatus(req: IncomingMessage, res: ServerResponse): Pr
   }
 
   try {
-    // Keep the public status endpoint isolated from the large server/database barrel.
-    const [{ authService }, { VendorApplicationRepository }] = await Promise.all([
-      import('../src/server/auth/index'),
-      import('../src/server/db/repositories/VendorApplicationRepository')
-    ]);
-
     const user = await authService.authenticateToken(token);
     if (!user?.username) {
       res.statusCode = 401;
@@ -123,7 +119,6 @@ let cachedApp: any = null;
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
   const reqUrl = req.url || '';
 
-  // Handle preflight OPTIONS requests immediately
   if (req.method === 'OPTIONS') {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
@@ -133,7 +128,6 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     return;
   }
 
-  // Isolated validation key endpoint
   const rawUrl = req.url || '';
   const decodedUrl = decodeURIComponent(rawUrl).toLowerCase();
 
@@ -147,7 +141,6 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
 
   if (await handleVendorStatus(req, res)) return;
 
-  // Isolated zero-dependency health endpoint execution
   if (
     reqUrl === '/api/health' ||
     reqUrl === '/health' ||
@@ -163,7 +156,6 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     return;
   }
 
-  // Isolated diagnostic endpoint
   if (
     reqUrl === '/api/debug/runtime' ||
     reqUrl === '/debug/runtime' ||
@@ -179,7 +171,6 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     return;
   }
 
-  // Normalize URL if Vercel rewrite passed __path query parameter
   if (req.url) {
     try {
       const parsedUrl = new URL(req.url, 'http://localhost');
