@@ -9,6 +9,7 @@ import { StorageEngine } from '../StorageEngine';
  */
 export class ProductRepository {
   private engine: StorageEngine<Product>;
+  private stockLocks: Map<string, Promise<void>> = new Map();
 
   constructor() {
     this.engine = new StorageEngine<Product>('marketplace_products', 'id', []);
@@ -92,6 +93,41 @@ export class ProductRepository {
 
     this.engine.set(normalized.id, normalized);
     return normalized;
+  }
+
+  /**
+   * Reserve physical stock before an order is persisted.
+   * The per-product lock prevents concurrent requests in the same runtime from
+   * both consuming the same inventory. Durable multi-instance atomicity should
+   * use the transactional database once Cloud SQL is enabled.
+   */
+  public async reserveStock(id: string, quantity: number): Promise<Product | undefined> {
+    if (!Number.isInteger(quantity) || quantity < 1) throw new Error('INVALID_STOCK_RESERVATION_QUANTITY');
+
+    while (this.stockLocks.has(id)) await this.stockLocks.get(id);
+    let unlock!: () => void;
+    const lock = new Promise<void>((resolve) => { unlock = resolve; });
+    this.stockLocks.set(id, lock);
+
+    try {
+      const existing = this.engine.get(id);
+      if (!existing || existing.isDeleted === true || existing.isActive !== true) return undefined;
+      if (existing.fulfillmentType === 'digital_download' || existing.fulfillmentType === 'instant_key') return existing;
+      if (existing.stock < quantity) return undefined;
+
+      const updated: Product = {
+        ...existing,
+        stock: existing.stock - quantity,
+        availabilityStatus: existing.stock - quantity <= 0 ? 'out_of_stock' : existing.availabilityStatus,
+        isActive: existing.stock - quantity > 0,
+        updatedAt: new Date().toISOString()
+      };
+      this.engine.set(id, updated);
+      return updated;
+    } finally {
+      this.stockLocks.delete(id);
+      unlock();
+    }
   }
 
   public updateAvailability(id: string, availabilityStatus: AvailabilityStatus, stock: number): Product | undefined {
