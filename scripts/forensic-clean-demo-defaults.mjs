@@ -12,9 +12,19 @@ const replacements = [
   [/pioneerUsername:\s*pioneerUsername\s*\|\|\s*['"]Pioneer_User['"]/g, "pioneerUsername: pioneerUsername || ''"],
   [/totalSalesPi:\s*1250\.00/g, 'totalSalesPi: 0'],
   [/username:\s*username\s*\|\|\s*['"]pioneer_user['"]/g, "username: username || ''"],
-  [/uid:\s*uid\s*\|\|\s*`pi-uid-\$\{Date\.now\(\)\}`/g, "uid: uid || ''"],
+  [/uid:\s*uid\s*\|\|\s*`pi-uid-\$\{Date\.now\(\)\\}`/g, "uid: uid || ''"],
   [/const buyerUsername = req\.user\?\.username \|\| req\.body\.buyerUsername \|\| ['"]Pioneer_User['"]/g, "const buyerUsername = req.user?.username || ''"],
-  [/const sellerUsername = req\.body\.sellerUsername \|\| ['"]Seller_Merchant['"]/g, "const sellerUsername = req.body.sellerUsername || ''"]
+  [/const sellerUsername = req\.body\.sellerUsername \|\| ['"]Seller_Merchant['"]/g, "const sellerUsername = req.body.sellerUsername || ''"],
+
+  // Education marketplace must not silently fall back to fabricated catalog items.
+  [/\s*SEED_MARKETPLACE_ITEMS,\n/gs, '\n'],
+  [/\s*return SEED_MARKETPLACE_ITEMS;/g, '    return [];'],
+  [/\s*import \{ SEED_MARKETPLACE_ITEMS \} from ['"]\.\/src\/data\/educationSeedData['"];\n/g, '\n'],
+  [/\s*let items = SEED_MARKETPLACE_ITEMS;/g, '    let items: any[] = [];'],
+
+  // Platform Admin must not expose fabricated users, wallets, KYC records, or merchant identities.
+  [/private usersState: UserAccountRecord\[\] = \[[\s\S]*?\n  \];\n\n  private rolesState:/g, 'private usersState: UserAccountRecord[] = [];\n\n  private rolesState:'],
+  [/userCount:\s*[0-9]+/g, 'userCount: 0']
 ];
 
 const files = [
@@ -28,7 +38,9 @@ const files = [
   'src/components/vendor/VendorApplicationModal.tsx',
   'src/components/views/AiSearchView.tsx',
   'src/App.tsx',
-  'server.ts'
+  'server.ts',
+  'src/services/educationService.ts',
+  'src/modules/platform_admin/services.ts'
 ];
 
 let changed = 0;
