@@ -11,19 +11,16 @@ function json(res: ServerResponse, status: number, body: unknown) {
   res.setHeader('Cache-Control', 'no-store');
   res.end(JSON.stringify(body));
 }
-
 function bearer(req: IncomingMessage): string | null {
   const raw = Array.isArray(req.headers.authorization) ? req.headers.authorization[0] : req.headers.authorization;
   if (!raw) return null;
   return raw.startsWith('Bearer ') ? raw.slice(7).trim() : raw.trim();
 }
-
 function idempotencyKey(req: IncomingMessage): string | null {
   const raw = Array.isArray(req.headers['idempotency-key']) ? req.headers['idempotency-key'][0] : req.headers['idempotency-key'];
   const key = String(raw || '').trim();
   return key || null;
 }
-
 async function readJson(req: IncomingMessage): Promise<Record<string, any>> {
   const chunks: Buffer[] = [];
   for await (const chunk of req as any) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
@@ -31,15 +28,10 @@ async function readJson(req: IncomingMessage): Promise<Record<string, any>> {
   const parsed = JSON.parse(Buffer.concat(chunks).toString('utf8'));
   return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
 }
-
-function requestHash(body: unknown): string {
-  return createHash('sha256').update(JSON.stringify(body ?? {})).digest('hex');
-}
-
+function requestHash(body: unknown): string { return createHash('sha256').update(JSON.stringify(body ?? {})).digest('hex'); }
 function canViewOrder(order: Order, username: string, roles: string[]) {
   return order.buyerUsername === username || roles.includes('PLATFORM_ADMIN') || roles.includes('COMPLIANCE_OFFICER');
 }
-
 function extractPiUserUid(paymentData: any): string | null {
   const candidates = [paymentData?.user_uid, paymentData?.userUid, paymentData?.payer?.uid, paymentData?.payer?.user_uid];
   const value = candidates.find((candidate) => typeof candidate === 'string' && candidate.trim());
@@ -57,7 +49,6 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     if (!token) return json(res, 401, { ok: false, error: 'AUTHENTICATION_REQUIRED' });
     const user = await authService.authenticateToken(token);
     if (!user?.username) return json(res, 401, { ok: false, error: 'INVALID_SESSION' });
-
     const url = new URL(req.url || '/', 'http://localhost');
     const path = url.pathname.replace(/^\/api\/v1\/orders\/?/, '').replace(/\/$/, '');
 
@@ -73,77 +64,48 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       const orderId = path.slice(0, -'/payment-verify'.length).replace(/\/$/, '');
       const order = orderRepo.findById(orderId);
       if (!order) return json(res, 404, { ok: false, error: 'ORDER_NOT_FOUND' });
-      if (order.buyerUsername !== user.username && !(user.roles || []).includes('PLATFORM_ADMIN')) {
-        return json(res, 403, { ok: false, error: 'ORDER_ACCESS_DENIED' });
-      }
+      if (order.buyerUsername !== user.username && !(user.roles || []).includes('PLATFORM_ADMIN')) return json(res, 403, { ok: false, error: 'ORDER_ACCESS_DENIED' });
       if (order.serverVerified === true) return json(res, 200, { ok: true, verified: true, order });
 
       const body = await readJson(req);
       const paymentId = String(body.paymentId || '').trim();
       if (!paymentId) return json(res, 400, { ok: false, error: 'PI_PAYMENT_ID_REQUIRED' });
-
       const existingPayment = paymentLedgerRepo.findByPaymentId(paymentId);
-      if (existingPayment?.orderId && existingPayment.orderId !== order.id) {
-        return json(res, 409, { ok: false, verified: false, error: 'PI_PAYMENT_ALREADY_BOUND_TO_ORDER' });
-      }
+      if (existingPayment?.orderId && existingPayment.orderId !== order.id) return json(res, 409, { ok: false, verified: false, error: 'PI_PAYMENT_ALREADY_BOUND_TO_ORDER' });
 
       const verification = await verifyPiPaymentAuthoritative(paymentId);
-      if (!verification.verified) {
-        return json(res, 402, { ok: false, verified: false, error: 'PI_PAYMENT_NOT_VERIFIED', message: verification.message });
-      }
-
+      if (!verification.verified) return json(res, 402, { ok: false, verified: false, error: 'PI_PAYMENT_NOT_VERIFIED', message: verification.message });
       const paymentData = verification.paymentData || {};
       const paymentAmount = Number(paymentData.amount);
-      if (!Number.isFinite(paymentAmount) || Math.abs(paymentAmount - order.totalPi) > 0.0000001) {
-        return json(res, 409, { ok: false, verified: false, error: 'PI_PAYMENT_AMOUNT_MISMATCH' });
-      }
+      if (!Number.isFinite(paymentAmount) || Math.abs(paymentAmount - order.totalPi) > 0.0000001) return json(res, 409, { ok: false, verified: false, error: 'PI_PAYMENT_AMOUNT_MISMATCH' });
 
       const piUserUid = extractPiUserUid(paymentData);
-      if (!piUserUid || !user.piUid || piUserUid !== user.piUid) {
-        return json(res, 403, { ok: false, verified: false, error: 'PI_PAYMENT_BUYER_MISMATCH' });
-      }
+      if (!piUserUid || !user.piUid || piUserUid !== user.piUid) return json(res, 403, { ok: false, verified: false, error: 'PI_PAYMENT_BUYER_MISMATCH' });
 
       const txid = String(paymentData?.transaction?.txid || paymentData?.transaction?.hash || body.txid || '').trim();
-      if (process.env.NODE_ENV === 'production' && !txid) {
-        return json(res, 409, { ok: false, verified: false, error: 'PI_TRANSACTION_ID_REQUIRED' });
-      }
+      if (process.env.NODE_ENV === 'production' && !txid) return json(res, 409, { ok: false, verified: false, error: 'PI_TRANSACTION_ID_REQUIRED' });
       if (txid) {
         const existingTx = paymentLedgerRepo.findByTxid(txid);
-        if (existingTx?.paymentId && existingTx.paymentId !== paymentId) {
-          return json(res, 409, { ok: false, verified: false, error: 'PI_TRANSACTION_ALREADY_USED' });
-        }
+        if (existingTx?.paymentId && existingTx.paymentId !== paymentId) return json(res, 409, { ok: false, verified: false, error: 'PI_TRANSACTION_ALREADY_USED' });
       }
 
       const ledger = txid
         ? paymentLedgerRepo.recordCompletion(paymentId, txid, { orderId: order.id, buyerUsername: order.buyerUsername, amountPi: order.totalPi, piUserUid })
         : paymentLedgerRepo.recordApproval(paymentId, { orderId: order.id, buyerUsername: order.buyerUsername, amountPi: order.totalPi, piUserUid });
-
       const updated = orderRepo.markPaymentVerified(order.id, paymentId, txid || undefined);
-      pstpAuditRepo.appendLog({
-        orderId: order.id,
-        paymentId,
-        actor: 'system',
-        actorRole: 'system',
-        action: 'PAYMENT_SERVER_VERIFIED',
-        details: `Pi payment server-verified (${verification.source}); PSTP escrow protection activated.`,
-        ipAddress: 'server',
-        deviceInfo: 'PiNova PSTP Payment Verification Service'
-      });
-
+      pstpAuditRepo.appendLog({ orderId: order.id, paymentId, actor: 'system', actorRole: 'system', action: 'PAYMENT_SERVER_VERIFIED', details: `Pi payment server-verified (${verification.source}); PSTP escrow protection activated.`, ipAddress: 'server', deviceInfo: 'PiNova PSTP Payment Verification Service' });
       return json(res, 200, { ok: true, verified: true, escrowStatus: updated?.escrowStatus, pstpStatus: updated?.pstpStatus, order: updated, paymentLedger: ledger });
     }
 
     if (req.method === 'POST' && !path) {
       const body = await readJson(req);
       if (!Array.isArray(body.items) || body.items.length === 0) return json(res, 400, { ok: false, error: 'ORDER_ITEMS_REQUIRED' });
-
       const key = idempotencyKey(req);
       if (!key) return json(res, 400, { ok: false, error: 'IDEMPOTENCY_KEY_REQUIRED' });
       if (key.length > 200) return json(res, 400, { ok: false, error: 'INVALID_IDEMPOTENCY_KEY' });
 
-      const fingerprint = 'order-create:v1';
-      const hash = requestHash(body);
-      const reservation = await idempotencyRepo.reserveIdempotencyKey(`${user.username}:orders:${key}`, fingerprint, hash);
+      const scopedKey = `${user.username}:orders:${key}`;
+      const reservation = await idempotencyRepo.reserveIdempotencyKey(scopedKey, 'order-create:v1', requestHash(body));
       if (reservation.status === 'RESOLVED') return json(res, 200, reservation.cachedResult);
       if (reservation.status === 'IN_PROGRESS') return json(res, 409, { ok: false, error: 'ORDER_REQUEST_IN_PROGRESS' });
       if (reservation.status === 'CONFLICT') return json(res, 409, { ok: false, error: 'IDEMPOTENCY_KEY_PAYLOAD_CONFLICT' });
@@ -151,13 +113,14 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       try {
         const items: OrderItem[] = [];
         let totalPi = 0;
+        const physicalReservations = new Map<string, number>();
         for (const input of body.items) {
           const productId = String(input?.productId || '').trim();
           const quantity = Number.isInteger(input?.quantity) ? Number(input.quantity) : 0;
           if (!productId || quantity < 1) throw new Error('INVALID_ORDER_ITEM');
           const product = productRepo.findById(productId);
           if (!product || product.isActive !== true || product.isDeleted === true) throw new Error(`PRODUCT_NOT_AVAILABLE:${productId}`);
-          if (quantity > product.stock && product.fulfillmentType !== 'digital_download' && product.fulfillmentType !== 'instant_key') throw new Error(`INSUFFICIENT_STOCK:${productId}`);
+          if (product.fulfillmentType !== 'digital_download' && product.fulfillmentType !== 'instant_key') physicalReservations.set(productId, (physicalReservations.get(productId) || 0) + quantity);
           totalPi += product.pricePi * quantity;
           items.push({ product, quantity, selectedVariant: input.selectedVariant, customDetails: input.customDetails });
         }
@@ -177,19 +140,15 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
           securityFlag: false,
         };
 
-        // Reserve physical stock immediately. Digital/instant fulfillment is not decremented here.
-        for (const item of items) {
-          if (item.product.fulfillmentType === 'digital_download' || item.product.fulfillmentType === 'instant_key') continue;
-          const reserved = productRepo.reserveStock(item.product.id, item.quantity);
-          if (!reserved) throw new Error(`INSUFFICIENT_STOCK:${item.product.id}`);
-        }
+        const reserved = await productRepo.reserveStockBatch([...physicalReservations.entries()].map(([id, quantity]) => ({ id, quantity })));
+        if (!reserved && physicalReservations.size) throw new Error('INSUFFICIENT_STOCK');
 
         const saved = orderRepo.save(order);
         const response = { ok: true, order: saved };
-        await idempotencyRepo.resolveIdempotencyKey(`${user.username}:orders:${key}`, response);
+        await idempotencyRepo.resolveIdempotencyKey(scopedKey, response);
         return json(res, 201, response);
       } catch (error) {
-        await idempotencyRepo.releaseIdempotencyKey(`${user.username}:orders:${key}`);
+        await idempotencyRepo.releaseIdempotencyKey(scopedKey);
         return json(res, 409, { ok: false, error: error instanceof Error ? error.message : 'ORDER_CREATE_FAILED' });
       }
     }
