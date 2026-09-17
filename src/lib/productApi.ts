@@ -31,6 +31,8 @@ export async function createSellerProduct(input: Partial<Product>): Promise<Prod
     return { ok: false, status: 401, error: 'AUTHENTICATION_REQUIRED' };
   }
 
+  // Seller identity, activation, moderation state, rating and product id are server-owned.
+  // Do not persist client-generated demo metadata or placeholder media.
   const result = await safeFetchJson<{ ok?: boolean; product?: Product; error?: string }>(
     '/api/products',
     {
@@ -42,14 +44,16 @@ export async function createSellerProduct(input: Partial<Product>): Promise<Prod
         pricePi: Number(input.pricePi || 0),
         category: input.category || 'physical',
         subcategory: input.subcategory || '',
-        images: Array.isArray(input.images) ? input.images : [],
+        images: [],
         stock: Number.isInteger(input.stock) && (input.stock as number) >= 0 ? input.stock : 0,
-        features: Array.isArray(input.features) ? input.features : [],
+        features: [],
         specs: input.specs,
         productType: input.productType,
         fulfillmentType: input.fulfillmentType,
         availabilityStatus: input.availabilityStatus,
-        tags: Array.isArray(input.tags) ? input.tags : []
+        tags: [input.category, input.subcategory].filter(
+          (value): value is string => typeof value === 'string' && value.trim().length > 0
+        )
       })
     }
   );
