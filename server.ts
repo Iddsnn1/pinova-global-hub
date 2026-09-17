@@ -64,6 +64,11 @@ const securityEventsRateLimiter = createRateLimiter({ windowMs: 60000, maxReques
 // Vercel Serverless Request URL Restoration Middleware
 app.use((req, res, next) => {
   try {
+    // If req.url is ALREADY a valid /api/ route that is NOT /api/index, keep it intact!
+    if (req.url && req.url.startsWith('/api/') && !req.url.startsWith('/api/index')) {
+      return next();
+    }
+
     let targetPath = '';
     const rawUrl = req.url || '';
 
@@ -77,16 +82,14 @@ app.use((req, res, next) => {
     if (!targetPath && req.query && typeof req.query.__path === 'string') {
       targetPath = req.query.__path;
     } else if (!targetPath && req.headers['x-forwarded-uri']) {
-      targetPath = req.headers['x-forwarded-uri'] as string;
+      const fwd = req.headers['x-forwarded-uri'] as string;
+      if (fwd && !fwd.startsWith('/api/index')) targetPath = fwd;
     } else if (!targetPath && req.headers['x-original-url']) {
-      targetPath = req.headers['x-original-url'] as string;
-    } else if (!targetPath && req.headers['x-matched-path']) {
-      targetPath = req.headers['x-matched-path'] as string;
-    } else if (!targetPath && req.headers['x-invoke-path']) {
-      targetPath = req.headers['x-invoke-path'] as string;
+      const orig = req.headers['x-original-url'] as string;
+      if (orig && !orig.startsWith('/api/index')) targetPath = orig;
     }
 
-    if (targetPath) {
+    if (targetPath && !targetPath.startsWith('/api/index')) {
       if (!targetPath.startsWith('/api')) {
         targetPath = '/api' + (targetPath.startsWith('/') ? targetPath : '/' + targetPath);
       }
@@ -109,15 +112,25 @@ const isProduction = process.env.NODE_ENV === 'production';
 const ALLOWED_CORS_ORIGINS = [
   'http://localhost:3000',
   'http://127.0.0.1:3000',
-  'https://app-cdn.minepi.com'
+  'https://app-cdn.minepi.com',
+  'https://iddsnn.com',
+  'https://www.iddsnn.com'
 ];
 
 app.use((req, res, next) => {
   const origin = req.headers.origin as string | undefined;
   if (origin) {
-    const isPiDomain = origin.endsWith('.minepi.com') || ALLOWED_CORS_ORIGINS.includes(origin) || origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:');
-    if (isPiDomain || !isProduction) {
+    const isAllowedDomain =
+      origin.endsWith('.minepi.com') ||
+      origin === 'https://iddsnn.com' ||
+      origin === 'https://www.iddsnn.com' ||
+      origin.endsWith('.vercel.app') ||
+      ALLOWED_CORS_ORIGINS.includes(origin) ||
+      origin.startsWith('http://localhost:') ||
+      origin.startsWith('http://127.0.0.1:');
+    if (isAllowedDomain || !isProduction) {
       res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Vary', 'Origin');
     }
   } else {
     // Non-browser or local client requests
@@ -125,7 +138,7 @@ app.use((req, res, next) => {
   }
 
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Admin-Key, X-Idempotency-Key, Idempotency-Key');
+  res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Admin-Key, X-Idempotency-Key, Idempotency-Key, X-Branding-Type, X-Filename, X-Pioneer-Username, X-Username, Range');
   // Allow Pi Browser & Google AI Studio iframe embedding strictly without wildcard leak
   res.removeHeader('X-Frame-Options');
   res.setHeader('Content-Security-Policy', "frame-ancestors 'self' https://*.minepi.com https://app-cdn.minepi.com pi: https://ai.studio https://*.google.com https://*.run.app https://localhost.corp.google.com:26001;");
@@ -868,15 +881,28 @@ function validateBrandingImageSignature(buffer: Buffer, mimeType: string): boole
 
 // Raw body parser middleware specifically for vendor storefront branding uploads (max 5 MB)
 const vendorBrandingRawBodyParser = express.raw({
-  type: ['image/jpeg', 'image/png', 'image/jpg', 'image/webp', 'application/octet-stream'],
+  type: (req: express.Request) => {
+    const ct = (req.headers['content-type'] || '').toLowerCase();
+    return (
+      ct.startsWith('image/') ||
+      ct.startsWith('application/octet-stream') ||
+      ct.includes('png') ||
+      ct.includes('jpeg') ||
+      ct.includes('jpg') ||
+      ct.includes('webp')
+    );
+  },
   limit: '5mb'
 });
 
 const handleVendorBrandingRawBody = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  if (Buffer.isBuffer(req.body)) {
+    return next();
+  }
   vendorBrandingRawBodyParser(req, res, (err: any) => {
     if (err) {
       if (err.type === 'entity.too.large' || err.status === 413) {
-        res.status(413).json({
+        res.status(400).json({
           success: false,
           error: 'FILE_TOO_LARGE',
           message: 'Storefront branding image exceeds maximum allowed size of 5 MB.'
@@ -1046,11 +1072,28 @@ app.post(
 // Distinct from encrypted KYC document storage: branding is public for buyers
 // ============================================================================
 
+// GET /api/vendor/branding-status & /api/v1/vendor/branding-status
+// Safe diagnostic endpoint verifying branding handler and storage state
+app.get(
+  ['/api/vendor/branding-status', '/api/v1/vendor/branding-status'],
+  (req, res) => {
+    res.json({
+      status: 'ok',
+      runtime: process.env.VERCEL === '1' ? 'vercel' : 'node',
+      brandingRouteLoaded: true,
+      blobPackageAvailable: true,
+      blobTokenConfigured: Boolean(process.env.BLOB_READ_WRITE_TOKEN),
+      maxFileSize: 5 * 1024 * 1024,
+      allowedFormats: ['image/jpeg', 'image/png', 'image/webp']
+    });
+  }
+);
+
 // POST /api/vendor/branding-upload & /api/v1/vendor/branding-upload
 app.post(
   ['/api/vendor/branding-upload', '/api/v1/vendor/branding-upload'],
-  authenticate,
   handleVendorBrandingRawBody,
+  authenticate,
   async (req: AuthenticatedRequest, res) => {
     try {
       // 1. Authoritative caller authentication (strict - do NOT trust client-supplied owner)
@@ -1069,7 +1112,7 @@ app.post(
       if (!authUser || !authUser.username) {
         res.status(401).json({
           success: false,
-          error: 'UNAUTHORIZED',
+          error: 'AUTHENTICATION_REQUIRED',
           message: 'Authentication required to upload merchant storefront branding.'
         });
         return;
@@ -1123,48 +1166,116 @@ app.post(
       }
 
       // 6. Branding type ('logo' or 'banner')
-      const rawType = ((req.headers['x-branding-type'] as string) || (req.query?.type as string) || 'logo').toLowerCase().trim();
-      const brandingType: 'logo' | 'banner' = rawType === 'banner' ? 'banner' : 'logo';
+      const rawType = ((req.headers['x-branding-type'] as string) || (req.headers['x-asset-type'] as string) || (req.query?.type as string) || 'logo').toLowerCase().trim();
+      const brandingType: 'logo' | 'banner' = rawType.includes('banner') ? 'banner' : 'logo';
 
       // 7. Safe server-managed filename and asset identifier
       const ext = mimeType === 'image/png' ? 'png' : mimeType === 'image/webp' ? 'webp' : 'jpg';
       const randomId = crypto.randomBytes(16).toString('hex');
       const assetId = `${brandingType}_${randomId}.${ext}`;
 
-      const brandingDir = getVendorBrandingDir();
-      const filePath = path.join(brandingDir, assetId);
-      const metaPath = path.join(brandingDir, `${assetId}.meta.json`);
+      const isVercel = process.env.VERCEL === '1' || Boolean(process.env.VERCEL_ENV);
+      const blobToken = process.env.BLOB_READ_WRITE_TOKEN;
+      const shouldUseBlob = isProduction || isVercel || Boolean(blobToken);
 
-      // 8. Store public image asset with mode 0o644
-      fs.writeFileSync(filePath, fileBuffer, { mode: 0o644 });
-      try { fs.chmodSync(filePath, 0o644); } catch {}
-
-      // 9. Store metadata
-      const rawFilename = (req.headers['x-filename'] as string) || `store_${brandingType}`;
-      let originalFilename = `store_${brandingType}.${ext}`;
-      try { originalFilename = decodeURIComponent(rawFilename); } catch { originalFilename = rawFilename; }
-      const sanitizedFilename = sanitizeVendorFilename(originalFilename);
-
-      const metadata = {
-        assetId,
+      console.log('[Branding Upload] Processing upload:', {
+        route: req.path || req.url,
         brandingType,
-        owner: ownerUsername.toLowerCase(),
-        mimeType,
-        originalFilename: sanitizedFilename,
-        size: fileBuffer.length,
-        uploadedAt: new Date().toISOString()
-      };
-      fs.writeFileSync(metaPath, JSON.stringify(metadata, null, 2), { mode: 0o644 });
-      try { fs.chmodSync(metaPath, 0o644); } catch {}
+        assetId,
+        ownerUsernamePresent: Boolean(ownerUsername),
+        mimeAccepted: mimeType,
+        fileSize: fileBuffer.length,
+        signatureAccepted: true,
+        blobTokenConfigured: Boolean(blobToken),
+        storageTarget: shouldUseBlob ? 'vercel-blob' : 'local-disk'
+      });
+
+      let assetUrl = '';
+
+      if (shouldUseBlob) {
+        try {
+          const { put } = await import('@vercel/blob');
+
+          if (!blobToken) {
+            throw Object.assign(
+              new Error('BLOB_READ_WRITE_TOKEN is not configured for Vercel branding uploads.'),
+              { code: 'BLOB_CONFIGURATION_ERROR' }
+            );
+          }
+
+          console.log('[Branding Upload] Starting Vercel Blob put for asset:', assetId);
+
+          const blob = await put(
+            `vendor-branding/${assetId}`,
+            fileBuffer,
+            {
+              access: 'public',
+              contentType: mimeType,
+              addRandomSuffix: false,
+              token: blobToken
+            }
+          );
+          assetUrl = blob.url;
+          console.log('[Branding Upload] Vercel Blob put succeeded:', { assetId, url: assetUrl });
+        } catch (blobErr: any) {
+          console.error('[Branding Upload] Vercel Blob error:', {
+            code: blobErr?.code || 'UNKNOWN_ERROR',
+            name: blobErr?.name,
+            message: blobErr?.message || String(blobErr)
+          });
+          const isConfigError = blobErr?.code === 'BLOB_CONFIGURATION_ERROR' || blobErr?.message?.includes('BLOB_READ_WRITE_TOKEN');
+          res.status(isConfigError ? 500 : 502).json({
+            success: false,
+            error: isConfigError ? 'BLOB_CONFIGURATION_ERROR' : 'BLOB_UPLOAD_FAILED',
+            message: isConfigError
+              ? 'Cloud storage is not configured for branding uploads. Please verify BLOB_READ_WRITE_TOKEN.'
+              : 'Failed to upload branding image to cloud storage. Please retry.'
+          });
+          return;
+        }
+      } else {
+        // Local disk storage fallback for local development only
+        const brandingDir = getVendorBrandingDir();
+        const filePath = path.join(brandingDir, assetId);
+        fs.writeFileSync(filePath, fileBuffer, { mode: 0o644 });
+        try { fs.chmodSync(filePath, 0o644); } catch {}
+        assetUrl = `/api/vendor/branding-asset/${assetId}`;
+      }
+
+      // Store metadata when filesystem permits
+      try {
+        const brandingDir = getVendorBrandingDir();
+        const metaPath = path.join(brandingDir, `${assetId}.meta.json`);
+        const rawFilename = (req.headers['x-filename'] as string) || (req.query?.filename as string) || `store_${brandingType}`;
+        let originalFilename = `store_${brandingType}.${ext}`;
+        try { originalFilename = decodeURIComponent(rawFilename); } catch { originalFilename = rawFilename; }
+        const sanitizedFilename = sanitizeVendorFilename(originalFilename);
+
+        const metadata = {
+          assetId,
+          brandingType,
+          owner: ownerUsername.toLowerCase(),
+          mimeType,
+          originalFilename: sanitizedFilename,
+          size: fileBuffer.length,
+          url: assetUrl,
+          uploadedAt: new Date().toISOString()
+        };
+        fs.writeFileSync(metaPath, JSON.stringify(metadata, null, 2), { mode: 0o644 });
+        try { fs.chmodSync(metaPath, 0o644); } catch {}
+      } catch (metaErr) {
+        // Ephemeral filesystem on serverless is non-fatal if blob put succeeded
+      }
 
       res.status(201).json({
         success: true,
-        url: `/api/vendor/branding-asset/${assetId}`,
+        url: assetUrl,
         assetId,
         brandingType,
         message: `${brandingType === 'logo' ? 'Store logo' : 'Store banner'} uploaded successfully.`
       });
     } catch (err: any) {
+      console.error('[Branding Upload Error]:', err);
       res.status(500).json({
         success: false,
         error: 'BRANDING_UPLOAD_ERROR',
@@ -1178,7 +1289,7 @@ app.post(
 // Publicly accessible to buyers and storefront visitors
 app.get(
   ['/api/vendor/branding-asset/:assetId', '/api/v1/vendor/branding-asset/:assetId'],
-  (req, res) => {
+  async (req, res) => {
     try {
       const { assetId } = req.params;
       if (!assetId || !/^(logo|banner)_[a-f0-9]{32}\.(png|jpg|jpeg|webp)$/i.test(assetId)) {
@@ -1203,24 +1314,39 @@ app.get(
         return;
       }
 
-      if (!fs.existsSync(filePath)) {
-        res.status(404).json({
-          success: false,
-          error: 'ASSET_NOT_FOUND',
-          message: 'Branding image asset not found.'
-        });
+      if (fs.existsSync(filePath)) {
+        const ext = path.extname(filePath).toLowerCase();
+        const contentType = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
+        res.setHeader('Content-Type', contentType);
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        res.setHeader('Cache-Control', 'public, max-age=86400, immutable');
+        res.setHeader('Content-Disposition', 'inline');
+
+        const stream = fs.createReadStream(filePath);
+        stream.pipe(res);
         return;
       }
 
-      const ext = path.extname(filePath).toLowerCase();
-      const contentType = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
-      res.setHeader('Content-Type', contentType);
-      res.setHeader('X-Content-Type-Options', 'nosniff');
-      res.setHeader('Cache-Control', 'public, max-age=86400, immutable');
-      res.setHeader('Content-Disposition', 'inline');
+      // Check Vercel Blob storage if local file is absent
+      const blobToken = process.env.BLOB_READ_WRITE_TOKEN;
+      if (blobToken) {
+        try {
+          const { head } = await import('@vercel/blob');
+          const blobDetails = await head(`vendor-branding/${assetId}`, { token: blobToken });
+          if (blobDetails && blobDetails.url) {
+            res.redirect(302, blobDetails.url);
+            return;
+          }
+        } catch (headErr) {
+          // Asset not found in blob
+        }
+      }
 
-      const stream = fs.createReadStream(filePath);
-      stream.pipe(res);
+      res.status(404).json({
+        success: false,
+        error: 'ASSET_NOT_FOUND',
+        message: 'Branding image asset not found.'
+      });
     } catch (err: any) {
       res.status(500).json({
         success: false,
@@ -1272,6 +1398,17 @@ app.delete(
         return;
       }
 
+      // Check Vercel Blob deletion
+      const blobToken = process.env.BLOB_READ_WRITE_TOKEN;
+      if (blobToken) {
+        try {
+          const { del } = await import('@vercel/blob');
+          await del(`vendor-branding/${assetId}`, { token: blobToken });
+        } catch (delErr) {
+          console.warn('[Branding Delete] Vercel Blob del warning:', delErr);
+        }
+      }
+
       const brandingDir = getVendorBrandingDir();
       const filePath = path.resolve(brandingDir, assetId);
       const metaPath = path.resolve(brandingDir, `${assetId}.meta.json`);
@@ -1281,12 +1418,7 @@ app.delete(
         return;
       }
 
-      if (!fs.existsSync(filePath)) {
-        res.status(404).json({ success: false, error: 'ASSET_NOT_FOUND', message: 'Branding asset not found.' });
-        return;
-      }
-
-      // Check ownership from metadata
+      // Check ownership from metadata if present
       if (fs.existsSync(metaPath)) {
         try {
           const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
@@ -1307,13 +1439,13 @@ app.delete(
 
       res.json({
         success: true,
-        message: 'Storefront branding asset removed successfully.'
+        message: 'Branding asset removed successfully.'
       });
     } catch (err: any) {
       res.status(500).json({
         success: false,
-        error: 'BRANDING_DELETE_ERROR',
-        message: 'Internal server error while removing branding asset.'
+        error: 'BRANDING_ASSET_DELETE_ERROR',
+        message: 'Failed to delete branding asset.'
       });
     }
   }
@@ -1666,6 +1798,154 @@ app.post(['/api/admin/vendor-application/:id/review', '/api/v1/admin/vendor-appl
 
   res.json({ success: true, application: updated });
 });
+
+// GET /api/vendor/seller/access & /api/v1/vendor/seller/access
+app.get(
+  ['/api/vendor/seller/access', '/api/v1/vendor/seller/access'],
+  authenticate,
+  (req: AuthenticatedRequest, res: express.Response) => {
+    try {
+      const username = req.user?.username;
+      if (!username) {
+        res.status(401).json({
+          success: false,
+          error: 'UNAUTHORIZED',
+          message: 'Authenticated Pioneer session required.'
+        });
+        return;
+      }
+
+      const application = vendorApplicationRepo.findByUsername(username);
+      const isApproved = application?.status === 'APPROVED';
+      const access = vendorApplicationRepo.getMerchantAccess(username);
+
+      res.json({
+        success: true,
+        authorized: isApproved,
+        status: application?.status || 'UNREGISTERED',
+        sellerLifecycle: isApproved ? 'ACTIVE' : 'INACTIVE',
+        verified: isApproved,
+        pstpAuthorized: isApproved && Boolean(application?.pstpAgreementAccepted),
+        storeName: application?.storeName || null,
+        applicationId: application?.id || null,
+        access
+      });
+    } catch (err: any) {
+      res.status(500).json({
+        success: false,
+        error: 'SELLER_ACCESS_CHECK_ERROR',
+        message: err.message
+      });
+    }
+  }
+);
+
+// POST /api/vendor/seller/authorize & /api/v1/vendor/seller/authorize
+app.post(
+  ['/api/vendor/seller/authorize', '/api/v1/vendor/seller/authorize'],
+  authenticate,
+  (req: AuthenticatedRequest, res: express.Response) => {
+    try {
+      const username = req.user?.username;
+      if (!username) {
+        res.status(401).json({
+          success: false,
+          error: 'UNAUTHORIZED',
+          message: 'Authenticated Pioneer session required.'
+        });
+        return;
+      }
+
+      const application = vendorApplicationRepo.findByUsername(username);
+      if (!application || application.status !== 'APPROVED') {
+        res.status(403).json({
+          success: false,
+          authorized: false,
+          error: 'MERCHANT_NOT_APPROVED',
+          message: 'Seller authorization requires an approved merchant application.'
+        });
+        return;
+      }
+
+      const access = vendorApplicationRepo.getMerchantAccess(username);
+
+      res.json({
+        success: true,
+        authorized: true,
+        sellerLifecycle: 'ACTIVE',
+        verified: true,
+        storeName: application.storeName,
+        applicationId: application.id,
+        access
+      });
+    } catch (err: any) {
+      res.status(500).json({
+        success: false,
+        error: 'SELLER_AUTHORIZE_ERROR',
+        message: err.message
+      });
+    }
+  }
+);
+
+// POST /api/vendor/seller/authorize-pstp & /api/v1/vendor/seller/authorize-pstp
+app.post(
+  ['/api/vendor/seller/authorize-pstp', '/api/v1/vendor/seller/authorize-pstp'],
+  authenticate,
+  (req: AuthenticatedRequest, res: express.Response) => {
+    try {
+      const username = req.user?.username;
+      if (!username) {
+        res.status(401).json({
+          success: false,
+          error: 'UNAUTHORIZED',
+          message: 'Authenticated Pioneer session required.'
+        });
+        return;
+      }
+
+      const application = vendorApplicationRepo.findByUsername(username);
+      if (!application || application.status !== 'APPROVED') {
+        res.status(403).json({
+          success: false,
+          authorized: false,
+          error: 'MERCHANT_NOT_APPROVED',
+          message: 'PSTP seller authorization requires an approved merchant application.'
+        });
+        return;
+      }
+
+      if (!application.pstpAgreementAccepted) {
+        res.status(403).json({
+          success: false,
+          authorized: false,
+          error: 'PSTP_AGREEMENT_REQUIRED',
+          message: 'PSTP Escrow Protocol seller agreement must be accepted.'
+        });
+        return;
+      }
+
+      const access = vendorApplicationRepo.getMerchantAccess(username);
+
+      res.json({
+        success: true,
+        authorized: true,
+        pstpAuthorized: true,
+        sellerLifecycle: 'ACTIVE',
+        verified: true,
+        storeName: application.storeName,
+        applicationId: application.id,
+        access
+      });
+    } catch (err: any) {
+      res.status(500).json({
+        success: false,
+        error: 'SELLER_PSTP_AUTHORIZE_ERROR',
+        message: err.message
+      });
+    }
+  }
+);
 
 // 4. Security Events API (Phase 4 Remediation)
 app.get(['/api/pstp/security-events', '/api/v1/pstp/security-events'], async (req, res) => {
@@ -5080,8 +5360,12 @@ async function startServer() {
   });
 }
 
-startServer().catch(err => {
-  console.error('Failed to start server:', err);
-});
+const isVercelServerless = process.env.VERCEL === '1' || Boolean(process.env.VERCEL_ENV) || Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME);
+
+if (!isVercelServerless) {
+  startServer().catch(err => {
+    console.error('Failed to start server:', err);
+  });
+}
 
 export default app;

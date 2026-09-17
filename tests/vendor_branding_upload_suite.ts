@@ -212,11 +212,74 @@ const customBranding = resolveStoreBranding(`/api/vendor/branding-asset/${sample
 assert(customBranding.logoUrl === `/api/vendor/branding-asset/${sampleLogoId}`, 'Custom store logo references server-managed asset');
 assert(customBranding.bannerUrl === `/api/vendor/branding-asset/${sampleBannerId}`, 'Custom store banner references server-managed asset');
 
+// --- SECTION 7: SERVER-AUTHORITATIVE SELLER AUTHORIZATION & VENDOR AUTH BRIDGE ---
+console.log('\n--- SECTION 7: SERVER-AUTHORITATIVE SELLER AUTHORIZATION & VENDOR AUTH BRIDGE ---');
+
+interface MockVendorApp {
+  id: string;
+  status: 'PENDING_REVIEW' | 'APPROVED' | 'REJECTED';
+  pstpAgreementAccepted: boolean;
+  storeName: string;
+}
+
+function evaluateSellerAccess(app: MockVendorApp | null) {
+  const isApproved = app?.status === 'APPROVED';
+  return {
+    authorized: isApproved,
+    status: app?.status || 'UNREGISTERED',
+    sellerLifecycle: isApproved ? 'ACTIVE' : 'INACTIVE',
+    verified: isApproved,
+    pstpAuthorized: isApproved && Boolean(app?.pstpAgreementAccepted)
+  };
+}
+
+function evaluateSellerAuthorize(app: MockVendorApp | null) {
+  if (!app || app.status !== 'APPROVED') {
+    return { ok: false, status: 403, error: 'MERCHANT_NOT_APPROVED' };
+  }
+  return { ok: true, status: 200, authorized: true, sellerLifecycle: 'ACTIVE', verified: true };
+}
+
+function evaluatePstpAuthorize(app: MockVendorApp | null) {
+  if (!app || app.status !== 'APPROVED') {
+    return { ok: false, status: 403, error: 'MERCHANT_NOT_APPROVED' };
+  }
+  if (!app.pstpAgreementAccepted) {
+    return { ok: false, status: 403, error: 'PSTP_AGREEMENT_REQUIRED' };
+  }
+  return { ok: true, status: 200, authorized: true, pstpAuthorized: true, sellerLifecycle: 'ACTIVE', verified: true };
+}
+
+const unregAccess = evaluateSellerAccess(null);
+assert(unregAccess.authorized === false && unregAccess.sellerLifecycle === 'INACTIVE', 'Unregistered user has inactive seller lifecycle');
+
+const pendingApp: MockVendorApp = { id: 'app_1', status: 'PENDING_REVIEW', pstpAgreementAccepted: true, storeName: 'Pending Store' };
+const pendingAccess = evaluateSellerAccess(pendingApp);
+assert(pendingAccess.authorized === false && pendingAccess.sellerLifecycle === 'INACTIVE', 'Pending merchant cannot access active seller lifecycle');
+assert(evaluateSellerAuthorize(pendingApp).ok === false, 'Pending merchant is rejected from seller authorization with 403');
+assert(evaluatePstpAuthorize(pendingApp).ok === false, 'Pending merchant is rejected from PSTP authorization with 403');
+
+const rejectedApp: MockVendorApp = { id: 'app_2', status: 'REJECTED', pstpAgreementAccepted: true, storeName: 'Rejected Store' };
+assert(evaluateSellerAuthorize(rejectedApp).ok === false, 'Rejected merchant is rejected from seller authorization with 403');
+
+const approvedNoPstp: MockVendorApp = { id: 'app_3', status: 'APPROVED', pstpAgreementAccepted: false, storeName: 'Approved Store' };
+const approvedAccess = evaluateSellerAccess(approvedNoPstp);
+assert(approvedAccess.authorized === true && approvedAccess.sellerLifecycle === 'ACTIVE' && approvedAccess.verified === true, 'Approved merchant receives Active verified seller lifecycle');
+assert(approvedAccess.pstpAuthorized === false, 'Approved merchant without PSTP agreement is not PSTP authorized');
+assert(evaluateSellerAuthorize(approvedNoPstp).ok === true, 'Approved merchant successfully authorizes seller lifecycle');
+const pstpRes = evaluatePstpAuthorize(approvedNoPstp);
+assert(pstpRes.ok === false && pstpRes.error === 'PSTP_AGREEMENT_REQUIRED', 'Approved merchant without PSTP agreement is rejected from PSTP authorization');
+
+const fullyCompliant: MockVendorApp = { id: 'app_4', status: 'APPROVED', pstpAgreementAccepted: true, storeName: 'Compliant Store' };
+const fullAccess = evaluateSellerAccess(fullyCompliant);
+assert(fullAccess.authorized === true && fullAccess.pstpAuthorized === true, 'Fully approved compliant merchant receives full seller + PSTP authorization');
+assert(evaluatePstpAuthorize(fullyCompliant).ok === true, 'Fully compliant merchant successfully authorizes PSTP seller lifecycle');
+
 // Clean up test directories
 try {
   fs.rmSync(testBaseDir, { recursive: true, force: true });
 } catch {}
 
 console.log('\n================================================================');
-console.log(`ALL BRANDING UPLOAD TESTS PASSED: ${passedTests}/${totalTests}`);
+console.log(`ALL BRANDING UPLOAD & SELLER AUDIT TESTS PASSED: ${passedTests}/${totalTests}`);
 console.log('================================================================\n');

@@ -69,7 +69,7 @@ import { INITIAL_PI_CONVERSION_CONFIG, INITIAL_CONVERSION_RATE_LOGS } from './da
 
 import { LanguageProvider } from './context/LanguageContext';
 import { LanguageSelectorModal } from './components/i18n/LanguageSelectorModal';
-import { MerchantEcosystemHub } from './components/merchant/MerchantEcosystemHub';
+import { SellerStudioV2 } from './components/seller/SellerStudioV2';
 import { VendorApplicationModal } from './components/vendor/VendorApplicationModal';
 import { formatPiAmount } from './utils/formatters';
 
@@ -249,7 +249,20 @@ function MainAppContent() {
       const path = window.location.pathname || '';
       if (search.includes('tab=pi-diagnostic') || search.includes('view=pi-diagnostic') || path.includes('/pi-diagnostic')) {
         setActiveSection('pi-diagnostic');
+      } else if (path.includes('/seller-studio') || search.includes('section=seller_studio') || search.includes('tab=seller-studio')) {
+        setActiveSection('seller_studio');
       }
+
+      const handlePopState = (e: PopStateEvent) => {
+        const curPath = window.location.pathname || '';
+        const curSearch = window.location.search || '';
+        if (curPath.includes('/seller-studio') || curSearch.includes('section=seller_studio')) {
+          setActiveSection('seller_studio');
+        } else if (e.state?.section) {
+          setActiveSection(e.state.section);
+        }
+      };
+      window.addEventListener('popstate', handlePopState);
     }
 
     // Only proactively initialize the SDK (Pi.init). Authentication is strictly triggered on user gesture.
@@ -385,6 +398,15 @@ function MainAppContent() {
     }
 
     setActiveSection(targetSection);
+    if (typeof window !== 'undefined') {
+      try {
+        if (targetSection === 'seller_studio' && !window.location.pathname.includes('/seller-studio')) {
+          window.history.pushState({ section: 'seller_studio' }, '', '/seller-studio');
+        } else if (targetSection !== 'seller_studio' && window.location.pathname.includes('/seller-studio')) {
+          window.history.pushState({ section: targetSection }, '', '/');
+        }
+      } catch (_) {}
+    }
     if (targetSection === 'marketplace') {
       setSelectedMarketplaceCategory(newCategory as MarketplaceCategory);
     } else if (targetSection === 'utilities') {
@@ -1195,34 +1217,38 @@ function MainAppContent() {
         )}
 
         {activeSection === 'seller_studio' && (
-          <MerchantEcosystemHub
+          <SellerStudioV2
+            user={user}
             products={products}
             orders={orders}
-            coupons={coupons}
-            vendorProfile={
-              vendors.find((v) => (v.storeName || '').toLowerCase() === (user?.username || '').toLowerCase()) ||
-              vendors[0] || {
-                id: 'vendor-current',
-                sellerUsername: user.username,
-                storeName: `${user.username}'s Official Store`,
-                bio: 'Verified Pi Pioneer Merchant offering authentic merchandise & trusted local fulfillment.',
+            vendors={vendors}
+            onAddProduct={(newProd) => {
+              const fullProd: Product = {
+                ...newProd,
+                id: `prod_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+                createdAt: new Date().toISOString(),
                 rating: 5.0,
-                reviewsCount: 1,
-                verified: true,
-                totalSalesPi: 140.0,
-                bannerImage: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=1200&q=80',
-                logoImage: 'https://images.unsplash.com/photo-1472851294608-062f824d29cc?auto=format&fit=crop&w=400&q=80',
-                joinedDate: '2025-01-01',
-                shippingCountries: ['Nigeria', 'Global']
-              }
-            }
-            onAddProduct={(newProd) => setProducts((prev) => [newProd, ...prev])}
-            onUpdateFulfillment={(orderId, trackingNumber, carrier) => {
-              handleUpdateOrderStatus(orderId, 'Shipped', { trackingNumber, carrier });
+                reviewsCount: 0,
+                sellerId: user.username,
+                sellerName: user.username,
+                sellerVerified: true
+              };
+              setProducts((prev) => [fullProd, ...prev]);
             }}
-            onCreateCoupon={(newCoupon) => setCoupons((prev) => [newCoupon, ...prev])}
-            onNavigateSection={handleNavigateSection}
-            onOpenVendorApplication={() => setIsVendorApplicationOpen(true)}
+            onUpdateProduct={(updated) => {
+              setProducts((prev) => prev.map((p) => p.id === updated.id ? updated : p));
+            }}
+            onDeleteProduct={(id) => {
+              setProducts((prev) => prev.filter((p) => p.id !== id));
+            }}
+            onUpdateOrderStatus={(orderId, status, trackingNumber, carrier) => {
+              handleUpdateOrderStatus(orderId, status, { trackingNumber, carrier });
+            }}
+            onViewStorefront={(vendorId) => {
+              const v = vendors.find((x) => x.id === vendorId || x.sellerUsername === vendorId) || vendors[0];
+              if (v) setSelectedVendor(v);
+            }}
+            onNavigateHome={() => handleNavigateSection('marketplace')}
           />
         )}
 

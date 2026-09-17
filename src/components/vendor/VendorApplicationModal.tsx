@@ -25,6 +25,7 @@ import {
   Trash2
 } from 'lucide-react';
 import { VendorApplication, SellerType, VendorApplicationStatus } from '../../types';
+import { getVendorAuthToken, getVendorUsername, ensureServerSession } from '../../lib/vendorAuthBridge';
 
 interface VendorApplicationModalProps {
   isOpen: boolean;
@@ -241,30 +242,76 @@ export const VendorApplicationModal: React.FC<VendorApplicationModalProps> = ({
    * Uploads a store branding image (logo or banner) to the public branding endpoint.
    */
   const uploadBrandingAsset = async (file: File, type: 'logo' | 'banner'): Promise<string> => {
-    const token = localStorage.getItem('auth_token') || localStorage.getItem('pi_auth_token') || localStorage.getItem('pinova_token');
+    let token = await ensureServerSession(false) || getVendorAuthToken();
+    const effectiveUsername = getVendorUsername() || pioneerUsername || '';
+    const uploadUrl = `/api/vendor/branding-upload?type=${encodeURIComponent(type)}&filename=${encodeURIComponent(file.name)}`;
+
     const headers: Record<string, string> = {
       'Content-Type': file.type || (file.name.endsWith('.png') ? 'image/png' : file.name.endsWith('.webp') ? 'image/webp' : 'image/jpeg'),
       'X-Branding-Type': type,
-      'X-Filename': encodeURIComponent(file.name),
-      'X-Pioneer-Username': pioneerUsername || ''
+      'X-Filename': encodeURIComponent(file.name)
     };
+    if (effectiveUsername) {
+      headers['X-Pioneer-Username'] = effectiveUsername;
+    }
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
 
-    const response = await fetch('/api/vendor/branding-upload', {
-      method: 'POST',
-      headers,
-      body: file
-    });
+    let response: Response;
+    try {
+      response = await fetch(uploadUrl, {
+        method: 'POST',
+        headers,
+        body: file
+      });
+    } catch (networkErr: any) {
+      console.error(`[Branding Upload] Network/CORS failure uploading ${type}:`, networkErr);
+      throw new Error('Branding upload could not reach the PiNova server. Please check your network connection and retry.');
+    }
+
+    // On 401 Unauthorized, refresh server session and retry once
+    if (response.status === 401) {
+      try {
+        const freshToken = await ensureServerSession(true);
+        if (freshToken) {
+          headers['Authorization'] = `Bearer ${freshToken}`;
+          response = await fetch(uploadUrl, {
+            method: 'POST',
+            headers,
+            body: file
+          });
+        }
+      } catch (retryErr) {
+        console.warn('[Branding Upload] Session refresh retry encountered error:', retryErr);
+      }
+    }
 
     if (!response.ok) {
-      let errMsg = `Failed to upload ${type} image (${response.status})`;
+      let errorJson: any = null;
       try {
-        const errorJson = await response.json();
-        if (errorJson.message) errMsg = errorJson.message;
+        errorJson = await response.json();
       } catch {}
-      throw new Error(errMsg);
+
+      if (response.status === 401 || errorJson?.error === 'AUTHENTICATION_REQUIRED') {
+        throw new Error(errorJson?.message || 'Authentication required: Please connect your Pioneer account to upload storefront branding.');
+      } else if (response.status === 400 && errorJson?.error === 'FILE_TOO_LARGE') {
+        throw new Error('Storefront branding image exceeds maximum allowed size of 5 MB.');
+      } else if (response.status === 400 && errorJson?.error === 'INVALID_MIME_TYPE') {
+        throw new Error('Invalid image format. Allowed branding image types are image/png, image/jpeg, and image/webp.');
+      } else if (response.status === 400 && errorJson?.error === 'FILE_SIGNATURE_MISMATCH') {
+        throw new Error('File signature mismatch: File content does not match the declared image format.');
+      } else if (response.status === 400 && errorJson?.error === 'EMPTY_FILE') {
+        throw new Error('Selected image file is empty or unreadable.');
+      } else if (response.status === 500 && errorJson?.error === 'BLOB_CONFIGURATION_ERROR') {
+        throw new Error('Cloud storage configuration error. Please contact PiNova support or retry shortly.');
+      } else if (response.status === 502 || errorJson?.error === 'BLOB_UPLOAD_FAILED') {
+        throw new Error('Cloud storage upload temporarily unavailable. Please retry in a few moments.');
+      } else if (response.status >= 500) {
+        throw new Error(errorJson?.message || 'Server was unable to process branding image. Please retry.');
+      } else {
+        throw new Error(errorJson?.message || `Failed to upload ${type} image (HTTP ${response.status}).`);
+      }
     }
 
     const result = await response.json();
@@ -324,16 +371,18 @@ export const VendorApplicationModal: React.FC<VendorApplicationModalProps> = ({
   };
 
   const handleRemoveLogo = async () => {
-    if (storeLogo && storeLogo.startsWith('/api/vendor/branding-asset/')) {
-      const assetId = storeLogo.split('/').pop();
+    if (storeLogo) {
+      const match = storeLogo.match(/(logo_[a-f0-9]{32}\.(png|jpg|jpeg|webp))/i);
+      const assetId = match ? match[1] : null;
       if (assetId) {
         try {
-          const token = localStorage.getItem('auth_token') || localStorage.getItem('pi_auth_token') || localStorage.getItem('pinova_token');
+          const token = getVendorAuthToken();
+          const effectiveUsername = getVendorUsername() || pioneerUsername || '';
           await fetch(`/api/vendor/branding-asset/${assetId}`, {
             method: 'DELETE',
             headers: {
               ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-              'X-Pioneer-Username': pioneerUsername || ''
+              'X-Pioneer-Username': effectiveUsername
             }
           });
         } catch {}
@@ -375,16 +424,18 @@ export const VendorApplicationModal: React.FC<VendorApplicationModalProps> = ({
   };
 
   const handleRemoveBanner = async () => {
-    if (storeBanner && storeBanner.startsWith('/api/vendor/branding-asset/')) {
-      const assetId = storeBanner.split('/').pop();
+    if (storeBanner) {
+      const match = storeBanner.match(/(banner_[a-f0-9]{32}\.(png|jpg|jpeg|webp))/i);
+      const assetId = match ? match[1] : null;
       if (assetId) {
         try {
-          const token = localStorage.getItem('auth_token') || localStorage.getItem('pi_auth_token') || localStorage.getItem('pinova_token');
+          const token = getVendorAuthToken();
+          const effectiveUsername = getVendorUsername() || pioneerUsername || '';
           await fetch(`/api/vendor/branding-asset/${assetId}`, {
             method: 'DELETE',
             headers: {
               ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-              'X-Pioneer-Username': pioneerUsername || ''
+              'X-Pioneer-Username': effectiveUsername
             }
           });
         } catch {}
