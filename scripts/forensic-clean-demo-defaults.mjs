@@ -7,6 +7,9 @@ const replacements = [
   [/userBalancePi\s*=\s*1250\.00/g, 'userBalancePi = 0'],
   [/userBalancePi\s*=\s*1250\.0/g, 'userBalancePi = 0'],
   [/userBalancePi\s*=\s*1250/g, 'userBalancePi = 0'],
+  [/userBalancePi\s*=\s*250\.00/g, 'userBalancePi = 0'],
+  [/userBalancePi\s*=\s*250\.0/g, 'userBalancePi = 0'],
+  [/return 250\.00;/g, 'return 0;'],
   [/buyerUsername\s*=\s*['"]Pioneer_User['"]/g, "buyerUsername = ''"],
   [/buyerUsername\s*\|\|\s*['"]Pioneer_User['"]/g, "buyerUsername || ''"],
   [/pioneerUsername:\s*pioneerUsername\s*\|\|\s*['"]Pioneer_User['"]/g, "pioneerUsername: pioneerUsername || ''"],
@@ -31,7 +34,7 @@ const replacements = [
   [/const \[qaItems, setQaItems\] = useState\(\[[\s\S]*?\n  \]\);\n  const \[newQuestionInput/g, 'const [qaItems, setQaItems] = useState<any[]>([]);\n  const [newQuestionInput'],
   [/const \[liveChatStream, setLiveChatStream\] = useState\(\[[\s\S]*?\n  \]\);/g, 'const [liveChatStream, setLiveChatStream] = useState<any[]>([]);'],
   [/const \[followedStores, setFollowedStores\] = useState<string\[\]>\(\[[\s\S]*?\]\);/g, 'const [followedStores, setFollowedStores] = useState<string[]>([]);'],
-  [/const \[blockedUsers, setBlockedUsers\] = useState\(\[[\s\S]*?\]\);/g, 'const [blockedUsers, setBlockedUsers] = useState<string[]>([]);'],
+  [/const \[blockedUsers, setBlockedUsers\] = useState\(\[[\s\S]*?\n  \]\);/g, 'const [blockedUsers, setBlockedUsers] = useState<string[]>([]);'],
 
   // Merchant Studio analytics/support/audit must not present fabricated operational history.
   [/const \[announcementBanner, setAnnouncementBanner\] = useState\([^;]+\);/g, "const [announcementBanner, setAnnouncementBanner] = useState('');"],
@@ -52,6 +55,12 @@ const replacements = [
   [/\bSarah Chen \(Owner\)|\bDavid Rodriguez \(Manager\)|\bAlex Mercer \(Warehouse\)/g, ''],
   [/\b192\.168\.1\.104\b|\b10\.0\.4\.12\b|\b172\.16\.0\.44\b/g, ''],
   [/\bTICK-9081\b|\bTICK-8812\b/g, ''],
+
+  // No fabricated active-order identity or shipment should appear when the user has no orders.
+  [/const orderId = displayOrder\?\.id \|\| ['"]ORD-PI-892341['"]/g, "const orderId = displayOrder?.id || ''"],
+  [/activeOrders && activeOrders\.length > 0 \? activeOrders\[0\]\.id : ['"]ORD-PI-892341['"]/g, "activeOrders && activeOrders.length > 0 ? activeOrders[0].id : ''"],
+  [/Your order ORD-PI-892341 was authorized and confirmed via official Pi Network platform API\./g, 'No active order is currently available.'],
+  [/PiNova_Invoice_ORD-PI-892341\.pdf/g, ''],
 ];
 
 const files = [
@@ -66,8 +75,12 @@ const files = [
   'src/components/views/AiSearchView.tsx',
   'src/components/views/PlatformAdminView.tsx',
   'src/components/views/EnterpriseSecurityView.tsx',
+  'src/components/views/SocialCommunityHub.tsx',
   'src/components/social/SocialCommunityHub.tsx',
   'src/components/merchant/MerchantEcosystemHub.tsx',
+  'src/components/views/HomeView.tsx',
+  'src/components/views/ProfileView.tsx',
+  'src/components/navigation/FullScreenNavHeader.tsx',
   'src/App.tsx',
   'server.ts',
   'src/services/educationService.ts',
