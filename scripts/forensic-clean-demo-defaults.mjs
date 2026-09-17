@@ -10,18 +10,10 @@ const replacements = [
   [/buyerUsername\s*=\s*['"]Pioneer_User['"]/g, "buyerUsername = ''"],
   [/buyerUsername\s*\|\|\s*['"]Pioneer_User['"]/g, "buyerUsername || ''"],
   [/pioneerUsername:\s*pioneerUsername\s*\|\|\s*['"]Pioneer_User['"]/g, "pioneerUsername: pioneerUsername || ''"],
-  [/totalSalesPi:\s*1250\.00/g, 'totalSalesPi: 0'],
   [/username:\s*username\s*\|\|\s*['"]pioneer_user['"]/g, "username: username || ''"],
   [/uid:\s*uid\s*\|\|\s*`pi-uid-\$\{Date\.now\(\)\\}`/g, "uid: uid || ''"],
   [/const buyerUsername = req\.user\?\.username \|\| req\.body\.buyerUsername \|\| ['"]Pioneer_User['"]/g, "const buyerUsername = req.user?.username || ''"],
   [/const sellerUsername = req\.body\.sellerUsername \|\| ['"]Seller_Merchant['"]/g, "const sellerUsername = req.body.sellerUsername || ''"],
-
-  // Remaining fabricated Pioneer identity/wallet defaults must never ship to production.
-  [/['"]Pi_Pioneer_01['"]/g, "''"],
-  [/['"]user-uid-892341['"]/g, "''"],
-  [/['"]GD5X\.\.\.PINOVA_KEY['"]/g, "''"],
-  [/return 250\.00;/g, 'return 0;'],
-  [/currentAdminUsername\s*=\s*['"]['"]/g, "currentAdminUsername = ''"],
 
   // Education marketplace must not silently fall back to fabricated catalog items.
   [/\s*SEED_MARKETPLACE_ITEMS,\n/gs, '\n'],
@@ -31,7 +23,35 @@ const replacements = [
 
   // Platform Admin must not expose fabricated users, wallets, KYC records, or merchant identities.
   [/private usersState: UserAccountRecord\[\] = \[[\s\S]*?\n  \];\n\n  private rolesState:/g, 'private usersState: UserAccountRecord[] = [];\n\n  private rolesState:'],
-  [/userCount:\s*[0-9]+/g, 'userCount: 0']
+  [/userCount:\s*[0-9]+/g, 'userCount: 0'],
+
+  // Social/community surfaces must start empty until backed by authenticated/live data.
+  [/const \[conversations, setConversations\] = useState\(\[[\s\S]*?\n  \]\);\n\n  \/\/ --- COMMUNITY FEED STATE ---/g, 'const [conversations, setConversations] = useState<any[]>([]);\n\n  // --- COMMUNITY FEED STATE ---'],
+  [/const \[feedPosts, setFeedPosts\] = useState\(\[[\s\S]*?\n  \]\);\n  const \[newCommentInput/g, 'const [feedPosts, setFeedPosts] = useState<any[]>([]);\n  const [newCommentInput'],
+  [/const \[qaItems, setQaItems\] = useState\(\[[\s\S]*?\n  \]\);\n  const \[newQuestionInput/g, 'const [qaItems, setQaItems] = useState<any[]>([]);\n  const [newQuestionInput'],
+  [/const \[liveChatStream, setLiveChatStream\] = useState\(\[[\s\S]*?\n  \]\);/g, 'const [liveChatStream, setLiveChatStream] = useState<any[]>([]);'],
+  [/const \[followedStores, setFollowedStores\] = useState<string\[\]>\(\[[\s\S]*?\]\);/g, 'const [followedStores, setFollowedStores] = useState<string[]>([]);'],
+  [/const \[blockedUsers, setBlockedUsers\] = useState\(\[[\s\S]*?\]\);/g, 'const [blockedUsers, setBlockedUsers] = useState<string[]>([]);'],
+
+  // Merchant Studio analytics/support/audit must not present fabricated operational history.
+  [/const \[announcementBanner, setAnnouncementBanner\] = useState\([^;]+\);/g, "const [announcementBanner, setAnnouncementBanner] = useState('');"],
+  [/const \[auditLogs, setAuditLogs\] = useState\(\[[\s\S]*?\n  \]\);/g, 'const [auditLogs, setAuditLogs] = useState<any[]>([]);'],
+  [/const \[supportTickets, setSupportTickets\] = useState\(\[[\s\S]*?\n  \]\);/g, 'const [supportTickets, setSupportTickets] = useState<any[]>([]);'],
+  [/const revenueChartData = \[[\s\S]*?\n  \];/g, 'const revenueChartData: Array<{ month: string; piRevenue: number; orders: number }> = [];'],
+  [/currentAdminUsername = ['"]Pi_Pioneer_01['"]/g, "currentAdminUsername = ''"],
+  [/['"]Pi_Pioneer_01['"]/g, "''"],
+  [/['"]user-uid-892341['"]/g, "''"],
+  [/['"]GD5X\.\.\.PINOVA_KEY['"]/g, "''"],
+  [/['"]TechNova Global Store['"]/g, "''"],
+  [/['"]TechNova Official Store['"]/g, "''"],
+  [/['"]Aura Artisanal Crafts & Wearables['"]/g, "''"],
+  [/['"]Pioneer Hardware Wholesale Group['"]/g, "''"],
+  [/['"]TICK-8801['"]/g, "''"],
+  [/['"]TICK-9012['"]/g, "''"],
+  [/['"]log-101['"]|['"]log-102['"]|['"]log-103['"]|['"]log-104['"]/g, "''"],
+  [/\bSarah Chen \(Owner\)|\bDavid Rodriguez \(Manager\)|\bAlex Mercer \(Warehouse\)/g, ''],
+  [/\b192\.168\.1\.104\b|\b10\.0\.4\.12\b|\b172\.16\.0\.44\b/g, ''],
+  [/\bTICK-9081\b|\bTICK-8812\b/g, ''],
 ];
 
 const files = [
@@ -44,14 +64,14 @@ const files = [
   'src/components/education/EducationDiscovery.tsx',
   'src/components/vendor/VendorApplicationModal.tsx',
   'src/components/views/AiSearchView.tsx',
-  'src/App.tsx',
-  'src/modules/security/engine.ts',
-  'src/modules/platform_admin/services.ts',
-  'src/components/social/SocialCommunityHub.tsx',
   'src/components/views/PlatformAdminView.tsx',
   'src/components/views/EnterpriseSecurityView.tsx',
+  'src/components/social/SocialCommunityHub.tsx',
+  'src/components/merchant/MerchantEcosystemHub.tsx',
+  'src/App.tsx',
   'server.ts',
-  'src/services/educationService.ts'
+  'src/services/educationService.ts',
+  'src/modules/platform_admin/services.ts'
 ];
 
 let changed = 0;
