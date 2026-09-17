@@ -39,8 +39,8 @@ interface FlightServicesHubProps {
 
 export const FlightServicesHub: React.FC<FlightServicesHubProps> = ({
   piConversionConfig,
-  userBalancePi = 1250.00,
-  buyerUsername = 'Pioneer_User',
+  userBalancePi = 0,
+  buyerUsername = '',
   onBookingSuccess,
   onSelectOptionForUtility,
   initialOrigin = 'KAN',
