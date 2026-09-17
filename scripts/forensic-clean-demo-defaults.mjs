@@ -14,7 +14,7 @@ const replacements = [
   [/buyerUsername\s*\|\|\s*['"]Pioneer_User['"]/g, "buyerUsername || ''"],
   [/pioneerUsername:\s*pioneerUsername\s*\|\|\s*['"]Pioneer_User['"]/g, "pioneerUsername: pioneerUsername || ''"],
   [/username:\s*username\s*\|\|\s*['"]pioneer_user['"]/g, "username: username || ''"],
-  [/uid:\s*uid\s*\|\|\s*`pi-uid-\$\{Date\.now\(\)\\}`/g, "uid: uid || ''"],
+  [/uid:\s*uid\s*\|\|\s*`pi-uid-\$\{Date\.now\(\)\}`/g, "uid: uid || ''"],
   [/const buyerUsername = req\.user\?\.username \|\| req\.body\.buyerUsername \|\| ['"]Pioneer_User['"]/g, "const buyerUsername = req.user?.username || ''"],
   [/const sellerUsername = req\.body\.sellerUsername \|\| ['"]Seller_Merchant['"]/g, "const sellerUsername = req.body.sellerUsername || ''"],
 
@@ -61,6 +61,11 @@ const replacements = [
   [/activeOrders && activeOrders\.length > 0 \? activeOrders\[0\]\.id : ['"]ORD-PI-892341['"]/g, "activeOrders && activeOrders.length > 0 ? activeOrders[0].id : ''"],
   [/Your order ORD-PI-892341 was authorized and confirmed via official Pi Network platform API\./g, 'No active order is currently available.'],
   [/PiNova_Invoice_ORD-PI-892341\.pdf/g, ''],
+
+  // Final identity guard: exact fabricated demo identities must never survive the production build.
+  /['"]Pioneer_User['"]/g, "''",
+  /['"]pioneer_user['"]/g, "''",
+  /['"]Seller_Merchant['"]/g, "''",
 ];
 
 const files = [
