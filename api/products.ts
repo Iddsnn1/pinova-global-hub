@@ -138,7 +138,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         sellerId: existing.sellerId,
         sellerName: existing.sellerName,
         sellerVerified: existing.sellerVerified,
-        rating: existing.sellerVerified,
+        rating: existing.rating,
         reviewsCount: existing.reviewsCount,
         isActive: existing.isActive,
         moderationStatus: existing.moderationStatus
