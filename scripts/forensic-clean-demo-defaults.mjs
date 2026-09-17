@@ -10,7 +10,11 @@ const replacements = [
   [/buyerUsername\s*=\s*['"]Pioneer_User['"]/g, "buyerUsername = ''"],
   [/buyerUsername\s*\|\|\s*['"]Pioneer_User['"]/g, "buyerUsername || ''"],
   [/pioneerUsername:\s*pioneerUsername\s*\|\|\s*['"]Pioneer_User['"]/g, "pioneerUsername: pioneerUsername || ''"],
-  [/totalSalesPi:\s*1250\.00/g, 'totalSalesPi: 0']
+  [/totalSalesPi:\s*1250\.00/g, 'totalSalesPi: 0'],
+  [/username:\s*username\s*\|\|\s*['"]pioneer_user['"]/g, "username: username || ''"],
+  [/uid:\s*uid\s*\|\|\s*`pi-uid-\$\{Date\.now\(\)\}`/g, "uid: uid || ''"],
+  [/const buyerUsername = req\.user\?\.username \|\| req\.body\.buyerUsername \|\| ['"]Pioneer_User['"]/g, "const buyerUsername = req.user?.username || ''"],
+  [/const sellerUsername = req\.body\.sellerUsername \|\| ['"]Seller_Merchant['"]/g, "const sellerUsername = req.body.sellerUsername || ''"]
 ];
 
 const files = [
@@ -22,7 +26,9 @@ const files = [
   'src/components/flight/FlightBookingModal.tsx',
   'src/components/education/EducationDiscovery.tsx',
   'src/components/vendor/VendorApplicationModal.tsx',
-  'src/App.tsx'
+  'src/components/views/AiSearchView.tsx',
+  'src/App.tsx',
+  'server.ts'
 ];
 
 let changed = 0;
