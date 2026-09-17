@@ -12,39 +12,58 @@ function assert(condition: boolean, message: string): void {
 }
 
 const repo = new VendorApplicationRepository();
-const seeded = repo.findById('VAPP-NG-9081');
-assert(Boolean(seeded), 'Seeded vendor application must exist for lifecycle test');
-assert(seeded?.status === 'APPROVED', 'Approved application must remain APPROVED');
-assert(seeded?.verificationStatus === 'Verified', 'Approved application must be Verified');
-assert(seeded?.sellerStatus === 'Active', 'Approved application must be Active');
+const testApplicationId = 'TEST-VAPP-LIFECYCLE';
+const testUsername = 'test_vendor_lifecycle';
+const seeded = repo.save({
+  id: testApplicationId,
+  pioneerUsername: testUsername,
+  storeName: 'Test Merchant Lifecycle Fixture',
+  sellerType: 'business',
+  country: 'Test Country',
+  countryCode: 'ZZ',
+  stateRegion: 'Test Region',
+  city: 'Test City',
+  contactEmail: 'vendor-lifecycle@example.invalid',
+  contactPhone: 'TEST_ONLY',
+  storeDescription: 'Synthetic test-only merchant fixture for governance lifecycle tests.',
+  categoriesToSell: [],
+  documents: [],
+  policies: {
+    returnRefundPolicy: 'TEST_ONLY',
+    deliveryShippingPolicy: 'TEST_ONLY'
+  },
+  pstpAgreementAccepted: true,
+  status: 'APPROVED',
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString()
+});
+assert(Boolean(seeded), 'Test-only vendor application must be created');
+assert(seeded.status === 'APPROVED', 'Approved application must remain APPROVED');
+assert(seeded.verificationStatus === 'Verified', 'Approved application must be Verified');
+assert(seeded.sellerStatus === 'Active', 'Approved application must be Active');
 
-const pending = repo.updateStatus('VAPP-NG-9081', 'PENDING_REVIEW', 'Awaiting governance review', 'test-admin');
+const pending = repo.updateStatus(testApplicationId, 'PENDING_REVIEW', 'Awaiting governance review', 'test-admin');
 assert(pending?.verificationStatus === 'Pending Verification', 'Pending review must not be Verified');
 assert(pending?.sellerStatus === 'Probation', 'Pending review must not be Active');
 
-const accessWhilePending = repo.getMerchantAccess('pi_artisan_hub');
+const accessWhilePending = repo.getMerchantAccess(testUsername);
 assert(accessWhilePending.canSell === false, 'Pending vendor must not be allowed to sell');
 assert(accessWhilePending.canReceivePstpOrders === false, 'Pending vendor must not receive PSTP orders');
 
-const approved = repo.updateStatus('VAPP-NG-9081', 'APPROVED', 'Governance approved', 'test-admin');
+const approved = repo.updateStatus(testApplicationId, 'APPROVED', 'Governance approved', 'test-admin');
 assert(approved?.verificationStatus === 'Verified', 'Approved vendor must become Verified');
 assert(approved?.sellerStatus === 'Active', 'Approved vendor must become Active');
 
-const accessAfterApproval = repo.getMerchantAccess('pi_artisan_hub');
+const accessAfterApproval = repo.getMerchantAccess(testUsername);
 assert(accessAfterApproval.canSell === true, 'Approved vendor must be allowed to sell');
 assert(accessAfterApproval.canReceivePstpOrders === true, 'Approved vendor with PSTP agreement must receive PSTP orders');
 
-const rejected = repo.updateStatus('VAPP-NG-9081', 'REJECTED', 'Verification rejected', 'test-admin');
+const rejected = repo.updateStatus(testApplicationId, 'REJECTED', 'Verification rejected', 'test-admin');
 assert(rejected?.verificationStatus === 'Unverified', 'Rejected vendor must become Unverified');
 assert(rejected?.sellerStatus === 'Suspended', 'Rejected vendor must be Suspended');
 
-const accessAfterRejection = repo.getMerchantAccess('pi_artisan_hub');
+const accessAfterRejection = repo.getMerchantAccess(testUsername);
 assert(accessAfterRejection.canSell === false, 'Rejected vendor must not be allowed to sell');
 assert(accessAfterRejection.canReceivePstpOrders === false, 'Rejected vendor must not receive PSTP orders');
-
-// Keep the seeded fixture in its original production-safe state after the suite.
-const restored = repo.updateStatus('VAPP-NG-9081', 'APPROVED', 'Seed fixture restored after lifecycle test', 'test-suite');
-assert(restored?.verificationStatus === 'Verified', 'Seed fixture must be restored to Verified');
-assert(restored?.sellerStatus === 'Active', 'Seed fixture must be restored to Active');
 
 console.log('Vendor governance lifecycle suite: PASS');
