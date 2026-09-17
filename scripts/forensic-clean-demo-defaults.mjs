@@ -14,7 +14,6 @@ const replacements = [
   [/buyerUsername\s*\|\|\s*['"]Pioneer_User['"]/g, "buyerUsername || ''"],
   [/pioneerUsername:\s*pioneerUsername\s*\|\|\s*['"]Pioneer_User['"]/g, "pioneerUsername: pioneerUsername || ''"],
   [/username:\s*username\s*\|\|\s*['"]pioneer_user['"]/g, "username: username || ''"],
-  [/uid:\s*uid\s*\|\|\s*`pi-uid-\$\{Date\.now\(\)\}`/g, "uid: uid || ''"],
   [/const buyerUsername = req\.user\?\.username \|\| req\.body\.buyerUsername \|\| ['"]Pioneer_User['"]/g, "const buyerUsername = req.user?.username || ''"],
   [/const sellerUsername = req\.body\.sellerUsername \|\| ['"]Seller_Merchant['"]/g, "const sellerUsername = req.body.sellerUsername || ''"],
 
