@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import { randomBytes } from 'crypto';
-import { ProductRepository } from '../src/server/db';
-import { authService } from '../src/server/auth';
+import { ProductRepository } from '../src/server/db/repositories/ProductRepository.ts';
+import { authService } from '../src/server/auth/index.ts';
 import type { Product } from '../src/types';
 
 const productRepo = new ProductRepository();
