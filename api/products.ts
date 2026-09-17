@@ -1,9 +1,16 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import { randomBytes } from 'crypto';
-import { ProductRepository } from '../src/server/db/repositories/ProductRepository.ts';
 import type { Product } from '../src/types';
 
-const productRepo = new ProductRepository();
+type ProductRepo = import('../src/server/db/repositories/ProductRepository.ts').ProductRepository;
+let productRepo: ProductRepo | null = null;
+
+async function getProductRepo(): Promise<ProductRepo> {
+  if (productRepo) return productRepo;
+  const { ProductRepository } = await import('../src/server/db/repositories/ProductRepository.ts');
+  productRepo = new ProductRepository();
+  return productRepo;
+}
 
 function json(res: ServerResponse, status: number, body: unknown) {
   res.statusCode = status;
@@ -32,8 +39,6 @@ async function readJson(req: IncomingMessage): Promise<Record<string, any>> {
 async function authenticate(req: IncomingMessage) {
   const token = bearer(req);
   if (!token) return null;
-  // Keep the authentication/security dependency out of the module's top-level
-  // initialization so public GET requests cannot crash on auth repository startup.
   const { authService } = await import('../src/server/auth/index.ts');
   return authService.authenticateToken(token);
 }
@@ -50,10 +55,11 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     const path = url.pathname
       .replace(/^\/api\/(?:v1\/)?products\/?/, '')
       .replace(/\/$/, '');
+    const repo = await getProductRepo();
 
     if (req.method === 'GET') {
       if (path) {
-        const product = productRepo.findById(path);
+        const product = repo.findById(path);
         if (!product || product.isActive !== true) {
           return json(res, 404, { ok: false, error: 'PRODUCT_NOT_FOUND' });
         }
@@ -63,8 +69,8 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       const q = url.searchParams.get('q') || '';
       const category = url.searchParams.get('category') || undefined;
       const products = q
-        ? productRepo.search(q, { activeOnly: true, category: category as Product['category'] | undefined })
-        : productRepo.getAll({ activeOnly: true, category: category as Product['category'] | undefined });
+        ? repo.search(q, { activeOnly: true, category: category as Product['category'] | undefined })
+        : repo.getAll({ activeOnly: true, category: category as Product['category'] | undefined });
       return json(res, 200, { ok: true, products });
     }
 
@@ -98,12 +104,12 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         isActive: false,
         moderationStatus: 'PENDING_REVIEW'
       };
-      const saved = productRepo.save(product);
+      const saved = repo.save(product);
       return json(res, 201, { ok: true, product: saved });
     }
 
     if ((req.method === 'PATCH' || req.method === 'DELETE') && path) {
-      const existing = productRepo.findById(path);
+      const existing = repo.findById(path);
       if (!existing) return json(res, 404, { ok: false, error: 'PRODUCT_NOT_FOUND' });
 
       const roles = Array.isArray(user.roles) ? user.roles : [];
@@ -113,13 +119,13 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       }
 
       if (req.method === 'DELETE') {
-        productRepo.softDelete(path);
+        repo.softDelete(path);
         return json(res, 200, { ok: true, deleted: true });
       }
 
       const body = await readJson(req);
       const { id: _id, sellerId: _sellerId, sellerName: _sellerName, sellerVerified: _sellerVerified, rating: _rating, reviewsCount: _reviewsCount, isActive: _isActive, moderationStatus: _moderationStatus, ...safePatch } = body;
-      const updated = productRepo.save({
+      const updated = repo.save({
         ...existing,
         ...safePatch,
         id: existing.id,
@@ -137,7 +143,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     return json(res, 405, { ok: false, error: 'METHOD_NOT_ALLOWED' });
   } catch (error) {
     console.error('[products-api]', error);
-    return json(res, 400, {
+    return json(res, 500, {
       ok: false,
       error: error instanceof Error ? error.message : 'PRODUCT_API_FAILED'
     });
