@@ -12,7 +12,7 @@ const replacements = [
   [/return 250\.00;/g, 'return 0;'],
   [/buyerUsername\s*=\s*['"]Pioneer_User['"]/g, "buyerUsername = ''"],
   [/buyerUsername\s*\|\|\s*['"]Pioneer_User['"]/g, "buyerUsername || ''"],
-  [/pioneerUsername:\s*pioneerUsername\s*\|\|\s*['"]Pioneer_User['"]/g, "pioneerUsername: pioneerUsername || ''"],
+  [/pioneerUsername:\s*pioneerUsername\s*\|\|\s*['"]pioneer_user['"]/g, "pioneerUsername: pioneerUsername || ''"],
   [/username:\s*username\s*\|\|\s*['"]pioneer_user['"]/g, "username: username || ''"],
   [/const buyerUsername = req\.user\?\.username \|\| req\.body\.buyerUsername \|\| ['"]Pioneer_User['"]/g, "const buyerUsername = req.user?.username || ''"],
   [/const sellerUsername = req\.body\.sellerUsername \|\| ['"]Seller_Merchant['"]/g, "const sellerUsername = req.body.sellerUsername || ''"],
@@ -81,6 +81,19 @@ const replacements = [
   [/rating: 5\.0,/g, 'rating: 0,'],
   [/features: \[['"]Official Pi Platform Order Protection['"], ['"]Express Courier Delivery['"], ['"]Quality Guaranteed['"]\]/g, 'features: []'],
   [/tags: \[newProdCat, newProdSubcat, ['"]Merchant Featured['"]\]/g, 'tags: [newProdCat, newProdSubcat]'],
+
+  // Seller Studio product creation: preserve the existing component, but route persistence through
+  // the authenticated server API. The server remains authoritative for seller identity and moderation.
+  [/import \{ formatPiAmount \} from ['"]\.\/utils\/formatters['"];\n/g, "import { formatPiAmount } from './utils/formatters';\nimport { createSellerProduct } from './lib/productApi';\n"],
+  [/onAddProduct=\{\(newProd\) => setProducts\(\(prev\) => \[newProd, \.\.\.prev\]\)\}/g,
+    `onAddProduct={async (newProd) => {
+              const result = await createSellerProduct(newProd);
+              if (!result.ok || !result.product) {
+                console.error('Seller product creation failed:', result.error);
+                return;
+              }
+              setProducts((prev) => [result.product!, ...prev]);
+            }}`],
 
   // Verification state must not manufacture a compliance record from a filename-only form.
   [/if \(!docFileName\) return;/g, "if (!docFileName || !docFileName.trim()) return;"],
