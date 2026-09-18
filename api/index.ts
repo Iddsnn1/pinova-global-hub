@@ -1,8 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import { createRequire } from 'module';
 import path from 'path';
-import { authService } from '../src/server/auth/index.ts';
-import { VendorApplicationRepository } from '../src/server/db/repositories/VendorApplicationRepository.ts';
 
 // Ensure serverless environment flag is set before loading server module
 process.env.VERCEL = process.env.VERCEL || '1';
@@ -69,6 +67,7 @@ async function handleVendorStatus(req: IncomingMessage, res: ServerResponse): Pr
   }
 
   try {
+    const { authService, VendorApplicationRepository } = getServerDependencies();
     const user = await authService.authenticateToken(token);
     if (!user?.username) {
       res.statusCode = 401;
@@ -115,6 +114,20 @@ async function handleVendorStatus(req: IncomingMessage, res: ServerResponse): Pr
 }
 
 let cachedApp: any = null;
+let cachedDependencies: any = null;
+
+function getServerDependencies() {
+  if (cachedDependencies) return cachedDependencies;
+  const mod = getApp();
+  cachedDependencies = {
+    authService: mod.authService,
+    VendorApplicationRepository: mod.VendorApplicationRepository
+  };
+  if (!cachedDependencies.authService || !cachedDependencies.VendorApplicationRepository) {
+    throw new Error('Bundled server dependencies are unavailable');
+  }
+  return cachedDependencies;
+}
 
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
   const reqUrl = req.url || '';
