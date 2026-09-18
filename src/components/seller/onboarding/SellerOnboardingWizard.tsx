@@ -42,9 +42,31 @@ export const SellerOnboardingWizard: React.FC<SellerOnboardingWizardProps> = ({
   const [storeBio, setStoreBio] = useState('');
   const [category, setCategory] = useState(resolveMarketplaceCategory('electronics'));
   const [sellerType, setSellerType] = useState<'individual' | 'business'>('individual');
-  const [country, setCountry] = useState('Global');
+  const [countryCode, setCountryCode] = useState('');
+  const [country, setCountry] = useState('');
   const [stateRegion, setStateRegion] = useState('');
   const [city, setCity] = useState('');
+
+  const countryOptions = React.useMemo(() => {
+    const fallback = [
+      ['NG', 'Nigeria'], ['GH', 'Ghana'], ['KE', 'Kenya'], ['ZA', 'South Africa'],
+      ['EG', 'Egypt'], ['RW', 'Rwanda'], ['UG', 'Uganda'], ['TZ', 'Tanzania'],
+      ['US', 'United States'], ['GB', 'United Kingdom'], ['CA', 'Canada']
+    ] as Array<[string, string]>;
+    try {
+      const regions = typeof Intl.supportedValuesOf === 'function'
+        ? Intl.supportedValuesOf('region').filter((code) => /^[A-Z]{2}$/.test(code))
+        : [];
+      const names = new Intl.DisplayNames(['en'], { type: 'region' });
+      const options = regions
+        .map((code) => [code, names.of(code) || code] as [string, string])
+        .filter(([, name]) => Boolean(name))
+        .sort((a, b) => a[1].localeCompare(b[1]));
+      return options.length ? options : fallback;
+    } catch {
+      return fallback;
+    }
+  }, []);
   const [email, setEmail] = useState(`${userUsername}@pinova.network`);
   const [phone, setPhone] = useState('');
 
@@ -188,8 +210,8 @@ export const SellerOnboardingWizard: React.FC<SellerOnboardingWizardProps> = ({
 
   // Final Step: Submit Application
   const handleFinalSubmit = async () => {
-    if (!storeName.trim() || !email.trim()) {
-      setSubmitError('Store name and contact email are required.');
+    if (!storeName.trim() || !email.trim() || !countryCode) {
+      setSubmitError('Store name, contact email, and country are required.');
       setCurrentStep(1);
       return;
     }
@@ -209,9 +231,9 @@ export const SellerOnboardingWizard: React.FC<SellerOnboardingWizardProps> = ({
         storeDescription: storeBio.trim(),
         sellerType,
         country,
-        countryCode: country.slice(0, 2).toUpperCase(),
-        stateRegion,
-        city,
+        countryCode,
+        stateRegion: stateRegion.trim(),
+        city: city.trim(),
         contactEmail: email.trim(),
         contactPhone: phone.trim(),
         storeLogo: logoUrl || undefined,
@@ -386,23 +408,43 @@ export const SellerOnboardingWizard: React.FC<SellerOnboardingWizardProps> = ({
                   <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1">
                     Country *
                   </label>
+                  <select
+                    value={countryCode}
+                    onChange={(e) => {
+                      const code = e.target.value;
+                      setCountryCode(code);
+                      setCountry(countryOptions.find(([value]) => value === code)?.[1] || '');
+                    }}
+                    required
+                    className="w-full px-3 py-2 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-neutral-50/50 dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100"
+                  >
+                    <option value="">Select country</option>
+                    {countryOptions.map(([code, name]) => (
+                      <option key={code} value={code}>{name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1">
+                    State / Region
+                  </label>
                   <input
                     type="text"
-                    value={country}
-                    onChange={(e) => setCountry(e.target.value)}
-                    placeholder="e.g. Kenya, Nigeria, USA"
+                    value={stateRegion}
+                    onChange={(e) => setStateRegion(e.target.value)}
+                    placeholder="e.g. Kano State, Ontario"
                     className="w-full px-3 py-2 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-neutral-50/50 dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100"
                   />
                 </div>
                 <div>
                   <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1">
-                    City / Region
+                    City
                   </label>
                   <input
                     type="text"
                     value={city}
                     onChange={(e) => setCity(e.target.value)}
-                    placeholder="e.g. Nairobi, Lagos"
+                    placeholder="e.g. Kano, Lagos, Toronto"
                     className="w-full px-3 py-2 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-neutral-50/50 dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100"
                   />
                 </div>
