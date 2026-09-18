@@ -32,11 +32,29 @@ export default async function handler(req: any, res: any) {
 
   const body = req.body || {};
   const csv = typeof body.csv === 'string' ? body.csv : '';
+  const importType = body.importType === 'inventory' ? 'inventory' : 'products';
   if (!csv || Buffer.byteLength(csv, 'utf8') > 10 * 1024 * 1024) return res.status(400).json({ ok: false, error: 'INVALID_CSV' });
 
   const rows = parseCsv(csv);
   if (rows.length < 2) return res.status(400).json({ ok: false, error: 'CSV_DATA_ROWS_REQUIRED' });
   const headers = rows[0].map(h => h.trim().toLowerCase());
+  if (importType === 'inventory') {
+    const productIdIndex = headers.indexOf('productid');
+    const stockIndex = headers.indexOf('stockonhand');
+    if (productIdIndex < 0 || stockIndex < 0) return res.status(400).json({ ok: false, error: 'REQUIRED_COLUMNS_MISSING', required: ['productId', 'stockOnHand'] });
+    const updated: any[] = [], errors: string[] = [];
+    for (let i = 1; i < rows.length; i++) {
+      const productId = String(rows[i][productIdIndex] || '').trim();
+      const stock = Number(rows[i][stockIndex]);
+      if (!productId || !Number.isInteger(stock) || stock < 0) { errors.push(`Row ${i + 1}: invalid productId or stockOnHand.`); continue; }
+      const product = repo.findById(productId);
+      if (!product || product.sellerId !== user.username) { errors.push(`Row ${i + 1}: product not found or not owned by this merchant.`); continue; }
+      const next = repo.updateAvailability(productId, stock > 0 ? 'in_stock' : 'out_of_stock', stock);
+      if (next) updated.push(next); else errors.push(`Row ${i + 1}: inventory update failed.`);
+    }
+    try { await pstpAuditRepo.append({ actor: user.username, action: 'MERCHANT_BULK_INVENTORY_UPDATE', resourceType: 'merchant_catalog', resourceId: user.username, details: { updatedCount: updated.length, errorCount: errors.length } }); } catch {}
+    return res.status(201).json({ ok: true, importedCount: updated.length, errorCount: errors.length, errors, products: updated });
+  }
   const titleIndex = headers.indexOf('title');
   const descriptionIndex = headers.indexOf('description');
   const priceIndex = headers.indexOf('pricepi');
