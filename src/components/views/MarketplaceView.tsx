@@ -273,6 +273,36 @@ export const MarketplaceView: React.FC<MarketplaceViewProps> = ({
     return categoryProducts
       .filter((p) => {
         if (!p) return false;
+
+        // Apply the same canonical 18-category taxonomy used by the marketplace filter.
+        if (categoryFilters.category !== 'all') {
+          const selectedDef = getMarketplaceCategoryDef(categoryFilters.category);
+          const canonical = resolveMarketplaceCategory(categoryFilters.category).toLowerCase();
+          const categoryText = String(p.category || '').toLowerCase();
+          const subcategoryText = String(p.subcategory || '').toLowerCase();
+          const titleText = String(p.title || '').toLowerCase();
+          const tagTexts = Array.isArray(p.tags) ? p.tags.filter((t): t is string => typeof t === 'string').map((t) => t.toLowerCase()) : [];
+          const selectedName = String(selectedDef?.name || '').toLowerCase();
+          const categoryMatch =
+            categoryText === canonical ||
+            categoryText.includes(canonical) ||
+            categoryText.includes(selectedName) ||
+            selectedName.includes(categoryText) ||
+            subcategoryText.includes(selectedName) ||
+            titleText.includes(selectedName) ||
+            tagTexts.some((tag) => tag.includes(canonical) || tag.includes(selectedName));
+          if (!categoryMatch) return false;
+
+          if (categoryFilters.subcategory) {
+            const sub = categoryFilters.subcategory.toLowerCase();
+            const subMatch =
+              subcategoryText.includes(sub) ||
+              titleText.includes(sub) ||
+              tagTexts.some((tag) => tag.includes(sub));
+            if (!subMatch) return false;
+          }
+        }
+
         const matchesPrice = p.pricePi <= categoryFilters.maxPrice;
         const matchesRating = p.rating >= categoryFilters.minRating;
         const matchesVerified = !categoryFilters.verifiedOnly || p.sellerVerified;
