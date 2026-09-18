@@ -1,9 +1,8 @@
 import crypto from 'crypto';
-import { getBundledServer, authenticateRequest } from '../src/server/services/DurableVendorAuth';
-import { getDurableVendorApplication, durableVendorStorageEnabled } from '../src/server/services/DurableVendorApplicationStore';
+import { authenticateVendorRequest as authenticateRequest, getDurableVendorApplication, durableVendorStorageEnabled, ProductRepository } from '../dist/server.cjs';
 
 export default async function handler(req: any, res: any) {
-  const server = getBundledServer();
+  const server = { ProductRepository };
   if (req.method === 'GET') {
     const repo = new server.ProductRepository();
     const q = typeof req.query?.q === 'string' ? req.query.q : '';
