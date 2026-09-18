@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { vendorAuthenticatedFetch } from '../../../lib/vendorAuthBridge';
 import { 
   FileSpreadsheet, 
   UploadCloud, 
@@ -83,80 +84,26 @@ export const BulkCsvToolsTab: React.FC<BulkCsvToolsTabProps> = ({
     if (!selectedFile) return;
     setIsProcessing(true);
     setParseResult(null);
-
     try {
-      const text = await selectedFile.text();
-      const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-
-      if (lines.length <= 1) {
-        setParseResult({
-          success: false,
-          importedCount: 0,
-          errors: ['CSV file does not contain any data rows.']
-        });
-        setIsProcessing(false);
-        return;
-      }
-
-      // Simple parser for demonstration
-      const headers = lines[0].split(',').map(h => h.trim().replace(/^["']|["']$/g, '').toLowerCase());
-      const titleIndex = headers.findIndex(h => h.includes('title'));
-      const priceIndex = headers.findIndex(h => h.includes('price'));
-      const stockIndex = headers.findIndex(h => h.includes('stock'));
-      const catIndex = headers.findIndex(h => h.includes('cat'));
-
-      if (titleIndex === -1) {
-        setParseResult({
-          success: false,
-          importedCount: 0,
-          errors: ['Required column "title" missing from CSV header.']
-        });
-        setIsProcessing(false);
-        return;
-      }
-
-      let count = 0;
-      for (let i = 1; i < lines.length; i++) {
-        // basic CSV comma split respecting quotes
-        const rawRow = lines[i];
-        const cols = rawRow.split(',').map(c => c.trim().replace(/^["']|["']$/g, ''));
-        const title = cols[titleIndex] || '';
-        const price = priceIndex !== -1 ? parseFloat(cols[priceIndex]) || 1 : 1;
-        const stock = stockIndex !== -1 ? parseInt(cols[stockIndex]) || 0 : 5;
-        const category = catIndex !== -1 ? cols[catIndex] || 'physical' : 'physical';
-
-        if (title.trim() && onAddProduct) {
-          onAddProduct({
-            title: title.trim(),
-            description: 'Imported via bulk CSV merchant batch upload.',
-            pricePi: Math.max(0.01, price),
-            category: category as any,
-            subcategory: 'General',
-            stock: Math.max(0, stock),
-            images: [],
-            sellerId: 'current_merchant',
-            sellerName: 'Verified Merchant',
-            sellerVerified: true,
-            features: ['Bulk Imported', 'PSTP Escrow Protected'],
-            tags: ['bulk_import', 'catalog']
-          });
-          count++;
-        }
-      }
-
+      if (selectedFile.size > 10 * 1024 * 1024) throw new Error('CSV file exceeds the 10 MB limit.');
+      const csv = await selectedFile.text();
+      const response = await vendorAuthenticatedFetch('/api/products-bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ csv })
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(data?.message || data?.error || 'Server rejected the bulk import.');
+      const errors = Array.isArray(data?.errors) ? data.errors : [];
       setParseResult({
-        success: true,
-        importedCount: count,
-        errors: []
+        success: Number(data?.importedCount || 0) > 0 && errors.length === 0,
+        importedCount: Number(data?.importedCount || 0),
+        errors: errors.length ? errors : []
       });
       setSelectedFile(null);
       if (fileInputRef.current) fileInputRef.current.value = '';
     } catch (err: any) {
-      setParseResult({
-        success: false,
-        importedCount: 0,
-        errors: [err.message || 'Failed to read CSV file.']
-      });
+      setParseResult({ success: false, importedCount: 0, errors: [err?.message || 'Failed to process CSV file.'] });
     } finally {
       setIsProcessing(false);
     }
@@ -271,7 +218,7 @@ export const BulkCsvToolsTab: React.FC<BulkCsvToolsTabProps> = ({
               {selectedFile ? selectedFile.name : 'Click or drop a CSV file here'}
             </span>
             <span className="text-[11px] text-neutral-400 block mt-1">
-              Supports .csv up to 10 MB
+              Supports .csv up to 10 MB • Product imports are server-validated and enter moderation review
             </span>
           </div>
 
