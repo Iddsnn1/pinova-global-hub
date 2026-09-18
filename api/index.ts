@@ -1,8 +1,8 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import { createRequire } from 'module';
 import path from 'path';
-import { authService } from '../src/server/auth/index';
-import { VendorApplicationRepository } from '../src/server/db/repositories/VendorApplicationRepository';
+import { authService } from '../src/server/auth/index.ts';
+import { VendorApplicationRepository } from '../src/server/db/repositories/VendorApplicationRepository.ts';
 
 // Ensure serverless environment flag is set before loading server module
 process.env.VERCEL = process.env.VERCEL || '1';
