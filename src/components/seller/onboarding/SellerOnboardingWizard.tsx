@@ -19,7 +19,7 @@ import {
   Mail,
   Phone
 } from 'lucide-react';
-import { vendorAuthenticatedFetch, getVendorAuthHeaders } from '../../../lib/vendorAuthBridge';
+import { vendorAuthenticatedFetch } from '../../../lib/vendorAuthBridge';
 
 interface SellerOnboardingWizardProps {
   userUsername: string;
@@ -104,12 +104,9 @@ export const SellerOnboardingWizard: React.FC<SellerOnboardingWizardProps> = ({
 
     try {
       const buffer = await file.arrayBuffer();
-      const authHeaders = getVendorAuthHeaders();
-
-      const res = await fetch('/api/vendor/branding-upload', {
+      const res = await vendorAuthenticatedFetch('/api/vendor/branding-upload', {
         method: 'POST',
         headers: {
-          ...authHeaders,
           'Content-Type': file.type,
           'X-Asset-Type': assetType === 'logo' ? 'storeLogo' : 'storeBanner',
           'X-Filename': encodeURIComponent(file.name)
@@ -153,12 +150,9 @@ export const SellerOnboardingWizard: React.FC<SellerOnboardingWizardProps> = ({
 
     try {
       const buffer = await selectedFile.arrayBuffer();
-      const authHeaders = getVendorAuthHeaders();
-
-      const res = await fetch('/api/vendor/document-upload', {
+      const res = await vendorAuthenticatedFetch('/api/vendor/document-upload', {
         method: 'POST',
         headers: {
-          ...authHeaders,
           'Content-Type': selectedFile.type,
           'X-Filename': encodeURIComponent(selectedFile.name),
           'X-Document-Type': docType,
