@@ -21,6 +21,7 @@ function parseCsv(input: string): string[][] {
   return rows;
 }
 
+// Server-authoritative bulk import endpoint.
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'METHOD_NOT_ALLOWED' });
   if (!durableVendorStorageEnabled()) return res.status(503).json({ ok: false, error: 'DURABLE_VENDOR_STORAGE_UNAVAILABLE' });
