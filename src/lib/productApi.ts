@@ -1,5 +1,6 @@
 import type { Product } from '../types';
 import { safeFetchJson } from './safeFetch';
+import { vendorAuthenticatedFetch, getVendorAuthHeaders } from './vendorAuthBridge';
 
 export interface ProductApiResult {
   ok: boolean;
@@ -8,28 +9,7 @@ export interface ProductApiResult {
   error?: string;
 }
 
-function getStoredSessionToken(): string | null {
-  try {
-    return (
-      localStorage.getItem('auth_token') ||
-      localStorage.getItem('pinova_token') ||
-      localStorage.getItem('pi_auth_token')
-    );
-  } catch {
-    return null;
-  }
-}
-
-function authHeaders(): Record<string, string> | null {
-  const token = getStoredSessionToken();
-  return token ? { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } : null;
-}
-
 export async function createSellerProduct(input: Partial<Product>): Promise<ProductApiResult> {
-  const headers = authHeaders();
-  if (!headers) {
-    return { ok: false, status: 401, error: 'AUTHENTICATION_REQUIRED' };
-  }
 
   // Seller identity, activation, moderation state, rating and product id are server-owned.
   // Do not persist client-generated demo metadata or placeholder media.
@@ -37,7 +17,7 @@ export async function createSellerProduct(input: Partial<Product>): Promise<Prod
     '/api/products',
     {
       method: 'POST',
-      headers,
+      headers: { ...getVendorAuthHeaders(), 'Content-Type': 'application/json' },
       body: JSON.stringify({
         title: input.title || '',
         description: input.description || '',
@@ -73,12 +53,9 @@ export async function updateSellerProduct(
   productId: string,
   patch: Partial<Product>
 ): Promise<ProductApiResult> {
-  const headers = authHeaders();
-  if (!headers) return { ok: false, status: 401, error: 'AUTHENTICATION_REQUIRED' };
-
   const result = await safeFetchJson<{ ok?: boolean; product?: Product; error?: string }>(
     `/api/products/${encodeURIComponent(productId)}`,
-    { method: 'PATCH', headers, body: JSON.stringify(patch) }
+    { method: 'PATCH', headers: { ...getVendorAuthHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify(patch) }
   );
 
   if (!result.ok || !result.data?.product) {
@@ -93,12 +70,9 @@ export async function updateSellerProduct(
 }
 
 export async function deleteSellerProduct(productId: string): Promise<ProductApiResult> {
-  const headers = authHeaders();
-  if (!headers) return { ok: false, status: 401, error: 'AUTHENTICATION_REQUIRED' };
-
   const result = await safeFetchJson<{ ok?: boolean; error?: string }>(
     `/api/products/${encodeURIComponent(productId)}`,
-    { method: 'DELETE', headers }
+    { method: 'DELETE', headers: getVendorAuthHeaders() }
   );
 
   if (!result.ok) {
