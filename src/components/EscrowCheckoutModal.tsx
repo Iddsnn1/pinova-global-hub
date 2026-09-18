@@ -135,7 +135,10 @@ export const EscrowCheckoutModal: React.FC<EscrowCheckoutModalProps> = ({
 
           fetch(`/api/v1/orders/${encodeURIComponent(generatedOrderId)}/payment-verify`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${accessToken}`
+            },
             body: JSON.stringify({ paymentId, txid })
           })
             .then(async (verifyRes) => {
