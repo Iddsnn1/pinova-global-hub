@@ -196,16 +196,16 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
     existingVendor || {
       id: userUsername || 'vendor_current',
       sellerUsername: userUsername,
-      storeName: serverStatus.storeName || `${user?.username || 'Pioneer'}'s Store`,
-      bio: 'Official verified PiNova Merchant Store.',
-      rating: 5.0,
+      storeName: serverStatus.storeName || 'Merchant Store',
+      bio: '',
+      rating: 0,
       reviewsCount: 0,
       verified: false,
       totalSalesPi: 0,
-      bannerImage: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=1200&q=80',
-      logoImage: 'https://images.unsplash.com/photo-1472851294608-062f824d29cc?auto=format&fit=crop&w=400&q=80',
-      joinedDate: '2025-01-01',
-      shippingCountries: ['Global']
+      bannerImage: '',
+      logoImage: '',
+      joinedDate: '',
+      shippingCountries: []
     }
   );
 
