@@ -5530,6 +5530,6 @@ if (!isVercelServerless) {
   });
 }
 
-export { authService, vendorApplicationRepo, ProductRepository };
+export { authService, vendorApplicationRepo, ProductRepository, pstpAuditRepo };
 export { VendorApplicationRepository } from './src/server/db/repositories/VendorApplicationRepository';
 export default app;
