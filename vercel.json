@@ -18,15 +18,15 @@
     },
     {
       "source": "/api/v1/products",
-      "destination": "/api/products-durable"
+      "destination": "/api/index?__path=/products"
     },
     {
       "source": "/api/v1/products/(.*)",
-      "destination": "/api/products-durable"
+      "destination": "/api/index?__path=/products"
     },
     {
       "source": "/api/products",
-      "destination": "/api/products-durable"
+      "destination": "/api/index?__path=/products"
     },
     {
       "source": "/api/vendor/apply",
