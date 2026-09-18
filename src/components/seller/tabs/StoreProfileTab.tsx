@@ -37,10 +37,10 @@ export const StoreProfileTab: React.FC<StoreProfileTabProps> = ({
     initialApplication?.sellerType || 'individual'
   );
   const [category, setCategory] = useState(
-    resolveMarketplaceCategory(initialApplication?.categoriesToSell?.[0] || 'electronics')
+    initialApplication?.categoriesToSell?.[0] ? resolveMarketplaceCategory(initialApplication.categoriesToSell[0]) : ''
   );
   const [country, setCountry] = useState(
-    initialApplication?.country || vendorProfile.country || 'Global'
+    initialApplication?.country || vendorProfile.country || ''
   );
   const [stateRegion, setStateRegion] = useState(
     initialApplication?.stateRegion || ''
@@ -49,7 +49,7 @@ export const StoreProfileTab: React.FC<StoreProfileTabProps> = ({
     initialApplication?.city || ''
   );
   const [contactEmail, setContactEmail] = useState(
-    initialApplication?.contactEmail || vendorProfile.contactEmail || `${userUsername}@pinova.network`
+    initialApplication?.contactEmail || vendorProfile.contactEmail || ''
   );
   const [contactPhone, setContactPhone] = useState(
     initialApplication?.contactPhone || vendorProfile.contactPhone || ''
@@ -102,10 +102,10 @@ export const StoreProfileTab: React.FC<StoreProfileTabProps> = ({
         // Preserve existing documents & policies
         documents: initialApplication?.documents || [],
         policies: initialApplication?.policies || {
-          returnRefundPolicy: 'Standard 7-Day return under PSTP Escrow guidelines.',
-          deliveryShippingPolicy: 'Prompt tracked dispatch within 48 hours.'
+          returnRefundPolicy: '',
+          deliveryShippingPolicy: ''
         },
-        pstpAgreementAccepted: true
+        pstpAgreementAccepted: Boolean(initialApplication?.pstpAgreementAccepted)
       };
 
       const res = await vendorAuthenticatedFetch('/api/vendor/apply', {
