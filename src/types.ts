@@ -400,6 +400,8 @@ export interface Coupon {
   minSpendPi: number;
   active: boolean;
   expiresAt: string;
+  sellerUsername?: string;
+  storeName?: string | null;
 }
 
 export interface Notification {
