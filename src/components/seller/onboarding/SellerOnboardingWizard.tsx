@@ -45,15 +45,13 @@ export const SellerOnboardingWizard: React.FC<SellerOnboardingWizardProps> = ({
   const [sellerType, setSellerType] = useState<'individual' | 'business'>('individual');
   const [countryCode, setCountryCode] = useState('');
   const [country, setCountry] = useState('');
-  const [stateRegion, setSt  const countryOptions = React.useMemo(() => {
+  const [stateRegion, setStateRegion] = useState('');
+  const [city, setCity] = useState('');
+
+  const countryOptions = React.useMemo(() => {
     return ALL_GLOBAL_COUNTRIES
       .map((country) => [country.code, country.name] as [string, string])
       .sort((a, b) => a[1].localeCompare(b[1]));
-  }, []);
-ns : fallback;
-    } catch {
-      return fallback;
-    }
   }, []);
   const [email, setEmail] = useState(`${userUsername}@pinova.network`);
   const [phone, setPhone] = useState('');
