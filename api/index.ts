@@ -1,6 +1,8 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import { createRequire } from 'module';
 import path from 'path';
+import crypto from 'crypto';
+import { authenticateVendorRequest as authenticateRequest, getDurableVendorApplication, durableVendorStorageEnabled, ProductRepository } from '../dist/server.cjs';
 
 // Ensure serverless environment flag is set before loading server module
 process.env.VERCEL = process.env.VERCEL || '1';
@@ -35,6 +37,47 @@ function getBearerToken(req: IncomingMessage): string | null {
   const raw = Array.isArray(req.headers.authorization) ? req.headers.authorization[0] : req.headers.authorization;
   if (!raw) return null;
   return raw.startsWith('Bearer ') ? raw.slice(7).trim() : raw.trim();
+}
+
+async function handleDurableProducts(req: any, res: any): Promise<boolean> {
+  const pathname = new URL(req.url || '/', 'http://localhost').pathname;
+  if (pathname !== '/api/products' && pathname !== '/api/v1/products' && !pathname.startsWith('/api/v1/products/')) return false;
+
+  const repo = new ProductRepository();
+  if (req.method === 'GET') {
+    const parsed = new URL(req.url || '/', 'http://localhost');
+    const q = parsed.searchParams.get('q') || '';
+    const category = parsed.searchParams.get('category') || undefined;
+    const products = q ? repo.search(q, { activeOnly: true, category }) : repo.getAll({ activeOnly: true, category });
+    return res.json({ ok: true, products });
+  }
+  if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'METHOD_NOT_ALLOWED' });
+  if (!durableVendorStorageEnabled()) return res.status(503).json({ ok: false, error: 'DURABLE_VENDOR_STORAGE_UNAVAILABLE' });
+  const user = await authenticateRequest(req);
+  if (!user?.username) return res.status(401).json({ ok: false, error: 'INVALID_SESSION' });
+  const merchant = await getDurableVendorApplication(user.username);
+  const canSell = merchant?.status === 'APPROVED' && merchant.verificationStatus === 'Verified' && merchant.sellerStatus === 'Active';
+  if (!canSell) return res.status(403).json({ ok: false, error: 'MERCHANT_SELLER_ACCESS_REQUIRED' });
+
+  const body = req.body || {};
+  const stock = Number.isInteger(body.stock) && body.stock >= 0 ? body.stock : 0;
+  const title = String(body.title || '').trim();
+  const description = String(body.description || '').trim();
+  const pricePi = Number(body.pricePi ?? 0);
+  if (!title || !description || !Number.isFinite(pricePi) || pricePi < 0) return res.status(400).json({ ok: false, error: 'INVALID_PRODUCT_INPUT' });
+
+  const product = {
+    id: `prd_${Date.now()}_${crypto.randomBytes(5).toString('hex')}`, title, description, pricePi,
+    category: body.category || 'physical', subcategory: String(body.subcategory || ''),
+    images: Array.isArray(body.images) ? body.images.filter(Boolean) : [], stock, rating: 0, reviewsCount: 0,
+    sellerId: String(user.username).trim(), sellerName: String(user.username).trim(), sellerVerified: true,
+    features: Array.isArray(body.features) ? body.features.filter(Boolean) : [], specs: body.specs,
+    productType: body.productType, fulfillmentType: body.fulfillmentType,
+    availabilityStatus: body.availabilityStatus || (stock > 0 ? 'in_stock' : 'out_of_stock'),
+    tags: Array.isArray(body.tags) ? body.tags.filter(Boolean) : [], isActive: false, moderationStatus: 'PENDING_REVIEW'
+  };
+  const saved = repo.save(product as any);
+  return res.status(201).json({ ok: true, product: saved });
 }
 
 async function handleVendorStatus(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
