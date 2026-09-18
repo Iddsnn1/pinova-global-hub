@@ -1,4 +1,4 @@
-import { getAuthenticatedPiUser } from './piSdk';
+import { getAuthenticatedPiUser, PiSdkManager } from './piSdk';
 
 /**
  * Server-Authoritative Vendor Authentication Bridge
@@ -122,8 +122,27 @@ export async function ensureServerSession(forceRefresh: boolean = false): Promis
   let username = 'pioneer_user';
   let uid = `pi-uid-${Date.now()}`;
 
-  // 1. Attempt window.Pi.authenticate() if available
-  if (typeof window !== 'undefined' && window.Pi && typeof window.Pi.authenticate === 'function') {
+  // 1. Reuse the canonical Pi SDK manager first. This preserves an already
+  // authenticated Pioneer session and avoids launching a second native
+  // Pi.authenticate() call from the vendor flow.
+  try {
+    const managedUser = getAuthenticatedPiUser() || await PiSdkManager.authenticate(
+      ['username', 'payments'],
+      undefined,
+      false
+    );
+    if (managedUser?.accessToken) {
+      rawAccessToken = managedUser.accessToken;
+      if (managedUser.username) username = managedUser.username;
+      if (managedUser.uid) uid = managedUser.uid;
+    }
+  } catch (piAuthErr) {
+    console.warn('[vendorAuthBridge] canonical Pi SDK authentication unavailable:', piAuthErr);
+  }
+
+  // 2. Fallback to the raw Pi SDK only when the canonical manager could not
+  // provide a verified active user.
+  if (!rawAccessToken && typeof window !== 'undefined' && window.Pi && typeof window.Pi.authenticate === 'function') {
     try {
       const authResult = await window.Pi.authenticate(
         ['username', 'payments'],
@@ -137,17 +156,7 @@ export async function ensureServerSession(forceRefresh: boolean = false): Promis
         if (authResult.user?.uid) uid = authResult.user.uid;
       }
     } catch (piAuthErr) {
-      console.warn('[vendorAuthBridge] window.Pi.authenticate encountered an issue:', piAuthErr);
-    }
-  }
-
-  // 2. Fallback to active Pi user state if window.Pi.authenticate was not invoked or succeeded
-  if (!rawAccessToken) {
-    const piUser = getAuthenticatedPiUser();
-    if (piUser?.accessToken) {
-      rawAccessToken = piUser.accessToken;
-      if (piUser.username) username = piUser.username;
-      if (piUser.uid) uid = piUser.uid;
+      console.warn('[vendorAuthBridge] raw window.Pi.authenticate encountered an issue:', piAuthErr);
     }
   }
 
