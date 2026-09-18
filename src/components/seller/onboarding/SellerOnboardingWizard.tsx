@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { vendorAuthenticatedFetch } from '../../../lib/vendorAuthBridge';
 import { MARKETPLACE_CATEGORIES, resolveMarketplaceCategory } from '../../../data/categoryData';
+import { ALL_GLOBAL_COUNTRIES } from '../../../data/countriesData';
 
 interface SellerOnboardingWizardProps {
   userUsername: string;
@@ -44,25 +45,12 @@ export const SellerOnboardingWizard: React.FC<SellerOnboardingWizardProps> = ({
   const [sellerType, setSellerType] = useState<'individual' | 'business'>('individual');
   const [countryCode, setCountryCode] = useState('');
   const [country, setCountry] = useState('');
-  const [stateRegion, setStateRegion] = useState('');
-  const [city, setCity] = useState('');
-
-  const countryOptions = React.useMemo(() => {
-    const fallback = [
-      ['NG', 'Nigeria'], ['GH', 'Ghana'], ['KE', 'Kenya'], ['ZA', 'South Africa'],
-      ['EG', 'Egypt'], ['RW', 'Rwanda'], ['UG', 'Uganda'], ['TZ', 'Tanzania'],
-      ['US', 'United States'], ['GB', 'United Kingdom'], ['CA', 'Canada']
-    ] as Array<[string, string]>;
-    try {
-      const regions = typeof Intl.supportedValuesOf === 'function'
-        ? Intl.supportedValuesOf('region').filter((code) => /^[A-Z]{2}$/.test(code))
-        : [];
-      const names = new Intl.DisplayNames(['en'], { type: 'region' });
-      const options = regions
-        .map((code) => [code, names.of(code) || code] as [string, string])
-        .filter(([, name]) => Boolean(name))
-        .sort((a, b) => a[1].localeCompare(b[1]));
-      return options.length ? options : fallback;
+  const [stateRegion, setSt  const countryOptions = React.useMemo(() => {
+    return ALL_GLOBAL_COUNTRIES
+      .map((country) => [country.code, country.name] as [string, string])
+      .sort((a, b) => a[1].localeCompare(b[1]));
+  }, []);
+ns : fallback;
     } catch {
       return fallback;
     }
