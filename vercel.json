@@ -18,11 +18,39 @@
     },
     {
       "source": "/api/v1/products",
-      "destination": "/api/products"
+      "destination": "/api/products-durable"
     },
     {
       "source": "/api/v1/products/(.*)",
-      "destination": "/api/products"
+      "destination": "/api/products-durable"
+    },
+    {
+      "source": "/api/products",
+      "destination": "/api/products-durable"
+    },
+    {
+      "source": "/api/vendor/apply",
+      "destination": "/api/vendor/apply-durable"
+    },
+    {
+      "source": "/api/vendor/status",
+      "destination": "/api/vendor/status-durable"
+    },
+    {
+      "source": "/api/vendor/seller/access",
+      "destination": "/api/vendor/seller-access-durable"
+    },
+    {
+      "source": "/api/vendor/seller/authorize",
+      "destination": "/api/vendor/seller-authorize-durable"
+    },
+    {
+      "source": "/api/admin/vendor-applications",
+      "destination": "/api/admin/vendor-applications-durable"
+    },
+    {
+      "source": "/api/admin/vendor-application/(.*)/review",
+      "destination": "/api/admin/vendor-review-durable?id=$1"
     },
     {
       "source": "/api/v1/orders",
