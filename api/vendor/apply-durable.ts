@@ -1,5 +1,4 @@
-import { authenticateRequest, getBundledServer } from '../../src/server/services/DurableVendorAuth';
-import { getDurableVendorApplication, saveDurableVendorApplication, durableVendorStorageEnabled } from '../../src/server/services/DurableVendorApplicationStore';
+import { authenticateVendorRequest as authenticateRequest, getDurableVendorApplication, saveDurableVendorApplication, durableVendorStorageEnabled, pstpAuditRepo } from '../../dist/server.cjs';
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') return res.status(405).json({ success: false, error: 'METHOD_NOT_ALLOWED' });
@@ -39,8 +38,7 @@ export default async function handler(req: any, res: any) {
     };
 
     const saved = await saveDurableVendorApplication(application);
-    const server = getBundledServer();
-    server.pstpAuditRepo.appendLog({
+    pstpAuditRepo.appendLog({
       orderId: saved.id,
       actor: effectiveUsername,
       actorRole: 'seller',
