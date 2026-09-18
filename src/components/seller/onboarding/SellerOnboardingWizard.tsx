@@ -20,6 +20,7 @@ import {
   Phone
 } from 'lucide-react';
 import { vendorAuthenticatedFetch } from '../../../lib/vendorAuthBridge';
+import { MARKETPLACE_CATEGORIES, resolveMarketplaceCategory } from '../../../data/categoryData';
 
 interface SellerOnboardingWizardProps {
   userUsername: string;
@@ -39,7 +40,7 @@ export const SellerOnboardingWizard: React.FC<SellerOnboardingWizardProps> = ({
   // Step 1: Business Info
   const [storeName, setStoreName] = useState('');
   const [storeBio, setStoreBio] = useState('');
-  const [category, setCategory] = useState('electronics');
+  const [category, setCategory] = useState(resolveMarketplaceCategory('electronics'));
   const [sellerType, setSellerType] = useState<'individual' | 'business'>('individual');
   const [country, setCountry] = useState('Global');
   const [stateRegion, setStateRegion] = useState('');
@@ -371,14 +372,14 @@ export const SellerOnboardingWizard: React.FC<SellerOnboardingWizardProps> = ({
                   </label>
                   <select
                     value={category}
-                    onChange={(e) => setCategory(e.target.value)}
+                    onChange={(e) => setCategory(resolveMarketplaceCategory(e.target.value))}
                     className="w-full px-3 py-2 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-neutral-50/50 dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100"
                   >
-                    <option value="electronics">Electronics</option>
-                    <option value="fashion">Fashion</option>
-                    <option value="home">Home & Living</option>
-                    <option value="groceries">Groceries</option>
-                    <option value="digital">Digital Assets</option>
+                    {MARKETPLACE_CATEGORIES.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.name}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div>
@@ -716,7 +717,7 @@ export const SellerOnboardingWizard: React.FC<SellerOnboardingWizardProps> = ({
                   </div>
                   <div>
                     <span className="text-neutral-500 block">Category:</span>
-                    <strong className="text-neutral-900 dark:text-neutral-100 capitalize">{category}</strong>
+                    <strong className="text-neutral-900 dark:text-neutral-100 capitalize">{MARKETPLACE_CATEGORIES.find((item) => item.id === category)?.name || category}</strong>
                   </div>
                   <div>
                     <span className="text-neutral-500 block">Location:</span>
