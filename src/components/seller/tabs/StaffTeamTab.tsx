@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   Users, 
   UserPlus, 
@@ -11,6 +11,7 @@ import {
   UserCheck
 } from 'lucide-react';
 import { StaffMember, StaffRole, PiUser as User } from '../../../types';
+import { vendorAuthenticatedFetch } from '../../../lib/vendorAuthBridge';
 
 interface StaffTeamTabProps {
   user: User;
@@ -42,29 +43,56 @@ export const StaffTeamTab: React.FC<StaffTeamTabProps> = ({
   };
 
   const [staffList, setStaffList] = useState<StaffMember[]>([]);
+  const [staffLoading, setStaffLoading] = useState(true);
 
-  const handleInviteStaff = (e: React.FormEvent) => {
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await vendorAuthenticatedFetch('/api/vendor/team');
+        const data = await res.json().catch(() => null);
+        if (!cancelled && res.ok && Array.isArray(data?.staff)) setStaffList(data.staff);
+        if (!cancelled && !res.ok) setInviteNotice(data?.message || 'Unable to load the team roster.');
+      } catch {
+        if (!cancelled) setInviteNotice('Unable to load the team roster from the server.');
+      } finally {
+        if (!cancelled) setStaffLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const handleInviteStaff = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inviteName.trim() || !inviteEmail.trim()) return;
 
-    const newStaff: StaffMember = {
-      id: `staff-${Date.now()}`,
-      name: inviteName.trim(),
-      email: inviteEmail.trim(),
-      role: inviteRole,
-      permissions: [inviteRole],
-      joinedAt: new Date().toISOString(),
-      status: 'invited'
-    };
+    try {
+      const res = await vendorAuthenticatedFetch('/api/vendor/team', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: inviteName.trim(),
+          email: inviteEmail.trim(),
+          role: inviteRole
+        })
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.member) {
+        setInviteNotice(data?.message || 'Unable to record the team invitation.');
+        return;
+      }
 
-    setStaffList(prev => [...prev, newStaff]);
-    setInviteNotice(`Invitation sent to ${inviteEmail.trim()} for ${inviteRole.toUpperCase()} role.`);
-    setTimeout(() => {
-      setShowInviteModal(false);
-      setInviteName('');
-      setInviteEmail('');
-      setInviteNotice(null);
-    }, 2000);
+      setStaffList(prev => [...prev, data.member]);
+      setInviteNotice(`Invitation recorded securely for ${inviteEmail.trim()} as ${inviteRole.toUpperCase()}.`);
+      setTimeout(() => {
+        setShowInviteModal(false);
+        setInviteName('');
+        setInviteEmail('');
+        setInviteNotice(null);
+      }, 1800);
+    } catch {
+      setInviteNotice('Unable to reach the merchant team service.');
+    }
   };
 
   return (
@@ -138,7 +166,9 @@ export const StaffTeamTab: React.FC<StaffTeamTabProps> = ({
           </div>
 
           {/* Invited Staff Members */}
-          {staffList.map((member) => (
+          {staffLoading ? (
+            <div className="py-8 text-center text-xs text-neutral-500">Loading server-authoritative team roster…</div>
+          ) : staffList.map((member) => (
             <div key={member.id} className="py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-neutral-200 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 font-bold flex items-center justify-center shrink-0">
@@ -177,7 +207,7 @@ export const StaffTeamTab: React.FC<StaffTeamTabProps> = ({
               No staff members added yet.
             </h4>
             <p className="text-xs text-neutral-500 dark:text-neutral-400 max-w-sm mx-auto mt-1">
-              Add team members to delegate store operations safely with custom role permissions.
+              Add team members to delegate store operations safely. Invitations are stored server-side and do not grant access until an activation flow is completed.
             </p>
           </div>
         )}
