@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { Vendor } from '../../../types';
 import { vendorAuthenticatedFetch } from '../../../lib/vendorAuthBridge';
+import { MARKETPLACE_CATEGORIES, resolveMarketplaceCategory } from '../../../data/categoryData';
 
 interface StoreProfileTabProps {
   userUsername: string;
@@ -36,7 +37,7 @@ export const StoreProfileTab: React.FC<StoreProfileTabProps> = ({
     initialApplication?.sellerType || 'individual'
   );
   const [category, setCategory] = useState(
-    initialApplication?.categoriesToSell?.[0] || 'electronics'
+    resolveMarketplaceCategory(initialApplication?.categoriesToSell?.[0] || 'electronics')
   );
   const [country, setCountry] = useState(
     initialApplication?.country || vendorProfile.country || 'Global'
@@ -213,16 +214,14 @@ export const StoreProfileTab: React.FC<StoreProfileTabProps> = ({
               </label>
               <select
                 value={category}
-                onChange={(e) => setCategory(e.target.value)}
+                onChange={(e) => setCategory(resolveMarketplaceCategory(e.target.value))
                 className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-neutral-50/50 dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/30"
               >
-                <option value="electronics">Phones, Computing & Electronics</option>
-                <option value="fashion">Fashion, Apparel & Accessories</option>
-                <option value="home">Home, Living & Appliances</option>
-                <option value="groceries">Food, Groceries & Produce</option>
-                <option value="health">Health & Beauty</option>
-                <option value="digital">Digital Assets & Software</option>
-                <option value="services">Professional Pioneer Services</option>
+                {MARKETPLACE_CATEGORIES.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                  </option>
+                ))}
               </select>
             </div>
 
