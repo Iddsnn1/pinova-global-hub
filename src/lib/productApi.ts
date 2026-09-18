@@ -1,6 +1,5 @@
 import type { Product } from '../types';
-import { safeFetchJson } from './safeFetch';
-import { vendorAuthenticatedFetch, getVendorAuthHeaders } from './vendorAuthBridge';
+import { vendorAuthenticatedFetch } from './vendorAuthBridge';
 
 export interface ProductApiResult {
   ok: boolean;
@@ -9,15 +8,53 @@ export interface ProductApiResult {
   error?: string;
 }
 
-export async function createSellerProduct(input: Partial<Product>): Promise<ProductApiResult> {
+async function authenticatedJsonFetch<T>(
+  input: RequestInfo | URL,
+  init: RequestInit = {}
+): Promise<{ ok: boolean; status: number; data?: T; error?: string }> {
+  try {
+    const response = await vendorAuthenticatedFetch(input, init);
+    const contentType = response.headers.get('content-type') || '';
+    const text = await response.text();
 
-  // Seller identity, activation, moderation state, rating and product id are server-owned.
-  // Do not persist client-generated demo metadata or placeholder media.
-  const result = await safeFetchJson<{ ok?: boolean; product?: Product; error?: string }>(
+    let data: T | undefined;
+    if (text.trim()) {
+      if (contentType.includes('application/json')) {
+        try {
+          data = JSON.parse(text) as T;
+        } catch {
+          return { ok: false, status: response.status, error: 'INVALID_JSON_RESPONSE' };
+        }
+      } else {
+        return {
+          ok: false,
+          status: response.status,
+          error: `Server returned non-JSON response (${contentType || 'unknown'})`
+        };
+      }
+    }
+
+    return {
+      ok: response.ok,
+      status: response.status,
+      data,
+      error: response.ok ? undefined : ((data as any)?.error || `HTTP_${response.status}`)
+    };
+  } catch (error: any) {
+    return {
+      ok: false,
+      status: 0,
+      error: error?.message || 'NETWORK_ERROR'
+    };
+  }
+}
+
+export async function createSellerProduct(input: Partial<Product>): Promise<ProductApiResult> {
+  const result = await authenticatedJsonFetch<{ ok?: boolean; product?: Product; error?: string }>(
     '/api/products',
     {
       method: 'POST',
-      headers: { ...getVendorAuthHeaders(), 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         title: input.title || '',
         description: input.description || '',
@@ -53,9 +90,13 @@ export async function updateSellerProduct(
   productId: string,
   patch: Partial<Product>
 ): Promise<ProductApiResult> {
-  const result = await safeFetchJson<{ ok?: boolean; product?: Product; error?: string }>(
+  const result = await authenticatedJsonFetch<{ ok?: boolean; product?: Product; error?: string }>(
     `/api/products/${encodeURIComponent(productId)}`,
-    { method: 'PATCH', headers: { ...getVendorAuthHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify(patch) }
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch)
+    }
   );
 
   if (!result.ok || !result.data?.product) {
@@ -70,9 +111,9 @@ export async function updateSellerProduct(
 }
 
 export async function deleteSellerProduct(productId: string): Promise<ProductApiResult> {
-  const result = await safeFetchJson<{ ok?: boolean; error?: string }>(
+  const result = await authenticatedJsonFetch<{ ok?: boolean; error?: string }>(
     `/api/products/${encodeURIComponent(productId)}`,
-    { method: 'DELETE', headers: getVendorAuthHeaders() }
+    { method: 'DELETE' }
   );
 
   if (!result.ok) {
