@@ -41,7 +41,7 @@ function getBearerToken(req: IncomingMessage): string | null {
 
 async function handleDurableProducts(req: any, res: any): Promise<boolean> {
   const pathname = new URL(req.url || '/', 'http://localhost').pathname;
-  if (pathname !== '/api/products' && pathname !== '/api/v1/products' && !pathname.startsWith('/api/v1/products/')) return false;
+  if (pathname !== '/api/products' && pathname !== '/api/v1/products' && !pathname.startsWith('/api/v1/products/') && !req.url?.includes('__path=/products')) return false;
 
   const repo = new ProductRepository();
   if (req.method === 'GET') {
