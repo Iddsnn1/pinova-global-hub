@@ -370,6 +370,9 @@ export const MARKETPLACE_CATEGORY_ALIASES: Record<string, MarketplaceCategory> =
   promotions: 'other_general',
   other: 'other_general',
   general: 'other_general',
+  home: 'home_living',
+  digital: 'computers_technology',
+  digital_assets: 'computers_technology',
   all: 'all'
 };
 
