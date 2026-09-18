@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   Tag, 
   Plus, 
@@ -36,27 +36,57 @@ export const MarketingPromosTab: React.FC<MarketingPromosTabProps> = ({
   const [expiryDays, setExpiryDays] = useState(30);
   const [promosList, setPromosList] = useState<PromoCode[]>([]);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [promoLoading, setPromoLoading] = useState(true);
+  const [promoError, setPromoError] = useState('');
 
-  const handleCreatePromo = (e: React.FormEvent) => {
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/vendor/promos');
+        const data = await res.json().catch(() => null);
+        if (!cancelled && res.ok && Array.isArray(data?.promos)) {
+          setPromosList(data.promos.filter((p: any) => p.sellerUsername === userUsername));
+        }
+      } catch {
+        if (!cancelled) setPromoError('Unable to load server promotions.');
+      } finally {
+        if (!cancelled) setPromoLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [userUsername]);
+
+  const handleCreatePromo = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!promoCode.trim()) return;
 
     const expiryDate = new Date();
     expiryDate.setDate(expiryDate.getDate() + expiryDays);
 
-    const newPromo: PromoCode = {
-      id: `promo-${Date.now()}`,
-      code: promoCode.trim().toUpperCase(),
-      discountPercent: Math.min(100, Math.max(1, discountPercent)),
-      minPurchasePi: Math.max(0, minPurchasePi),
-      expiresAt: expiryDate.toLocaleDateString(),
-      usageCount: 0,
-      status: 'active'
-    };
-
-    setPromosList(prev => [...prev, newPromo]);
-    setPromoCode('');
-    setShowCreateModal(false);
+    try {
+      const res = await fetch('/api/vendor/promos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code: promoCode.trim().toUpperCase(),
+          discountPercent: Math.min(100, Math.max(1, discountPercent)),
+          minPurchasePi: Math.max(0, minPurchasePi),
+          expiresAt: expiryDate.toISOString()
+        })
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.promo) {
+        setPromoError(data?.message || data?.error || 'Unable to create promotion.');
+        return;
+      }
+      setPromosList(prev => [...prev, data.promo]);
+      setPromoCode('');
+      setPromoError('');
+      setShowCreateModal(false);
+    } catch {
+      setPromoError('Unable to reach the promotion service.');
+    }
   };
 
   const handleCopyCode = (code: string, id: string) => {
@@ -106,7 +136,7 @@ export const MarketingPromosTab: React.FC<MarketingPromosTabProps> = ({
           Active Store Coupon Campaigns
         </h3>
 
-        {promosList.length === 0 ? (
+        {promoLoading ? (<div className="py-12 text-center text-xs text-neutral-500">Loading server promotions…</div>) : promosList.length === 0 ? (
           /* Truthful Empty State */
           <div className="text-center py-12 px-4 border border-dashed border-neutral-200 dark:border-neutral-800 rounded-xl">
             <Tag className="w-12 h-12 mx-auto text-neutral-300 dark:text-neutral-700 mb-3" />
