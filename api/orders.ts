@@ -3,6 +3,7 @@ import { createHash, randomBytes } from 'crypto';
 import { authService } from '../src/server/auth';
 import { orderRepo, productRepo, paymentLedgerRepo, pstpAuditRepo, idempotencyRepo } from '../src/server/db';
 import { verifyPiPaymentAuthoritative } from '../src/server/services/PiPaymentVerificationService';
+import { listDurableVendorApplications } from '../dist/server.cjs';
 import type { Order, OrderItem, PstpOrderStatus } from '../src/types';
 
 function json(res: ServerResponse, status: number, body: unknown) {
@@ -112,7 +113,10 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
 
       try {
         const items: OrderItem[] = [];
-        let totalPi = 0;
+        let subtotalPi = 0;
+        let discountPi = 0;
+        let shippingPi = 0;
+        const promoCode = String(body.promoCode || '').trim().toUpperCase();
         const physicalReservations = new Map<string, number>();
         for (const input of body.items) {
           const productId = String(input?.productId || '').trim();
@@ -121,16 +125,53 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
           const product = productRepo.findById(productId);
           if (!product || product.isActive !== true || product.isDeleted === true) throw new Error(`PRODUCT_NOT_AVAILABLE:${productId}`);
           if (product.fulfillmentType !== 'digital_download' && product.fulfillmentType !== 'instant_key') physicalReservations.set(productId, (physicalReservations.get(productId) || 0) + quantity);
-          totalPi += product.pricePi * quantity;
+          const requestedVariantId = input?.customDetails?.variant?.id || input?.selectedVariant;
+          let variantDeltaPi = 0;
+          if (requestedVariantId) {
+            const variant = Array.isArray(product.variants) ? product.variants.find((candidate) => candidate.id === requestedVariantId) : undefined;
+            if (!variant) throw new Error(`PRODUCT_VARIANT_NOT_AVAILABLE:${productId}`);
+            variantDeltaPi = Number(variant.priceDeltaPi || 0);
+          }
+          subtotalPi += (product.pricePi + variantDeltaPi) * quantity;
           items.push({ product, quantity, selectedVariant: input.selectedVariant, customDetails: input.customDetails });
         }
 
+        if (promoCode) {
+          const apps = await listDurableVendorApplications();
+          const nowMs = Date.now();
+          const promoOwners = apps.filter((app:any) =>
+            app?.status === 'APPROVED' &&
+            app?.verificationStatus === 'Verified' &&
+            app?.sellerStatus === 'Active' &&
+            Array.isArray(app?.promos)
+          );
+          const matches = promoOwners.flatMap((app:any) =>
+            app.promos.filter((promo:any) =>
+              promo?.active === true &&
+              String(promo.code || '').toUpperCase() === promoCode &&
+              Date.parse(promo.expiresAt) > nowMs
+            ).map((promo:any) => ({ promo, sellerUsername: String(app.pioneerUsername) }))
+          );
+          if (matches.length === 0) throw new Error('INVALID_OR_EXPIRED_PROMO');
+          const match = matches[0];
+          const eligibleSubtotal = items.reduce((sum, item) => {
+            if (item.product.sellerId !== match.sellerUsername) return sum;
+            const variantDelta = Number(item.customDetails?.variant?.priceDeltaPi || 0);
+            return sum + (item.product.pricePi + variantDelta) * item.quantity;
+          }, 0);
+          if (eligibleSubtotal < Number(match.promo.minPurchasePi)) throw new Error('PROMO_MINIMUM_SPEND_NOT_MET');
+          discountPi = Math.min(eligibleSubtotal, eligibleSubtotal * (Number(match.promo.discountPercent) / 100));
+        }
+        const isPhysicalOrder = items.some((item) => item.product.category === 'physical');
+        shippingPi = isPhysicalOrder ? 2.5 : 0;
+        const totalPi = Math.max(0, Number((subtotalPi - discountPi + shippingPi).toFixed(2)));
         const now = new Date().toISOString();
         const order: Order = {
           id: `ord_${Date.now()}_${randomBytes(6).toString('hex')}`,
           buyerUsername: user.username,
           items,
           totalPi,
+          ...(promoCode ? { promoCode, discountPi, subtotalPi, shippingPi } : {}),
           escrowStatus: 'payment_pending',
           pstpStatus: 'Pending Payment',
           createdAt: now,
