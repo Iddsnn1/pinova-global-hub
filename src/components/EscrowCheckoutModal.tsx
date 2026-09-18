@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { X, ShieldCheck, Lock, CheckCircle2, Loader2, AlertCircle, ArrowRight, Smartphone, MapPin, Truck } from 'lucide-react';
 import { OrderItem, CartItem, Coupon } from '../types';
-import { executePiPayment, authenticatePiUser, resetPiAuthState } from '../lib/piSdk';
+import { executePiPayment, authenticatePiUser, getAuthenticatedPiUser, resetPiAuthState } from '../lib/piSdk';
 
 interface EscrowCheckoutModalProps {
   cartItems: OrderItem[];
@@ -82,12 +82,16 @@ export const EscrowCheckoutModal: React.FC<EscrowCheckoutModalProps> = ({
       return;
     }
 
+    const sessionUser = getAuthenticatedPiUser();
+    const accessToken = sessionUser?.accessToken;
+    if (!accessToken) throw new Error('Authenticated Pi session token unavailable.');
     const idempotencyKey = `checkout-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
     const orderResponse = await fetch('/api/v1/orders', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Idempotency-Key': idempotencyKey
+        'Idempotency-Key': idempotencyKey,
+        'Authorization': `Bearer ${accessToken}`
       },
       body: JSON.stringify({
         items: cartItems.map((item) => ({
