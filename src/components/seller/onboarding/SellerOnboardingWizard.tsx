@@ -41,7 +41,7 @@ export const SellerOnboardingWizard: React.FC<SellerOnboardingWizardProps> = ({
   // Step 1: Business Info
   const [storeName, setStoreName] = useState('');
   const [storeBio, setStoreBio] = useState('');
-  const [category, setCategory] = useState(resolveMarketplaceCategory('electronics'));
+  const [category, setCategory] = useState('');
   const [sellerType, setSellerType] = useState<'individual' | 'business'>('individual');
   const [countryCode, setCountryCode] = useState('');
   const [country, setCountry] = useState('');
@@ -53,7 +53,7 @@ export const SellerOnboardingWizard: React.FC<SellerOnboardingWizardProps> = ({
       .map((country) => [country.code, country.name] as [string, string])
       .sort((a, b) => a[1].localeCompare(b[1]));
   }, []);
-  const [email, setEmail] = useState(`${userUsername}@pinova.network`);
+  const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
 
   // Step 2: Branding
@@ -78,16 +78,10 @@ export const SellerOnboardingWizard: React.FC<SellerOnboardingWizardProps> = ({
   const [kycError, setKycError] = useState<string | null>(null);
 
   // Step 4: Policies
-  const [returnPolicy, setReturnPolicy] = useState(
-    '7-Day return policy for defective merchandise under PSTP Escrow dispute guidelines.'
-  );
-  const [shippingPolicy, setShippingPolicy] = useState(
-    'Orders are packed and dispatched with registered tracked courier delivery within 48 hours.'
-  );
-  const [cancellationPolicy, setCancellationPolicy] = useState(
-    'Cancellations accepted prior to shipment tracking generation.'
-  );
-  const [termsAccepted, setTermsAccepted] = useState(true);
+  const [returnPolicy, setReturnPolicy] = useState('');
+  const [shippingPolicy, setShippingPolicy] = useState('');
+  const [cancellationPolicy, setCancellationPolicy] = useState('');
+  const [termsAccepted, setTermsAccepted] = useState(false);
 
   // Submission State
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -196,8 +190,8 @@ export const SellerOnboardingWizard: React.FC<SellerOnboardingWizardProps> = ({
 
   // Final Step: Submit Application
   const handleFinalSubmit = async () => {
-    if (!storeName.trim() || !email.trim() || !countryCode) {
-      setSubmitError('Store name, contact email, and country are required.');
+    if (!storeName.trim() || !email.trim() || !countryCode || !category || !returnPolicy.trim() || !shippingPolicy.trim() || !termsAccepted) {
+      setSubmitError('Store name, contact email, country, category, return/shipping policies, and PSTP agreement are required.');
       setCurrentStep(1);
       return;
     }
@@ -749,7 +743,7 @@ export const SellerOnboardingWizard: React.FC<SellerOnboardingWizardProps> = ({
                   </div>
                   <div>
                     <span className="text-neutral-500 block">Location:</span>
-                    <strong className="text-neutral-900 dark:text-neutral-100">{city || country}, {country}</strong>
+                    <strong className="text-neutral-900 dark:text-neutral-100">{[city, stateRegion, country].filter(Boolean).join(', ') || 'Not provided'}</strong>
                   </div>
                   <div>
                     <span className="text-neutral-500 block">Email:</span>
@@ -757,7 +751,7 @@ export const SellerOnboardingWizard: React.FC<SellerOnboardingWizardProps> = ({
                   </div>
                   <div>
                     <span className="text-neutral-500 block">Store Logo:</span>
-                    <strong className="text-neutral-900 dark:text-neutral-100">{logoUrl ? 'Uploaded ✓' : 'Default'}</strong>
+                    <strong className="text-neutral-900 dark:text-neutral-100">{logoUrl ? 'Uploaded ✓' : 'Not uploaded'}</strong>
                   </div>
                   <div>
                     <span className="text-neutral-500 block">KYC Documents:</span>
@@ -769,7 +763,7 @@ export const SellerOnboardingWizard: React.FC<SellerOnboardingWizardProps> = ({
               <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-800 dark:text-emerald-400 flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 shrink-0" />
                 <span>
-                  Ready for submission. Your application will be reviewed by the compliance governance team.
+                  All required information is present. Your application will be submitted for compliance review only after the authenticated Pioneer session is verified.
                 </span>
               </div>
             </div>
@@ -793,8 +787,8 @@ export const SellerOnboardingWizard: React.FC<SellerOnboardingWizardProps> = ({
           {currentStep < 5 ? (
             <button
               onClick={() => {
-                if (currentStep === 1 && (!storeName.trim() || !email.trim())) {
-                  setSubmitError('Store name and contact email are required.');
+                if (currentStep === 1 && (!storeName.trim() || !email.trim() || !countryCode || !category)) {
+                  setSubmitError('Store name, contact email, category, and country are required.');
                   return;
                 }
                 setSubmitError(null);
