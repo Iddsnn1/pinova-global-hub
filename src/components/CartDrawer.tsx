@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { X, Trash2, ShoppingBag, ShieldCheck, Tag, ArrowRight, Check } from 'lucide-react';
 import { OrderItem, Coupon } from '../types';
 
@@ -25,6 +25,37 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null);
   const [couponError, setCouponError] = useState('');
   const [shippingCountry, setShippingCountry] = useState('United States');
+  const [serverCoupons, setServerCoupons] = useState<Coupon[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/vendor/promos', { cache: 'no-store' });
+        const data = await res.json().catch(() => null);
+        if (!cancelled && res.ok && Array.isArray(data?.promos)) {
+          setServerCoupons(data.promos.map((promo: any) => ({
+            code: String(promo.code || '').toUpperCase(),
+            discountPercent: Number(promo.discountPercent),
+            minSpendPi: Number(promo.minPurchasePi),
+            active: promo.active === true,
+            expiresAt: String(promo.expiresAt || ''),
+            sellerUsername: promo.sellerUsername,
+            storeName: promo.storeName ?? null
+          })));
+        }
+      } catch {
+        // Server coupons are optional; keep legacy coupon source available.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const availableCoupons = useMemo(() => {
+    const merged = new Map<string, Coupon>();
+    [...coupons, ...serverCoupons].forEach((coupon) => merged.set(coupon.code.toUpperCase(), coupon));
+    return [...merged.values()];
+  }, [coupons, serverCoupons]);
 
   if (!isOpen) return null;
 
@@ -35,17 +66,35 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
     return acc + price * item.quantity;
   }, 0);
 
-  const discountAmount = appliedCoupon ? (subtotalPi * appliedCoupon.discountPercent) / 100 : 0;
+  const eligibleCouponSubtotal = appliedCoupon?.sellerUsername
+    ? cartItems.reduce((acc, item) => {
+        if (item.product.sellerId !== appliedCoupon.sellerUsername) return acc;
+        const price = item.product.discountPercent
+          ? item.product.pricePi * (1 - item.product.discountPercent / 100)
+          : item.product.pricePi;
+        return acc + price * item.quantity;
+      }, 0)
+    : subtotalPi;
+  const discountAmount = appliedCoupon ? (eligibleCouponSubtotal * appliedCoupon.discountPercent) / 100 : 0;
   const totalPi = Math.max(0, subtotalPi - discountAmount);
 
   const handleApplyCoupon = () => {
     setCouponError('');
-    const matched = coupons.find((c) => c.code.toUpperCase() === couponCode.trim().toUpperCase() && c.active);
+    const matched = availableCoupons.find((c) => c.code.toUpperCase() === couponCode.trim().toUpperCase() && c.active && Date.parse(c.expiresAt) > Date.now());
     if (!matched) {
       setCouponError('Invalid coupon code');
       return;
     }
-    if (subtotalPi < matched.minSpendPi) {
+    const eligibleSubtotal = matched.sellerUsername
+      ? cartItems.reduce((acc, item) => {
+          if (item.product.sellerId !== matched.sellerUsername) return acc;
+          const price = item.product.discountPercent
+            ? item.product.pricePi * (1 - item.product.discountPercent / 100)
+            : item.product.pricePi;
+          return acc + price * item.quantity;
+        }, 0)
+      : subtotalPi;
+    if (eligibleSubtotal < matched.minSpendPi) {
       setCouponError(`Minimum spend of ${matched.minSpendPi} π required`);
       return;
     }
