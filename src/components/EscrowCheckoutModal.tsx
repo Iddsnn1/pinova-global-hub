@@ -50,10 +50,16 @@ export const EscrowCheckoutModal: React.FC<EscrowCheckoutModalProps> = ({
     return acc + getItemUnitPrice(item) * item.quantity;
   }, 0);
 
-  const discountAmount = appliedCoupon ? (subtotal * appliedCoupon.discountPercent) / 100 : 0;
+  const eligibleCouponSubtotal = appliedCoupon?.sellerUsername
+    ? cartItems.reduce((acc, item) => {
+        if (item.product.sellerId !== appliedCoupon.sellerUsername) return acc;
+        return acc + getItemUnitPrice(item) * item.quantity;
+      }, 0)
+    : subtotal;
+  const discountAmount = appliedCoupon ? (eligibleCouponSubtotal * appliedCoupon.discountPercent) / 100 : 0;
   const isPhysicalOrder = cartItems.some((i) => i.product.category === 'physical');
   const shippingCost = isPhysicalOrder ? 2.50 : 0;
-  const totalAmountPi = subtotal - discountAmount + shippingCost;
+  const totalAmountPi = Math.max(0, subtotal - discountAmount + shippingCost);
 
   const addLog = (msg: string) => {
     setStatusLogs((prev) => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`]);
@@ -76,8 +82,30 @@ export const EscrowCheckoutModal: React.FC<EscrowCheckoutModalProps> = ({
       return;
     }
 
-    const memo = `PiNova Purchase (${cartItems.length} items) - Order by ${userUsername}`;
-    const generatedOrderId = `ORD-PI-${Date.now().toString().slice(-6)}`;
+    const idempotencyKey = `checkout-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    const orderResponse = await fetch('/api/v1/orders', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Idempotency-Key': idempotencyKey
+      },
+      body: JSON.stringify({
+        items: cartItems.map((item) => ({
+          productId: item.product.id,
+          quantity: item.quantity,
+          selectedVariant: item.selectedVariant,
+          customDetails: item.customDetails
+        })),
+        promoCode: appliedCoupon?.code || ''
+      })
+    });
+    const orderData = await orderResponse.json().catch(() => null);
+    if (!orderResponse.ok || !orderData?.order?.id) {
+      throw new Error(orderData?.message || orderData?.error || 'Unable to create a server-authoritative order.');
+    }
+    const authoritativeOrder = orderData.order;
+    const generatedOrderId = authoritativeOrder.id;
+    const authoritativeTotalPi = Number(authoritativeOrder.totalPi);
     setCreatedOrderId(generatedOrderId);
 
     const metadata = {
@@ -89,7 +117,7 @@ export const EscrowCheckoutModal: React.FC<EscrowCheckoutModalProps> = ({
 
     executePiPayment(
       {
-        amount: Number(totalAmountPi.toFixed(2)),
+        amount: Number(authoritativeTotalPi.toFixed(2)),
         memo,
         metadata
       },
@@ -100,7 +128,26 @@ export const EscrowCheckoutModal: React.FC<EscrowCheckoutModalProps> = ({
         onSuccess: (paymentId, txid) => {
           setCompletedPaymentId(paymentId);
           setCompletedTxid(txid);
-          setPaymentStep('success');
+
+          fetch(`/api/v1/orders/${encodeURIComponent(generatedOrderId)}/payment-verify`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ paymentId, txid })
+          })
+            .then(async (verifyRes) => {
+              const verifyData = await verifyRes.json().catch(() => null);
+              if (!verifyRes.ok || verifyData?.verified !== true) {
+                throw new Error(verifyData?.message || verifyData?.error || 'Server-side Pi payment verification failed.');
+              }
+              setPaymentStep('success');
+              onPaymentSuccess(verifyData.order || { ...authoritativeOrder, piPaymentId: paymentId, piTxid: txid, serverVerified: true });
+            })
+            .catch((verifyErr) => {
+              setPaymentStep('failed');
+              setErrorMessage(verifyErr?.message || 'Server-side Pi payment verification failed.');
+              addLog(`Server verification error: ${verifyErr?.message || verifyErr}`);
+            });
+          return;
 
           // Construct digital deliveries if any
           const digitalDeliveries = cartItems
