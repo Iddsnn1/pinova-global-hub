@@ -38,10 +38,94 @@ import { StudentVerificationService } from './src/server/services/StudentVerific
 import { EducationRepository } from './src/server/db/repositories/EducationRepository';
 import { ProductRepository } from './src/server/db/repositories/ProductRepository';
 import { requireVendorSellerAccess } from './src/server/services/VendorAccessService';
+import { get, list, put } from '@vercel/blob';
 
 dotenv.config();
 
 const app = express();
+
+const DURABLE_VENDOR_PREFIX = 'vendor-applications/';
+
+function durableVendorEnabled(): boolean {
+  // Vercel Blob supports both token-based auth and Vercel OIDC. In Vercel
+  // serverless functions the SDK can authenticate through OIDC without a
+  // long-lived BLOB_READ_WRITE_TOKEN.
+  return Boolean(process.env.BLOB_READ_WRITE_TOKEN || process.env.VERCEL === '1' || process.env.VERCEL_ENV);
+}
+
+function durableVendorKey(username: string): string {
+  return `${DURABLE_VENDOR_PREFIX}${encodeURIComponent(username.trim().toLowerCase())}.json`;
+}
+
+async function readDurableVendorPath(pathname: string): Promise<any | null> {
+  if (!durableVendorEnabled()) return null;
+  const result = await get(pathname, { access: 'private', useCache: false });
+  if (!result || result.statusCode !== 200 || !result.stream) return null;
+  const reader = result.stream.getReader();
+  const chunks: Uint8Array[] = [];
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (value) chunks.push(value);
+  }
+  const bytes = new Uint8Array(chunks.reduce((n, chunk) => n + chunk.length, 0));
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return JSON.parse(new TextDecoder().decode(bytes));
+}
+
+export async function getDurableVendorApplication(username: string): Promise<any | null> {
+  if (!username?.trim()) return null;
+  return readDurableVendorPath(durableVendorKey(username));
+}
+
+export async function saveDurableVendorApplication(application: any): Promise<any> {
+  if (!durableVendorEnabled()) throw new Error('DURABLE_VENDOR_STORAGE_UNAVAILABLE');
+  await put(durableVendorKey(application.pioneerUsername), JSON.stringify(application), {
+    access: 'private',
+    contentType: 'application/json',
+    allowOverwrite: true
+  });
+  return application;
+}
+
+export async function listDurableVendorApplications(): Promise<any[]> {
+  if (!durableVendorEnabled()) return [];
+  const entries: any[] = [];
+  let cursor: string | undefined;
+  do {
+    const page = await list({ prefix: DURABLE_VENDOR_PREFIX, limit: 1000, cursor });
+    for (const blob of page.blobs) {
+      const app = await readDurableVendorPath(blob.pathname);
+      if (app) entries.push(app);
+    }
+    cursor = page.hasMore ? page.cursor : undefined;
+  } while (cursor);
+  return entries;
+}
+
+export function durableVendorStorageEnabled(): boolean {
+  return durableVendorEnabled();
+}
+
+export async function authenticateVendorRequest(req: any): Promise<any | null> {
+  const header = req.headers?.authorization || req.headers?.Authorization;
+  const match = typeof header === 'string' ? header.match(/^Bearer\\s+(.+)$/i) : null;
+  if (!match?.[1]) return null;
+  return authService.authenticateToken(match[1]);
+}
+
+export async function authenticateVendorAdminRequest(req: any): Promise<any | null> {
+  const user = await authenticateVendorRequest(req);
+  if (!user?.username) return null;
+  const roles = Array.isArray(user.roles) ? user.roles : [];
+  return roles.includes('PLATFORM_ADMIN') || roles.includes('COMPLIANCE_OFFICER') ? user : null;
+}
+
+
 // Bind port: In Google AI Studio environment, nginx reverse-proxies port 8080 to internal port 3000 (DEFAULT_APP_PORT=3000).
 // In standalone Cloud Run without nginx proxy, bind directly to process.env.PORT.
 const PORT = process.env.DEFAULT_APP_PORT 
