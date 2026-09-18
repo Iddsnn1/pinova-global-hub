@@ -23,6 +23,7 @@ export const BulkCsvToolsTab: React.FC<BulkCsvToolsTabProps> = ({
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [importType, setImportType] = useState<'products' | 'inventory'>('products');
   const [isProcessing, setIsProcessing] = useState(false);
   const [parseResult, setParseResult] = useState<{
     success: boolean;
@@ -90,7 +91,7 @@ export const BulkCsvToolsTab: React.FC<BulkCsvToolsTabProps> = ({
       const response = await vendorAuthenticatedFetch('/api/products-bulk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ csv })
+        body: JSON.stringify({ csv, importType })
       });
       const data = await response.json().catch(() => null);
       if (!response.ok) throw new Error(data?.message || data?.error || 'Server rejected the bulk import.');
@@ -201,6 +202,14 @@ export const BulkCsvToolsTab: React.FC<BulkCsvToolsTabProps> = ({
             <UploadCloud className="w-4 h-4 text-purple-600" />
             Upload Batch CSV File
           </h3>
+
+          <div className="flex items-center gap-2">
+            <label className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">Import type</label>
+            <select value={importType} onChange={(e) => setImportType(e.target.value as 'products' | 'inventory')} className="flex-1 px-3 py-2 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-xs min-h-[40px]">
+              <option value="products">Product Catalog</option>
+              <option value="inventory">Inventory Stock Update</option>
+            </select>
+          </div>
 
           <div
             onClick={() => fileInputRef.current?.click()}
