@@ -1,8 +1,8 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import { randomBytes } from 'crypto';
-import { ProductRepository } from '../src/server/db/repositories/ProductRepository';
-import { vendorApplicationRepo } from '../src/server/db';
-import { requireVendorSellerAccess } from '../src/server/services/VendorAccessService';
+import { ProductRepository } from '../src/server/db/repositories/ProductRepository.ts';
+import { vendorApplicationRepo } from '../src/server/db/index.ts';
+import { requireVendorSellerAccess } from '../src/server/services/VendorAccessService.ts';
 import type { Product } from '../src/types';
 
 const productRepo = new ProductRepository();
@@ -34,7 +34,7 @@ async function readJson(req: IncomingMessage): Promise<Record<string, any>> {
 async function authenticate(req: IncomingMessage) {
   const token = bearer(req);
   if (!token) return null;
-  const { authService } = await import('../src/server/auth/index');
+  const { authService } = await import('../src/server/auth/index.ts');
   return authService.authenticateToken(token);
 }
 
