@@ -236,7 +236,9 @@ export const SellerOnboardingWizard: React.FC<SellerOnboardingWizardProps> = ({
         body: JSON.stringify(payload)
       });
 
-      const data = await res.json();
+      const rawResponse = await res.text();
+      let data: any;
+      try { data = rawResponse ? JSON.parse(rawResponse) : {}; } catch { data = { error: rawResponse || `Server returned HTTP ${res.status}` }; }
       if (res.ok && data.success) {
         onComplete(data.application || payload);
         onClose();
