@@ -63,12 +63,11 @@ export default async function handler(req:any,res:any) {
     });
 
     try {
-      await pstpAuditRepo.append({
+      pstpAuditRepo.appendLog({
         actor: username,
+        actorRole: 'merchant',
         action: 'MERCHANT_WAREHOUSE_CREATED',
-        resourceType: 'merchant_inventory',
-        resourceId: warehouse.id,
-        details: { name, location, country }
+        details: JSON.stringify({ resourceType: 'merchant_inventory', resourceId: warehouse.id, name, location, country })
       });
     } catch {}
 
