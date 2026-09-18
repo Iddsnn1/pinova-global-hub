@@ -1,5 +1,5 @@
-import { authenticateAdminRequest, getBundledServer } from '../../../src/server/services/DurableVendorAuth';
-import { getDurableVendorApplication, saveDurableVendorApplication, durableVendorStorageEnabled } from '../../../src/server/services/DurableVendorApplicationStore';
+import { authenticateAdminRequest, getBundledServer } from '../../src/server/services/DurableVendorAuth';
+import { getDurableVendorApplication, saveDurableVendorApplication, durableVendorStorageEnabled } from '../../src/server/services/DurableVendorApplicationStore';
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') return res.status(405).json({ success: false, error: 'METHOD_NOT_ALLOWED' });
