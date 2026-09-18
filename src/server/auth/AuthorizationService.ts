@@ -46,14 +46,28 @@ export class AuthorizationService {
       user = this.userRepo.upsertUser({ username, piUid: uid || user.piUid, roles: safeRoles, institutionId: institutionId || user.institutionId });
     }
 
-    const token = `pinova_sess_${crypto.randomBytes(24).toString('hex')}`;
+    // Vercel runs API handlers in separate serverless instances. A session token
+    // stored only in StorageEngine can therefore disappear between /api/auth/session
+    // and /api/vendor/apply. Use a signed, stateless session token as the portable
+    // server credential while still re-fetching the user's authoritative roles.
+    const expiresAt = Date.now() + ttlMs;
+    const nonce = crypto.randomBytes(16).toString('hex');
+    const payload = Buffer.from(JSON.stringify({
+      v: 1,
+      username: user.username,
+      uid: user.piUid || uid || null,
+      exp: expiresAt,
+      nonce
+    })).toString('base64url');
+    const signature = crypto.createHmac('sha256', this.secretKey).update(payload).digest('base64url');
+    const token = `pinova_sess_v1_${payload}.${signature}`;
     const session: SessionEntity = {
       token,
       userId: user.id,
       username: user.username,
       roles: user.roles,
       institutionId: user.institutionId,
-      expiresAt: Date.now() + ttlMs,
+      expiresAt,
       createdAt: new Date().toISOString()
     };
 
@@ -132,7 +146,49 @@ export class AuthorizationService {
       };
     }
 
-    // 3. Check Test / Dev Signed Tokens (e.g. "pinova_test_token_<username>")
+    // 3. Verify portable signed session tokens. This is required across Vercel
+    // serverless instances where an in-memory/file-backed session cache is not shared.
+    if (token.startsWith('pinova_sess_v1_')) {
+      try {
+        const signed = token.slice('pinova_sess_v1_'.length);
+        const separator = signed.lastIndexOf('.');
+        if (separator <= 0) return null;
+
+        const payload = signed.slice(0, separator);
+        const signature = signed.slice(separator + 1);
+        const expected = crypto.createHmac('sha256', this.secretKey).update(payload).digest('base64url');
+
+        const providedBuf = Buffer.from(signature);
+        const expectedBuf = Buffer.from(expected);
+        if (providedBuf.length !== expectedBuf.length || !crypto.timingSafeEqual(providedBuf, expectedBuf)) {
+          return null;
+        }
+
+        const decoded = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+        if (decoded?.v !== 1 || !decoded?.username || !Number.isFinite(decoded?.exp) || Date.now() > decoded.exp) {
+          return null;
+        }
+
+        const user = this.userRepo.findByUsername(String(decoded.username));
+        if (!user || user.status === 'SUSPENDED') return null;
+
+        // Never trust roles/permissions from the token. Re-read them from the
+        // authoritative repository so revocations still take effect.
+        return {
+          id: user.id,
+          username: user.username,
+          piUid: user.piUid,
+          roles: user.roles,
+          permissions: RoleRepository.getPermissionsForRoles(user.roles),
+          institutionId: user.institutionId,
+          guardianId: user.guardianId
+        };
+      } catch {
+        return null;
+      }
+    }
+
+    // 4. Check Test / Dev Signed Tokens (e.g. "pinova_test_token_<username>")
     if (token.startsWith('pinova_test_token_')) {
       // In production mode: strictly disallow test tokens
       if (process.env.NODE_ENV === 'production') {
@@ -156,7 +212,7 @@ export class AuthorizationService {
       }
     }
 
-    // 4. If token appears to be a Pi Access Token, verify with Pi Network Platform API
+    // 5. If token appears to be a Pi Access Token, verify with Pi Network Platform API
     if (token.length > 20 && !token.includes(' ')) {
       try {
         const isProduction = process.env.NODE_ENV === 'production';
