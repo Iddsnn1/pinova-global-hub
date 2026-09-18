@@ -1,5 +1,4 @@
-import { authenticateAdminRequest } from '../../src/server/services/DurableVendorAuth';
-import { listDurableVendorApplications, durableVendorStorageEnabled } from '../../src/server/services/DurableVendorApplicationStore';
+import { authenticateVendorAdminRequest as authenticateAdminRequest, listDurableVendorApplications, durableVendorStorageEnabled } from '../../dist/server.cjs';
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'GET') return res.status(405).json({ success: false, error: 'METHOD_NOT_ALLOWED' });
