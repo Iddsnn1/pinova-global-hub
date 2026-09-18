@@ -30,6 +30,7 @@ export default async function handler(req: any, res: any) {
   const canSell = merchant?.status === 'APPROVED' && merchant.verificationStatus === 'Verified' && merchant.sellerStatus === 'Active';
   if (!canSell) return res.status(403).json({ ok: false, error: 'MERCHANT_SELLER_ACCESS_REQUIRED' });
 
+  const repo = new ProductRepository();
   const body = req.body || {};
   const csv = typeof body.csv === 'string' ? body.csv : '';
   const importType = body.importType === 'inventory' ? 'inventory' : 'products';
@@ -52,7 +53,7 @@ export default async function handler(req: any, res: any) {
       const next = repo.updateAvailability(productId, stock > 0 ? 'in_stock' : 'out_of_stock', stock);
       if (next) updated.push(next); else errors.push(`Row ${i + 1}: inventory update failed.`);
     }
-    try { await pstpAuditRepo.append({ actor: user.username, action: 'MERCHANT_BULK_INVENTORY_UPDATE', resourceType: 'merchant_catalog', resourceId: user.username, details: { updatedCount: updated.length, errorCount: errors.length } }); } catch {}
+    try { pstpAuditRepo.appendLog({ actor: user.username, actorRole: 'merchant', action: 'MERCHANT_BULK_INVENTORY_UPDATE', details: JSON.stringify({ resourceType: 'merchant_catalog', resourceId: user.username, updatedCount: updated.length, errorCount: errors.length }) }); } catch {}
     return res.status(201).json({ ok: true, importedCount: updated.length, errorCount: errors.length, errors, products: updated });
   }
   const titleIndex = headers.indexOf('title');
@@ -63,7 +64,6 @@ export default async function handler(req: any, res: any) {
   const tagsIndex = headers.indexOf('tags');
   if (titleIndex < 0 || priceIndex < 0) return res.status(400).json({ ok: false, error: 'REQUIRED_COLUMNS_MISSING', required: ['title', 'pricePi'] });
 
-  const repo = new ProductRepository();
   const imported: any[] = [], errors: string[] = [];
   for (let i = 1; i < rows.length; i++) {
     const r = rows[i];
@@ -88,12 +88,11 @@ export default async function handler(req: any, res: any) {
     imported.push(repo.save(product as any));
   }
   try {
-    await pstpAuditRepo.append({
+    pstpAuditRepo.appendLog({
       actor: user.username,
+      actorRole: 'merchant',
       action: 'MERCHANT_BULK_PRODUCT_IMPORT',
-      resourceType: 'merchant_catalog',
-      resourceId: user.username,
-      details: { importedCount: imported.length, errorCount: errors.length }
+      details: JSON.stringify({ resourceType: 'merchant_catalog', resourceId: user.username, importedCount: imported.length, errorCount: errors.length })
     });
   } catch {}
   return res.status(201).json({ ok: true, importedCount: imported.length, errorCount: errors.length, errors, products: imported });
