@@ -12,6 +12,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { Product } from '../../../types';
+import { vendorAuthenticatedFetch } from '../../../lib/vendorAuthBridge';
 
 interface InventoryWarehousesTabProps {
   products: Product[];
@@ -29,42 +30,83 @@ export const InventoryWarehousesTab: React.FC<InventoryWarehousesTabProps> = ({
   const [showWarehouseModal, setShowWarehouseModal] = useState(false);
   const [warehouseName, setWarehouseName] = useState('');
   const [warehouseLocation, setWarehouseLocation] = useState('');
-  const [warehousesList, setWarehousesList] = useState<Array<{ id: string; name: string; location: string; isPrimary: boolean }>>([]);
+  const [warehousesList, setWarehousesList] = useState<Array<{ id: string; name: string; location: string; country: string; isPrimary: boolean }>>([]);
+  const [inventorySaving, setInventorySaving] = useState(false);
+  const [warehouseSaving, setWarehouseSaving] = useState(false);
+  const [inventoryError, setInventoryError] = useState('');
+
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await vendorAuthenticatedFetch('/api/vendor/warehouses');
+        const data = await res.json().catch(() => null);
+        if (!cancelled && res.ok && Array.isArray(data?.warehouses)) setWarehousesList(data.warehouses);
+      } catch {
+        if (!cancelled) setInventoryError('Unable to load durable warehouse records.');
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   const filteredProducts = products.filter(p => 
     p.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
     (p.category || '').toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleAdjustStock = (e: React.FormEvent) => {
+  const handleAdjustStock = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedProduct || !onUpdateProduct) return;
-    const updated: Product = {
-      ...selectedProduct,
-      stock: Math.max(0, adjustStockVal)
-    };
-    onUpdateProduct(updated);
-    setSelectedProduct(null);
+    if (!selectedProduct) return;
+    setInventorySaving(true);
+    setInventoryError('');
+    try {
+      const csv = `productId,stockOnHand\n${selectedProduct.id},${Math.max(0, adjustStockVal)}\n`;
+      const res = await vendorAuthenticatedFetch('/api/products-bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ csv, importType: 'inventory' })
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || Number(data?.importedCount) !== 1) throw new Error(data?.error || data?.errors?.[0] || 'Inventory update failed.');
+      onUpdateProduct?.({ ...selectedProduct, stock: Math.max(0, adjustStockVal) });
+      setSelectedProduct(null);
+    } catch (error:any) {
+      setInventoryError(error?.message || 'Unable to save stock.');
+    } finally {
+      setInventorySaving(false);
+    }
   };
 
-  const handleCreateWarehouse = (e: React.FormEvent) => {
+  const handleCreateWarehouse = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!warehouseName.trim()) return;
-    const newWh = {
-      id: `wh-${Date.now()}`,
-      name: warehouseName.trim(),
-      location: warehouseLocation.trim() || 'Global Depot',
-      isPrimary: warehousesList.length === 0
-    };
-    setWarehousesList(prev => [...prev, newWh]);
-    setWarehouseName('');
-    setWarehouseLocation('');
-    setShowWarehouseModal(false);
+    setWarehouseSaving(true);
+    setInventoryError('');
+    try {
+      const res = await vendorAuthenticatedFetch('/api/vendor/warehouses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: warehouseName.trim(), location: warehouseLocation.trim() || 'Global Depot', country: '' })
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.warehouse) throw new Error(data?.error || data?.message || 'Unable to create warehouse.');
+      setWarehousesList(Array.isArray(data.warehouses) ? data.warehouses : [data.warehouse]);
+      setWarehouseName('');
+      setWarehouseLocation('');
+      setShowWarehouseModal(false);
+    } catch (error:any) {
+      setInventoryError(error?.message || 'Unable to save warehouse.');
+    } finally {
+      setWarehouseSaving(false);
+    }
   };
 
   return (
     <div className="space-y-6" id="inventory-warehouses-tab">
       {/* Header Banner */}
+      {inventoryError && (
+        <div className="px-4 py-3 rounded-xl border border-rose-200 dark:border-rose-900/50 bg-rose-50 dark:bg-rose-950/20 text-xs text-rose-700 dark:text-rose-300">{inventoryError}</div>
+      )}
       <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-2xl p-4 sm:p-6 shadow-xs">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
@@ -335,7 +377,7 @@ export const InventoryWarehousesTab: React.FC<InventoryWarehousesTabProps> = ({
                   type="submit"
                   className="flex-1 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold min-h-[44px]"
                 >
-                  Save Stock
+                  {inventorySaving ? 'Saving…' : 'Save Stock'}
                 </button>
               </div>
             </form>
@@ -389,7 +431,7 @@ export const InventoryWarehousesTab: React.FC<InventoryWarehousesTabProps> = ({
                   type="submit"
                   className="flex-1 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold min-h-[44px]"
                 >
-                  Save Depot
+                  {warehouseSaving ? 'Saving…' : 'Save Depot'}
                 </button>
               </div>
             </form>
