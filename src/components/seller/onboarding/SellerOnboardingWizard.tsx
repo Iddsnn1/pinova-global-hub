@@ -19,7 +19,8 @@ import {
   Mail,
   Phone
 } from 'lucide-react';
-import { vendorAuthenticatedFetch } from '../../../lib/vendorAuthBridge';
+import { ensureServerSession, vendorAuthenticatedFetch } from '../../../lib/vendorAuthBridge';
+import { getAuthenticatedPiUser, PiSdkManager } from '../../../lib/piSdk';
 import { MARKETPLACE_CATEGORIES, resolveMarketplaceCategory } from '../../../data/categoryData';
 import { ALL_GLOBAL_COUNTRIES } from '../../../data/countriesData';
 
@@ -87,6 +88,8 @@ export const SellerOnboardingWizard: React.FC<SellerOnboardingWizardProps> = ({
   // Submission State
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [authenticatingPioneer, setAuthenticatingPioneer] = useState(false);
+  const [serverSessionReady, setServerSessionReady] = useState(false);
 
   if (!isOpen) return null;
 
@@ -223,8 +226,49 @@ export const SellerOnboardingWizard: React.FC<SellerOnboardingWizardProps> = ({
   };
 
   // Final Step: Submit Application
+  const ensureOnboardingAuthentication = async (): Promise<boolean> => {
+    if (authenticatingPioneer) return false;
+
+    setAuthenticatingPioneer(true);
+    setSubmitError(null);
+
+    try {
+      const existingUser = getAuthenticatedPiUser();
+      const user = existingUser || await PiSdkManager.authenticate(
+        ['username', 'payments'],
+        undefined,
+        false
+      );
+
+      if (!user?.accessToken || !user.username) {
+        setServerSessionReady(false);
+        setSubmitError('Pi authentication was not completed. Please authenticate your Pioneer session in Pi Browser and try again.');
+        return false;
+      }
+
+      const sessionToken = await ensureServerSession(true);
+      if (!sessionToken) {
+        setServerSessionReady(false);
+        setSubmitError('Pi authentication succeeded, but the secure server session could not be established. Please try again.');
+        return false;
+      }
+
+      setServerSessionReady(true);
+      return true;
+    } catch (err: any) {
+      setServerSessionReady(false);
+      setSubmitError(err?.message || 'Pi authentication could not be completed. Please try again in Pi Browser.');
+      return false;
+    } finally {
+      setAuthenticatingPioneer(false);
+    }
+  };
+
   const handleFinalSubmit = async () => {
     if (!validateBeforeSubmit()) return;
+
+    const authenticated = await ensureOnboardingAuthentication();
+    if (!authenticated) return;
     if (uploadedDocs.length === 0) {
       setSubmitError('At least one verification document is required for KYC compliance.');
       setCurrentStep(3);
@@ -852,6 +896,46 @@ export const SellerOnboardingWizard: React.FC<SellerOnboardingWizardProps> = ({
                   Review your required merchant policies and PSTP agreement before submitting. No policy text is pre-filled; these fields must contain your own merchant terms.
                 </span>
               </div>
+
+              <div className={`p-4 rounded-2xl border ${serverSessionReady ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-purple-500/10 border-purple-500/30'}`}>
+                <div className="flex items-start gap-3">
+                  {serverSessionReady ? (
+                    <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                  ) : (
+                    <ShieldCheck className="w-5 h-5 text-purple-600 shrink-0" />
+                  )}
+                  <div className="flex-1">
+                    <p className="font-bold text-neutral-900 dark:text-neutral-100">
+                      {serverSessionReady ? 'Pioneer session authenticated' : 'Pioneer authentication required'}
+                    </p>
+                    <p className="text-neutral-600 dark:text-neutral-400 mt-1">
+                      {serverSessionReady
+                        ? 'Your Pi identity has an active server-verified session. You can submit this merchant application.'
+                        : 'Authenticate your Pioneer session in Pi Browser before submitting. The server will issue the protected merchant session.'}
+                    </p>
+                    {!serverSessionReady && (
+                      <button
+                        type="button"
+                        onClick={ensureOnboardingAuthentication}
+                        disabled={authenticatingPioneer}
+                        className="mt-3 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white font-semibold flex items-center gap-2"
+                      >
+                        {authenticatingPioneer ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            Authenticating Pioneer...
+                          </>
+                        ) : (
+                          <>
+                            <ShieldCheck className="w-4 h-4" />
+                            Authenticate Pioneer
+                          </>
+                        )}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -885,7 +969,7 @@ export const SellerOnboardingWizard: React.FC<SellerOnboardingWizardProps> = ({
           ) : (
             <button
               id="submit-onboarding-btn"
-              disabled={isSubmitting}
+              disabled={isSubmitting || authenticatingPioneer}
               onClick={handleFinalSubmit}
               className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-semibold text-xs flex items-center gap-1.5 transition-colors shadow-xs"
             >
