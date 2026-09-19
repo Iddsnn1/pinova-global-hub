@@ -476,15 +476,35 @@ app.get('/validation-key.txt', (req, res) => {
 // Authentication Endpoints (Phase 1 Remediation)
 app.post(['/api/auth/session', '/api/v1/auth/session'], authRateLimiter, async (req, res) => {
   try {
-    const { accessToken, username, uid, roles } = req.body;
+    const { accessToken } = req.body;
+
+    if (typeof accessToken !== 'string' || !accessToken.trim()) {
+      return res.status(401).json({
+        success: false,
+        error: 'PI_AUTHENTICATION_REQUIRED',
+        message: 'A valid Pi access token is required to establish a Pioneer server session.'
+      });
+    }
+
+    // Never trust username, uid, or roles supplied by the browser. In production,
+    // verify the raw Pi access token against Pi Platform first, then bind the
+    // server session to the identity returned by Pi.
+    const verifiedPiUser = await authService.authenticateToken(accessToken.trim());
+    if (!verifiedPiUser?.username) {
+      return res.status(401).json({
+        success: false,
+        error: 'PI_AUTHENTICATION_INVALID',
+        message: 'Pi authentication could not be verified by the Pi Platform.'
+      });
+    }
+
     const adminAuth = await checkAdminAuth(req);
     const isAuthorizedAdmin = adminAuth.authenticated && adminAuth.authorized;
 
     const session = await authService.createSession({
-      accessToken,
-      username: username || 'pioneer_user',
-      uid: uid || `pi-uid-${Date.now()}`,
-      roles,
+      username: verifiedPiUser.username,
+      uid: verifiedPiUser.piUid,
+      roles: verifiedPiUser.roles,
       isAuthorizedAdmin
     } as any);
 
