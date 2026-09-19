@@ -14,6 +14,37 @@ export default async function handler(req: any, res: any) {
       return res.status(403).json({ success: false, error: 'VENDOR_IDENTITY_MISMATCH' });
     }
 
+    const storeName = String(body.storeName || '').trim();
+    const contactEmail = String(body.contactEmail || '').trim();
+    const country = String(body.country || '').trim();
+    const categoriesToSell = Array.isArray(body.categoriesToSell)
+      ? body.categoriesToSell.map((value: any) => String(value || '').trim()).filter(Boolean)
+      : [];
+    const policies = body.policies && typeof body.policies === 'object' ? body.policies : {};
+    const returnRefundPolicy = String(policies.returnRefundPolicy || '').trim();
+    const deliveryShippingPolicy = String(policies.deliveryShippingPolicy || '').trim();
+    const pstpAgreementAccepted = body.pstpAgreementAccepted === true;
+    const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail);
+
+    const missingFields: string[] = [];
+    if (!storeName) missingFields.push('storeName');
+    if (!contactEmail) missingFields.push('contactEmail');
+    else if (!emailValid) missingFields.push('contactEmailValid');
+    if (!country) missingFields.push('country');
+    if (!categoriesToSell.length) missingFields.push('category');
+    if (!returnRefundPolicy) missingFields.push('returnRefundPolicy');
+    if (!deliveryShippingPolicy) missingFields.push('deliveryShippingPolicy');
+    if (!pstpAgreementAccepted) missingFields.push('pstpAgreementAccepted');
+
+    if (missingFields.length) {
+      return res.status(400).json({
+        success: false,
+        error: 'REQUIRED_MERCHANT_PROFILE_FIELDS',
+        message: 'Store name, contact email, country, category, return/shipping policies, and PSTP agreement are required.',
+        missingFields
+      });
+    }
+
     const documents = Array.isArray(body.documents) ? body.documents : [];
     if (!documents.length) return res.status(400).json({ success: false, error: 'VERIFICATION_DOCUMENT_REQUIRED', message: 'A securely uploaded verification document is required.' });
     if (documents.some((d: any) => !String(d?.fileUrl || '').startsWith('private://vendor-documents/'))) {
@@ -26,10 +57,16 @@ export default async function handler(req: any, res: any) {
     const application = {
       ...(existing || {}),
       ...body,
+      storeName,
+      contactEmail,
+      country,
+      categoriesToSell,
+      documents,
+      policies: { ...policies, returnRefundPolicy, deliveryShippingPolicy },
+      pstpAgreementAccepted,
       id: existing?.id || `VAPP-${String(body.countryCode || 'GL').slice(0, 2).toUpperCase()}-${Date.now().toString().slice(-8)}`,
       pioneerUsername: effectiveUsername,
       pioneerUid: user.id || body.pioneerUid,
-      documents,
       status,
       verificationStatus: status === 'APPROVED' ? 'Verified' : 'Pending Verification',
       sellerStatus: status === 'APPROVED' ? 'Active' : 'Probation',
