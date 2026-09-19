@@ -217,12 +217,14 @@ export class AuthorizationService {
       try {
         const isProduction = process.env.NODE_ENV === 'production';
         const piApiKey = (process.env.PI_API_KEY || process.env.PI_SERVER_KEY || '').trim();
-        const sandboxFlag = String(process.env.PI_SANDBOX_MODE || process.env.VITE_PI_SANDBOX || process.env.VITE_PI_ENV || '').trim().toLowerCase();
-        const isSandbox = sandboxFlag === 'true' || sandboxFlag === '1' || sandboxFlag === 'sandbox' || sandboxFlag === 'testnet';
-        const piApiBase = isSandbox ? 'https://api.sandbox.minepi.com' : 'https://api.minepi.com';
 
-        // Verify against the same Pi environment as the active app. Testnet/Sandbox
-        // access tokens must never be sent to the Mainnet identity endpoint.
+        // Pi's Sandbox is a Pi Browser/SDK environment mapped onto Pi Testnet.
+        // The backend identity endpoint remains the official Platform API
+        // (/v2/me); there is no separate api.sandbox.minepi.com Platform API host.
+        // Therefore never construct a non-existent sandbox API hostname here.
+        const piApiBase = 'https://api.minepi.com';
+
+        // The access token is verified server-side against Pi's official Platform API.
         if (isProduction && piApiKey && piApiKey !== 'YOUR_PI_PLATFORM_API_KEY' && piApiKey !== 'MY_PI_API_KEY') {
           const res = await fetch(`${piApiBase}/v2/me`, {
             headers: {
