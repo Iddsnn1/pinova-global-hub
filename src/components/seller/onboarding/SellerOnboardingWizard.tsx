@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { 
   X, 
   ArrowRight, 
@@ -55,6 +55,7 @@ export const SellerOnboardingWizard: React.FC<SellerOnboardingWizardProps> = ({
   }, []);
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  const stepOneFormRef = useRef<HTMLDivElement>(null);
 
   // Step 2: Branding
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
@@ -255,6 +256,34 @@ export const SellerOnboardingWizard: React.FC<SellerOnboardingWizardProps> = ({
     }
   };
 
+  const validateStepOne = () => {
+    const root = stepOneFormRef.current;
+    const storeNameValue = root?.querySelector<HTMLInputElement>('[name="storeName"]')?.value ?? storeName;
+    const emailValue = root?.querySelector<HTMLInputElement>('[name="contactEmail"]')?.value ?? email;
+    const categoryValue = root?.querySelector<HTMLSelectElement>('[name="category"]')?.value ?? category;
+    const countryValue = root?.querySelector<HTMLSelectElement>('[name="countryCode"]')?.value ?? countryCode;
+    const normalizedStoreName = storeNameValue.trim();
+    const normalizedEmail = emailValue.trim();
+    const normalizedCategory = categoryValue ? resolveMarketplaceCategory(categoryValue) : '';
+    const normalizedCountryCode = countryValue.trim();
+    setStoreName(normalizedStoreName);
+    setEmail(normalizedEmail);
+    setCategory(normalizedCategory);
+    setCountryCode(normalizedCountryCode);
+    setCountry(countryOptions.find(([code]) => code === normalizedCountryCode)?.[1] || '');
+    const missing: string[] = [];
+    if (!normalizedStoreName) missing.push('Store name');
+    if (!normalizedEmail) missing.push('Contact email');
+    if (!normalizedCategory) missing.push('Category');
+    if (!normalizedCountryCode) missing.push('Country');
+    if (missing.length) {
+      setSubmitError(`${missing.join(', ')} ${missing.length === 1 ? 'is' : 'are'} required.`);
+      return false;
+    }
+    setSubmitError(null);
+    return true;
+  };
+
   const steps = [
     { num: 1, title: 'Store Details' },
     { num: 2, title: 'Branding' },
@@ -314,7 +343,7 @@ export const SellerOnboardingWizard: React.FC<SellerOnboardingWizardProps> = ({
         </div>
 
         {/* Modal Body */}
-        <div className="p-5 sm:p-6 max-h-[65vh] overflow-y-auto space-y-4">
+        <div ref={stepOneFormRef} className="p-5 sm:p-6 max-h-[65vh] overflow-y-auto space-y-4">
           {submitError && (
             <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-700 dark:text-rose-400 text-xs font-semibold flex items-center gap-2">
               <AlertCircle className="w-4 h-4 shrink-0" />
@@ -332,7 +361,9 @@ export const SellerOnboardingWizard: React.FC<SellerOnboardingWizardProps> = ({
                   </label>
                   <input
                     type="text"
+                    name="storeName"
                     value={storeName}
+                    onInput={(e) => setStoreName(e.currentTarget.value)}
                     onChange={(e) => setStoreName(e.target.value)}
                     placeholder="e.g. Apex Tech Enterprise"
                     required
@@ -373,8 +404,9 @@ export const SellerOnboardingWizard: React.FC<SellerOnboardingWizardProps> = ({
                     Category *
                   </label>
                   <select
+                    name="category"
                     value={category}
-                    onChange={(e) => setCategory(resolveMarketplaceCategory(e.target.value))}
+                    onChange={(e) => setCategory(e.target.value ? resolveMarketplaceCategory(e.target.value) : '')}
                     className="w-full px-3 py-2 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-neutral-50/50 dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100"
                   >
                     <option value="">Select category</option>
@@ -390,6 +422,7 @@ export const SellerOnboardingWizard: React.FC<SellerOnboardingWizardProps> = ({
                     Country *
                   </label>
                   <select
+                    name="countryCode"
                     value={countryCode}
                     onChange={(e) => {
                       const code = e.target.value;
@@ -438,7 +471,9 @@ export const SellerOnboardingWizard: React.FC<SellerOnboardingWizardProps> = ({
                   </label>
                   <input
                     type="email"
+                    name="contactEmail"
                     value={email}
+                    onInput={(e) => setEmail(e.currentTarget.value)}
                     onChange={(e) => setEmail(e.target.value)}
                     required
                     className="w-full px-3 py-2 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-neutral-50/50 dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100"
@@ -788,11 +823,7 @@ export const SellerOnboardingWizard: React.FC<SellerOnboardingWizardProps> = ({
           {currentStep < 5 ? (
             <button
               onClick={() => {
-                if (currentStep === 1 && (!storeName.trim() || !email.trim() || !countryCode || !category)) {
-                  setSubmitError('Store name, contact email, category, and country are required.');
-                  return;
-                }
-                setSubmitError(null);
+                if (currentStep === 1 && !validateStepOne()) return;
                 setCurrentStep(prev => prev + 1);
               }}
               className="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-semibold text-xs flex items-center gap-1.5 transition-colors shadow-xs"
