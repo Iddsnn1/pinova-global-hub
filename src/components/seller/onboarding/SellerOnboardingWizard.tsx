@@ -110,6 +110,14 @@ export const SellerOnboardingWizard: React.FC<SellerOnboardingWizardProps> = ({
     setBrandingError(null);
 
     try {
+      // Branding uploads are protected by the same server-authoritative session
+      // used for merchant submission. Establish it before sending any bytes.
+      const authenticated = await ensureOnboardingAuthentication();
+      if (!authenticated) {
+        setBrandingError('Pioneer authentication is required before uploading merchant branding. Please authenticate in Pi Browser and try again.');
+        return;
+      }
+
       const buffer = await file.arrayBuffer();
       const res = await vendorAuthenticatedFetch('/api/vendor/branding-upload', {
         method: 'POST',
@@ -156,6 +164,14 @@ export const SellerOnboardingWizard: React.FC<SellerOnboardingWizardProps> = ({
     setKycError(null);
 
     try {
+      // KYC uploads also require an authenticated server session; never send
+      // protected documents without server verification.
+      const authenticated = await ensureOnboardingAuthentication();
+      if (!authenticated) {
+        setKycError('Pioneer authentication is required before uploading verification documents. Please authenticate in Pi Browser and try again.');
+        return;
+      }
+
       const buffer = await selectedFile.arrayBuffer();
       const res = await vendorAuthenticatedFetch('/api/vendor/document-upload', {
         method: 'POST',
