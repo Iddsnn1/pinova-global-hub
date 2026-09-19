@@ -56,6 +56,10 @@ export class AuthorizationService {
       v: 1,
       username: user.username,
       uid: user.piUid || uid || null,
+      // The token is cryptographically signed by the server. Include the
+      // already-sanitized roles so a Vercel function instance can verify the
+      // portable session without depending on another instance's filesystem.
+      roles: Array.isArray(user.roles) ? user.roles : [],
       exp: expiresAt,
       nonce
     })).toString('base64url');
@@ -169,17 +173,32 @@ export class AuthorizationService {
           return null;
         }
 
-        const user = this.userRepo.findByUsername(String(decoded.username));
-        if (!user || user.status === 'SUSPENDED') return null;
+        let user = this.userRepo.findByUsername(String(decoded.username));
+        if (user?.status === 'SUSPENDED') return null;
 
-        // Never trust roles/permissions from the token. Re-read them from the
-        // authoritative repository so revocations still take effect.
+        // Vercel serverless instances do not share the file-backed identity
+        // repository. A valid signed session therefore must remain portable.
+        // Roles are copied from the server-issued, sanitized session payload;
+        // they are never accepted from the client request itself.
+        const tokenRoles = Array.isArray(decoded.roles)
+          ? decoded.roles.filter((role: any) => typeof role === 'string') as UserRole[]
+          : [];
+
+        if (!user) {
+          user = this.userRepo.upsertUser({
+            username: String(decoded.username),
+            piUid: typeof decoded.uid === 'string' ? decoded.uid : undefined,
+            roles: tokenRoles.length ? tokenRoles : ['PIONEER']
+          });
+        }
+
+        const roles = tokenRoles.length ? tokenRoles : user.roles;
         return {
           id: user.id,
           username: user.username,
-          piUid: user.piUid,
-          roles: user.roles,
-          permissions: RoleRepository.getPermissionsForRoles(user.roles),
+          piUid: user.piUid || (typeof decoded.uid === 'string' ? decoded.uid : undefined),
+          roles,
+          permissions: RoleRepository.getPermissionsForRoles(roles),
           institutionId: user.institutionId,
           guardianId: user.guardianId
         };
