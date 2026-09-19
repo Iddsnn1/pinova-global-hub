@@ -370,13 +370,14 @@ export const SellerOnboardingWizard: React.FC<SellerOnboardingWizardProps> = ({
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1">
-                    Category
+                    Category *
                   </label>
                   <select
                     value={category}
                     onChange={(e) => setCategory(resolveMarketplaceCategory(e.target.value))}
                     className="w-full px-3 py-2 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-neutral-50/50 dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100"
                   >
+                    <option value="">Select category</option>
                     {MARKETPLACE_CATEGORIES.map((item) => (
                       <option key={item.id} value={item.id}>
                         {item.name}
