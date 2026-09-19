@@ -189,13 +189,42 @@ export const SellerOnboardingWizard: React.FC<SellerOnboardingWizardProps> = ({
     }
   };
 
+  const validatePolicies = () => {
+    const missing: string[] = [];
+    if (!returnPolicy.trim()) missing.push('Return/refund policy');
+    if (!shippingPolicy.trim()) missing.push('Delivery/shipping policy');
+    if (!termsAccepted) missing.push('PSTP agreement');
+
+    if (missing.length) {
+      setSubmitError(`${missing.join(', ')} ${missing.length === 1 ? 'is' : 'are'} required before review.`);
+      return false;
+    }
+    setSubmitError(null);
+    return true;
+  };
+
+  const validateBeforeSubmit = () => {
+    const missing: string[] = [];
+    if (!storeName.trim()) missing.push('Store name');
+    if (!email.trim()) missing.push('Contact email');
+    if (!countryCode) missing.push('Country');
+    if (!category) missing.push('Category');
+    if (!returnPolicy.trim()) missing.push('Return/refund policy');
+    if (!shippingPolicy.trim()) missing.push('Delivery/shipping policy');
+    if (!termsAccepted) missing.push('PSTP agreement');
+
+    if (missing.length) {
+      setSubmitError(`${missing.join(', ')} ${missing.length === 1 ? 'is' : 'are'} required.`);
+      if (!storeName.trim() || !email.trim() || !countryCode || !category) setCurrentStep(1);
+      else setCurrentStep(4);
+      return false;
+    }
+    return true;
+  };
+
   // Final Step: Submit Application
   const handleFinalSubmit = async () => {
-    if (!storeName.trim() || !email.trim() || !countryCode || !category || !returnPolicy.trim() || !shippingPolicy.trim() || !termsAccepted) {
-      setSubmitError('Store name, contact email, country, category, return/shipping policies, and PSTP agreement are required.');
-      setCurrentStep(1);
-      return;
-    }
+    if (!validateBeforeSubmit()) return;
     if (uploadedDocs.length === 0) {
       setSubmitError('At least one verification document is required for KYC compliance.');
       setCurrentStep(3);
@@ -796,10 +825,31 @@ export const SellerOnboardingWizard: React.FC<SellerOnboardingWizardProps> = ({
                 </div>
               </div>
 
-              <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-800 dark:text-emerald-400 flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 shrink-0" />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="p-3 rounded-xl border border-neutral-200 dark:border-neutral-700">
+                  <span className="text-neutral-500 block">Return/Refund Policy</span>
+                  <strong className={returnPolicy.trim() ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}>
+                    {returnPolicy.trim() ? 'Provided ✓' : 'Required'}
+                  </strong>
+                </div>
+                <div className="p-3 rounded-xl border border-neutral-200 dark:border-neutral-700">
+                  <span className="text-neutral-500 block">Delivery/Shipping Policy</span>
+                  <strong className={shippingPolicy.trim() ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}>
+                    {shippingPolicy.trim() ? 'Provided ✓' : 'Required'}
+                  </strong>
+                </div>
+                <div className="p-3 rounded-xl border border-neutral-200 dark:border-neutral-700 sm:col-span-2">
+                  <span className="text-neutral-500 block">PSTP Agreement</span>
+                  <strong className={termsAccepted ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}>
+                    {termsAccepted ? 'Accepted ✓' : 'Required'}
+                  </strong>
+                </div>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-400 flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
                 <span>
-                  All required information is present. Your application will be submitted for compliance review only after the authenticated Pioneer session is verified.
+                  Review your required merchant policies and PSTP agreement before submitting. No policy text is pre-filled; these fields must contain your own merchant terms.
                 </span>
               </div>
             </div>
@@ -824,6 +874,7 @@ export const SellerOnboardingWizard: React.FC<SellerOnboardingWizardProps> = ({
             <button
               onClick={() => {
                 if (currentStep === 1 && !validateStepOne()) return;
+                if (currentStep === 4 && !validatePolicies()) return;
                 setCurrentStep(prev => prev + 1);
               }}
               className="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-semibold text-xs flex items-center gap-1.5 transition-colors shadow-xs"
