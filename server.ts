@@ -5485,6 +5485,7 @@ app.post('/api/products', authenticate, async (req: AuthenticatedRequest, res) =
       description,
       pricePi,
       category: body.category || 'physical',
+      marketplaceCategory: String(body.marketplaceCategory || '').trim() || undefined,
       subcategory: String(body.subcategory || ''),
       images: Array.isArray(body.images) ? body.images.filter(Boolean) : [],
       stock,
