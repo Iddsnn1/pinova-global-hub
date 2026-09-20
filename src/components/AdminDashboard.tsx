@@ -41,7 +41,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     if (activeTab === 'vendors') {
       setLoadingApps(true);
       fetch('/api/admin/vendor-applications', {
-        headers: { 'x-user-role': 'admin' }
+        credentials: 'include',
+        headers: { 'Accept': 'application/json' }
       })
         .then((res) => res.json())
         .then((data) => {
@@ -54,18 +55,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
   }, [activeTab]);
 
-  const handleReviewApplication = async (id: string, status: 'APPROVED' | 'REJECTED') => {
+  const handleReviewApplication = async (id: string, status: 'APPROVED' | 'ACTION_REQUIRED' | 'REJECTED') => {
     try {
       const res = await fetch(`/api/admin/vendor-application/${id}/review`, {
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
-          'x-user-role': 'admin'
+          'Accept': 'application/json'
         },
         body: JSON.stringify({
           status,
           adminNotes: adminNotes || (status === 'APPROVED' ? 'Verified by PiNova Compliance Desk' : 'Incomplete documentation'),
-          reviewedBy: 'Admin_Lead_01'
+          // The server derives the reviewer from the authenticated admin session.
         })
       });
       const data = await res.json();
@@ -294,7 +296,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       </div>
 
                       <div className="flex items-center gap-2">
-                        {app.status !== 'APPROVED' && (
+                        {app.status !== 'APPROVED' && app.status !== 'REJECTED' && (
                           <button
                             onClick={() => handleReviewApplication(app.id, 'APPROVED')}
                             className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-colors flex items-center gap-1 shadow-sm"
@@ -303,7 +305,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             <span>Approve & Verify</span>
                           </button>
                         )}
-                        {app.status !== 'REJECTED' && (
+                        {app.status !== 'REJECTED' && app.status !== 'APPROVED' && (
+                          <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => {
+                              if (reviewingAppId === app.id) {
+                                handleReviewApplication(app.id, 'ACTION_REQUIRED');
+                              } else {
+                                setReviewingAppId(app.id);
+                              }
+                            }}
+                            className="px-3.5 py-1.5 rounded-xl bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 text-xs font-bold transition-colors"
+                          >
+                            <span>{reviewingAppId === app.id ? 'Request Changes' : 'Request Changes'}</span>
+                          </button>
                           <button
                             onClick={() => {
                               if (reviewingAppId === app.id) {
@@ -316,6 +331,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           >
                             <span>{reviewingAppId === app.id ? 'Confirm Rejection' : 'Reject Application'}</span>
                           </button>
+                        </div>
                         )}
                       </div>
                     </div>
@@ -335,7 +351,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       <div className="flex gap-2 pt-1">
                         <input
                           type="text"
-                          placeholder="Enter rejection reason or compliance notes..."
+                          placeholder="Enter compliance notes / reason..."
                           value={adminNotes}
                           onChange={(e) => setAdminNotes(e.target.value)}
                           className="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white"
