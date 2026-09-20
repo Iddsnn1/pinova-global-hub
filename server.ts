@@ -47,10 +47,16 @@ const app = express();
 const DURABLE_VENDOR_PREFIX = 'vendor-applications/';
 
 function durableVendorEnabled(): boolean {
-  // Vercel Blob supports both token-based auth and Vercel OIDC. In Vercel
-  // serverless functions the SDK can authenticate through OIDC without a
-  // long-lived BLOB_READ_WRITE_TOKEN.
-  return Boolean(process.env.BLOB_READ_WRITE_TOKEN || process.env.VERCEL === '1' || process.env.VERCEL_ENV);
+  // Merchant/KYC persistence is isolated to the dedicated PRIVATE Blob store.
+  // This prevents the legacy public store from ever being used for sensitive
+  // vendor application records.
+  return Boolean(process.env.PRIVATE_BLOB_STORE_ID);
+}
+
+function privateVendorBlobOptions() {
+  const storeId = process.env.PRIVATE_BLOB_STORE_ID;
+  if (!storeId) throw new Error('PRIVATE_BLOB_STORE_ID_UNAVAILABLE');
+  return { storeId };
 }
 
 function durableVendorKey(username: string): string {
@@ -63,11 +69,11 @@ async function readDurableVendorPath(pathname: string): Promise<any | null> {
   // Check existence before GET. Some private Blob configurations surface
   // a missing pathname as HTTP 400; list() lets us distinguish that from
   // an authentication/store configuration failure.
-  const page = await list({ prefix: pathname, limit: 10 });
+  const page = await list({ prefix: pathname, limit: 10, ...privateVendorBlobOptions() });
   const exists = page.blobs.some((blob) => blob.pathname === pathname);
   if (!exists) return null;
 
-  const result = await get(pathname, { access: 'private', useCache: false });
+  const result = await get(pathname, { access: 'private', useCache: false, ...privateVendorBlobOptions() });
   if (!result || result.statusCode !== 200 || !result.stream) return null;
 
   const reader = result.stream.getReader();
@@ -98,7 +104,8 @@ export async function saveDurableVendorApplication(application: any): Promise<an
   await put(durableVendorKey(application.pioneerUsername), JSON.stringify(application), {
     access: 'private',
     contentType: 'application/json',
-    allowOverwrite: true
+    allowOverwrite: true,
+    ...privateVendorBlobOptions()
   });
   return application;
 }
@@ -108,7 +115,7 @@ export async function listDurableVendorApplications(): Promise<any[]> {
   const entries: any[] = [];
   let cursor: string | undefined;
   do {
-    const page = await list({ prefix: DURABLE_VENDOR_PREFIX, limit: 1000, cursor });
+    const page = await list({ prefix: DURABLE_VENDOR_PREFIX, limit: 1000, cursor, ...privateVendorBlobOptions() });
     for (const blob of page.blobs) {
       const app = await readDurableVendorPath(blob.pathname);
       if (app) entries.push(app);
