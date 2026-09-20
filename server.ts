@@ -60,35 +60,32 @@ function durableVendorKey(username: string): string {
 async function readDurableVendorPath(pathname: string): Promise<any | null> {
   if (!durableVendorEnabled()) return null;
 
-  try {
-    const result = await get(pathname, { access: 'private', useCache: false });
-    if (!result || result.statusCode !== 200 || !result.stream) return null;
-    const reader = result.stream.getReader();
+  // Check existence before GET. Some private Blob configurations surface
+  // a missing pathname as HTTP 400; list() lets us distinguish that from
+  // an authentication/store configuration failure.
+  const page = await list({ prefix: pathname, limit: 10 });
+  const exists = page.blobs.some((blob) => blob.pathname === pathname);
+  if (!exists) return null;
+
+  const result = await get(pathname, { access: 'private', useCache: false });
+  if (!result || result.statusCode !== 200 || !result.stream) return null;
+
+  const reader = result.stream.getReader();
   const chunks: Uint8Array[] = [];
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
     if (value) chunks.push(value);
   }
+
   const bytes = new Uint8Array(chunks.reduce((n, chunk) => n + chunk.length, 0));
   let offset = 0;
   for (const chunk of chunks) {
     bytes.set(chunk, offset);
     offset += chunk.length;
   }
-    return JSON.parse(new TextDecoder().decode(bytes));
-  } catch (error: any) {
-    // A first-time merchant has no durable application object yet. The Blob
-    // SDK can surface that missing private object as HTTP 400; treat only
-    // that read miss as "not found". Actual write/auth failures still fail
-    // closed when saveDurableVendorApplication() calls put().
-    const status = Number(error?.statusCode ?? error?.status ?? error?.response?.status);
-    if (status === 400 || status === 404) {
-      console.info('[durable-vendor] application object not found; treating as first submission');
-      return null;
-    }
-    throw error;
-  }
+
+  return JSON.parse(new TextDecoder().decode(bytes));
 }
 
 export async function getDurableVendorApplication(username: string): Promise<any | null> {
