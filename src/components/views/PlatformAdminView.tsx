@@ -81,7 +81,8 @@ export type AdminTab =
   | 'users' 
   | 'rbac' 
   | 'config' 
-  | 'audit';
+  | 'audit'
+  | 'vendor_compliance';
 
 export const PlatformAdminView: React.FC<PlatformAdminViewProps> = ({
   currentAdminUsername = 'Pi_Pioneer_01',
@@ -148,6 +149,78 @@ export const PlatformAdminView: React.FC<PlatformAdminViewProps> = ({
 
   // Global Settings State
   const [globalSettings, setGlobalSettings] = useState<GlobalPlatformSettings>(() => engine.getGlobalSettings());
+
+  // Server-authoritative merchant compliance queue.
+  const [vendorApplications, setVendorApplications] = useState<any[]>([]);
+  const [vendorAppsLoading, setVendorAppsLoading] = useState(false);
+  const [vendorAppsError, setVendorAppsError] = useState<string | null>(null);
+  const [vendorReviewId, setVendorReviewId] = useState<string | null>(null);
+  const [vendorReviewNotes, setVendorReviewNotes] = useState('');
+
+  const loadVendorApplications = async () => {
+    setVendorAppsLoading(true);
+    setVendorAppsError(null);
+    try {
+      const res = await fetch('/api/admin/vendor-applications', {
+        credentials: 'include',
+        headers: { Accept: 'application/json' }
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.error || data?.message || `Compliance queue request failed (HTTP ${res.status})`);
+      }
+      if (!data?.success || !Array.isArray(data.applications)) {
+        throw new Error('Compliance queue returned an invalid response.');
+      }
+      setVendorApplications(data.applications);
+    } catch (error: any) {
+      setVendorAppsError(error?.message || 'Unable to load the compliance queue.');
+    } finally {
+      setVendorAppsLoading(false);
+    }
+  };
+
+  const handleVendorReview = async (
+    id: string,
+    status: 'APPROVED' | 'ACTION_REQUIRED' | 'REJECTED'
+  ) => {
+    setVendorReviewId(id);
+    try {
+      const res = await fetch(`/api/admin/vendor-application/${encodeURIComponent(id)}/review`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json'
+        },
+        body: JSON.stringify({
+          status,
+          adminNotes: vendorReviewNotes.trim() ||
+            (status === 'APPROVED'
+              ? 'Merchant compliance review completed.'
+              : status === 'ACTION_REQUIRED'
+                ? 'Additional compliance documentation or corrections required.'
+                : 'Merchant application rejected after compliance review.')
+        })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.success) {
+        throw new Error(data?.error || data?.message || `Review request failed (HTTP ${res.status})`);
+      }
+      setVendorReviewNotes('');
+      await loadVendorApplications();
+    } catch (error: any) {
+      setVendorAppsError(error?.message || 'Unable to submit compliance decision.');
+    } finally {
+      setVendorReviewId(null);
+    }
+  };
+
+  React.useEffect(() => {
+    if (activeTab === 'vendor_compliance') {
+      void loadVendorApplications();
+    }
+  }, [activeTab]);
 
   // Data Refresh Trigger
   const [tick, setTick] = useState(0);
@@ -446,6 +519,7 @@ export const PlatformAdminView: React.FC<PlatformAdminViewProps> = ({
           { id: 'feature_flags', label: 'Feature Rollout & Flags', icon: <SlidersHorizontal className="w-4 h-4" /> },
           { id: 'backup_recovery', label: 'Backup & Recovery', icon: <HardDrive className="w-4 h-4" /> },
           { id: 'incidents', label: 'Incident Management', icon: <Flame className="w-4 h-4" />, count: incidentsList.filter(i => i.status !== 'RESOLVED').length },
+          { id: 'vendor_compliance', label: 'Merchant Compliance Queue', icon: <UserCheck className="w-4 h-4" />, count: vendorApplications.filter(a => ['PENDING_REVIEW', 'UNDER_REVIEW', 'ACTION_REQUIRED'].includes(a?.status)).length },
           { id: 'users', label: 'Users & Identity Directory', icon: <Users className="w-4 h-4" />, count: filteredUsers.length },
           { id: 'rbac', label: 'RBAC & Permissions', icon: <Key className="w-4 h-4" />, count: roleDefinitions.length },
           { id: 'config', label: 'Marketplace Configuration', icon: <Sliders className="w-4 h-4" /> },
@@ -473,6 +547,117 @@ export const PlatformAdminView: React.FC<PlatformAdminViewProps> = ({
         ))}
       </div>
 
+
+      {/* SERVER-AUTHORITATIVE MERCHANT COMPLIANCE QUEUE */}
+      {activeTab === 'vendor_compliance' && (
+        <div className="space-y-6">
+          <div className="p-5 rounded-3xl bg-slate-900 border border-slate-800">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-black text-white flex items-center gap-2">
+                  <UserCheck className="w-5 h-5 text-emerald-400" />
+                  Merchant Compliance Review Queue
+                </h2>
+                <p className="text-xs text-slate-400 mt-1">
+                  Server-authoritative review of submitted merchant applications. Reviewer identity is derived from the authenticated compliance session.
+                </p>
+              </div>
+              <button
+                onClick={() => void loadVendorApplications()}
+                disabled={vendorAppsLoading}
+                className="px-3 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white text-xs font-bold flex items-center gap-2"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${vendorAppsLoading ? 'animate-spin' : ''}`} />
+                Refresh Queue
+              </button>
+            </div>
+          </div>
+
+          {vendorAppsError && (
+            <div className="p-4 rounded-2xl bg-red-950/40 border border-red-800 text-red-200 text-xs">
+              <div className="font-bold">Compliance queue unavailable</div>
+              <div className="mt-1">{vendorAppsError}</div>
+              <div className="mt-2 text-red-300/80">
+                This does not bypass server authorization; sign in with an authorized PLATFORM_ADMIN or COMPLIANCE_OFFICER session.
+              </div>
+            </div>
+          )}
+
+          {!vendorAppsLoading && !vendorAppsError && vendorApplications.length === 0 && (
+            <div className="p-10 rounded-3xl bg-slate-900 border border-slate-800 text-center">
+              <CheckCircle2 className="w-10 h-10 mx-auto text-emerald-400 mb-3" />
+              <div className="text-sm font-bold text-white">No submitted merchant applications in the queue</div>
+              <div className="text-xs text-slate-400 mt-1">Applications will appear here after a merchant submits onboarding.</div>
+            </div>
+          )}
+
+          <div className="grid gap-4">
+            {vendorApplications.map((app) => {
+              const pending = ['PENDING_REVIEW', 'UNDER_REVIEW', 'ACTION_REQUIRED'].includes(app?.status);
+              const reviewing = vendorReviewId === app?.id;
+              return (
+                <div key={app.id} className="p-5 rounded-3xl bg-slate-900 border border-slate-800 space-y-4">
+                  <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="font-black text-white">{app.storeName || app.businessName || 'Merchant Application'}</h3>
+                        <span className="px-2 py-1 rounded-lg bg-slate-800 text-slate-300 text-[10px] font-black">{app.status || 'UNKNOWN'}</span>
+                        <span className="px-2 py-1 rounded-lg bg-slate-800 text-slate-300 text-[10px] font-black">{app.verificationStatus || 'Unverified'}</span>
+                        <span className="px-2 py-1 rounded-lg bg-slate-800 text-slate-300 text-[10px] font-black">{app.sellerStatus || 'Inactive'}</span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3 text-xs">
+                        <div><span className="text-slate-500">Application:</span> <span className="text-slate-200 font-mono">{app.id}</span></div>
+                        <div><span className="text-slate-500">Pioneer:</span> <span className="text-slate-200">{app.username || app.pioneerUsername || '—'}</span></div>
+                        <div><span className="text-slate-500">Business:</span> <span className="text-slate-200">{app.businessName || '—'}</span></div>
+                        <div><span className="text-slate-500">Submitted:</span> <span className="text-slate-200">{app.createdAt ? new Date(app.createdAt).toLocaleString() : '—'}</span></div>
+                      </div>
+                    </div>
+                    <div className="text-xs text-slate-400">
+                      Seller access requires <span className="text-emerald-300 font-bold">APPROVED + Verified + Active</span>.
+                    </div>
+                  </div>
+
+                  {pending && (
+                    <div className="space-y-3 pt-3 border-t border-slate-800">
+                      {vendorReviewId === app.id && (
+                        <textarea
+                          value={vendorReviewNotes}
+                          onChange={(e) => setVendorReviewNotes(e.target.value)}
+                          placeholder="Compliance review notes (optional)..."
+                          className="w-full h-20 bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white focus:outline-none"
+                        />
+                      )}
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          disabled={reviewing}
+                          onClick={() => void handleVendorReview(app.id, 'ACTION_REQUIRED')}
+                          className="px-3 py-2 rounded-xl bg-amber-950 text-amber-300 border border-amber-800 text-xs font-bold disabled:opacity-50"
+                        >
+                          Request Changes
+                        </button>
+                        <button
+                          disabled={reviewing}
+                          onClick={() => void handleVendorReview(app.id, 'REJECTED')}
+                          className="px-3 py-2 rounded-xl bg-red-950 text-red-300 border border-red-800 text-xs font-bold disabled:opacity-50"
+                        >
+                          Reject
+                        </button>
+                        <button
+                          disabled={reviewing}
+                          onClick={() => void handleVendorReview(app.id, 'APPROVED')}
+                          className="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold disabled:opacity-50"
+                        >
+                          {reviewing ? 'Submitting…' : 'Approve Merchant'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* TAB 1: OVERVIEW & PLATFORM HEALTH */}
       {activeTab === 'overview' && (
