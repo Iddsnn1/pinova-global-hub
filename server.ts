@@ -59,9 +59,11 @@ function durableVendorKey(username: string): string {
 
 async function readDurableVendorPath(pathname: string): Promise<any | null> {
   if (!durableVendorEnabled()) return null;
-  const result = await get(pathname, { access: 'private', useCache: false });
-  if (!result || result.statusCode !== 200 || !result.stream) return null;
-  const reader = result.stream.getReader();
+
+  try {
+    const result = await get(pathname, { access: 'private', useCache: false });
+    if (!result || result.statusCode !== 200 || !result.stream) return null;
+    const reader = result.stream.getReader();
   const chunks: Uint8Array[] = [];
   while (true) {
     const { done, value } = await reader.read();
@@ -74,7 +76,19 @@ async function readDurableVendorPath(pathname: string): Promise<any | null> {
     bytes.set(chunk, offset);
     offset += chunk.length;
   }
-  return JSON.parse(new TextDecoder().decode(bytes));
+    return JSON.parse(new TextDecoder().decode(bytes));
+  } catch (error: any) {
+    // A first-time merchant has no durable application object yet. The Blob
+    // SDK can surface that missing private object as HTTP 400; treat only
+    // that read miss as "not found". Actual write/auth failures still fail
+    // closed when saveDurableVendorApplication() calls put().
+    const status = Number(error?.statusCode ?? error?.status ?? error?.response?.status);
+    if (status === 400 || status === 404) {
+      console.info('[durable-vendor] application object not found; treating as first submission');
+      return null;
+    }
+    throw error;
+  }
 }
 
 export async function getDurableVendorApplication(username: string): Promise<any | null> {
