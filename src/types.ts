@@ -23,6 +23,8 @@ export interface Product {
   description: string;
   pricePi: number;
   category: ProductCategory;
+  /** Canonical marketplace taxonomy category (separate from fulfillment/product type). */
+  marketplaceCategory?: string;
   subcategory: string;
   images: string[];
   stock: number;
