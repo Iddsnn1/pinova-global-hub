@@ -113,7 +113,7 @@ export function durableVendorStorageEnabled(): boolean {
 
 export async function authenticateVendorRequest(req: any): Promise<any | null> {
   const header = req.headers?.authorization || req.headers?.Authorization;
-  const match = typeof header === 'string' ? header.match(/^Bearer\\s+(.+)$/i) : null;
+  const match = typeof header === 'string' ? header.match(/^Bearer\s+(.+)$/i) : null;
   if (!match?.[1]) return null;
   return authService.authenticateToken(match[1]);
 }
