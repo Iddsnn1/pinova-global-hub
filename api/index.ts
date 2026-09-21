@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'http';
 import { createRequire } from 'module';
 import path from 'path';
 import crypto from 'crypto';
-import { authenticateVendorRequest as authenticateRequest, getDurableVendorApplicationByIdentity, durableVendorStorageEnabled, ProductRepository } from '../dist/server.cjs';
+import { authenticateVendorRequest as authenticateRequest, getDurableVendorApplication, listDurableVendorApplications, durableVendorStorageEnabled, ProductRepository } from '../dist/server.cjs';
 
 // Ensure serverless environment flag is set before loading server module
 process.env.VERCEL = process.env.VERCEL || '1';
@@ -39,6 +39,22 @@ function getBearerToken(req: IncomingMessage): string | null {
   return raw.startsWith('Bearer ') ? raw.slice(7).trim() : raw.trim();
 }
 
+async function resolveApprovedMerchant(username: string, pioneerUid?: string | null): Promise<any | null> {
+  const direct = await getDurableVendorApplication(username);
+  if (direct) return direct;
+
+  const target = String(username || '').trim().replace(/^@/, '').toLowerCase();
+  const uid = String(pioneerUid || '').trim();
+  if (!target && !uid) return null;
+
+  const entries = await listDurableVendorApplications();
+  return entries.find((application: any) => {
+    const storedUsername = String(application?.pioneerUsername || '').trim().replace(/^@/, '').toLowerCase();
+    const storedUid = String(application?.pioneerUid || '').trim();
+    return (target && storedUsername === target) || (uid && storedUid === uid);
+  }) || null;
+}
+
 async function handleDurableProducts(req: any, res: any): Promise<boolean> {
   const pathname = new URL(req.url || '/', 'http://localhost').pathname;
   if (pathname !== '/api/products' && pathname !== '/api/v1/products' && !pathname.startsWith('/api/v1/products/') && !req.url?.includes('__path=/products')) return false;
@@ -55,7 +71,7 @@ async function handleDurableProducts(req: any, res: any): Promise<boolean> {
   if (!durableVendorStorageEnabled()) return res.status(503).json({ ok: false, error: 'DURABLE_VENDOR_STORAGE_UNAVAILABLE' });
   const user = await authenticateRequest(req);
   if (!user?.username) return res.status(401).json({ ok: false, error: 'INVALID_SESSION' });
-  const merchant = await getDurableVendorApplicationByIdentity(user.username, user.id);
+  const merchant = await resolveApprovedMerchant(user.username, user.id);
   const canSell = merchant?.status === 'APPROVED' && merchant.verificationStatus === 'Verified' && merchant.sellerStatus === 'Active';
   if (!canSell) return res.status(403).json({ ok: false, error: 'MERCHANT_SELLER_ACCESS_REQUIRED' });
 
