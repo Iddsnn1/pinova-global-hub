@@ -691,22 +691,7 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
             {activeTab === 'products' && (
               <ProductsTab
                 products={products}
-                onOpenAddProduct={() => {
-                  onAddProduct({
-                    title: 'New Store Product',
-                    description: 'Genuine merchant product on PiNova Global Marketplace.',
-                    pricePi: 10,
-                    category: 'physical',
-                    subcategory: 'General',
-                    images: ['https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=600&q=80'],
-                    stock: 5,
-                    sellerId: userUsername,
-                    sellerName: vendorProfile.storeName,
-                    sellerVerified: serverStatus.verified,
-                    features: ['Authentic Pi Merchant Item', 'Protected by Escrow'],
-                    tags: ['marketplace', 'merchant']
-                  });
-                }}
+                onOpenAddProduct={() => handleSelectTab('products')}
                 onEditProduct={(prod) => {
                   if (onUpdateProduct) onUpdateProduct(prod);
                 }}
