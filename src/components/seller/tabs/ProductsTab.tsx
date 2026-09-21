@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Package, Plus, Search, Edit3, Trash2, X, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { Product, ProductCategory } from '../../../types';
 import { MARKETPLACE_CATEGORIES } from '../../../data/categoryData';
@@ -7,6 +7,8 @@ import { createSellerProduct } from '../../../lib/productApi';
 interface ProductsTabProps {
   products: Product[];
   onOpenAddProduct?: () => void;
+  openCreateOnMount?: boolean;
+  onCreateFormOpened?: () => void;
   onEditProduct: (product: Product) => void;
   onDeleteProduct: (productId: string) => void;
 }
@@ -14,7 +16,7 @@ interface ProductsTabProps {
 type ProductDraft = { title: string; description: string; category: ProductCategory; marketplaceCategory: string; subcategory: string; pricePi: string; stock: string; imageUrl: string };
 const EMPTY_DRAFT: ProductDraft = { title: '', description: '', category: 'physical', marketplaceCategory: MARKETPLACE_CATEGORIES[0]?.id || 'other_general', subcategory: '', pricePi: '', stock: '0', imageUrl: '' };
 
-export const ProductsTab: React.FC<ProductsTabProps> = ({ products, onEditProduct, onDeleteProduct }) => {
+export const ProductsTab: React.FC<ProductsTabProps> = ({ products, openCreateOnMount = false, onCreateFormOpened, onEditProduct, onDeleteProduct }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [stockFilter, setStockFilter] = useState<'all' | 'in_stock' | 'out_of_stock'>('all');
@@ -38,6 +40,12 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({ products, onEditProduc
   const categoryCount = MARKETPLACE_CATEGORIES.length;
 
   const openCreateForm = () => { setDraft(EMPTY_DRAFT); setSubmitError(null); setSubmitSuccess(null); setIsCreateOpen(true); };
+
+  useEffect(() => {
+    if (!openCreateOnMount) return;
+    openCreateForm();
+    onCreateFormOpened?.();
+  }, [openCreateOnMount, onCreateFormOpened]);
   const closeCreateForm = () => { if (!isSubmitting) setIsCreateOpen(false); };
 
   const submitProduct = async (event: React.FormEvent) => {
