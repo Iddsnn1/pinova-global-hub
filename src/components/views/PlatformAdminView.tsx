@@ -51,6 +51,8 @@ import {
   AlertCircle
 } from 'lucide-react';
 
+import { getVendorAuthHeaders } from '../../lib/vendorAuthBridge';
+
 import { 
   PlatformAdminEngine, 
   ALL_GRANULAR_PERMISSIONS 
@@ -163,7 +165,10 @@ export const PlatformAdminView: React.FC<PlatformAdminViewProps> = ({
     try {
       const res = await fetch('/api/admin/vendor-applications', {
         credentials: 'include',
-        headers: { Accept: 'application/json' }
+        headers: {
+          Accept: 'application/json',
+          ...getVendorAuthHeaders()
+        }
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
