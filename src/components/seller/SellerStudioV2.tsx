@@ -128,20 +128,14 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
   const [isMobileModuleSheetOpen, setIsMobileModuleSheetOpen] = useState(false);
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
 
-  // Synchronize browser history and back navigation
-  const handleSelectTab = useCallback((newTab: SellerStudioTabId, pushHistory = true) => {
+  // Keep Seller Studio module switching entirely in React state.
+  // Pi Browser must not treat an internal module switch as a new document navigation.
+  const handleSelectTab = useCallback((newTab: SellerStudioTabId) => {
     setActiveTab(newTab);
     setIsMobileMenuOpen(false);
     setIsMobileModuleSheetOpen(false);
 
     if (typeof window !== 'undefined') {
-      try {
-        const url = new URL(window.location.href);
-        url.searchParams.set('tab', newTab);
-        if (pushHistory) {
-          window.history.pushState({ sellerTab: newTab }, '', url.toString());
-        }
-      } catch (_) {}
       try {
         window.scrollTo({ top: 0, behavior: 'smooth' });
       } catch (_) {}
