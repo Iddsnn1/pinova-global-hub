@@ -127,6 +127,7 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMobileModuleSheetOpen, setIsMobileModuleSheetOpen] = useState(false);
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
+  const [openProductForm, setOpenProductForm] = useState(false);
 
   // Keep Seller Studio module switching entirely in React state.
   // Pi Browser must not treat an internal module switch as a new document navigation.
@@ -663,7 +664,10 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
                 orders={orders}
                 onNavigateTab={(tab) => handleSelectTab(tab as SellerStudioTabId)}
                 onOpenOnboarding={() => setIsOnboardingOpen(true)}
-                onAddProduct={() => handleSelectTab('products')}
+                onAddProduct={() => {
+                  setOpenProductForm(true);
+                  handleSelectTab('products');
+                }}
                 onOpenStorefrontPreview={() => {
                   if (onViewStorefront) onViewStorefront(vendorProfile.id);
                 }}
@@ -685,7 +689,8 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
             {activeTab === 'products' && (
               <ProductsTab
                 products={products}
-                onOpenAddProduct={() => handleSelectTab('products')}
+                openCreateOnMount={openProductForm}
+                onCreateFormOpened={() => setOpenProductForm(false)}
                 onEditProduct={(prod) => {
                   if (onUpdateProduct) onUpdateProduct(prod);
                 }}
