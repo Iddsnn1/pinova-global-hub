@@ -34,9 +34,33 @@ async function readPath(pathname: string): Promise<DurableVendorApplication | nu
   return JSON.parse(new TextDecoder().decode(bytes));
 }
 
+function normalizeIdentity(value: unknown): string {
+  return String(value || '').trim().replace(/^@/, '').toLowerCase();
+}
+
 export async function getDurableVendorApplication(username: string): Promise<DurableVendorApplication | null> {
   if (!username?.trim() || !enabled()) return null;
-  return readPath(keyFor(username));
+  const direct = await readPath(keyFor(username));
+  if (direct) return direct;
+
+  // Resolve harmless @prefix/case differences against the authenticated identity.
+  const target = normalizeIdentity(username);
+  if (!target) return null;
+  const entries = await listDurableVendorApplications();
+  return entries.find((app) => normalizeIdentity(app?.pioneerUsername) === target) || null;
+}
+
+export async function getDurableVendorApplicationByIdentity(
+  username: string,
+  pioneerUid?: string | null
+): Promise<DurableVendorApplication | null> {
+  const direct = await getDurableVendorApplication(username);
+  if (direct) return direct;
+
+  const uid = String(pioneerUid || '').trim();
+  if (!uid || !enabled()) return null;
+  const entries = await listDurableVendorApplications();
+  return entries.find((app) => String(app?.pioneerUid || '').trim() === uid) || null;
 }
 
 export async function saveDurableVendorApplication(application: DurableVendorApplication): Promise<DurableVendorApplication> {
