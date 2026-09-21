@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'http';
 import { createRequire } from 'module';
 import path from 'path';
 import crypto from 'crypto';
-import { authenticateVendorRequest as authenticateRequest, getDurableVendorApplication, durableVendorStorageEnabled, ProductRepository } from '../dist/server.cjs';
+import { authenticateVendorRequest as authenticateRequest, getDurableVendorApplicationByIdentity, durableVendorStorageEnabled, ProductRepository } from '../dist/server.cjs';
 
 // Ensure serverless environment flag is set before loading server module
 process.env.VERCEL = process.env.VERCEL || '1';
@@ -55,7 +55,7 @@ async function handleDurableProducts(req: any, res: any): Promise<boolean> {
   if (!durableVendorStorageEnabled()) return res.status(503).json({ ok: false, error: 'DURABLE_VENDOR_STORAGE_UNAVAILABLE' });
   const user = await authenticateRequest(req);
   if (!user?.username) return res.status(401).json({ ok: false, error: 'INVALID_SESSION' });
-  const merchant = await getDurableVendorApplication(user.username);
+  const merchant = await getDurableVendorApplicationByIdentity(user.username, user.id);
   const canSell = merchant?.status === 'APPROVED' && merchant.verificationStatus === 'Verified' && merchant.sellerStatus === 'Active';
   if (!canSell) return res.status(403).json({ ok: false, error: 'MERCHANT_SELLER_ACCESS_REQUIRED' });
 
