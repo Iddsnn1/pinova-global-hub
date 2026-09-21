@@ -6,7 +6,7 @@ import { createSellerProduct } from '../../../lib/productApi';
 
 interface ProductsTabProps {
   products: Product[];
-  onOpenAddProduct: () => void;
+  onOpenAddProduct?: () => void;
   onEditProduct: (product: Product) => void;
   onDeleteProduct: (productId: string) => void;
 }
@@ -14,7 +14,7 @@ interface ProductsTabProps {
 type ProductDraft = { title: string; description: string; category: ProductCategory; marketplaceCategory: string; subcategory: string; pricePi: string; stock: string; imageUrl: string };
 const EMPTY_DRAFT: ProductDraft = { title: '', description: '', category: 'physical', marketplaceCategory: MARKETPLACE_CATEGORIES[0]?.id || 'other_general', subcategory: '', pricePi: '', stock: '0', imageUrl: '' };
 
-export const ProductsTab: React.FC<ProductsTabProps> = ({ products, onOpenAddProduct: _onOpenAddProduct, onEditProduct, onDeleteProduct }) => {
+export const ProductsTab: React.FC<ProductsTabProps> = ({ products, onEditProduct, onDeleteProduct }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [stockFilter, setStockFilter] = useState<'all' | 'in_stock' | 'out_of_stock'>('all');
