@@ -51,7 +51,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 
-import { getVendorAuthHeaders } from '../../lib/vendorAuthBridge';
+import { getVendorAuthHeaders, vendorAuthenticatedFetch, clearVendorAuthToken, ensureServerSession } from '../../lib/vendorAuthBridge';
 
 import { 
   PlatformAdminEngine, 
@@ -163,13 +163,35 @@ export const PlatformAdminView: React.FC<PlatformAdminViewProps> = ({
     setVendorAppsLoading(true);
     setVendorAppsError(null);
     try {
-      const res = await fetch('/api/admin/vendor-applications', {
+      // Always negotiate a current server session before entering the privileged
+      // compliance queue. This is important when a server-side RBAC allowlist
+      // (PINOVA_COMPLIANCE_ADMIN_USERNAMES) was added after an older session
+      // token was issued. The Pi identity is still verified server-side.
+      let res = await vendorAuthenticatedFetch('/api/admin/vendor-applications', {
         credentials: 'include',
         headers: {
           Accept: 'application/json',
           ...getVendorAuthHeaders()
         }
       });
+
+      // A previously issued server session can legitimately lack the newly
+      // configured compliance role. Refresh exactly once on 403; never trust
+      // client-supplied roles or bypass the server authorization gate.
+      if (res.status === 403) {
+        clearVendorAuthToken();
+        const refreshedToken = await ensureServerSession(true);
+        if (refreshedToken) {
+          res = await vendorAuthenticatedFetch('/api/admin/vendor-applications', {
+            credentials: 'include',
+            headers: {
+              Accept: 'application/json',
+              ...getVendorAuthHeaders()
+            }
+          });
+        }
+      }
+
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         throw new Error(data?.error || data?.message || `Compliance queue request failed (HTTP ${res.status})`);
@@ -191,12 +213,13 @@ export const PlatformAdminView: React.FC<PlatformAdminViewProps> = ({
   ) => {
     setVendorReviewId(id);
     try {
-      const res = await fetch(`/api/admin/vendor-application/${encodeURIComponent(id)}/review`, {
+      let res = await vendorAuthenticatedFetch(`/api/admin/vendor-application/${encodeURIComponent(id)}/review`, {
         method: 'POST',
         credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
-          Accept: 'application/json'
+          Accept: 'application/json',
+          ...getVendorAuthHeaders()
         },
         body: JSON.stringify({
           status,
@@ -208,6 +231,31 @@ export const PlatformAdminView: React.FC<PlatformAdminViewProps> = ({
                 : 'Merchant application rejected after compliance review.')
         })
       });
+
+      if (res.status === 403) {
+        clearVendorAuthToken();
+        const refreshedToken = await ensureServerSession(true);
+        if (refreshedToken) {
+          res = await vendorAuthenticatedFetch(`/api/admin/vendor-application/${encodeURIComponent(id)}/review`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: {
+              'Content-Type': 'application/json',
+              Accept: 'application/json',
+              ...getVendorAuthHeaders()
+            },
+            body: JSON.stringify({
+              status,
+              adminNotes: vendorReviewNotes.trim() ||
+                (status === 'APPROVED'
+                  ? 'Merchant compliance review completed.'
+                  : status === 'ACTION_REQUIRED'
+                    ? 'Additional compliance documentation or corrections required.'
+                    : 'Merchant application rejected after compliance review.')
+            })
+          });
+        }
+      }
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data?.success) {
         throw new Error(data?.error || data?.message || `Review request failed (HTTP ${res.status})`);
