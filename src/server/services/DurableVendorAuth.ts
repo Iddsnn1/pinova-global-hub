@@ -18,5 +18,5 @@ export async function authenticateAdminRequest(req: { headers: Record<string, an
   const user = await authenticateRequest(req);
   if (!user) return null;
   const roles = Array.isArray(user.roles) ? user.roles : [];
-  return roles.includes('PLATFORM_ADMIN') || roles.includes('COMPLIANCE_OFFICER') ? user : null;
+  return roles.includes('PLATFORM_ADMIN') || roles.includes('COMPLIANCE_OFFICER') || roles.includes('COMPLIANCE_ADMIN') ? user : null;
 }
