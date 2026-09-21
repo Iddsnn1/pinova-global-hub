@@ -297,7 +297,7 @@ async function checkAdminAuth(req: express.Request): Promise<{ authenticated: bo
   if (token) {
     const user = await authService.authenticateToken(token);
     if (user) {
-      const isAuthorized = user.roles.some((r) => r === 'PLATFORM_ADMIN' || r === 'COMPLIANCE_OFFICER');
+      const isAuthorized = user.roles.some((r) => r === 'PLATFORM_ADMIN' || r === 'COMPLIANCE_OFFICER' || r === 'COMPLIANCE_ADMIN');
       return { authenticated: true, authorized: isAuthorized, user };
     }
   }
