@@ -516,13 +516,30 @@ app.post(['/api/auth/session', '/api/v1/auth/session'], authRateLimiter, async (
       });
     }
 
+    // Optional server-side admin allowlist. This is configuration, not a client claim:
+    // a verified Pi identity must explicitly appear in PINOVA_COMPLIANCE_ADMIN_USERNAMES
+    // before it can receive privileged compliance roles.
+    const configuredAdminUsernames = new Set(
+      String(process.env.PINOVA_COMPLIANCE_ADMIN_USERNAMES || '')
+        .split(',')
+        .map((value) => value.trim().replace(/^@/, '').toLowerCase())
+        .filter(Boolean)
+    );
+    const verifiedUsername = verifiedPiUser.username.trim().replace(/^@/, '').toLowerCase();
+    const configuredComplianceAdmin = configuredAdminUsernames.has(verifiedUsername);
+
     const adminAuth = await checkAdminAuth(req);
-    const isAuthorizedAdmin = adminAuth.authenticated && adminAuth.authorized;
+    const isAuthorizedAdmin =
+      (adminAuth.authenticated && adminAuth.authorized) || configuredComplianceAdmin;
+
+    const sessionRoles = configuredComplianceAdmin
+      ? ['PLATFORM_ADMIN', 'COMPLIANCE_ADMIN'] as const
+      : verifiedPiUser.roles;
 
     const session = await authService.createSession({
       username: verifiedPiUser.username,
       uid: verifiedPiUser.piUid,
-      roles: verifiedPiUser.roles,
+      roles: sessionRoles as any,
       isAuthorizedAdmin
     } as any);
 
