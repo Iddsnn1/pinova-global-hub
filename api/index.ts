@@ -71,8 +71,10 @@ async function handleDurableProducts(req: any, res: any): Promise<boolean> {
   if (!durableVendorStorageEnabled()) return res.status(503).json({ ok: false, error: 'DURABLE_VENDOR_STORAGE_UNAVAILABLE' });
   const user = await authenticateRequest(req);
   if (!user?.username) return res.status(401).json({ ok: false, error: 'INVALID_SESSION' });
-  const merchant = await resolveApprovedMerchant(user.username, user.id);
-  const canSell = merchant?.status === 'APPROVED' && merchant.verificationStatus === 'Verified' && merchant.sellerStatus === 'Active';
+  const { VendorApplicationRepository } = getServerDependencies();
+  const vendorApplicationRepo = new VendorApplicationRepository();
+  const access = vendorApplicationRepo.getMerchantAccess(user.username);
+  const canSell = access.canSell === true;
   if (!canSell) return res.status(403).json({ ok: false, error: 'MERCHANT_SELLER_ACCESS_REQUIRED' });
 
   const body = req.body || {};
