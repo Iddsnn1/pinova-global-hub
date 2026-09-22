@@ -52,7 +52,10 @@ export default async function handler(req: any, res: any) {
     }
 
     const existing = await getDurableVendorApplication(effectiveUsername);
-    const status = existing?.status === 'APPROVED' ? 'APPROVED' : 'PENDING_REVIEW';
+    // Submission is NEVER an approval action. Every new application or resubmission
+    // must enter the server-authoritative Merchant Compliance Queue. Only the
+    // privileged compliance review endpoint may transition a merchant to APPROVED.
+    const status = 'PENDING_REVIEW';
     const now = new Date().toISOString();
     const application = {
       ...(existing || {}),
