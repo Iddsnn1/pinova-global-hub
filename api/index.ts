@@ -74,7 +74,10 @@ async function handleDurableProducts(req: any, res: any): Promise<boolean> {
   // Seller authorization must use the same durable compliance record that the
   // Platform Administration review queue updates. Do not use the ephemeral
   // serverless StorageEngine as the source of merchant activation state.
-  const durableMerchant = await resolveApprovedMerchant(user.username, user.id);
+  // Portable sessions may expose either the local auth user id or the
+  // authoritative Pi UID. The durable application can legitimately contain
+  // either identity depending on when the application was created.
+  const durableMerchant = await resolveApprovedMerchant(user.username, user.piUid || user.id);
   const canSell = durableMerchant?.status === 'APPROVED'
     && durableMerchant?.verificationStatus === 'Verified'
     && durableMerchant?.sellerStatus === 'Active';
