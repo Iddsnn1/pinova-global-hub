@@ -1244,8 +1244,8 @@ function MainAppContent() {
             onUpdateOrderStatus={(orderId, status, trackingNumber, carrier) => {
               handleUpdateOrderStatus(orderId, status, { trackingNumber, carrier });
             }}
-            onViewStorefront={(vendorId) => {
-              const v = vendors.find((x) => x.id === vendorId || x.sellerUsername === vendorId) || vendors[0];
+            onViewStorefront={(vendorId, vendorOverride) => {
+              const v = vendorOverride || vendors.find((x) => x.id === vendorId || x.sellerUsername === vendorId) || vendors[0];
               if (v) setSelectedVendor(v);
             }}
             onNavigateHome={() => handleNavigateSection('marketplace')}
