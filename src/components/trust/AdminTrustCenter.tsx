@@ -49,24 +49,9 @@ export const AdminTrustCenter: React.FC = () => {
     return r.status === statusFilter;
   });
 
-  const handleApproveRequest = (reqId: string) => {
-    trustModule.approveVerification(reqId, 'Admin_Compliance', adminNote);
-    setVerifications([...trustModule.getVerificationRequests()]);
-    setSelectedReq(null);
-    setAdminNote('');
-  };
-
-  const handleRejectRequest = (reqId: string) => {
-    if (!adminNote.trim()) {
-      alert('Please provide a reason for rejecting the verification request.');
-      return;
-    }
-    trustModule.rejectVerification(reqId, 'Admin_Compliance', adminNote);
-    setVerifications([...trustModule.getVerificationRequests()]);
-    setSelectedReq(null);
-    setAdminNote('');
-  };
-
+  // Merchant onboarding approval is intentionally NOT handled in this legacy Trust Center.
+  // All merchant KYC/business verification decisions must go through the server-authoritative
+  // Merchant Compliance Queue so approval updates the same durable merchant record used by Seller access.
   const handleResolveAlert = (alertId: string) => {
     trustModule.fraudEngine.resolveAlert(alertId, 'Admin_Security', 'Investigated and cleared by compliance team.');
     setAlerts([...trustModule.fraudEngine.getAlerts()]);
@@ -261,52 +246,11 @@ export const AdminTrustCenter: React.FC = () => {
         </div>
       )}
 
-      {/* MODAL FOR APPROVING / REJECTING VERIFICATION */}
-      {selectedReq && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
-          <div className="w-full max-w-lg p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-4 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
-              <h3 className="font-extrabold text-base text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                <UserCheck className="w-5 h-5 text-purple-500" />
-                <span>Verification Decision — @{selectedReq.applicantUsername}</span>
-              </h3>
-              <button onClick={() => setSelectedReq(null)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 font-bold">✕</button>
-            </div>
-
-            <div className="space-y-2 text-xs">
-              <div className="p-3 rounded-2xl bg-purple-50 dark:bg-purple-950/50 border border-purple-200 dark:border-purple-800 text-purple-900 dark:text-purple-200">
-                <span className="font-bold block">Target Level: {selectedReq.requestedLevel}</span>
-                <p className="mt-1 opacity-90">{VERIFICATION_REQUIREMENTS[selectedReq.requestedLevel]?.description}</p>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Administrator Compliance Note:</label>
-                <textarea
-                  value={adminNote}
-                  onChange={(e) => setAdminNote(e.target.value)}
-                  placeholder="Provide approval reasoning or rejection rationale..."
-                  className="w-full p-3 rounded-2xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 text-xs focus:ring-2 focus:ring-purple-500 outline-none h-24"
-                />
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3 pt-2">
-              <button
-                onClick={() => handleApproveRequest(selectedReq.id)}
-                className="flex-1 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 transition-all"
-              >
-                <CheckCircle2 className="w-4 h-4" />
-                <span>Approve Verification Level</span>
-              </button>
-              <button
-                onClick={() => handleRejectRequest(selectedReq.id)}
-                className="flex-1 py-3 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs flex items-center justify-center gap-2 shadow-lg shadow-rose-500/20 transition-all"
-              >
-                <XCircle className="w-4 h-4" />
-                <span>Reject Verification</span>
-              </button>
-            </div>
-          </div>
+      {/* Merchant verification is read-only here. Use Merchant Compliance Queue for all decisions. */}
+      {activeTab === 'verifications' && (
+        <div className="p-5 rounded-3xl bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800 text-xs text-indigo-900 dark:text-indigo-200">
+          <div className="font-extrabold text-sm mb-1">Merchant Compliance Queue Only</div>
+          <p>Merchant KYC/business verification and merchant activation decisions are not performed in this legacy Trust Center. Open the server-authoritative Merchant Compliance Queue to review, approve, request changes, or reject a merchant application.</p>
         </div>
       )}
 
