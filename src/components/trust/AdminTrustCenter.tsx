@@ -144,113 +144,15 @@ export const AdminTrustCenter: React.FC = () => {
         </button>
       </div>
 
-      {/* TAB 1: VERIFICATION QUEUE */}
+      {/* TAB 1: MERCHANT VERIFICATION — READ ONLY */}
       {activeTab === 'verifications' && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between gap-4 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800">
-            <div className="flex items-center gap-2">
-              <Filter className="w-4 h-4 text-slate-400" />
-              <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Filter Status:</span>
-              <div className="flex items-center gap-1">
-                {(['ALL', 'PENDING', 'APPROVED', 'REJECTED'] as const).map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => setStatusFilter(s)}
-                    className={`px-3 py-1 rounded-xl text-[11px] font-bold ${
-                      statusFilter === s
-                        ? 'bg-purple-600 text-white'
-                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
-                    }`}
-                  >
-                    {s}
-                  </button>
-                ))}
-              </div>
-            </div>
+        <div className="p-6 rounded-3xl bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800 space-y-3">
+          <div className="flex items-center gap-2 text-indigo-900 dark:text-indigo-200">
+            <Lock className="w-4 h-4" />
+            <h3 className="font-extrabold text-sm">Merchant Compliance Queue Only</h3>
           </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {filteredRequests.map((req) => (
-              <div 
-                key={req.id} 
-                className="p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-3 relative hover:border-purple-500/40 transition-all shadow-sm"
-              >
-                <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-                  <div>
-                    <span className="text-[10px] uppercase font-mono font-bold text-slate-400">{req.id}</span>
-                    <h3 className="font-extrabold text-sm text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                      <span>@{req.applicantUsername}</span>
-                    </h3>
-                  </div>
-                  <span className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase ${
-                    req.status === 'APPROVED' 
-                      ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/30'
-                      : req.status === 'REJECTED'
-                      ? 'bg-rose-500/10 text-rose-500 border border-rose-500/30'
-                      : 'bg-amber-500/10 text-amber-500 border border-amber-500/30 animate-pulse'
-                  }`}>
-                    {req.status}
-                  </span>
-                </div>
-
-                <div className="space-y-1.5 text-xs text-slate-600 dark:text-slate-400">
-                  <div className="flex justify-between">
-                    <span className="font-medium">Requested Level:</span>
-                    <span className="font-bold text-purple-600 dark:text-purple-400">{req.requestedLevel}</span>
-                  </div>
-                  {req.businessTaxId && (
-                    <div className="flex justify-between">
-                      <span className="font-medium">Tax/Business ID:</span>
-                      <span className="font-mono text-slate-900 dark:text-slate-100 font-bold">{req.businessTaxId}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between">
-                    <span className="font-medium">Submitted At:</span>
-                    <span>{new Date(req.submittedAt).toLocaleString()}</span>
-                  </div>
-                </div>
-
-                <div className="pt-2">
-                  <span className="text-[11px] font-bold text-slate-500 block mb-1">Attached Governance Documents:</span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {req.documentsProvided.map((doc, idx) => (
-                      <span key={idx} className="px-2.5 py-1 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-[10px] font-bold flex items-center gap-1 border border-slate-200 dark:border-slate-700">
-                        <FileText className="w-3 h-3 text-purple-500" />
-                        {doc}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-
-                {req.adminNote && (
-                  <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-400">
-                    <span className="font-bold text-slate-900 dark:text-slate-200 block mb-0.5">Admin Note ({req.reviewedBy}):</span>
-                    {req.adminNote}
-                  </div>
-                )}
-
-                {req.status === 'PENDING' && (
-                  <div className="pt-3 flex items-center gap-2 border-t border-slate-100 dark:border-slate-800">
-                    <button
-                      onClick={() => setSelectedReq(req)}
-                      className="w-full py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-md shadow-purple-500/20"
-                    >
-                      <Eye className="w-3.5 h-3.5" />
-                      <span>Review & Decision</span>
-                    </button>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Merchant verification is read-only here. Use Merchant Compliance Queue for all decisions. */}
-      {activeTab === 'verifications' && (
-        <div className="p-5 rounded-3xl bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800 text-xs text-indigo-900 dark:text-indigo-200">
-          <div className="font-extrabold text-sm mb-1">Merchant Compliance Queue Only</div>
-          <p>Merchant KYC/business verification and merchant activation decisions are not performed in this legacy Trust Center. Open the server-authoritative Merchant Compliance Queue to review, approve, request changes, or reject a merchant application.</p>
+          <p className="text-xs text-indigo-800 dark:text-indigo-300">Merchant KYC/business verification and merchant activation decisions are not performed in this legacy Trust Center. Use the server-authoritative Merchant Compliance Queue for every merchant review decision.</p>
+          <div className="text-[11px] font-bold text-indigo-700 dark:text-indigo-300">No Approve, Reject, or Verify action is available here.</div>
         </div>
       )}
 
