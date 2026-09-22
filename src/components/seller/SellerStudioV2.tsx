@@ -82,7 +82,7 @@ interface SellerStudioV2Props {
   onUpdateProduct?: (product: Product) => void;
   onDeleteProduct?: (productId: string) => void;
   onUpdateOrderStatus?: (orderId: string, status: Order['pstpStatus'], trackingNumber?: string, carrier?: string) => void;
-  onViewStorefront?: (vendorId: string) => void;
+  onViewStorefront?: (vendorId: string, vendorOverride?: Vendor) => void;
   onNavigateHome?: () => void;
 }
 
@@ -370,7 +370,7 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
             {onViewStorefront && (
               <button
                 id="seller-view-storefront-btn"
-                onClick={() => onViewStorefront(vendorProfile.id)}
+                onClick={() => onViewStorefront(vendorProfile.id, vendorProfile)}
                 className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-300 text-xs font-semibold transition-colors min-h-[40px]"
               >
                 <ExternalLink className="w-3.5 h-3.5 text-purple-600" />
@@ -569,7 +569,7 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
                 <button
                   onClick={() => {
                     setIsMobileMenuOpen(false);
-                    onViewStorefront(vendorProfile.id);
+                    onViewStorefront(vendorProfile.id, vendorProfile);
                   }}
                   className="w-full py-2.5 rounded-xl border border-neutral-200 dark:border-neutral-700 text-xs font-semibold text-neutral-700 dark:text-neutral-300 flex items-center justify-center gap-1.5 hover:bg-neutral-100 dark:hover:bg-neutral-800 min-h-[44px]"
                 >
@@ -669,7 +669,7 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
                   handleSelectTab('products');
                 }}
                 onOpenStorefrontPreview={() => {
-                  if (onViewStorefront) onViewStorefront(vendorProfile.id);
+                  if (onViewStorefront) onViewStorefront(vendorProfile.id, vendorProfile);
                 }}
               />
             )}
@@ -783,7 +783,7 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
                   }));
                 }}
                 onOpenStorefrontPreview={() => {
-                  if (onViewStorefront) onViewStorefront(vendorProfile.id);
+                  if (onViewStorefront) onViewStorefront(vendorProfile.id, vendorProfile);
                 }}
               />
             )}
