@@ -97,39 +97,52 @@ export class VendorApplicationRepository {
   }
 
   public save(application: VendorApplicationInput): VendorApplicationEntity {
-    // Lifecycle fields are server-authoritative. If an older caller omits them,
-    // derive both values from the governance status before persistence.
+    // This legacy repository is read-compatible only. Merchant activation is
+    // exclusively owned by the durable Compliance Queue. No local repository
+    // caller may create or preserve an APPROVED merchant state.
+    if (application.status === 'APPROVED') {
+      throw new Error('MERCHANT_APPROVAL_MUST_USE_COMPLIANCE_QUEUE');
+    }
+
     const lifecycle = this.lifecycleForStatus(application.status);
     const normalized: VendorApplicationEntity = {
       ...application,
-      verificationStatus: application.verificationStatus ?? lifecycle.verificationStatus,
-      sellerStatus: application.sellerStatus ?? lifecycle.sellerStatus
+      verificationStatus: lifecycle.verificationStatus,
+      sellerStatus: lifecycle.sellerStatus
     };
 
     this.engine.set(normalized.id, normalized);
     return normalized;
   }
 
+  /**
+   * Legacy compatibility helper for non-approval lifecycle updates.
+   *
+   * IMPORTANT: APPROVED is intentionally rejected here. The only supported
+   * merchant approval mutation is the authenticated durable Compliance Queue
+   * review endpoint.
+   */
   public updateStatus(
     id: string,
     status: VendorApplicationStatus,
     adminNotes?: string,
     reviewedBy?: string
   ): VendorApplicationEntity | undefined {
+    if (status === 'APPROVED') {
+      throw new Error('MERCHANT_APPROVAL_MUST_USE_COMPLIANCE_QUEUE');
+    }
+
     const existing = this.engine.get(id);
     if (!existing) return undefined;
 
-    // Governance status is the single authoritative source for merchant activation.
-    // Never activate a seller from a client-side role, badge, or localStorage flag.
     const lifecycle = this.lifecycleForStatus(status);
-
     const updated: VendorApplicationEntity = {
       ...existing,
       status,
       verificationStatus: lifecycle.verificationStatus,
       sellerStatus: lifecycle.sellerStatus,
       adminReviewNotes: adminNotes ?? existing.adminReviewNotes,
-      reviewedBy: reviewedBy ?? 'Platform Compliance Lead',
+      reviewedBy: reviewedBy ?? 'Legacy Governance Read-Only',
       reviewedAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
