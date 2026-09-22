@@ -19,6 +19,14 @@ function keyFor(id: string): string {
 
 async function readPath(pathname: string): Promise<Product | null> {
   if (!enabled()) return null;
+
+  // Vercel Blob private GET can surface a missing pathname as HTTP 400.
+  // Check the private store index first so a first-time product create is
+  // treated as "not found" rather than as a storage failure.
+  const page = await list({ prefix: pathname, limit: 10, ...privateBlobOptions() });
+  const exists = page.blobs.some((blob) => blob.pathname === pathname);
+  if (!exists) return null;
+
   const result = await get(pathname, { access: 'private', useCache: false, ...privateBlobOptions() });
   if (!result || result.statusCode !== 200 || !result.stream) return null;
   const chunks: Uint8Array[] = [];
