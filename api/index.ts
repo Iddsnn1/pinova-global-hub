@@ -3,7 +3,7 @@ import { createRequire } from 'module';
 import path from 'path';
 import crypto from 'crypto';
 import { authenticateVendorRequest as authenticateRequest, getDurableVendorApplication, listDurableVendorApplications, durableVendorStorageEnabled } from '../dist/server.cjs';
-import { durableProductStorageEnabled, listDurableProducts, saveDurableProduct } from '../src/server/services/DurableProductCatalog';
+import { durableProductStorageEnabled, listDurableProducts, saveDurableProduct } from '../dist/server.cjs';
 
 // Ensure serverless environment flag is set before loading server module
 process.env.VERCEL = process.env.VERCEL || '1';
