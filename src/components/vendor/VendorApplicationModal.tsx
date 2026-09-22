@@ -198,7 +198,13 @@ export const VendorApplicationModal: React.FC<VendorApplicationModalProps> = ({
         body: fileBuffer
       });
 
-      const data = await res.json();
+      const rawResponse = await res.text();
+      let data: any = {};
+      try {
+        data = rawResponse ? JSON.parse(rawResponse) : {};
+      } catch {
+        data = { message: rawResponse || `Server returned HTTP ${res.status}` };
+      }
       if (data.success && data.reference && data.reference.startsWith('private://vendor-documents/')) {
         setUploadedDocRef(data.reference);
         setUploadStatus('uploaded');
