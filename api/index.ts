@@ -83,7 +83,18 @@ async function handleDurableProducts(req: any, res: any): Promise<boolean> {
   const canSell = durableMerchant?.status === 'APPROVED'
     && durableMerchant?.verificationStatus === 'Verified'
     && durableMerchant?.sellerStatus === 'Active';
-  if (!canSell) return res.status(403).json({ ok: false, error: 'MERCHANT_SELLER_ACCESS_REQUIRED' });
+  if (!canSell) {
+    console.warn('[seller/access] durable merchant access denied', {
+      username: String(user.username || '').trim().replace(/^@/, '').toLowerCase(),
+      hasPiUid: Boolean(user.piUid),
+      hasLocalUserId: Boolean(user.id),
+      matchedMerchant: Boolean(durableMerchant),
+      merchantStatus: durableMerchant?.status || null,
+      verificationStatus: durableMerchant?.verificationStatus || null,
+      sellerStatus: durableMerchant?.sellerStatus || null
+    });
+    return res.status(403).json({ ok: false, error: 'MERCHANT_SELLER_ACCESS_REQUIRED' });
+  }
 
   const body = req.body || {};
   const stock = Number.isInteger(body.stock) && body.stock >= 0 ? body.stock : 0;
