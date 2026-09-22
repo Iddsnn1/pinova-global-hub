@@ -59,63 +59,114 @@ async function resolveApprovedMerchant(username: string, pioneerUid?: string | s
 }
 
 async function handleDurableProducts(req: any, res: any): Promise<boolean> {
-  const pathname = new URL(req.url || '/', 'http://localhost').pathname;
-  if (pathname !== '/api/products' && pathname !== '/api/v1/products' && !pathname.startsWith('/api/v1/products/') && !req.url?.includes('__path=/products')) return false;
+  const parsed = new URL(req.url || '/', 'http://localhost');
+  const pathname = parsed.pathname;
+  const isProductRoute =
+    pathname === '/api/products' ||
+    pathname === '/api/v1/products' ||
+    pathname.startsWith('/api/v1/products/') ||
+    pathname.startsWith('/api/products/') ||
+    req.url?.includes('__path=/products');
+  if (!isProductRoute) return false;
 
-  if (!durableProductStorageEnabled()) return res.status(503).json({ ok: false, error: 'DURABLE_PRODUCT_STORAGE_UNAVAILABLE' });
+  if (!durableProductStorageEnabled()) {
+    return res.status(503).json({ ok: false, error: 'DURABLE_PRODUCT_STORAGE_UNAVAILABLE' });
+  }
+
+  const id = pathname.startsWith('/api/v1/products/')
+    ? decodeURIComponent(pathname.slice('/api/v1/products/'.length).split('/')[0])
+    : pathname.startsWith('/api/products/')
+      ? decodeURIComponent(pathname.slice('/api/products/'.length).split('/')[0])
+      : '';
+
   if (req.method === 'GET') {
-    const parsed = new URL(req.url || '/', 'http://localhost');
+    if (id) {
+      const product = (await listDurableProducts({ includeDeleted: false })).find((item) => item.id === id);
+      if (!product || product.isActive !== true) return res.status(404).json({ ok: false, error: 'PRODUCT_NOT_FOUND' });
+      return res.json({ ok: true, product });
+    }
     const q = parsed.searchParams.get('q') || '';
     const category = parsed.searchParams.get('category') || undefined;
     const products = await listDurableProducts({ activeOnly: true, category: category as any, q });
     return res.json({ ok: true, products });
   }
-  if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'METHOD_NOT_ALLOWED' });
-  if (!durableVendorStorageEnabled()) return res.status(503).json({ ok: false, error: 'DURABLE_VENDOR_STORAGE_UNAVAILABLE' });
+
+  if (req.method !== 'POST' && req.method !== 'PATCH' && req.method !== 'DELETE') {
+    return res.status(405).json({ ok: false, error: 'METHOD_NOT_ALLOWED' });
+  }
+
   const user = await authenticateRequest(req);
   if (!user?.username) return res.status(401).json({ ok: false, error: 'INVALID_SESSION' });
-  // Seller authorization must use the same durable compliance record that the
-  // Platform Administration review queue updates. Do not use the ephemeral
-  // serverless StorageEngine as the source of merchant activation state.
-  // Portable sessions may expose either the local auth user id or the
-  // authoritative Pi UID. The durable application can legitimately contain
-  // either identity depending on when the application was created.
+
   const durableMerchant = await resolveApprovedMerchant(user.username, [user.piUid, user.id]);
   const canSell = durableMerchant?.status === 'APPROVED'
     && durableMerchant?.verificationStatus === 'Verified'
     && durableMerchant?.sellerStatus === 'Active';
   if (!canSell) {
-    console.warn('[seller/access] durable merchant access denied', {
-      username: String(user.username || '').trim().replace(/^@/, '').toLowerCase(),
-      hasPiUid: Boolean(user.piUid),
-      hasLocalUserId: Boolean(user.id),
-      matchedMerchant: Boolean(durableMerchant),
-      merchantStatus: durableMerchant?.status || null,
-      verificationStatus: durableMerchant?.verificationStatus || null,
-      sellerStatus: durableMerchant?.sellerStatus || null
-    });
     return res.status(403).json({ ok: false, error: 'MERCHANT_SELLER_ACCESS_REQUIRED' });
   }
 
-  const body = req.body || {};
-  const stock = Number.isInteger(body.stock) && body.stock >= 0 ? body.stock : 0;
-  const title = String(body.title || '').trim();
-  const description = String(body.description || '').trim();
-  const pricePi = Number(body.pricePi ?? 0);
-  if (!title || !description || !Number.isFinite(pricePi) || pricePi < 0) return res.status(400).json({ ok: false, error: 'INVALID_PRODUCT_INPUT' });
+  if (req.method === 'POST') {
+    const body = req.body || {};
+    const stock = Number.isInteger(body.stock) && body.stock >= 0 ? body.stock : 0;
+    const title = String(body.title || '').trim();
+    const description = String(body.description || '').trim();
+    const pricePi = Number(body.pricePi ?? 0);
+    if (!title || !description || !Number.isFinite(pricePi) || pricePi < 0) {
+      return res.status(400).json({ ok: false, error: 'INVALID_PRODUCT_INPUT' });
+    }
 
-  const product = {
-    id: `prd_${Date.now()}_${crypto.randomBytes(5).toString('hex')}`, title, description, pricePi,
-    category: body.category || 'physical', subcategory: String(body.subcategory || ''),
-    images: Array.isArray(body.images) ? body.images.filter(Boolean) : [], stock, rating: 0, reviewsCount: 0,
-    sellerId: String(user.username).trim(), sellerName: String(user.username).trim(), sellerVerified: true,
-    features: Array.isArray(body.features) ? body.features.filter(Boolean) : [], specs: body.specs,
-    productType: body.productType, fulfillmentType: body.fulfillmentType,
-    availabilityStatus: body.availabilityStatus || (stock > 0 ? 'in_stock' : 'out_of_stock'),
-    tags: Array.isArray(body.tags) ? body.tags.filter(Boolean) : [], isActive: false, moderationStatus: 'PENDING_REVIEW'
+    const product = {
+      id: `prd_${Date.now()}_${crypto.randomBytes(5).toString('hex')}`,
+      title, description, pricePi,
+      category: body.category || 'physical',
+      marketplaceCategory: String(body.marketplaceCategory || ''),
+      subcategory: String(body.subcategory || ''),
+      images: Array.isArray(body.images) ? body.images.filter(Boolean) : [],
+      stock, rating: 0, reviewsCount: 0,
+      sellerId: String(user.username).trim(),
+      sellerName: String(durableMerchant.storeName || user.username).trim(),
+      sellerVerified: true,
+      features: Array.isArray(body.features) ? body.features.filter(Boolean) : [],
+      specs: body.specs,
+      productType: body.productType,
+      fulfillmentType: body.fulfillmentType,
+      availabilityStatus: body.availabilityStatus || (stock > 0 ? 'in_stock' : 'out_of_stock'),
+      tags: Array.isArray(body.tags) ? body.tags.filter(Boolean) : [],
+      isActive: false,
+      moderationStatus: 'PENDING_REVIEW'
+    };
+    const saved = await saveDurableProduct(product as any);
+    return res.status(201).json({ ok: true, product: saved });
+  }
+
+  if (!id) return res.status(400).json({ ok: false, error: 'PRODUCT_ID_REQUIRED' });
+  const existing = (await listDurableProducts({ includeDeleted: true })).find((item) => item.id === id);
+  if (!existing || existing.isDeleted === true) return res.status(404).json({ ok: false, error: 'PRODUCT_NOT_FOUND' });
+  if (String(existing.sellerId).trim().toLowerCase() !== String(user.username).trim().toLowerCase()) {
+    return res.status(403).json({ ok: false, error: 'PRODUCT_OWNERSHIP_REQUIRED' });
+  }
+
+  if (req.method === 'DELETE') {
+    await saveDurableProduct({ ...existing, isDeleted: true, isActive: false });
+    return res.json({ ok: true, deleted: true });
+  }
+
+  const body = req.body || {};
+  const next = {
+    ...existing,
+    ...body,
+    id: existing.id,
+    sellerId: existing.sellerId,
+    sellerName: existing.sellerName,
+    sellerVerified: true,
+    isDeleted: false,
+    // Merchant edits never self-publish a product.
+    isActive: false,
+    moderationStatus: existing.moderationStatus === 'APPROVED' ? 'PENDING_REVIEW' : (body.moderationStatus || existing.moderationStatus || 'PENDING_REVIEW')
   };
-  const saved = await saveDurableProduct(product as any);
-  return res.status(201).json({ ok: true, product: saved });
+  const saved = await saveDurableProduct(next as any);
+  return res.json({ ok: true, product: saved });
 }
 
 async function handleVendorStatus(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
@@ -223,6 +274,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   }
 
   if (await handleVendorStatus(req, res)) return;
+  if (await handleDurableProducts(req, res)) return;
 
   if (
     reqUrl === '/api/health' ||
