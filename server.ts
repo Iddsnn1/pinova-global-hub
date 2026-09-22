@@ -1037,7 +1037,19 @@ const vendorBrandingRawBodyParser = express.raw({
 });
 
 const handleVendorBrandingRawBody = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  // Vercel/serverless adapters may surface an already-read binary request body
+  // as Uint8Array/ArrayBuffer rather than Node Buffer. Normalize it before
+  // invoking express.raw(), otherwise the second parser can see an empty
+  // stream and branding uploads fail with a generic processing error.
   if (Buffer.isBuffer(req.body)) {
+    return next();
+  }
+  if (req.body instanceof Uint8Array) {
+    (req as any).body = Buffer.from(req.body);
+    return next();
+  }
+  if (req.body instanceof ArrayBuffer) {
+    (req as any).body = Buffer.from(new Uint8Array(req.body));
     return next();
   }
   vendorBrandingRawBodyParser(req, res, (err: any) => {
@@ -1096,8 +1108,14 @@ app.post(
       }
 
       // 3. Body validation & size check (max 5 MB)
-      const fileBuffer: Buffer = req.body;
-      if (!Buffer.isBuffer(fileBuffer) || fileBuffer.length === 0) {
+      const fileBuffer: Buffer = Buffer.isBuffer(req.body)
+        ? req.body
+        : req.body instanceof Uint8Array
+          ? Buffer.from(req.body)
+          : req.body instanceof ArrayBuffer
+            ? Buffer.from(new Uint8Array(req.body))
+            : Buffer.alloc(0);
+      if (fileBuffer.length === 0) {
         res.status(400).json({
           success: false,
           error: 'EMPTY_FILE',
