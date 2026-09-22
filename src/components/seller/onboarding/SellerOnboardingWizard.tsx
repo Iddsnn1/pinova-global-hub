@@ -129,12 +129,18 @@ export const SellerOnboardingWizard: React.FC<SellerOnboardingWizardProps> = ({
         body: buffer
       });
 
-      const data = await res.json();
+      const rawResponse = await res.text();
+      let data: any = {};
+      try {
+        data = rawResponse ? JSON.parse(rawResponse) : {};
+      } catch {
+        data = { message: rawResponse || `Server returned HTTP ${res.status}` };
+      }
       if (res.ok && data.success && data.url) {
         if (assetType === 'logo') setLogoUrl(data.url);
         else setBannerUrl(data.url);
       } else {
-        setBrandingError(data.message || 'Failed to upload image.');
+        setBrandingError(data.message || data.error || `Branding upload failed (HTTP ${res.status}).`);
       }
     } catch (err: any) {
       setBrandingError(err.message || 'Network error during upload.');
