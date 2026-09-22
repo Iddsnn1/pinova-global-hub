@@ -62,6 +62,7 @@ import { MessagingModal } from './components/MessagingModal';
 import { NotificationCenter } from './components/NotificationCenter';
 import { PstpShieldCenter } from './components/PstpShieldCenter';
 import { SellerStorefrontModal } from './components/SellerStorefrontModal';
+import { MerchantStorefrontView } from './components/merchant/MerchantStorefrontView';
 import { SocialCommunityHub } from './components/social/SocialCommunityHub';
 
 import { PiConversionConfig, ConversionRateLog } from './types/utility';
@@ -168,6 +169,7 @@ function MainAppContent() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
   const [selectedVendor, setSelectedVendor] = useState<Vendor | null>(null);
+  const [storefrontPageVendor, setStorefrontPageVendor] = useState<Vendor | null>(null);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isVendorApplicationOpen, setIsVendorApplicationOpen] = useState(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
@@ -1249,6 +1251,13 @@ function MainAppContent() {
               if (v) setSelectedVendor(v);
             }}
             onNavigateHome={() => handleNavigateSection('marketplace')}
+            onOpenStorefrontPage={(vendor) => {
+              setSelectedVendor(null);
+              setStorefrontPageVendor(vendor);
+              if (typeof window !== 'undefined') {
+                window.history.pushState({ storefrontPage: true }, '', `?store=${encodeURIComponent(vendor.sellerUsername || vendor.id)}`);
+              }
+            }}
           />
         )}
 
@@ -1425,6 +1434,26 @@ function MainAppContent() {
             handleOpenStorefrontByName(sellerName);
           }}
         />
+      )}
+
+      {storefrontPageVendor && (
+        <div className="fixed inset-0 z-[80] bg-white dark:bg-slate-950 overflow-y-auto">
+          <MerchantStorefrontView
+            vendor={storefrontPageVendor}
+            products={products}
+            onClose={() => {
+              setStorefrontPageVendor(null);
+              if (typeof window !== 'undefined') window.history.pushState({}, '', window.location.pathname);
+            }}
+            onSelectProduct={handleSelectProduct}
+            onAddToCart={(p, e) => handleAddToCart(p, 1)}
+            onToggleWishlist={handleToggleWishlist}
+            wishlistProductIds={wishlist.map((w) => w.id)}
+            onInstantBuy={(p, e) => handleInstantBuy(p, 1)}
+            onContactSeller={(sellerUsername) => setActiveChatUser(sellerUsername)}
+            isModal={false}
+          />
+        </div>
       )}
 
       {selectedVendor && (
