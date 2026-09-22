@@ -37,7 +37,7 @@ import { EducationClassificationEngine } from './src/server/services/EducationCl
 import { StudentVerificationService } from './src/server/services/StudentVerificationService';
 import { EducationRepository } from './src/server/db/repositories/EducationRepository';
 import { ProductRepository } from './src/server/db/repositories/ProductRepository';
-import { requireVendorSellerAccess } from './src/server/services/VendorAccessService';
+import { getDurableVendorApplication, durableVendorStorageEnabled } from './src/server/services/DurableVendorApplicationStore';
 import { get, list, put } from '@vercel/blob';
 
 dotenv.config();
@@ -5510,13 +5510,25 @@ app.post('/api/products', authenticate, async (req: AuthenticatedRequest, res) =
       return res.status(401).json({ ok: false, error: 'INVALID_SESSION' });
     }
 
-    try {
-      requireVendorSellerAccess(vendorApplicationRepo, req.user.username);
-    } catch (error: any) {
-      return res.status(error?.statusCode || 403).json({
-        ok: false,
-        error: error?.code || 'MERCHANT_SELLER_ACCESS_REQUIRED'
+    if (!durableVendorStorageEnabled()) {
+      return res.status(503).json({ ok: false, error: 'DURABLE_VENDOR_STORAGE_UNAVAILABLE' });
+    }
+
+    const durableMerchant = await getDurableVendorApplication(req.user.username);
+    const canSell =
+      durableMerchant?.status === 'APPROVED' &&
+      durableMerchant?.verificationStatus === 'Verified' &&
+      durableMerchant?.sellerStatus === 'Active';
+
+    if (!canSell) {
+      console.warn('[products-api] durable merchant access denied', {
+        username: String(req.user.username).trim().replace(/^@/, '').toLowerCase(),
+        matchedMerchant: Boolean(durableMerchant),
+        merchantStatus: durableMerchant?.status || null,
+        verificationStatus: durableMerchant?.verificationStatus || null,
+        sellerStatus: durableMerchant?.sellerStatus || null
       });
+      return res.status(403).json({ ok: false, error: 'MERCHANT_SELLER_ACCESS_REQUIRED' });
     }
 
     const body = req.body || {};
