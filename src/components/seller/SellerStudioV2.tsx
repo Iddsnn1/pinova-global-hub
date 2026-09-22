@@ -83,6 +83,7 @@ interface SellerStudioV2Props {
   onDeleteProduct?: (productId: string) => void;
   onUpdateOrderStatus?: (orderId: string, status: Order['pstpStatus'], trackingNumber?: string, carrier?: string) => void;
   onViewStorefront?: (vendorId: string, vendorOverride?: Vendor) => void;
+  onOpenStorefrontPage?: (vendor: Vendor) => void;
   onNavigateHome?: () => void;
 }
 
@@ -104,6 +105,7 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
   onDeleteProduct,
   onUpdateOrderStatus,
   onViewStorefront,
+  onOpenStorefrontPage,
   onNavigateHome
 }) => {
   // Read initial tab from URL query params if present, default to 'overview'
@@ -669,7 +671,8 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
                   handleSelectTab('products');
                 }}
                 onOpenStorefrontPreview={() => {
-                  if (onViewStorefront) onViewStorefront(vendorProfile.id, vendorProfile);
+                  if (onOpenStorefrontPage) onOpenStorefrontPage(vendorProfile);
+                  else if (onViewStorefront) onViewStorefront(vendorProfile.id, vendorProfile);
                 }}
               />
             )}
@@ -783,7 +786,8 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
                   }));
                 }}
                 onOpenStorefrontPreview={() => {
-                  if (onViewStorefront) onViewStorefront(vendorProfile.id, vendorProfile);
+                  if (onOpenStorefrontPage) onOpenStorefrontPage(vendorProfile);
+                  else if (onViewStorefront) onViewStorefront(vendorProfile.id, vendorProfile);
                 }}
               />
             )}
