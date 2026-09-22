@@ -4,13 +4,10 @@ import type { Product, ProductCategory, AvailabilityStatus } from '../../types';
 const PREFIX = 'product-catalog/';
 
 function enabled(): boolean {
-  return Boolean(process.env.BLOB_READ_WRITE_TOKEN && process.env.PRIVATE_BLOB_STORE_ID);
-}
-
-function privateBlobOptions() {
-  const storeId = process.env.PRIVATE_BLOB_STORE_ID;
-  if (!storeId) throw new Error('PRIVATE_BLOB_STORE_ID_UNAVAILABLE');
-  return { storeId };
+  // The Blob SDK automatically uses BLOB_READ_WRITE_TOKEN for the store
+  // connected to this Vercel project. Do not pass a custom storeId here:
+  // current @vercel/blob SDK methods use the token to select the store.
+  return Boolean(process.env.BLOB_READ_WRITE_TOKEN);
 }
 
 function keyFor(id: string): string {
@@ -23,11 +20,11 @@ async function readPath(pathname: string): Promise<Product | null> {
   // Vercel Blob private GET can surface a missing pathname as HTTP 400.
   // Check the private store index first so a first-time product create is
   // treated as "not found" rather than as a storage failure.
-  const page = await list({ prefix: pathname, limit: 10, ...privateBlobOptions() });
+  const page = await list({ prefix: pathname, limit: 10 });
   const exists = page.blobs.some((blob) => blob.pathname === pathname);
   if (!exists) return null;
 
-  const result = await get(pathname, { access: 'private', useCache: false, ...privateBlobOptions() });
+  const result = await get(pathname, { access: 'private', useCache: false });
   if (!result || result.statusCode !== 200 || !result.stream) return null;
   const chunks: Uint8Array[] = [];
   const reader = result.stream.getReader();
@@ -47,7 +44,7 @@ async function listAll(): Promise<Product[]> {
   const products: Product[] = [];
   let cursor: string | undefined;
   do {
-    const page = await list({ prefix: PREFIX, limit: 1000, cursor, ...privateBlobOptions() });
+    const page = await list({ prefix: PREFIX, limit: 1000, cursor });
     for (const blob of page.blobs) {
       const product = await readPath(blob.pathname);
       if (product) products.push(product);
@@ -121,8 +118,7 @@ export async function saveDurableProduct(product: Product): Promise<Product> {
     access: 'private',
     contentType: 'application/json',
     allowOverwrite: true,
-    cacheControlMaxAge: 60,
-    ...privateBlobOptions()
+    cacheControlMaxAge: 60
   });
   return normalized;
 }
@@ -185,6 +181,6 @@ export async function deleteDurableProductBlob(id: string): Promise<boolean> {
   if (!enabled()) return false;
   const existing = await getDurableProduct(id);
   if (!existing) return false;
-  await del(keyFor(id), { ...privateBlobOptions() });
+  await del(keyFor(id));
   return true;
 }
