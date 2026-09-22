@@ -62,7 +62,7 @@ export async function createSellerProduct(input: Partial<Product>): Promise<Prod
         category: input.category || 'physical',
         marketplaceCategory: input.marketplaceCategory || '',
         subcategory: input.subcategory || '',
-        images: [],
+        images: Array.isArray(input.images) ? input.images.filter(Boolean) : [],
         stock: Number.isInteger(input.stock) && (input.stock as number) >= 0 ? input.stock : 0,
         features: [],
         specs: input.specs,
