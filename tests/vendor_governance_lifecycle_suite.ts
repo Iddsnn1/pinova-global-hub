@@ -33,14 +33,14 @@ const seeded = repo.save({
     deliveryShippingPolicy: 'TEST_ONLY'
   },
   pstpAgreementAccepted: true,
-  status: 'APPROVED',
+  status: 'PENDING_REVIEW',
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString()
 });
 assert(Boolean(seeded), 'Test-only vendor application must be created');
-assert(seeded.status === 'APPROVED', 'Approved application must remain APPROVED');
-assert(seeded.verificationStatus === 'Verified', 'Approved application must be Verified');
-assert(seeded.sellerStatus === 'Active', 'Approved application must be Active');
+assert(seeded.status === 'PENDING_REVIEW', 'New repository fixtures must begin in review');
+assert(seeded.verificationStatus === 'Pending Verification', 'Pending application must not be Verified');
+assert(seeded.sellerStatus === 'Probation', 'Pending application must not be Active');
 
 const pending = repo.updateStatus(testApplicationId, 'PENDING_REVIEW', 'Awaiting governance review', 'test-admin');
 assert(pending?.verificationStatus === 'Pending Verification', 'Pending review must not be Verified');
@@ -50,13 +50,18 @@ const accessWhilePending = repo.getMerchantAccess(testUsername);
 assert(accessWhilePending.canSell === false, 'Pending vendor must not be allowed to sell');
 assert(accessWhilePending.canReceivePstpOrders === false, 'Pending vendor must not receive PSTP orders');
 
-const approved = repo.updateStatus(testApplicationId, 'APPROVED', 'Governance approved', 'test-admin');
-assert(approved?.verificationStatus === 'Verified', 'Approved vendor must become Verified');
-assert(approved?.sellerStatus === 'Active', 'Approved vendor must become Active');
+let approvalBlocked = false;
+try {
+  repo.updateStatus(testApplicationId, 'APPROVED', 'Governance approved', 'test-admin');
+} catch (error) {
+  approvalBlocked = error instanceof Error
+    && error.message === 'MERCHANT_APPROVAL_MUST_USE_COMPLIANCE_QUEUE';
+}
+assert(approvalBlocked, 'Legacy repository must reject merchant approval mutations');
 
-const accessAfterApproval = repo.getMerchantAccess(testUsername);
-assert(accessAfterApproval.canSell === true, 'Approved vendor must be allowed to sell');
-assert(accessAfterApproval.canReceivePstpOrders === true, 'Approved vendor with PSTP agreement must receive PSTP orders');
+const accessAfterBlockedApproval = repo.getMerchantAccess(testUsername);
+assert(accessAfterBlockedApproval.canSell === false, 'Blocked legacy approval must not grant seller access');
+assert(accessAfterBlockedApproval.canReceivePstpOrders === false, 'Blocked legacy approval must not grant PSTP access');
 
 const rejected = repo.updateStatus(testApplicationId, 'REJECTED', 'Verification rejected', 'test-admin');
 assert(rejected?.verificationStatus === 'Unverified', 'Rejected vendor must become Unverified');
