@@ -2,7 +2,8 @@ import type { IncomingMessage, ServerResponse } from 'http';
 import { createRequire } from 'module';
 import path from 'path';
 import crypto from 'crypto';
-import { authenticateVendorRequest as authenticateRequest, getDurableVendorApplication, listDurableVendorApplications, durableVendorStorageEnabled, ProductRepository } from '../dist/server.cjs';
+import { authenticateVendorRequest as authenticateRequest, getDurableVendorApplication, listDurableVendorApplications, durableVendorStorageEnabled } from '../dist/server.cjs';
+import { durableProductStorageEnabled, listDurableProducts, saveDurableProduct } from '../src/server/services/DurableProductCatalog';
 
 // Ensure serverless environment flag is set before loading server module
 process.env.VERCEL = process.env.VERCEL || '1';
@@ -61,12 +62,12 @@ async function handleDurableProducts(req: any, res: any): Promise<boolean> {
   const pathname = new URL(req.url || '/', 'http://localhost').pathname;
   if (pathname !== '/api/products' && pathname !== '/api/v1/products' && !pathname.startsWith('/api/v1/products/') && !req.url?.includes('__path=/products')) return false;
 
-  const repo = new ProductRepository();
+  if (!durableProductStorageEnabled()) return res.status(503).json({ ok: false, error: 'DURABLE_PRODUCT_STORAGE_UNAVAILABLE' });
   if (req.method === 'GET') {
     const parsed = new URL(req.url || '/', 'http://localhost');
     const q = parsed.searchParams.get('q') || '';
     const category = parsed.searchParams.get('category') || undefined;
-    const products = q ? repo.search(q, { activeOnly: true, category }) : repo.getAll({ activeOnly: true, category });
+    const products = await listDurableProducts({ activeOnly: true, category: category as any, q });
     return res.json({ ok: true, products });
   }
   if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'METHOD_NOT_ALLOWED' });
@@ -113,7 +114,7 @@ async function handleDurableProducts(req: any, res: any): Promise<boolean> {
     availabilityStatus: body.availabilityStatus || (stock > 0 ? 'in_stock' : 'out_of_stock'),
     tags: Array.isArray(body.tags) ? body.tags.filter(Boolean) : [], isActive: false, moderationStatus: 'PENDING_REVIEW'
   };
-  const saved = repo.save(product as any);
+  const saved = await saveDurableProduct(product as any);
   return res.status(201).json({ ok: true, product: saved });
 }
 
