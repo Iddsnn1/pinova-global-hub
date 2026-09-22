@@ -1902,7 +1902,13 @@ app.get(['/api/admin/vendor-applications', '/api/v1/admin/vendor-applications'],
     return;
   }
 
-  const applications = vendorApplicationRepo.getAll();
+  // Compliance queue is backed by the same durable private Blob records
+  // that control seller activation. Do not read the ephemeral StorageEngine.
+  if (!durableVendorStorageEnabled()) {
+    res.status(503).json({ success: false, error: 'DURABLE_VENDOR_STORAGE_UNAVAILABLE' });
+    return;
+  }
+  const applications = await listDurableVendorApplications();
   res.json({ success: true, count: applications.length, applications });
 });
 
@@ -1917,22 +1923,49 @@ app.post(['/api/admin/vendor-application/:id/review', '/api/v1/admin/vendor-appl
     return;
   }
 
+  if (!durableVendorStorageEnabled()) {
+    res.status(503).json({ success: false, error: 'DURABLE_VENDOR_STORAGE_UNAVAILABLE' });
+    return;
+  }
+
   const { id } = req.params;
   const { status, adminNotes } = req.body || {};
   const reviewedBy = auth.user?.username || 'Admin_Compliance_Lead';
-  const updated = vendorApplicationRepo.updateStatus(id, status, adminNotes, reviewedBy);
+  const allowedStatuses = ['PENDING_REVIEW', 'UNDER_REVIEW', 'APPROVED', 'REJECTED', 'ACTION_REQUIRED'];
+  if (!allowedStatuses.includes(status)) {
+    res.status(400).json({ success: false, error: 'INVALID_VENDOR_STATUS' });
+    return;
+  }
 
-  if (!updated) {
+  const applications = await listDurableVendorApplications();
+  const existing = applications.find((application: any) => application.id === id);
+  if (!existing) {
     res.status(404).json({ success: false, error: 'APPLICATION_NOT_FOUND', message: 'Application not found' });
     return;
   }
+
+  const lifecycle = status === 'APPROVED'
+    ? { verificationStatus: 'Verified', sellerStatus: 'Active' }
+    : status === 'REJECTED'
+      ? { verificationStatus: 'Unverified', sellerStatus: 'Suspended' }
+      : { verificationStatus: 'Pending Verification', sellerStatus: 'Probation' };
+
+  const updated = await saveDurableVendorApplication({
+    ...existing,
+    status,
+    ...lifecycle,
+    adminReviewNotes: adminNotes ?? existing.adminReviewNotes,
+    reviewedBy,
+    reviewedAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  });
 
   auditService.recordPstpAudit({
     orderId: id,
     actor: reviewedBy,
     actorRole: 'admin',
     action: `VENDOR_APPLICATION_${status}`,
-    details: `Application ${id} (${updated.storeName}) status updated to ${status}. Notes: ${adminNotes || 'None'}`,
+    details: `Application ${id} (${updated.storeName || ''}) status updated to ${status}.`,
     ipAddress: req.ip || '127.0.0.1',
     deviceInfo: (req.headers['user-agent'] as string) || 'Admin Console'
   });
