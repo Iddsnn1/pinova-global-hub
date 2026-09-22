@@ -71,10 +71,13 @@ async function handleDurableProducts(req: any, res: any): Promise<boolean> {
   if (!durableVendorStorageEnabled()) return res.status(503).json({ ok: false, error: 'DURABLE_VENDOR_STORAGE_UNAVAILABLE' });
   const user = await authenticateRequest(req);
   if (!user?.username) return res.status(401).json({ ok: false, error: 'INVALID_SESSION' });
-  const { VendorApplicationRepository } = getServerDependencies();
-  const vendorApplicationRepo = new VendorApplicationRepository();
-  const access = vendorApplicationRepo.getMerchantAccess(user.username);
-  const canSell = access.canSell === true;
+  // Seller authorization must use the same durable compliance record that the
+  // Platform Administration review queue updates. Do not use the ephemeral
+  // serverless StorageEngine as the source of merchant activation state.
+  const durableMerchant = await resolveApprovedMerchant(user.username, user.id);
+  const canSell = durableMerchant?.status === 'APPROVED'
+    && durableMerchant?.verificationStatus === 'Verified'
+    && durableMerchant?.sellerStatus === 'Active';
   if (!canSell) return res.status(403).json({ ok: false, error: 'MERCHANT_SELLER_ACCESS_REQUIRED' });
 
   const body = req.body || {};
