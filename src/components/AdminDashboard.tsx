@@ -189,9 +189,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       <p className="text-[11px] text-slate-400">Total Sales: {v.totalSalesPi.toFixed(2)} π</p>
                     </div>
                   </div>
-                  <button onClick={() => onToggleVendorVerification(v.id)} className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors ${v.verified ? 'bg-rose-500/10 text-rose-500 hover:bg-rose-500/20' : 'bg-purple-600 text-white hover:bg-purple-700'}`}>
-                    {v.verified ? 'Revoke Badge' : 'Approve Verification'}
-                  </button>
+                  <div className={`px-3 py-1.5 rounded-xl text-xs font-bold border ${v.verified ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-slate-500/10 text-slate-400 border-slate-500/20'}`}>
+                    {v.verified ? 'Compliance Verified' : 'Verification Pending'}
+                  </div>
                 </div>
               ))}
             </div>
