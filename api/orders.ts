@@ -4,7 +4,7 @@ import { authService } from '../src/server/auth';
 import { orderRepo, productRepo, paymentLedgerRepo, pstpAuditRepo, idempotencyRepo } from '../src/server/db';
 import { verifyPiPaymentAuthoritative } from '../src/server/services/PiPaymentVerificationService';
 import { listDurableVendorApplications } from '../dist/server.cjs';
-import { durableProductStorageEnabled, getDurableProduct, reserveDurableProductStockBatch } from '../src/server/services/DurableProductCatalog';
+import { durableProductStorageEnabled, getDurableProduct, reserveDurableProductStockBatch } from '../dist/server.cjs';
 import type { Order, OrderItem, PstpOrderStatus } from '../src/types';
 
 function json(res: ServerResponse, status: number, body: unknown) {
