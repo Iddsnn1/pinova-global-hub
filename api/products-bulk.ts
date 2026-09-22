@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import { authenticateVendorRequest as authenticateRequest, getDurableVendorApplication, durableVendorStorageEnabled, pstpAuditRepo } from '../dist/server.cjs';
-import { durableProductStorageEnabled, getDurableProduct, saveDurableProduct, updateDurableProductAvailability } from '../src/server/services/DurableProductCatalog';
+import { durableProductStorageEnabled, getDurableProduct, saveDurableProduct, updateDurableProductAvailability } from '../dist/server.cjs';
 
 function parseCsv(input: string): string[][] {
   const rows: string[][] = [];
