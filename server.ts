@@ -1864,7 +1864,10 @@ app.post(['/api/vendor/apply', '/api/v1/vendor/apply'], authenticate, (req: Auth
         deliveryShippingPolicy: 'Standard dispatch within 24-48 business hours with tracking.'
       },
       pstpAgreementAccepted: Boolean(pstpAgreementAccepted),
-      status: (existing?.status === 'APPROVED' ? 'APPROVED' : 'PENDING_REVIEW') as any,
+      // Seller application submission can never preserve or create approval.
+      // Merchant activation is exclusively controlled by the server-authoritative
+      // Compliance Queue review endpoint.
+      status: 'PENDING_REVIEW' as any,
       createdAt: existing?.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
