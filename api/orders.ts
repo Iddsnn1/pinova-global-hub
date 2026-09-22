@@ -4,6 +4,7 @@ import { authService } from '../src/server/auth';
 import { orderRepo, productRepo, paymentLedgerRepo, pstpAuditRepo, idempotencyRepo } from '../src/server/db';
 import { verifyPiPaymentAuthoritative } from '../src/server/services/PiPaymentVerificationService';
 import { listDurableVendorApplications } from '../dist/server.cjs';
+import { durableProductStorageEnabled, getDurableProduct, reserveDurableProductStockBatch } from '../src/server/services/DurableProductCatalog';
 import type { Order, OrderItem, PstpOrderStatus } from '../src/types';
 
 function json(res: ServerResponse, status: number, body: unknown) {
@@ -50,6 +51,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     if (!token) return json(res, 401, { ok: false, error: 'AUTHENTICATION_REQUIRED' });
     const user = await authService.authenticateToken(token);
     if (!user?.username) return json(res, 401, { ok: false, error: 'INVALID_SESSION' });
+    if (!durableProductStorageEnabled()) return json(res, 503, { ok: false, error: 'DURABLE_PRODUCT_STORAGE_UNAVAILABLE' });
     const url = new URL(req.url || '/', 'http://localhost');
     const path = url.pathname.replace(/^\/api\/v1\/orders\/?/, '').replace(/\/$/, '');
 
@@ -122,7 +124,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
           const productId = String(input?.productId || '').trim();
           const quantity = Number.isInteger(input?.quantity) ? Number(input.quantity) : 0;
           if (!productId || quantity < 1) throw new Error('INVALID_ORDER_ITEM');
-          const product = productRepo.findById(productId);
+          const product = await getDurableProduct(productId);
           if (!product || product.isActive !== true || product.isDeleted === true) throw new Error(`PRODUCT_NOT_AVAILABLE:${productId}`);
           if (product.fulfillmentType !== 'digital_download' && product.fulfillmentType !== 'instant_key') physicalReservations.set(productId, (physicalReservations.get(productId) || 0) + quantity);
           const requestedVariantId = input?.customDetails?.variant?.id || input?.selectedVariant;
@@ -181,7 +183,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
           securityFlag: false,
         };
 
-        const reserved = await productRepo.reserveStockBatch([...physicalReservations.entries()].map(([id, quantity]) => ({ id, quantity })));
+        const reserved = await reserveDurableProductStockBatch([...physicalReservations.entries()].map(([id, quantity]) => ({ id, quantity })));
         if (!reserved && physicalReservations.size) throw new Error('INSUFFICIENT_STOCK');
 
         const saved = orderRepo.save(order);
