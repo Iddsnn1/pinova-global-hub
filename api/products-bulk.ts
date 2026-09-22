@@ -1,5 +1,6 @@
 import crypto from 'crypto';
-import { authenticateVendorRequest as authenticateRequest, getDurableVendorApplication, durableVendorStorageEnabled, ProductRepository, pstpAuditRepo } from '../dist/server.cjs';
+import { authenticateVendorRequest as authenticateRequest, getDurableVendorApplication, durableVendorStorageEnabled, pstpAuditRepo } from '../dist/server.cjs';
+import { durableProductStorageEnabled, getDurableProduct, saveDurableProduct, updateDurableProductAvailability } from '../src/server/services/DurableProductCatalog';
 
 function parseCsv(input: string): string[][] {
   const rows: string[][] = [];
@@ -31,7 +32,7 @@ export default async function handler(req: any, res: any) {
   const canSell = merchant?.status === 'APPROVED' && merchant.verificationStatus === 'Verified' && merchant.sellerStatus === 'Active';
   if (!canSell) return res.status(403).json({ ok: false, error: 'MERCHANT_SELLER_ACCESS_REQUIRED' });
 
-  const repo = new ProductRepository();
+  if (!durableProductStorageEnabled()) return res.status(503).json({ ok: false, error: 'DURABLE_PRODUCT_STORAGE_UNAVAILABLE' });
   const body = req.body || {};
   const csv = typeof body.csv === 'string' ? body.csv : '';
   const importType = body.importType === 'inventory' ? 'inventory' : 'products';
@@ -49,9 +50,9 @@ export default async function handler(req: any, res: any) {
       const productId = String(rows[i][productIdIndex] || '').trim();
       const stock = Number(rows[i][stockIndex]);
       if (!productId || !Number.isInteger(stock) || stock < 0) { errors.push(`Row ${i + 1}: invalid productId or stockOnHand.`); continue; }
-      const product = repo.findById(productId);
+      const product = await getDurableProduct(productId);
       if (!product || product.sellerId !== user.username) { errors.push(`Row ${i + 1}: product not found or not owned by this merchant.`); continue; }
-      const next = repo.updateAvailability(productId, stock > 0 ? 'in_stock' : 'out_of_stock', stock);
+      const next = await updateDurableProductAvailability(productId, stock > 0 ? 'in_stock' : 'out_of_stock', stock);
       if (next) updated.push(next); else errors.push(`Row ${i + 1}: inventory update failed.`);
     }
     try { pstpAuditRepo.appendLog({ actor: user.username, actorRole: 'merchant', action: 'MERCHANT_BULK_INVENTORY_UPDATE', details: JSON.stringify({ resourceType: 'merchant_catalog', resourceId: user.username, updatedCount: updated.length, errorCount: errors.length }) }); } catch {}
@@ -86,7 +87,7 @@ export default async function handler(req: any, res: any) {
       availabilityStatus: stock > 0 ? 'in_stock' : 'out_of_stock',
       isActive: false, moderationStatus: 'PENDING_REVIEW'
     };
-    imported.push(repo.save(product as any));
+    imported.push(await saveDurableProduct(product as any));
   }
   try {
     pstpAuditRepo.appendLog({
