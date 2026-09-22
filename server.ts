@@ -38,6 +38,7 @@ import { StudentVerificationService } from './src/server/services/StudentVerific
 import { EducationRepository } from './src/server/db/repositories/EducationRepository';
 import { ProductRepository } from './src/server/db/repositories/ProductRepository';
 import { getDurableVendorApplication, durableVendorStorageEnabled } from './src/server/services/DurableVendorApplicationStore';
+import { durableProductStorageEnabled, getDurableProduct, listDurableProducts, saveDurableProduct, updateDurableProductAvailability, reserveDurableProductStockBatch, softDeleteDurableProduct, deleteDurableProductBlob } from './src/server/services/DurableProductCatalog';
 import { get, list, put } from '@vercel/blob';
 
 dotenv.config();
@@ -5655,3 +5656,6 @@ if (!isVercelServerless) {
 export { authService, vendorApplicationRepo, ProductRepository, pstpAuditRepo };
 export { VendorApplicationRepository } from './src/server/db/repositories/VendorApplicationRepository';
 export default app;
+
+
+export { durableProductStorageEnabled, getDurableProduct, listDurableProducts, saveDurableProduct, updateDurableProductAvailability, reserveDurableProductStockBatch, softDeleteDurableProduct, deleteDurableProductBlob };
