@@ -87,7 +87,23 @@ async function handleDurableProducts(req: any, res: any): Promise<boolean> {
     }
     const q = parsed.searchParams.get('q') || '';
     const category = parsed.searchParams.get('category') || undefined;
-    const products = await listDurableProducts({ activeOnly: true, category: category as any, q });
+
+    // Public catalog: only active products. Authenticated merchants can also
+    // see their own pending/inactive products in Seller Studio after refresh.
+    const viewer = await authenticateRequest(req);
+    const viewerUsername = String(viewer?.username || '').trim();
+    const products = viewerUsername
+      ? await listDurableProducts({
+          includeDeleted: false,
+          sellerId: viewerUsername,
+          category: category as any,
+          q
+        })
+      : await listDurableProducts({
+          activeOnly: true,
+          category: category as any,
+          q
+        });
     return res.json({ ok: true, products });
   }
 
