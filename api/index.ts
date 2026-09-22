@@ -39,19 +39,21 @@ function getBearerToken(req: IncomingMessage): string | null {
   return raw.startsWith('Bearer ') ? raw.slice(7).trim() : raw.trim();
 }
 
-async function resolveApprovedMerchant(username: string, pioneerUid?: string | null): Promise<any | null> {
+async function resolveApprovedMerchant(username: string, pioneerUid?: string | string[] | null): Promise<any | null> {
   const direct = await getDurableVendorApplication(username);
   if (direct) return direct;
 
   const target = String(username || '').trim().replace(/^@/, '').toLowerCase();
-  const uid = String(pioneerUid || '').trim();
-  if (!target && !uid) return null;
+  const uidCandidates = (Array.isArray(pioneerUid) ? pioneerUid : [pioneerUid])
+    .map((value) => String(value || '').trim())
+    .filter(Boolean);
+  if (!target && !uidCandidates.length) return null;
 
   const entries = await listDurableVendorApplications();
   return entries.find((application: any) => {
     const storedUsername = String(application?.pioneerUsername || '').trim().replace(/^@/, '').toLowerCase();
     const storedUid = String(application?.pioneerUid || '').trim();
-    return (target && storedUsername === target) || (uid && storedUid === uid);
+    return (target && storedUsername === target) || (storedUid && uidCandidates.includes(storedUid));
   }) || null;
 }
 
@@ -77,7 +79,7 @@ async function handleDurableProducts(req: any, res: any): Promise<boolean> {
   // Portable sessions may expose either the local auth user id or the
   // authoritative Pi UID. The durable application can legitimately contain
   // either identity depending on when the application was created.
-  const durableMerchant = await resolveApprovedMerchant(user.username, user.piUid || user.id);
+  const durableMerchant = await resolveApprovedMerchant(user.username, [user.piUid, user.id]);
   const canSell = durableMerchant?.status === 'APPROVED'
     && durableMerchant?.verificationStatus === 'Verified'
     && durableMerchant?.sellerStatus === 'Active';
