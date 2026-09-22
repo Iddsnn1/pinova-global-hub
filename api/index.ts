@@ -147,26 +147,29 @@ async function handleVendorStatus(req: IncomingMessage, res: ServerResponse): Pr
   }
 
   try {
-    const { authService, VendorApplicationRepository } = getServerDependencies();
-    const user = await authService.authenticateToken(token);
+    const user = await authenticateRequest(req as any);
     if (!user?.username) {
       res.statusCode = 401;
       res.end(JSON.stringify({ success: false, error: 'INVALID_SESSION' }));
       return true;
     }
 
-    const vendorApplicationRepo = new VendorApplicationRepository();
-    const application = vendorApplicationRepo.findByUsername(user.username);
-    const access = vendorApplicationRepo.getMerchantAccess(user.username);
-    const status = access.applicationStatus || 'UNREGISTERED';
+    // Legacy /api/vendor/status must never read the ephemeral VendorApplicationRepository.
+    // Vercel production normally rewrites this route to the durable handler, but this
+    // fallback is intentionally kept aligned with the same durable compliance source
+    // so routing changes cannot resurrect a stale approval/status authority.
+    const application = await getDurableVendorApplication(user.username);
+    const status = application?.status || 'UNREGISTERED';
+    const verified = application?.verificationStatus === 'Verified';
+    const sellerActive = application?.sellerStatus === 'Active';
 
     res.statusCode = 200;
     res.end(JSON.stringify({
       success: true,
       status,
-      verified: access.verificationStatus === 'Verified',
-      pstpAuthorized: access.canReceivePstpOrders,
-      sellerLifecycle: access.sellerStatus === 'Active' ? 'ACTIVE' : 'INACTIVE',
+      verified,
+      pstpAuthorized: verified && sellerActive && status === 'APPROVED',
+      sellerLifecycle: sellerActive && status === 'APPROVED' ? 'ACTIVE' : 'INACTIVE',
       storeName: application?.storeName || null,
       application: application ? {
         id: application.id,
@@ -194,20 +197,6 @@ async function handleVendorStatus(req: IncomingMessage, res: ServerResponse): Pr
 }
 
 let cachedApp: any = null;
-let cachedDependencies: any = null;
-
-function getServerDependencies() {
-  if (cachedDependencies) return cachedDependencies;
-  const mod = getApp();
-  cachedDependencies = {
-    authService: mod.authService,
-    VendorApplicationRepository: mod.VendorApplicationRepository
-  };
-  if (!cachedDependencies.authService || !cachedDependencies.VendorApplicationRepository) {
-    throw new Error('Bundled server dependencies are unavailable');
-  }
-  return cachedDependencies;
-}
 
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
   const reqUrl = req.url || '';
