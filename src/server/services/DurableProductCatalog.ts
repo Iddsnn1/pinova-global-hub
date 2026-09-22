@@ -4,7 +4,13 @@ import type { Product, ProductCategory, AvailabilityStatus } from '../../types';
 const PREFIX = 'product-catalog/';
 
 function enabled(): boolean {
-  return Boolean(process.env.BLOB_READ_WRITE_TOKEN);
+  return Boolean(process.env.BLOB_READ_WRITE_TOKEN && process.env.PRIVATE_BLOB_STORE_ID);
+}
+
+function privateBlobOptions() {
+  const storeId = process.env.PRIVATE_BLOB_STORE_ID;
+  if (!storeId) throw new Error('PRIVATE_BLOB_STORE_ID_UNAVAILABLE');
+  return { storeId };
 }
 
 function keyFor(id: string): string {
@@ -13,7 +19,7 @@ function keyFor(id: string): string {
 
 async function readPath(pathname: string): Promise<Product | null> {
   if (!enabled()) return null;
-  const result = await get(pathname, { access: 'private', useCache: false });
+  const result = await get(pathname, { access: 'private', useCache: false, ...privateBlobOptions() });
   if (!result || result.statusCode !== 200 || !result.stream) return null;
   const chunks: Uint8Array[] = [];
   const reader = result.stream.getReader();
@@ -33,7 +39,7 @@ async function listAll(): Promise<Product[]> {
   const products: Product[] = [];
   let cursor: string | undefined;
   do {
-    const page = await list({ prefix: PREFIX, limit: 1000, cursor });
+    const page = await list({ prefix: PREFIX, limit: 1000, cursor, ...privateBlobOptions() });
     for (const blob of page.blobs) {
       const product = await readPath(blob.pathname);
       if (product) products.push(product);
@@ -107,7 +113,8 @@ export async function saveDurableProduct(product: Product): Promise<Product> {
     access: 'private',
     contentType: 'application/json',
     allowOverwrite: true,
-    cacheControlMaxAge: 60
+    cacheControlMaxAge: 60,
+    ...privateBlobOptions()
   });
   return normalized;
 }
@@ -170,6 +177,6 @@ export async function deleteDurableProductBlob(id: string): Promise<boolean> {
   if (!enabled()) return false;
   const existing = await getDurableProduct(id);
   if (!existing) return false;
-  await del(keyFor(id));
+  await del(keyFor(id), { ...privateBlobOptions() });
   return true;
 }
