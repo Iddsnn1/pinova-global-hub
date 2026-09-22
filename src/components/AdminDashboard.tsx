@@ -12,7 +12,6 @@ import { INITIAL_PRODUCTS } from '../data/mockData';
 interface AdminDashboardProps {
   orders: Order[];
   vendors: Vendor[];
-  onToggleVendorVerification: (vendorId: string) => void;
   onResolveDispute: (orderId: string, resolution: 'refund' | 'release') => void;
   onOpenPstpShield?: () => void;
   utilityConfig?: PiConversionConfig;
@@ -23,7 +22,6 @@ interface AdminDashboardProps {
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   orders = [],
   vendors = [],
-  onToggleVendorVerification,
   onResolveDispute,
   onOpenPstpShield,
   utilityConfig,
@@ -101,7 +99,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           <Zap className="w-4 h-4 text-amber-500" /><span>Utility & Conversion Rate Engine</span>
         </button>
         <button onClick={() => setActiveTab('vendors')} className={`pb-3 px-4 text-xs font-bold border-b-2 flex items-center gap-2 transition-colors shrink-0 ${activeTab === 'vendors' ? 'border-purple-600 text-purple-600 dark:text-purple-400' : 'border-transparent text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}>
-          <UserCheck className="w-4 h-4" /><span>Vendor Verification Queue ({vendors.length})</span>
+          <UserCheck className="w-4 h-4" /><span>Merchant Application Directory ({vendorApplications.length})</span>
         </button>
         <button onClick={() => setActiveTab('finance')} className={`pb-3 px-4 text-xs font-bold border-b-2 flex items-center gap-2 transition-colors shrink-0 ${activeTab === 'finance' ? 'border-purple-600 text-purple-600 dark:text-purple-400' : 'border-transparent text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}>
           <BarChart3 className="w-4 h-4 text-purple-500" /><span>Finance, Analytics & BI</span>
