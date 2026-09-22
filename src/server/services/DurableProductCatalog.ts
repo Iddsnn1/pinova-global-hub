@@ -24,7 +24,7 @@ async function readPath(pathname: string): Promise<Product | null> {
   const exists = page.blobs.some((blob) => blob.pathname === pathname);
   if (!exists) return null;
 
-  const result = await get(pathname, { access: 'private', useCache: false });
+  const result = await get(pathname, { access: 'public', useCache: false });
   if (!result || result.statusCode !== 200 || !result.stream) return null;
   const chunks: Uint8Array[] = [];
   const reader = result.stream.getReader();
@@ -115,7 +115,7 @@ export async function saveDurableProduct(product: Product): Promise<Product> {
   const existing = await getDurableProduct(product.id);
   const normalized = normalize(product, existing || undefined);
   await put(keyFor(normalized.id), JSON.stringify(normalized), {
-    access: 'private',
+    access: 'public',
     contentType: 'application/json',
     allowOverwrite: true,
     cacheControlMaxAge: 60
