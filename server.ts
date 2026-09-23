@@ -1226,6 +1226,44 @@ app.post(
   }
 );
 
+// POST /api/vendor/product-image-upload
+// Authenticated merchant product image upload; uses the public catalog Blob store.
+app.post(
+  '/api/vendor/product-image-upload',
+  handleVendorBrandingRawBody,
+  authenticate,
+  async (req: AuthenticatedRequest, res) => {
+    try {
+      const authUser = req.authenticatedUser || (req as any).user;
+      if (!authUser?.username) {
+        return res.status(401).json({ success: false, error: 'AUTHENTICATION_REQUIRED', message: 'Authenticated Pioneer session required.' });
+      }
+      const merchant = await getDurableVendorApplication(authUser.username);
+      const canSell = merchant?.status === 'APPROVED' && merchant?.verificationStatus === 'Verified' && merchant?.sellerStatus === 'Active';
+      if (!canSell) {
+        return res.status(403).json({ success: false, error: 'MERCHANT_SELLER_ACCESS_REQUIRED', message: 'Server-verified merchant access is required before uploading product images.' });
+      }
+      const rawContentType = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
+      const mimeType = rawContentType === 'image/jpg' ? 'image/jpeg' : rawContentType;
+      const allowedMimes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+      if (!allowedMimes.includes(mimeType)) return res.status(415).json({ success: false, error: 'UNSUPPORTED_IMAGE_TYPE', message: 'Use JPEG, PNG, WebP, or GIF.' });
+      const fileBuffer: Buffer = req.body;
+      if (!Buffer.isBuffer(fileBuffer) || fileBuffer.length === 0) return res.status(400).json({ success: false, error: 'EMPTY_IMAGE' });
+      if (fileBuffer.length > 5 * 1024 * 1024) return res.status(413).json({ success: false, error: 'IMAGE_TOO_LARGE', message: 'Maximum image size is 5 MB.' });
+      const safeUsername = String(authUser.username).replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 80) || 'merchant';
+      const extension = mimeType === 'image/jpeg' ? 'jpg' : mimeType.split('/')[1];
+      const assetId = crypto.randomBytes(12).toString('hex');
+      const pathname = `product-images/${safeUsername}/${Date.now()}-${assetId}.${extension}`;
+      const { put } = await import('@vercel/blob');
+      const blob = await put(pathname, fileBuffer, { access: 'public', contentType: mimeType, addRandomSuffix: false, allowOverwrite: false });
+      return res.status(200).json({ success: true, url: blob.url, pathname: blob.pathname, contentType: mimeType, size: fileBuffer.length });
+    } catch (error: any) {
+      console.error('[Product Image Upload]', error);
+      return res.status(500).json({ success: false, error: 'PRODUCT_IMAGE_UPLOAD_FAILED' });
+    }
+  }
+);
+
 // ============================================================================
 // PUBLIC STOREFRONT BRANDING UPLOAD & ASSET RETRIEVAL (PI-HUB BRANDING)
 // Distinct from encrypted KYC document storage: branding is public for buyers
