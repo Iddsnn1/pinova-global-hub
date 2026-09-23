@@ -143,6 +143,28 @@ export async function authenticateVendorAdminRequest(req: any): Promise<any | nu
   return roles.includes('PLATFORM_ADMIN') || roles.includes('COMPLIANCE_OFFICER') || roles.includes('COMPLIANCE_ADMIN') ? user : null;
 }
 
+async function resolveDurableVendorForAuthenticatedUser(user: any): Promise<any | null> {
+  if (!user) return null;
+  const directUsername = String(user.username || '').trim();
+  if (directUsername) {
+    const direct = await getDurableVendorApplication(directUsername);
+    if (direct) return direct;
+  }
+
+  const target = directUsername.replace(/^@/, '').toLowerCase();
+  const uidCandidates = [user.piUid, user.uid, user.id]
+    .map((value) => String(value || '').trim())
+    .filter(Boolean);
+
+  const entries = await listDurableVendorApplications();
+  return entries.find((application: any) => {
+    const storedUsername = String(application?.pioneerUsername || '').trim().replace(/^@/, '').toLowerCase();
+    const storedUid = String(application?.pioneerUid || '').trim();
+    return (target && storedUsername === target) ||
+      (storedUid && uidCandidates.includes(storedUid));
+  }) || null;
+}
+
 
 // Bind port: In Google AI Studio environment, nginx reverse-proxies port 8080 to internal port 3000 (DEFAULT_APP_PORT=3000).
 // In standalone Cloud Run without nginx proxy, bind directly to process.env.PORT.
@@ -1238,9 +1260,16 @@ app.post(
       if (!authUser?.username) {
         return res.status(401).json({ success: false, error: 'AUTHENTICATION_REQUIRED', message: 'Authenticated Pioneer session required.' });
       }
-      const merchant = await getDurableVendorApplication(authUser.username);
+      const merchant = await resolveDurableVendorForAuthenticatedUser(authUser);
       const canSell = merchant?.status === 'APPROVED' && merchant?.verificationStatus === 'Verified' && merchant?.sellerStatus === 'Active';
       if (!canSell) {
+        console.warn('[Product Image Upload] merchant access denied', {
+          username: String(authUser.username || '').trim().replace(/^@/, '').toLowerCase(),
+          merchantFound: Boolean(merchant),
+          merchantStatus: merchant?.status || null,
+          verificationStatus: merchant?.verificationStatus || null,
+          sellerStatus: merchant?.sellerStatus || null
+        });
         return res.status(403).json({ success: false, error: 'MERCHANT_SELLER_ACCESS_REQUIRED', message: 'Server-verified merchant access is required before uploading product images.' });
       }
       const rawContentType = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
