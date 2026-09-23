@@ -9,7 +9,15 @@ export interface DurableVendorApplication {
 const PREFIX = 'vendor-applications/';
 
 function enabled(): boolean {
-  return Boolean(process.env.BLOB_READ_WRITE_TOKEN);
+  // Merchant/KYC records must use the dedicated PRIVATE Blob store.
+  // Never fall back to the public catalog store for sensitive vendor data.
+  return Boolean(process.env.PRIVATE_BLOB_STORE_ID);
+}
+
+function blobOptions() {
+  const storeId = process.env.PRIVATE_BLOB_STORE_ID;
+  if (!storeId) throw new Error('PRIVATE_BLOB_STORE_ID_UNAVAILABLE');
+  return { storeId };
 }
 
 function keyFor(username: string): string {
@@ -19,8 +27,20 @@ function keyFor(username: string): string {
 
 async function readPath(pathname: string): Promise<DurableVendorApplication | null> {
   if (!enabled()) return null;
-  const result = await get(pathname, { access: 'private', useCache: false });
+
+  // Some private Blob configurations return HTTP 400 for a missing pathname.
+  // Check existence first so a missing application is treated as "not found".
+  const page = await list({ prefix: pathname, limit: 10, ...blobOptions() });
+  const exists = page.blobs.some((blob) => blob.pathname === pathname);
+  if (!exists) return null;
+
+  const result = await get(pathname, {
+    access: 'private',
+    useCache: false,
+    ...blobOptions()
+  });
   if (!result || result.statusCode !== 200 || !result.stream) return null;
+
   const chunks: Uint8Array[] = [];
   const reader = result.stream.getReader();
   while (true) {
@@ -28,9 +48,14 @@ async function readPath(pathname: string): Promise<DurableVendorApplication | nu
     if (done) break;
     if (value) chunks.push(value);
   }
+
   const bytes = new Uint8Array(chunks.reduce((n, c) => n + c.length, 0));
   let offset = 0;
-  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.length;
+  }
+
   return JSON.parse(new TextDecoder().decode(bytes));
 }
 
@@ -40,12 +65,13 @@ function normalizeIdentity(value: unknown): string {
 
 export async function getDurableVendorApplication(username: string): Promise<DurableVendorApplication | null> {
   if (!username?.trim() || !enabled()) return null;
+
   const direct = await readPath(keyFor(username));
   if (direct) return direct;
 
-  // Resolve harmless @prefix/case differences against the authenticated identity.
   const target = normalizeIdentity(username);
   if (!target) return null;
+
   const entries = await listDurableVendorApplications();
   return entries.find((app) => normalizeIdentity(app?.pioneerUsername) === target) || null;
 }
@@ -59,33 +85,46 @@ export async function getDurableVendorApplicationByIdentity(
 
   const uid = String(pioneerUid || '').trim();
   if (!uid || !enabled()) return null;
+
   const entries = await listDurableVendorApplications();
   return entries.find((app) => String(app?.pioneerUid || '').trim() === uid) || null;
 }
 
 export async function saveDurableVendorApplication(application: DurableVendorApplication): Promise<DurableVendorApplication> {
   if (!enabled()) throw new Error('DURABLE_VENDOR_STORAGE_UNAVAILABLE');
+
   await put(keyFor(application.pioneerUsername), JSON.stringify(application), {
     access: 'private',
     contentType: 'application/json',
     allowOverwrite: true,
-    cacheControlMaxAge: 60
+    ...blobOptions()
   });
+
   return application;
 }
 
 export async function listDurableVendorApplications(): Promise<DurableVendorApplication[]> {
   if (!enabled()) return [];
+
   const entries: DurableVendorApplication[] = [];
   let cursor: string | undefined;
+
   do {
-    const page = await list({ prefix: PREFIX, limit: 1000, cursor });
+    const page = await list({
+      prefix: PREFIX,
+      limit: 1000,
+      cursor,
+      ...blobOptions()
+    });
+
     for (const blob of page.blobs) {
       const app = await readPath(blob.pathname);
       if (app) entries.push(app);
     }
+
     cursor = page.hasMore ? page.cursor : undefined;
   } while (cursor);
+
   return entries;
 }
 
