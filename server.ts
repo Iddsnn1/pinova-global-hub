@@ -1851,7 +1851,7 @@ app.post(['/api/vendor/apply', '/api/v1/vendor/apply'], authenticate, (req: Auth
       };
     });
 
-    const existing = vendorApplicationRepo.findByUsername(effectiveUsername);
+    const existing = await getDurableVendorApplication(effectiveUsername);
     const appId = existing?.id || `VAPP-${(countryCode || 'GL').toUpperCase()}-${Date.now().toString().slice(-6)}`;
 
     const applicationRecord = {
@@ -1891,7 +1891,7 @@ app.post(['/api/vendor/apply', '/api/v1/vendor/apply'], authenticate, (req: Auth
       updatedAt: new Date().toISOString()
     };
 
-    vendorApplicationRepo.save(applicationRecord);
+    await saveDurableVendorApplication(applicationRecord);
 
     pstpAuditRepo.appendLog({
       orderId: appId,
@@ -1999,7 +1999,7 @@ app.post(['/api/admin/vendor-application/:id/review', '/api/v1/admin/vendor-appl
 app.get(
   ['/api/vendor/seller/access', '/api/v1/vendor/seller/access'],
   authenticate,
-  (req: AuthenticatedRequest, res: express.Response) => {
+  async (req: AuthenticatedRequest, res: express.Response) => {
     try {
       const username = req.user?.username;
       if (!username) {
@@ -2011,7 +2011,7 @@ app.get(
         return;
       }
 
-      const application = vendorApplicationRepo.findByUsername(username);
+      const application = await getDurableVendorApplication(username);
       const isApproved = application?.status === 'APPROVED';
       const access = vendorApplicationRepo.getMerchantAccess(username);
 
@@ -2040,7 +2040,7 @@ app.get(
 app.post(
   ['/api/vendor/seller/authorize', '/api/v1/vendor/seller/authorize'],
   authenticate,
-  (req: AuthenticatedRequest, res: express.Response) => {
+  async (req: AuthenticatedRequest, res: express.Response) => {
     try {
       const username = req.user?.username;
       if (!username) {
@@ -2052,7 +2052,7 @@ app.post(
         return;
       }
 
-      const application = vendorApplicationRepo.findByUsername(username);
+      const application = await getDurableVendorApplication(username);
       if (!application || application.status !== 'APPROVED') {
         res.status(403).json({
           success: false,
@@ -2088,7 +2088,7 @@ app.post(
 app.post(
   ['/api/vendor/seller/authorize-pstp', '/api/v1/vendor/seller/authorize-pstp'],
   authenticate,
-  (req: AuthenticatedRequest, res: express.Response) => {
+  async (req: AuthenticatedRequest, res: express.Response) => {
     try {
       const username = req.user?.username;
       if (!username) {
@@ -2100,7 +2100,7 @@ app.post(
         return;
       }
 
-      const application = vendorApplicationRepo.findByUsername(username);
+      const application = await getDurableVendorApplication(username);
       if (!application || application.status !== 'APPROVED') {
         res.status(403).json({
           success: false,
