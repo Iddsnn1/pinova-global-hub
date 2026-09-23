@@ -25,14 +25,16 @@ interface KycVerificationTabProps {
     storeName: string | null;
   };
   application: any;
-  onRefreshStatus: () => void;
+  onRefreshStatus: () => Promise<void> | void;
+  isRefreshingStatus?: boolean;
 }
 
 export const KycVerificationTab: React.FC<KycVerificationTabProps> = ({
   userUsername,
   serverStatus,
   application,
-  onRefreshStatus
+  onRefreshStatus,
+  isRefreshingStatus = false
 }) => {
   // Document Upload State
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -171,14 +173,19 @@ export const KycVerificationTab: React.FC<KycVerificationTabProps> = ({
               Authoritative server-governed merchant compliance and encrypted identity validation
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2">
             {getStatusBadge()}
             <button
-              onClick={onRefreshStatus}
-              className="p-1.5 rounded-lg border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-800 text-neutral-500 transition-colors"
-              title="Refresh Authoritative Status"
+              id="kyc-refresh-status-btn"
+              type="button"
+              onClick={() => void onRefreshStatus()}
+              disabled={isRefreshingStatus}
+              className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 min-h-[36px] rounded-lg border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-800 text-neutral-600 dark:text-neutral-300 text-xs font-semibold transition-colors disabled:opacity-60 disabled:cursor-wait"
+              title="Refresh authoritative compliance status"
+              aria-label="Refresh authoritative compliance status"
             >
-              <RefreshCw className="w-4 h-4" />
+              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshingStatus ? 'animate-spin' : ''}`} />
+              <span>{isRefreshingStatus ? 'Refreshing…' : 'Refresh Status'}</span>
             </button>
           </div>
         </div>
