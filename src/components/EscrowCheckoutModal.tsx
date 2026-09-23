@@ -118,6 +118,7 @@ export const EscrowCheckoutModal: React.FC<EscrowCheckoutModalProps> = ({
       itemCount: cartItems.length,
       shippingCountry
     };
+    const memo = `PiNova PSTP Order ${generatedOrderId}`;
 
     executePiPayment(
       {
