@@ -1758,7 +1758,7 @@ app.get(
 );
 
 // POST /api/vendor/apply & /api/v1/vendor/apply
-app.post(['/api/vendor/apply', '/api/v1/vendor/apply'], authenticate, (req: AuthenticatedRequest, res) => {
+app.post(['/api/vendor/apply', '/api/v1/vendor/apply'], authenticate, async (req: AuthenticatedRequest, res) => {
   try {
     const effectiveUsername = req.user?.username || req.body?.pioneerUsername;
     const {
