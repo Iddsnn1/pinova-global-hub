@@ -27,11 +27,39 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({ products, openCreateOn
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
   const [createdProducts, setCreatedProducts] = useState<Product[]>([]);
+  const [serverProducts, setServerProducts] = useState<Product[]>([]);
+  const [isLoadingServerProducts, setIsLoadingServerProducts] = useState(false);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
 
-  const visibleProducts = useMemo(() => [...createdProducts, ...products], [createdProducts, products]);
+  useEffect(() => {
+    let cancelled = false;
+    const loadServerProducts = async () => {
+      setIsLoadingServerProducts(true);
+      try {
+        const response = await vendorAuthenticatedFetch('/api/products', { method: 'GET' });
+        const text = await response.text();
+        if (!response.ok || !text) return;
+        const data = JSON.parse(text);
+        if (!cancelled && Array.isArray(data?.products)) setServerProducts(data.products);
+      } catch (error) {
+        console.warn('[ProductsTab] Failed to hydrate products from durable catalog:', error);
+      } finally {
+        if (!cancelled) setIsLoadingServerProducts(false);
+      }
+    };
+    loadServerProducts();
+    return () => { cancelled = true; };
+  }, []);
+
+  const visibleProducts = useMemo(() => {
+    const merged = new Map<string, Product>();
+    for (const product of products) merged.set(product.id, product);
+    for (const product of serverProducts) merged.set(product.id, product);
+    for (const product of createdProducts) merged.set(product.id, product);
+    return Array.from(merged.values());
+  }, [createdProducts, products, serverProducts]);
   const filteredProducts = visibleProducts.filter(product => {
     const q = searchQuery.toLowerCase();
     const matchesSearch = String(product.title || '').toLowerCase().includes(q) || String(product.description || '').toLowerCase().includes(q) || String(product.id || '').toLowerCase().includes(q);
@@ -109,6 +137,7 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({ products, openCreateOn
         return;
       }
       setCreatedProducts(prev => [result.product!, ...prev]);
+      setServerProducts(prev => [result.product!, ...prev.filter(product => product.id !== result.product!.id)]);
       setSubmitSuccess(`Product created successfully: ${result.product.title}`);
       setDraft(EMPTY_DRAFT);
       setImageFile(null);
