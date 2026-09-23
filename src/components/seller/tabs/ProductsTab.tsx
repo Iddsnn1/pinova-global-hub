@@ -114,9 +114,18 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({ products, openCreateOn
       setImageFile(null);
       setImagePreview(null);
       window.setTimeout(() => setIsCreateOpen(false), 900);
-    } catch (error) {
+    } catch (error: any) {
       console.error('[ProductsTab] Product creation failed:', error);
-      setSubmitError('Unable to reach the product service. Please try again.');
+      const message = String(error?.message || '').trim();
+      if (message === 'MERCHANT_SELLER_ACCESS_REQUIRED') {
+        setSubmitError('Server-verified merchant access is required. Please refresh Seller Studio and verify that your store is Active.');
+      } else if (message === 'AUTHENTICATION_REQUIRED' || message === 'INVALID_SESSION') {
+        setSubmitError('Your verified Pi session has expired. Refresh Seller Studio and reconnect your Pi account.');
+      } else if (message) {
+        setSubmitError(message);
+      } else {
+        setSubmitError('Unable to complete product submission. Please try again.');
+      }
     } finally { setIsUploadingImage(false); setIsSubmitting(false); }
   };
 
