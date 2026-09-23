@@ -98,6 +98,7 @@ export const PlatformAdminView: React.FC<PlatformAdminViewProps> = ({
 
   // Live Refresh State
   const [lastRefreshedAt, setLastRefreshedAt] = useState(new Date().toLocaleTimeString());
+  const [isRefreshingMetrics, setIsRefreshingMetrics] = useState(false);
 
   // Filter & Search for Users Directory
   const [userQuery, setUserQuery] = useState('');
@@ -277,9 +278,19 @@ export const PlatformAdminView: React.FC<PlatformAdminViewProps> = ({
 
   // Data Refresh Trigger
   const [tick, setTick] = useState(0);
-  const refreshData = () => {
-    setLastRefreshedAt(new Date().toLocaleTimeString());
-    setTick(prev => prev + 1);
+  const refreshData = async () => {
+    if (isRefreshingMetrics) return;
+    setIsRefreshingMetrics(true);
+    try {
+      // Re-read all derived admin snapshots from the current engine state and
+      // force React to rebuild every metric/health/KPI view. The engine remains
+      // the source of truth; this does not fabricate new telemetry values.
+      await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+      setTick(prev => prev + 1);
+      setLastRefreshedAt(new Date().toLocaleTimeString());
+    } finally {
+      setIsRefreshingMetrics(false);
+    }
   };
 
   // Derived Data
@@ -539,11 +550,13 @@ export const PlatformAdminView: React.FC<PlatformAdminViewProps> = ({
           </button>
 
           <button
-            onClick={refreshData}
-            className="px-3 py-1.5 rounded-xl bg-purple-950 hover:bg-purple-900 border border-purple-800 text-purple-200 text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm active:scale-95"
+            onClick={() => { void refreshData(); }}
+            disabled={isRefreshingMetrics}
+            aria-busy={isRefreshingMetrics}
+            className="px-3 py-1.5 rounded-xl bg-purple-950 hover:bg-purple-900 border border-purple-800 text-purple-200 text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm active:scale-95 disabled:opacity-60 disabled:cursor-wait"
           >
-            <RefreshCw className="w-3.5 h-3.5 text-amber-400" />
-            <span>Sync Live Metrics</span>
+            <RefreshCw className={`w-3.5 h-3.5 text-amber-400 ${isRefreshingMetrics ? 'animate-spin' : ''}`} />
+            <span>{isRefreshingMetrics ? 'Syncing…' : 'Sync Live Metrics'}</span>
           </button>
         </div>
       </div>
