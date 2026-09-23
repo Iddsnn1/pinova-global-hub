@@ -138,8 +138,14 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
     setIsMobileMenuOpen(false);
     setIsMobileModuleSheetOpen(false);
 
+    // Keep module navigation in browser history so Android/Pi Browser Back works
+    // without leaving Seller Studio or forcing a full document navigation.
     if (typeof window !== 'undefined') {
       try {
+        const url = new URL(window.location.href);
+        url.searchParams.set('tab', newTab);
+        url.searchParams.delete('module');
+        window.history.pushState({ sellerTab: newTab }, '', url.toString());
         window.scrollTo({ top: 0, behavior: 'smooth' });
       } catch (_) {}
     }
@@ -656,6 +662,30 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
 
           {/* Main Content Workspace */}
           <main className="flex-1 min-w-0">
+            {/* Consistent page-level back control for every Seller Studio module. */}
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <button
+                id="seller-page-back-btn"
+                type="button"
+                onClick={() => {
+                  if (activeTab !== 'overview') {
+                    handleSelectTab('overview');
+                  } else if (onNavigateHome) {
+                    onNavigateHome();
+                  }
+                }}
+                className="inline-flex items-center gap-2 px-3 py-2 min-h-[42px] rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 hover:bg-neutral-50 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-300 text-xs font-semibold transition-colors"
+                aria-label={activeTab !== 'overview' ? 'Back to Seller Dashboard' : 'Return to Marketplace'}
+              >
+                <ArrowLeft className="w-4 h-4" />
+                <span>{activeTab !== 'overview' ? 'Back to Dashboard' : 'Go Back'}</span>
+              </button>
+              {activeTab !== 'overview' && (
+                <span className="hidden sm:block text-[11px] text-neutral-400 truncate">
+                  Seller Studio / {currentTabItem.label}
+                </span>
+              )}
+            </div>
             {/* 1. Ecosystem Dashboard */}
             {activeTab === 'overview' && (
               <OverviewTab
@@ -770,6 +800,7 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
                 serverStatus={serverStatus}
                 application={applicationData}
                 onRefreshStatus={fetchAuthoritativeStatus}
+                isRefreshingStatus={isLoadingStatus}
               />
             )}
 
