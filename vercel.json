@@ -29,6 +29,10 @@
       "destination": "/api/index?__path=/products"
     },
     {
+      "source": "/api/vendor/product-image-upload",
+      "destination": "/api/vendor/product-image-upload"
+    },
+    {
       "source": "/api/vendor/apply",
       "destination": "/api/vendor/apply-durable"
     },
