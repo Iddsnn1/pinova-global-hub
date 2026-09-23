@@ -3,6 +3,7 @@ import { Package, Plus, Search, Edit3, Trash2, X, Loader2, AlertCircle, CheckCir
 import { Product, ProductCategory } from '../../../types';
 import { MARKETPLACE_CATEGORIES } from '../../../data/categoryData';
 import { createSellerProduct } from '../../../lib/productApi';
+import { vendorAuthenticatedFetch } from '../../../lib/vendorAuthBridge';
 
 interface ProductsTabProps {
   products: Product[];
@@ -26,6 +27,9 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({ products, openCreateOn
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
   const [createdProducts, setCreatedProducts] = useState<Product[]>([]);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
 
   const visibleProducts = useMemo(() => [...createdProducts, ...products], [createdProducts, products]);
   const filteredProducts = visibleProducts.filter(product => {
@@ -39,14 +43,36 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({ products, openCreateOn
   const categories = MARKETPLACE_CATEGORIES;
   const categoryCount = MARKETPLACE_CATEGORIES.length;
 
-  const openCreateForm = () => { setDraft(EMPTY_DRAFT); setSubmitError(null); setSubmitSuccess(null); setIsCreateOpen(true); };
+  const openCreateForm = () => { setDraft(EMPTY_DRAFT); setImageFile(null); setImagePreview(null); setSubmitError(null); setSubmitSuccess(null); setIsCreateOpen(true); };
 
   useEffect(() => {
     if (!openCreateOnMount) return;
     openCreateForm();
     onCreateFormOpened?.();
   }, [openCreateOnMount, onCreateFormOpened]);
-  const closeCreateForm = () => { if (!isSubmitting) setIsCreateOpen(false); };
+  const closeCreateForm = () => { if (!isSubmitting && !isUploadingImage) { setIsCreateOpen(false); setImageFile(null); setImagePreview(null); } };
+  const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] || null;
+    if (!file) return;
+    const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    if (!allowed.includes(file.type)) {
+      setSubmitError('Product image must be JPEG, PNG, WebP, or GIF.');
+      event.target.value = '';
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setSubmitError('Product image must be 5 MB or smaller.');
+      event.target.value = '';
+      return;
+    }
+    setSubmitError(null);
+    setImageFile(file);
+    setImagePreview(URL.createObjectURL(file));
+  };
+  const removeImage = () => {
+    setImageFile(null);
+    setImagePreview(null);
+  };
 
   const submitProduct = async (event: React.FormEvent) => {
     event.preventDefault(); setSubmitError(null); setSubmitSuccess(null);
@@ -57,7 +83,25 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({ products, openCreateOn
     if (!Number.isInteger(stock) || stock < 0) return setSubmitError('Inventory must be a whole number of 0 or more.');
     setIsSubmitting(true);
     try {
-      const result = await createSellerProduct({ title, description, pricePi, category: draft.category, marketplaceCategory: draft.marketplaceCategory, subcategory: draft.subcategory.trim(), images: draft.imageUrl.trim() ? [draft.imageUrl.trim()] : [], stock, features: [], tags: [], productType: draft.category === 'physical' ? 'physical' : draft.category === 'digital' ? 'digital' : 'service' });
+      let uploadedImageUrl = draft.imageUrl.trim();
+      if (imageFile) {
+        setIsUploadingImage(true);
+        const uploadResponse = await vendorAuthenticatedFetch('/api/vendor/product-image-upload', {
+          method: 'POST',
+          headers: { 'Content-Type': imageFile.type, 'X-Filename': encodeURIComponent(imageFile.name) },
+          body: imageFile
+        });
+        const uploadText = await uploadResponse.text();
+        let uploadData: any = null;
+        try { uploadData = uploadText ? JSON.parse(uploadText) : null; } catch { uploadData = null; }
+        if (!uploadResponse.ok || !uploadData?.url) {
+          const uploadError = uploadData?.error || `IMAGE_UPLOAD_FAILED_HTTP_${uploadResponse.status}`;
+          throw new Error(uploadError === 'MERCHANT_SELLER_ACCESS_REQUIRED' ? 'Seller access denied. Complete merchant verification before uploading product images.' : uploadError);
+        }
+        uploadedImageUrl = uploadData.url;
+        setIsUploadingImage(false);
+      }
+      const result = await createSellerProduct({ title, description, pricePi, category: draft.category, marketplaceCategory: draft.marketplaceCategory, subcategory: draft.subcategory.trim(), images: uploadedImageUrl ? [uploadedImageUrl] : [], stock, features: [], tags: [], productType: draft.category === 'physical' ? 'physical' : draft.category === 'digital' ? 'digital' : 'service' });
       if (!result.ok || !result.product) {
         if (result.status === 403 && result.error === 'MERCHANT_SELLER_ACCESS_REQUIRED') setSubmitError('Seller access denied. Complete merchant verification and activate your store before publishing products.');
         else if (result.status === 401) setSubmitError('Authentication is required. Reconnect your Pi account and try again.');
@@ -67,11 +111,13 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({ products, openCreateOn
       setCreatedProducts(prev => [result.product!, ...prev]);
       setSubmitSuccess(`Product created successfully: ${result.product.title}`);
       setDraft(EMPTY_DRAFT);
+      setImageFile(null);
+      setImagePreview(null);
       window.setTimeout(() => setIsCreateOpen(false), 900);
     } catch (error) {
       console.error('[ProductsTab] Product creation failed:', error);
       setSubmitError('Unable to reach the product service. Please try again.');
-    } finally { setIsSubmitting(false); }
+    } finally { setIsUploadingImage(false); setIsSubmitting(false); }
   };
 
   return (
@@ -101,8 +147,11 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({ products, openCreateOn
           <label className="text-xs font-semibold">Subcategory<input value={draft.subcategory} onChange={e => setDraft(d => ({...d, subcategory: e.target.value}))} className="mt-1.5 w-full rounded-xl border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 px-3 py-2.5 text-sm" placeholder="Optional" /></label>
           <label className="text-xs font-semibold">Price (π) *<input required type="number" min="0.000001" step="0.000001" value={draft.pricePi} onChange={e => setDraft(d => ({...d, pricePi: e.target.value}))} className="mt-1.5 w-full rounded-xl border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 px-3 py-2.5 text-sm" placeholder="10" /></label>
           <label className="text-xs font-semibold">Inventory *<input required type="number" min="0" step="1" value={draft.stock} onChange={e => setDraft(d => ({...d, stock: e.target.value}))} className="mt-1.5 w-full rounded-xl border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 px-3 py-2.5 text-sm" placeholder="5" /></label>
-          <label className="sm:col-span-2 text-xs font-semibold">Product Image URL <span className="font-normal text-neutral-400">(optional)</span><input type="url" value={draft.imageUrl} onChange={e => setDraft(d => ({...d, imageUrl: e.target.value}))} className="mt-1.5 w-full rounded-xl border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 px-3 py-2.5 text-sm" placeholder="https://..." /></label>
-        </div><div className="pt-2 flex flex-col-reverse sm:flex-row sm:justify-end gap-2"><button type="button" onClick={closeCreateForm} disabled={isSubmitting} className="px-4 py-2.5 rounded-xl border border-neutral-200 dark:border-neutral-700 text-xs font-semibold">Cancel</button><button id="submit-product-btn" type="submit" disabled={isSubmitting} className="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 disabled:opacity-60 text-white text-xs font-semibold flex items-center justify-center gap-2">{isSubmitting ? <><Loader2 className="w-4 h-4 animate-spin" />Submitting...</> : <><CheckCircle2 className="w-4 h-4" />Submit Product</>}</button></div>
+          <div className="sm:col-span-2 rounded-2xl border border-dashed border-neutral-300 dark:border-neutral-700 bg-neutral-50/70 dark:bg-neutral-800/50 p-4">
+            <div className="flex items-center justify-between gap-3 mb-2"><div><p className="text-xs font-semibold">Product Image</p><p className="text-[11px] text-neutral-500">Upload JPEG, PNG, WebP or GIF · max 5 MB</p></div>{imageFile && <button type="button" onClick={removeImage} disabled={isSubmitting} className="text-xs font-semibold text-rose-600">Remove</button>}</div>
+            {imagePreview ? <div className="flex items-center gap-3"><img src={imagePreview} alt="Product preview" className="w-24 h-24 rounded-xl object-cover border border-neutral-200 dark:border-neutral-700" /><div className="min-w-0"><p className="text-xs font-semibold truncate">{imageFile?.name}</p><p className="text-[11px] text-neutral-500 mt-1">{imageFile ? (imageFile.size / 1024 / 1024).toFixed(2) : '0'} MB</p></div></div> : <label className="cursor-pointer flex items-center justify-center min-h-24 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 hover:border-purple-400 transition-colors"><input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={handleImageChange} className="sr-only" /><span className="text-xs font-semibold text-purple-600">Choose product image</span></label>}
+          </div>
+        </div><div className="pt-2 flex flex-col-reverse sm:flex-row sm:justify-end gap-2"><button type="button" onClick={closeCreateForm} disabled={isSubmitting} className="px-4 py-2.5 rounded-xl border border-neutral-200 dark:border-neutral-700 text-xs font-semibold">Cancel</button><button id="submit-product-btn" type="submit" disabled={isSubmitting} className="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 disabled:opacity-60 text-white text-xs font-semibold flex items-center justify-center gap-2">{isUploadingImage ? <><Loader2 className="w-4 h-4 animate-spin" />Uploading image...</> : isSubmitting ? <><Loader2 className="w-4 h-4 animate-spin" />Submitting...</> : <><CheckCircle2 className="w-4 h-4" />Submit Product</>}</button></div>
       </form></div></div>}
     </div>
   );
