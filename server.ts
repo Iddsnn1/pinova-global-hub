@@ -37,7 +37,6 @@ import { EducationClassificationEngine } from './src/server/services/EducationCl
 import { StudentVerificationService } from './src/server/services/StudentVerificationService';
 import { EducationRepository } from './src/server/db/repositories/EducationRepository';
 import { ProductRepository } from './src/server/db/repositories/ProductRepository';
-import { durableVendorStorageEnabled } from './src/server/services/DurableVendorApplicationStore';
 import { durableProductStorageEnabled, getDurableProduct, listDurableProducts, saveDurableProduct, updateDurableProductAvailability, reserveDurableProductStockBatch, softDeleteDurableProduct, deleteDurableProductBlob } from './src/server/services/DurableProductCatalog';
 import { get, list, put } from '@vercel/blob';
 
