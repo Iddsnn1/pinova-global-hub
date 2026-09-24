@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { formatPiAmount } from './utils/formatters';
 import { 
   ShieldCheck, 
   Package, 
@@ -202,7 +203,7 @@ export const AdminOrderCenter: React.FC<AdminOrderCenterProps> = ({
               >
                 <div className="flex justify-between items-start mb-1">
                   <span className="text-xs font-bold text-slate-900 dark:text-slate-100">#{o.id.slice(0, 8)}</span>
-                  <span className="text-xs font-bold text-purple-600 dark:text-purple-400">{o.totalPi.toFixed(2)} Pi</span>
+                  <span className="text-xs font-bold text-purple-600 dark:text-purple-400">{formatPiAmount(o.totalPi, { minDecimals: 2 })} Pi</span>
                 </div>
                 <div className="text-[11px] text-slate-500 line-clamp-1 mb-1">
                   Buyer: {o.buyerUsername} • Seller: {o.items[0]?.product.sellerName}
@@ -232,7 +233,7 @@ export const AdminOrderCenter: React.FC<AdminOrderCenterProps> = ({
                 </div>
                 <div className="text-right text-xs">
                   <div className="text-slate-400">Volume</div>
-                  <div className="text-base font-extrabold text-purple-400">{activeOrder.totalPi.toFixed(2)} Pi</div>
+                  <div className="text-base font-extrabold text-purple-400">{formatPiAmount(activeOrder.totalPi, { minDecimals: 2 })} Pi</div>
                 </div>
               </div>
 
