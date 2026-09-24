@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { formatPiAmount } from './utils/formatters';
 import { 
   Package, 
   Download, 
@@ -173,7 +174,7 @@ export const BuyerDashboard: React.FC<BuyerDashboardProps> = ({
 
                   <div className="flex items-center gap-3">
                     {getStatusBadge(order.escrowStatus)}
-                    <span className="font-black text-amber-500 text-lg">{order.totalPi.toFixed(2)} π</span>
+                    <span className="font-black text-amber-500 text-lg">{formatPiAmount(order.totalPi, { minDecimals: 2 })} π</span>
                   </div>
                 </div>
 
@@ -312,7 +313,7 @@ export const BuyerDashboard: React.FC<BuyerDashboardProps> = ({
                     <td className="p-3 font-bold text-slate-900 dark:text-slate-100">{o.id}</td>
                     <td className="p-3 font-mono text-purple-600 dark:text-purple-400">{o.piPaymentId || 'N/A'}</td>
                     <td className="p-3 font-mono text-amber-500 truncate max-w-[150px]">{o.piTxid || 'N/A'}</td>
-                    <td className="p-3 font-black text-slate-900 dark:text-slate-100">{o.totalPi.toFixed(2)} π</td>
+                    <td className="p-3 font-black text-slate-900 dark:text-slate-100">{formatPiAmount(o.totalPi, { minDecimals: 2 })} π</td>
                     <td className="p-3 font-bold text-emerald-500 capitalize">{o.escrowStatus.replace('_', ' ')}</td>
                   </tr>
                 ))}
