@@ -242,6 +242,38 @@ function MainAppContent() {
     }
   }, [darkMode]);
 
+  // Hydrate the marketplace from the authoritative durable catalog so products
+  // created in Seller Studio are visible to buyers after refresh/login.
+  useEffect(() => {
+    let cancelled = false;
+    const loadPublicCatalog = async () => {
+      try {
+        const response = await fetch('/api/products', {
+          method: 'GET',
+          headers: { Accept: 'application/json' },
+          cache: 'no-store'
+        });
+        const text = await response.text();
+        if (!response.ok || !text) return;
+        const data = JSON.parse(text);
+        const durable = Array.isArray(data?.products) ? data.products as Product[] : [];
+        if (cancelled || durable.length === 0) return;
+
+        setProducts((previous) => {
+          const byId = new Map(previous.map((product) => [String(product.id), product]));
+          for (const product of durable) {
+            byId.set(String(product.id), product);
+          }
+          return Array.from(byId.values());
+        });
+      } catch (error) {
+        console.warn('[Marketplace] Durable product catalog hydration failed:', error);
+      }
+    };
+    loadPublicCatalog();
+    return () => { cancelled = true; };
+  }, []);
+
   // Proactive Pi SDK Initialization on Application Load (Controlled Lifecycle)
   useEffect(() => {
     let active = true;
