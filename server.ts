@@ -1,3 +1,4 @@
+import { verifyPiPaymentAuthoritative } from './src/server/services/PiPaymentVerificationService';
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
@@ -15,7 +16,9 @@ import {
   idempotencyRepo,
   vendorApplicationRepo,
   educationRepo,
-  FlightFulfillmentEntity
+  FlightFulfillmentEntity,
+  orderRepo,
+  productRepo
 } from './src/server/db';
 import { vtuNgAdapter } from './src/server/integrations';
 import { getTaxonomyByCountry, GLOBAL_EDUCATION_TAXONOMIES } from './src/data/educationTaxonomyData';
@@ -5743,3 +5746,6 @@ export default app;
 
 
 export { durableProductStorageEnabled, getDurableProduct, listDurableProducts, saveDurableProduct, updateDurableProductAvailability, reserveDurableProductStockBatch, softDeleteDurableProduct, deleteDurableProductBlob };
+
+// Bundled exports used by dedicated Vercel API functions.
+export { authService, orderRepo, productRepo, paymentLedgerRepo, pstpAuditRepo, idempotencyRepo, verifyPiPaymentAuthoritative };
