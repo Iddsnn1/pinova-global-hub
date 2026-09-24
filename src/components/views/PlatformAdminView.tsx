@@ -1,6 +1,5 @@
 import React, { useState, useMemo } from 'react';
 import { formatPiAmount } from '../../utils/formatters';
-import { formatPiAmount } from './utils/formatters';
 import { 
   ShieldCheck, 
   Activity, 
