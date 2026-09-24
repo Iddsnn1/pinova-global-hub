@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import { formatPiAmount } from '../utils/formatters';
 import { formatPiAmount } from './utils/formatters';
 import { LanguageMeta, TextDirection, TranslationDictionary, TranslationAuditLog } from '../types/i18n';
 import { INITIAL_SUPPORTED_LANGUAGES } from '../data/i18nLanguages';
