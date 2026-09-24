@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { formatPiAmount } from '../../utils/formatters';
 import { ShoppingBag, Trash2, Plus, Minus, ShieldCheck, ArrowRight, ArrowLeft, Tag, Lock, CheckCircle2 } from 'lucide-react';
 import { CartItem, Coupon } from '../../types';
 
@@ -151,7 +152,7 @@ export const CartView: React.FC<CartViewProps> = ({
                   )}
 
                   <div className="text-xs font-black text-amber-500 mt-1">
-                    {getItemUnitPrice(item).toFixed(2)} π / unit
+                    {formatPiAmount(getItemUnitPrice(item))} π / unit
                   </div>
                 </div>
               </div>
@@ -178,7 +179,7 @@ export const CartView: React.FC<CartViewProps> = ({
 
                 <div className="text-right">
                   <div className="text-xs font-black text-slate-900 dark:text-slate-100">
-                    {(getItemUnitPrice(item) * item.quantity).toFixed(2)} π
+                    {formatPiAmount((getItemUnitPrice(item) * item.quantity))} π
                   </div>
                   <button
                     onClick={() => onRemoveItem(item.product.id)}
@@ -241,12 +242,12 @@ export const CartView: React.FC<CartViewProps> = ({
           <div className="space-y-2.5 text-xs text-slate-300 border-t border-b border-slate-800 py-4">
             <div className="flex justify-between">
               <span>Subtotal:</span>
-              <span className="font-bold text-white">{subtotalPi.toFixed(2)} π</span>
+              <span className="font-bold text-white">{formatPiAmount(subtotalPi)} π</span>
             </div>
             {appliedCoupon && (
               <div className="flex justify-between text-purple-400 font-bold">
                 <span>Discount ({appliedCoupon.code}):</span>
-                <span>-{discountAmountPi.toFixed(2)} π</span>
+                <span>-{formatPiAmount(discountAmountPi)} π</span>
               </div>
             )}
             <div className="flex justify-between">
@@ -255,7 +256,7 @@ export const CartView: React.FC<CartViewProps> = ({
             </div>
             <div className="flex justify-between text-sm font-black text-white pt-2 border-t border-slate-800">
               <span>Total Payment Required:</span>
-              <span className="text-amber-400 text-lg">{totalPi.toFixed(2)} π</span>
+              <span className="text-amber-400 text-lg">{formatPiAmount(totalPi)} π</span>
             </div>
           </div>
 
