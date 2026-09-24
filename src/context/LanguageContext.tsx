@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import { formatPiAmount } from './utils/formatters';
 import { LanguageMeta, TextDirection, TranslationDictionary, TranslationAuditLog } from '../types/i18n';
 import { INITIAL_SUPPORTED_LANGUAGES } from '../data/i18nLanguages';
 import { getTranslation, LOCALES } from '../data/locales';
@@ -170,7 +171,7 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   // Regional Currency & Pi Formatting
   const formatCurrency = (piAmount: number, piRateUsd = 314159.00, showEstimatedFiat = true) => {
-    const piFormatted = `${piAmount.toFixed(2)} π`;
+    const piFormatted = `${formatPiAmount(piAmount, { minDecimals: 2 })} π`;
     
     // Calculate local fiat estimation
     const totalUsd = piAmount * piRateUsd;
