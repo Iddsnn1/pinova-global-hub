@@ -121,11 +121,29 @@ export const MerchantStorefrontView: React.FC<MerchantStorefrontViewProps> = ({
     }
   };
 
-  const handleShareStore = () => {
-    if (navigator.clipboard) {
-      navigator.clipboard.writeText(window.location.origin + `?store=${encodeURIComponent(vendor.storeName)}`);
-      setCopiedLink(true);
-      setTimeout(() => setCopiedLink(false), 2500);
+  const handleShareStore = async () => {
+    const storeUrl = window.location.origin + `?store=${encodeURIComponent(vendor.storeName || vendor.sellerUsername || vendor.id)}`;
+    const shareData = {
+      title: vendor.storeName || 'PiNova Merchant Store',
+      text: `Visit ${vendor.storeName || 'this merchant store'} on PiNova Global Hub`,
+      url: storeUrl
+    };
+    try {
+      if (typeof navigator.share === 'function') {
+        await navigator.share(shareData);
+        return;
+      }
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') return;
+    }
+    try {
+      if (navigator.clipboard) {
+        await navigator.clipboard.writeText(storeUrl);
+        setCopiedLink(true);
+        setTimeout(() => setCopiedLink(false), 2500);
+      }
+    } catch (error) {
+      console.warn('[MerchantStorefrontView] Unable to share store link:', error);
     }
   };
 
@@ -246,7 +264,10 @@ export const MerchantStorefrontView: React.FC<MerchantStorefrontViewProps> = ({
           </button>
 
           <button
-            onClick={() => onContactSeller(vendor.sellerUsername)}
+            onClick={() => {
+              const sellerUsername = String(vendor.sellerUsername || '').trim();
+              if (sellerUsername) onContactSeller(sellerUsername);
+            }}
             className="flex-1 sm:flex-initial px-4 py-2.5 rounded-2xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-900 dark:text-slate-100 font-bold text-xs transition-colors flex items-center justify-center gap-1.5 border border-slate-200 dark:border-slate-700 shadow-sm"
           >
             <MessageSquare className="w-4 h-4 text-indigo-400" />
@@ -256,7 +277,7 @@ export const MerchantStorefrontView: React.FC<MerchantStorefrontViewProps> = ({
           <button
             onClick={handleShareStore}
             className="p-2.5 rounded-2xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-colors border border-slate-200 dark:border-slate-700"
-            title="Share Store Link"
+            title="Share Store"
           >
             {copiedLink ? <Check className="w-4 h-4 text-emerald-400" /> : <Share2 className="w-4 h-4" />}
           </button>
