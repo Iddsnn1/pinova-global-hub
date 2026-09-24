@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { formatPiAmount } from './utils/formatters';
 import { 
   ShieldCheck, 
   Activity, 
@@ -1111,7 +1112,7 @@ export const PlatformAdminView: React.FC<PlatformAdminViewProps> = ({
                       </td>
 
                       <td className="p-3 font-mono font-bold text-amber-400">
-                        {caseItem.amountPi.toFixed(2)} π
+                        {formatPiAmount(caseItem.amountPi, { minDecimals: 2 })} π
                       </td>
 
                       <td className="p-3">
