@@ -74,11 +74,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           )}
           <div className="px-4 py-2 rounded-2xl bg-white/10 backdrop-blur-md border border-white/15 text-center">
             <div className="text-[10px] text-purple-200 uppercase font-semibold">Total Pi Volume</div>
-            <div className="text-lg font-black text-amber-300">{totalVolumePi.toFixed(2)} π</div>
+            <div className="text-lg font-black text-amber-300">{formatPiAmount(totalVolumePi, { minDecimals: 2 })} π</div>
           </div>
           <div className="px-4 py-2 rounded-2xl bg-white/10 backdrop-blur-md border border-white/15 text-center">
             <div className="text-[10px] text-purple-200 uppercase font-semibold">Protected Volume</div>
-            <div className="text-lg font-black text-emerald-400">{inEscrowVolumePi.toFixed(2)} π</div>
+            <div className="text-lg font-black text-emerald-400">{formatPiAmount(inEscrowVolumePi, { minDecimals: 2 })} π</div>
           </div>
         </div>
       </div>
@@ -185,7 +185,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         <span>{v.storeName}</span>
                         {v.verified && <ShieldCheck className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />}
                       </div>
-                      <p className="text-[11px] text-slate-400">Total Sales: {v.totalSalesPi.toFixed(2)} π</p>
+                      <p className="text-[11px] text-slate-400">Total Sales: {formatPiAmount(v.totalSalesPi, { minDecimals: 2 })} π</p>
                     </div>
                   </div>
                   <div className={`px-3 py-1.5 rounded-xl text-xs font-bold border ${v.verified ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-slate-500/10 text-slate-400 border-slate-500/20'}`}>
