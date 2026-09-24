@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { formatPiAmount } from '../utils/formatters';
 import { 
   Search, 
   X, 
@@ -533,7 +534,7 @@ export const UniversalSearchModal: React.FC<UniversalSearchModalProps> = ({
                       </p>
                       <div className="flex items-center justify-between pt-1">
                         <span className="text-xs font-black text-amber-500">
-                          {prod.pricePi.toFixed(2)} π
+                          {formatPiAmount(prod.pricePi)} π
                         </span>
                         <button
                           onClick={(e) => {
@@ -618,7 +619,7 @@ export const UniversalSearchModal: React.FC<UniversalSearchModalProps> = ({
                     <div>
                       <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100">{srv.title}</h4>
                       <p className="text-[11px] text-slate-500">By {srv.provider} • Rating: ⭐ {srv.rating}</p>
-                      <p className="text-xs font-black text-amber-500 mt-0.5">{srv.pricePi.toFixed(2)} π</p>
+                      <p className="text-xs font-black text-amber-500 mt-0.5">{formatPiAmount(srv.pricePi)} π</p>
                     </div>
                     <button className="px-3 py-1.5 bg-blue-600 text-white text-xs font-bold rounded-xl whitespace-nowrap">
                       Book Service
@@ -702,7 +703,7 @@ export const UniversalSearchModal: React.FC<UniversalSearchModalProps> = ({
                       <span className="px-2 py-0.5 rounded-full bg-purple-950 text-purple-300 font-bold text-[10px]">
                         {ord.pstpStatus}
                       </span>
-                      <span className="font-black text-amber-500">{ord.totalPi.toFixed(2)} π</span>
+                      <span className="font-black text-amber-500">{formatPiAmount(ord.totalPi)} π</span>
                     </div>
                   </div>
                 ))}
