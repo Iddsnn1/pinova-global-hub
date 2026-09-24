@@ -172,7 +172,7 @@ export const ExamCardsPortal: React.FC<ExamCardsPortalProps> = ({
   const activeBoard = EXAM_BOARDS.find(b => b.id === selectedBoardId) || EXAM_BOARDS[0];
   const activePackage = activeBoard.packages.find(p => p.id === selectedPackageId) || activeBoard.packages[0];
 
-  const pricePi = Math.max(0.000001, Number((activePackage.priceUsd / piRateUsd).toFixed(6)));
+  const pricePi = Math.max(0.000001, Number(activePackage.priceUsd / piRateUsd));
 
   const handleBoardSelect = (board: ExamBoard) => {
     setSelectedBoardId(board.id);
@@ -260,7 +260,7 @@ export const ExamCardsPortal: React.FC<ExamCardsPortalProps> = ({
           <div className="flex items-center gap-2 shrink-0">
             <div className="px-3.5 py-2 rounded-xl bg-slate-950/80 border border-slate-800 text-xs">
               <span className="text-slate-400 block text-[10px]">Your Pi Balance</span>
-              <span className="text-amber-400 font-extrabold text-sm">{userBalancePi.toFixed(2)} π</span>
+              <span className="text-amber-400 font-extrabold text-sm">{formatPiAmount(userBalancePi, { minDecimals: 2 })} π</span>
             </div>
           </div>
         </div>
@@ -451,7 +451,7 @@ export const ExamCardsPortal: React.FC<ExamCardsPortalProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               {activeBoard.packages.map(pkg => {
                 const isSelected = selectedPackageId === pkg.id;
-                const pkgPi = Math.max(0.000001, Number((pkg.priceUsd / piRateUsd).toFixed(6)));
+                const pkgPi = Math.max(0.000001, Number(pkg.priceUsd / piRateUsd));
                 return (
                   <button
                     key={pkg.id}
@@ -482,7 +482,7 @@ export const ExamCardsPortal: React.FC<ExamCardsPortalProps> = ({
                         {pkg.pinCount} {pkg.pinCount === 1 ? 'PIN' : 'PINs'}
                       </span>
                       <span className="font-black text-amber-400">
-                        {pkgPi.toFixed(6)} π
+                        {formatPiAmount(pkgPi, { minDecimals: 2 })} π
                       </span>
                     </div>
                   </button>
@@ -545,7 +545,7 @@ export const ExamCardsPortal: React.FC<ExamCardsPortalProps> = ({
               <div>
                 <span className="text-slate-400 block text-[10px]">Total Due with Pi Coin</span>
                 <div className="flex items-baseline gap-2">
-                  <span className="text-lg font-black text-amber-400">{pricePi.toFixed(6)} π</span>
+                  <span className="text-lg font-black text-amber-400">{formatPiAmount(pricePi, { minDecimals: 2 })} π</span>
                   <span className="text-slate-500 text-[11px]">(${activePackage.priceUsd.toFixed(2)} USD)</span>
                 </div>
               </div>
@@ -570,7 +570,7 @@ export const ExamCardsPortal: React.FC<ExamCardsPortalProps> = ({
               ) : (
                 <>
                   <FileCheck className="w-4 h-4 text-amber-300" />
-                  <span>Pay {pricePi.toFixed(6)} π & Get Instant PIN</span>
+                  <span>Pay {formatPiAmount(pricePi, { minDecimals: 2 })} π & Get Instant PIN</span>
                 </>
               )}
             </button>
