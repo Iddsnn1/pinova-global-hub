@@ -166,7 +166,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         }
         const isPhysicalOrder = items.some((item) => item.product.category === 'physical');
         shippingPi = isPhysicalOrder ? 2.5 : 0;
-        const totalPi = Math.max(0, Number((subtotalPi - discountPi + shippingPi).toFixed(2)));
+        const totalPi = Math.max(0, subtotalPi - discountPi + shippingPi);
         const now = new Date().toISOString();
         const order: Order = {
           id: `ord_${Date.now()}_${randomBytes(6).toString('hex')}`,
