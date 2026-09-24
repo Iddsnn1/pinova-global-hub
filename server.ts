@@ -42,6 +42,14 @@ import { get, list, put } from '@vercel/blob';
 
 dotenv.config();
 
+// Temporary diagnostic: capture the full stack for Node DEP0169 warnings.
+// This does not suppress the warning; it only identifies the exact dependency/call site.
+process.on('warning', (warning) => {
+  if (warning?.name === 'DeprecationWarning' && warning?.code === 'DEP0169') {
+    console.error('[DEP0169 TRACE]', warning.stack || warning.message);
+  }
+});
+
 const app = express();
 
 const DURABLE_VENDOR_PREFIX = 'vendor-applications/';
