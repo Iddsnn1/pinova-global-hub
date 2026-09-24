@@ -5665,8 +5665,11 @@ app.post('/api/products', authenticate, async (req: AuthenticatedRequest, res) =
       fulfillmentType: body.fulfillmentType,
       availabilityStatus: body.availabilityStatus || (stock > 0 ? 'in_stock' : 'out_of_stock'),
       tags: Array.isArray(body.tags) ? body.tags.filter(Boolean) : [],
-      isActive: false,
-      moderationStatus: 'PENDING_REVIEW'
+      // Verified/Active merchants may publish products immediately; product purchase APIs
+      // already require isActive and stock, so an approved merchant must not create a
+      // permanently invisible catalog item with no moderation workflow behind it.
+      isActive: stock > 0,
+      moderationStatus: 'APPROVED'
     };
 
     const saved = productRepository.save(product as any);
