@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { formatPiAmount } from '../../../utils/formatters';
 import { 
   ShoppingBag, 
   Search, 
@@ -179,7 +180,7 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
                     {order.items?.map(i => `${i.product.title} (x${i.quantity})`).join(', ') || 'Marketplace items'}
                   </div>
                   <div className="font-bold text-sm text-neutral-900 dark:text-neutral-100 shrink-0">
-                    Total: {order.totalPi?.toFixed(2)} π
+                    Total: {formatPiAmount(order.totalPi?)} π
                   </div>
                 </div>
 
@@ -221,7 +222,7 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
                               </span>
                             </div>
                             <span className="font-semibold text-neutral-900 dark:text-neutral-100">
-                              {(item.product.pricePi ? item.product.pricePi * item.quantity : 0).toFixed(2)} π
+                              {formatPiAmount((item.product.pricePi ? item.product.pricePi * item.quantity : 0))} π
                             </span>
                           </div>
                         ))}
