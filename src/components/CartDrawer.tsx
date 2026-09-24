@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { formatPiAmount } from '../utils/formatters';
 import { X, Trash2, ShoppingBag, ShieldCheck, Tag, ArrowRight, Check } from 'lucide-react';
 import { OrderItem, Coupon } from '../types';
 
@@ -163,7 +164,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
 
                       <div className="flex items-center justify-between mt-2">
                         <span className="font-black text-amber-500 text-sm">
-                          {(itemPrice * item.quantity).toFixed(2)} π
+                          {formatPiAmount((itemPrice * item.quantity))} π
                         </span>
 
                         <div className="flex items-center border border-slate-300 dark:border-slate-700 rounded-lg overflow-hidden bg-white dark:bg-slate-900">
@@ -256,13 +257,13 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
               <div className="space-y-2 text-xs text-slate-600 dark:text-slate-400 border-t border-slate-200 dark:border-slate-800 pt-3">
                 <div className="flex justify-between">
                   <span>Subtotal</span>
-                  <span className="font-bold text-slate-900 dark:text-slate-100">{subtotalPi.toFixed(2)} π</span>
+                  <span className="font-bold text-slate-900 dark:text-slate-100">{formatPiAmount(subtotalPi)} π</span>
                 </div>
 
                 {discountAmount > 0 && (
                   <div className="flex justify-between text-emerald-500 font-semibold">
                     <span>Discount ({appliedCoupon?.code})</span>
-                    <span>-{discountAmount.toFixed(2)} π</span>
+                    <span>-{formatPiAmount(discountAmount)} π</span>
                   </div>
                 )}
 
@@ -273,7 +274,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
 
                 <div className="flex justify-between text-base font-black text-slate-900 dark:text-slate-100 pt-2 border-t border-slate-200 dark:border-slate-800">
                   <span>Total Order Amount</span>
-                  <span className="text-amber-500 text-lg">{totalPi.toFixed(2)} π</span>
+                  <span className="text-amber-500 text-lg">{formatPiAmount(totalPi)} π</span>
                 </div>
               </div>
 
