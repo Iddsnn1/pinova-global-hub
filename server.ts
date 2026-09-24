@@ -5740,7 +5740,7 @@ if (!isVercelServerless) {
   });
 }
 
-export { authService, vendorApplicationRepo, ProductRepository, pstpAuditRepo, orderRepo, productRepo, paymentLedgerRepo, idempotencyRepo, verifyPiPaymentAuthoritative };
+export { authService, vendorApplicationRepo, ProductRepository, pstpAuditRepo, orderRepo, productRepo, paymentLedgerRepo, idempotencyRepo };
 export { VendorApplicationRepository } from './src/server/db/repositories/VendorApplicationRepository';
 export default app;
 
