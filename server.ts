@@ -5740,12 +5740,9 @@ if (!isVercelServerless) {
   });
 }
 
-export { authService, vendorApplicationRepo, ProductRepository, pstpAuditRepo };
+export { authService, vendorApplicationRepo, ProductRepository, pstpAuditRepo, orderRepo, productRepo, paymentLedgerRepo, idempotencyRepo, verifyPiPaymentAuthoritative };
 export { VendorApplicationRepository } from './src/server/db/repositories/VendorApplicationRepository';
 export default app;
 
 
 export { durableProductStorageEnabled, getDurableProduct, listDurableProducts, saveDurableProduct, updateDurableProductAvailability, reserveDurableProductStockBatch, softDeleteDurableProduct, deleteDurableProductBlob };
-
-// Bundled exports used by dedicated Vercel API functions.
-export { authService, orderRepo, productRepo, paymentLedgerRepo, pstpAuditRepo, idempotencyRepo, verifyPiPaymentAuthoritative };
