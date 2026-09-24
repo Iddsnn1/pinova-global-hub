@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { formatPiAmount } from '../../utils/formatters';
 import {
   FileCheck,
   CheckCircle2,
