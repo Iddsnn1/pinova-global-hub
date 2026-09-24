@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { formatPiAmount } from '../../../utils/formatters';
 import { formatPiAmount } from './utils/formatters';
 import { Users, Search, ShieldCheck } from 'lucide-react';
 import { Order } from '../../../types';
