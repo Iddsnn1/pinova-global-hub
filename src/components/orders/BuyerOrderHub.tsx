@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { formatPiAmount } from '../../utils/formatters';
 import { 
   Package, 
   Truck, 
@@ -536,7 +537,7 @@ export const BuyerOrderHub: React.FC<BuyerOrderHubProps> = ({
                       {o.id}
                     </span>
                     <span className="text-xs font-black text-purple-600 dark:text-purple-400">
-                      {o.totalPi.toFixed(2)} π
+                      {formatPiAmount(o.totalPi)} π
                     </span>
                   </div>
 
@@ -594,7 +595,7 @@ export const BuyerOrderHub: React.FC<BuyerOrderHubProps> = ({
                     <ShieldCheck className="w-3.5 h-3.5" /> PSTP Escrow Protected
                   </span>
                   <span>•</span>
-                  <span>Total: <strong className="text-amber-400">{activeOrder.totalPi.toFixed(2)} π</strong></span>
+                  <span>Total: <strong className="text-amber-400">{formatPiAmount(activeOrder.totalPi)} π</strong></span>
                 </div>
               </div>
 
@@ -808,7 +809,7 @@ export const BuyerOrderHub: React.FC<BuyerOrderHubProps> = ({
                           </div>
                         </div>
                         <div className="text-xs font-black text-purple-600 dark:text-purple-400 shrink-0">
-                          {(((item.product?.discountPercent ? item.product.pricePi * (1 - item.product.discountPercent / 100) : item.product?.pricePi || 0) + (item.customDetails?.variant?.priceDeltaPi || 0)) * item.quantity).toFixed(2)} π
+                          {formatPiAmount((((item.product?.discountPercent ? item.product.pricePi * (1 - item.product.discountPercent / 100) : item.product?.pricePi || 0) + (item.customDetails?.variant?.priceDeltaPi || 0)) * item.quantity))} π
                         </div>
                       </div>
                     ))}
@@ -986,7 +987,7 @@ export const BuyerOrderHub: React.FC<BuyerOrderHubProps> = ({
                           <tr key={idx}>
                             <td className="p-2.5 font-medium">{it.title}</td>
                             <td className="p-2.5 text-center">{it.quantity}</td>
-                            <td className="p-2.5 text-right font-bold text-purple-600 dark:text-purple-400">{it.totalPi.toFixed(2)} π</td>
+                            <td className="p-2.5 text-right font-bold text-purple-600 dark:text-purple-400">{formatPiAmount(it.totalPi)} π</td>
                           </tr>
                         ))}
                       </tbody>
@@ -1003,7 +1004,7 @@ export const BuyerOrderHub: React.FC<BuyerOrderHubProps> = ({
                     </div>
                     <div className="text-right">
                       <div className="text-slate-400 text-xs">Total Settled</div>
-                      <div className="text-xl font-black text-amber-500">{receipt.totalPi.toFixed(2)} π</div>
+                      <div className="text-xl font-black text-amber-500">{formatPiAmount(receipt.totalPi)} π</div>
                     </div>
                   </div>
                 </div>
