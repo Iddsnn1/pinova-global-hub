@@ -123,7 +123,7 @@ export const EscrowCheckoutModal: React.FC<EscrowCheckoutModalProps> = ({
 
     executePiPayment(
       {
-        amount: Number(authoritativeTotalPi.toFixed(2)),
+        amount: authoritativeTotalPi,
         memo,
         metadata
       },
@@ -173,7 +173,7 @@ export const EscrowCheckoutModal: React.FC<EscrowCheckoutModalProps> = ({
             id: metadata.orderId,
             buyerUsername: userUsername,
             items: cartItems,
-            totalPi: Number(totalAmountPi.toFixed(2)),
+            totalPi: totalAmountPi,
             escrowStatus: isPhysicalOrder ? 'in_escrow' : (hasServiceOrder ? 'in_escrow' : 'released'),
             piPaymentId: paymentId,
             piTxid: txid,
