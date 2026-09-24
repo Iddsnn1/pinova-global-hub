@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
+import { formatPiAmount } from '../../utils/formatters';
 import { 
   X, 
   ShieldCheck, 
