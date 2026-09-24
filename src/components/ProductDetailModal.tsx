@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { formatPiAmount } from '../utils/formatters';
 import { 
   X, 
   Star, 
@@ -269,11 +270,11 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                   <span className="text-[10px] text-purple-300 font-extrabold uppercase tracking-wider">Authoritative Pi Price</span>
                   <div className="flex items-baseline gap-2">
                     <span className="text-3xl font-black text-amber-400">
-                      {unitPrice.toFixed(2)} π
+                      {formatPiAmount(unitPrice)} π
                     </span>
                     {Boolean(product.discountPercent) && (
                       <span className="text-sm text-slate-400 line-through">
-                        {product.pricePi.toFixed(2)} π
+                        {formatPiAmount(product.pricePi)} π
                       </span>
                     )}
                   </div>
@@ -304,7 +305,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                         }`}
                       >
                         {v.title}
-                        {Boolean(v.priceDeltaPi) && ` (${v.priceDeltaPi > 0 ? '+' : ''}${v.priceDeltaPi.toFixed(2)} π)`}
+                        {Boolean(v.priceDeltaPi) && ` (${v.priceDeltaPi > 0 ? '+' : ''}${formatPiAmount(v.priceDeltaPi)} π)`}
                       </button>
                     ))}
                   </div>
@@ -560,7 +561,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                     : 'bg-gradient-to-r from-purple-600 via-indigo-600 to-amber-500 text-white shadow-purple-500/25 hover:opacity-95 active:scale-95'
                 }`}
               >
-                {isOutOfStock ? 'Sold Out' : `Buy Now with π (${(unitPrice * quantity).toFixed(2)} π)`}
+                {isOutOfStock ? 'Sold Out' : `Buy Now with π (${formatPiAmount((unitPrice * quantity))} π)`}
               </button>
             </div>
           </div>
