@@ -276,7 +276,7 @@ export const MerchantStorefrontView: React.FC<MerchantStorefrontViewProps> = ({
               </span>
               <span className="flex items-center gap-1">
                 <Award className="w-3.5 h-3.5 text-emerald-400" />
-                <span className="font-semibold text-slate-700 dark:text-slate-300">{vendor.totalSalesPi.toFixed(2)} π</span> Total Volume
+                <span className="font-semibold text-slate-700 dark:text-slate-300">{formatPiAmount(vendor.totalSalesPi, { minDecimals: 2 })} π</span> Total Volume
               </span>
               {vendor.country && (
                 <span className="flex items-center gap-1">
