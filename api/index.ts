@@ -130,6 +130,21 @@ async function handleDurableProducts(req: any, res: any): Promise<boolean> {
       : '';
 
   if (req.method === 'GET') {
+    // Run the one-time visibility repair before serving the durable catalog.
+    // The migration is idempotent and strictly excludes archived/zero-stock
+    // products and merchants who are not currently Verified + Active.
+    try {
+      const migration = await migrateEligibleCatalogVisibility();
+      if (migration.migrated.length) {
+        console.log('[catalog-migration] repaired durable product visibility', {
+          migrated: migration.migrated
+        });
+      }
+    } catch (migrationError: any) {
+      // Never make the catalog unavailable because the repair could not run.
+      console.warn('[catalog-migration] visibility repair skipped', migrationError?.message || migrationError);
+    }
+
     if (id) {
       const product = (await listDurableProducts({ includeDeleted: false })).find((item) => item.id === id);
       if (!product || product.isActive !== true) return res.status(404).json({ ok: false, error: 'PRODUCT_NOT_FOUND' });
