@@ -1,4 +1,5 @@
 import React from 'react';
+import { formatPiAmount } from '../utils/formatters';
 import { Star, Heart, ShoppingBag, ShieldCheck, Zap, Download, Gift, Smartphone, Package } from 'lucide-react';
 import { Product } from '../types';
 import { useTranslation } from '../context/LanguageContext';
@@ -150,11 +151,11 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             <div className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Protected Price</div>
             <div className="flex items-baseline gap-1">
               <span className="text-sm sm:text-base font-black text-amber-500 dark:text-amber-400 tracking-tight">
-                {discountedPrice.toFixed(2)} π
+                {formatPiAmount(discountedPrice)} π
               </span>
               {product.discountPercent && (
                 <span className="text-[10px] text-slate-400 line-through font-medium">
-                  {product.pricePi.toFixed(2)} π
+                  {formatPiAmount(product.pricePi)} π
                 </span>
               )}
             </div>
