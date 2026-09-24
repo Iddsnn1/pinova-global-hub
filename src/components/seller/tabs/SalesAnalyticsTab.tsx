@@ -1,6 +1,5 @@
 import React, { useMemo } from 'react';
 import { formatPiAmount } from '../../../utils/formatters';
-import { formatPiAmount } from './utils/formatters';
 import { TrendingUp, BarChart3, Calendar, ShieldCheck } from 'lucide-react';
 import { Order, Product } from '../../../types';
 
