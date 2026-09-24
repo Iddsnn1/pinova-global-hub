@@ -122,22 +122,6 @@ export const EscrowCheckoutModal: React.FC<EscrowCheckoutModalProps> = ({
       } finally {
         window.clearTimeout(orderTimeout);
       }
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Idempotency-Key': idempotencyKey,
-        'Authorization': `Bearer ${accessToken}`
-      },
-      body: JSON.stringify({
-        items: cartItems.map((item) => ({
-          productId: item.product.id,
-          quantity: item.quantity,
-          selectedVariant: item.selectedVariant,
-          customDetails: item.customDetails
-        })),
-        promoCode: appliedCoupon?.code || ''
-      })
-    });
     const orderData = await orderResponse.json().catch(() => null);
     if (!orderResponse.ok || !orderData?.order?.id) {
       throw new Error(orderData?.message || orderData?.error || 'Unable to create a server-authoritative order.');
