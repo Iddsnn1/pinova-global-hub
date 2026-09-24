@@ -946,7 +946,7 @@ export const FinanceAnalyticsView: React.FC<FinanceAnalyticsViewProps> = ({
                 <ProvenanceBadge provenance="calculated_marketplace_metric" />
                 <div>
                   <div className="text-2xl font-black text-indigo-600 dark:text-indigo-400 tracking-tight">
-                    {summary.averageOrderValuePi.toFixed(2)} π
+                    {formatPiAmount(summary.averageOrderValuePi, { minDecimals: 2 })} π
                   </div>
                   <div className="flex items-center gap-1.5 text-[11px] text-slate-400 font-extrabold mt-1">
                     <Award className="w-3.5 h-3.5 text-indigo-400" />
@@ -1084,7 +1084,7 @@ export const FinanceAnalyticsView: React.FC<FinanceAnalyticsViewProps> = ({
                       <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
                         <td className="py-3 px-3 font-mono font-bold text-slate-900 dark:text-white">{row.inv}</td>
                         <td className="py-3 px-3 font-mono text-purple-600 dark:text-purple-400">{row.ord}</td>
-                        <td className="py-3 px-3 font-bold text-emerald-600">{row.amt.toFixed(2)} π</td>
+                        <td className="py-3 px-3 font-bold text-emerald-600">{formatPiAmount(row.amt, { minDecimals: 2 })} π</td>
                         <td className="py-3 px-3 font-mono text-[11px] text-slate-400">{row.sdkId}</td>
                         <td className="py-3 px-3 text-slate-400 text-[11px]">{row.date}</td>
                         <td className="py-3 px-3">
