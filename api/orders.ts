@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import { createHash, randomBytes } from 'crypto';
-import { authService, orderRepo, productRepo, paymentLedgerRepo, pstpAuditRepo, idempotencyRepo, verifyPiPaymentAuthoritative } from '../dist/server.cjs';
+import { authService, paymentLedgerRepo, pstpAuditRepo, idempotencyRepo, verifyPiPaymentAuthoritative, durableOrderStorageEnabled, getDurableOrder, listDurableOrders, saveDurableOrder, markDurableOrderPaymentVerified } from '../dist/server.cjs';
 import { listDurableVendorApplications } from '../dist/server.cjs';
 import { durableProductStorageEnabled, getDurableProduct, reserveDurableProductStockBatch } from '../dist/server.cjs';
 import type { Order, OrderItem, PstpOrderStatus } from '../src/types';
@@ -50,12 +50,13 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     const user = await authService.authenticateToken(token);
     if (!user?.username) return json(res, 401, { ok: false, error: 'INVALID_SESSION' });
     if (!durableProductStorageEnabled()) return json(res, 503, { ok: false, error: 'DURABLE_PRODUCT_STORAGE_UNAVAILABLE' });
+    if (!durableOrderStorageEnabled()) return json(res, 503, { ok: false, error: 'DURABLE_ORDER_STORAGE_UNAVAILABLE' });
     const url = new URL(req.url || '/', 'http://localhost');
     const path = url.pathname.replace(/^\/api\/v1\/orders\/?/, '').replace(/\/$/, '');
 
     if (req.method === 'GET') {
-      if (!path) return json(res, 200, { ok: true, orders: orderRepo.findByBuyer(user.username) });
-      const order = orderRepo.findById(path);
+      if (!path) return json(res, 200, { ok: true, orders: await listDurableOrders(user.username) });
+      const order = await getDurableOrder(path);
       if (!order) return json(res, 404, { ok: false, error: 'ORDER_NOT_FOUND' });
       if (!canViewOrder(order, user.username, user.roles || [])) return json(res, 403, { ok: false, error: 'ORDER_ACCESS_DENIED' });
       return json(res, 200, { ok: true, order });
@@ -63,7 +64,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
 
     if (req.method === 'POST' && path.endsWith('/payment-verify')) {
       const orderId = path.slice(0, -'/payment-verify'.length).replace(/\/$/, '');
-      const order = orderRepo.findById(orderId);
+      const order = await getDurableOrder(orderId);
       if (!order) return json(res, 404, { ok: false, error: 'ORDER_NOT_FOUND' });
       if (order.buyerUsername !== user.username && !(user.roles || []).includes('PLATFORM_ADMIN')) return json(res, 403, { ok: false, error: 'ORDER_ACCESS_DENIED' });
       if (order.serverVerified === true) return json(res, 200, { ok: true, verified: true, order });
@@ -93,7 +94,8 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       const ledger = txid
         ? paymentLedgerRepo.recordCompletion(paymentId, txid, { orderId: order.id, buyerUsername: order.buyerUsername, amountPi: order.totalPi, piUserUid })
         : paymentLedgerRepo.recordApproval(paymentId, { orderId: order.id, buyerUsername: order.buyerUsername, amountPi: order.totalPi, piUserUid });
-      const updated = orderRepo.markPaymentVerified(order.id, paymentId, txid || undefined);
+      const updated = await markDurableOrderPaymentVerified(order.id, paymentId, txid || undefined);
+      if (!updated) return json(res, 404, { ok: false, verified: false, error: 'ORDER_NOT_FOUND' });
       pstpAuditRepo.appendLog({ orderId: order.id, paymentId, actor: 'system', actorRole: 'system', action: 'PAYMENT_SERVER_VERIFIED', details: `Pi payment server-verified (${verification.source}); PSTP escrow protection activated.`, ipAddress: 'server', deviceInfo: 'PiNova PSTP Payment Verification Service' });
       return json(res, 200, { ok: true, verified: true, escrowStatus: updated?.escrowStatus, pstpStatus: updated?.pstpStatus, order: updated, paymentLedger: ledger });
     }
@@ -184,7 +186,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         const reserved = await reserveDurableProductStockBatch([...physicalReservations.entries()].map(([id, quantity]) => ({ id, quantity })));
         if (!reserved && physicalReservations.size) throw new Error('INSUFFICIENT_STOCK');
 
-        const saved = orderRepo.save(order);
+        const saved = await saveDurableOrder(order);
         const response = { ok: true, order: saved };
         await idempotencyRepo.resolveIdempotencyKey(scopedKey, response);
         return json(res, 201, response);
@@ -195,7 +197,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     }
 
     if (req.method === 'PATCH' && path) {
-      const order = orderRepo.findById(path);
+      const order = await getDurableOrder(path);
       if (!order) return json(res, 404, { ok: false, error: 'ORDER_NOT_FOUND' });
       const roles = user.roles || [];
       if (!canViewOrder(order, user.username, roles)) return json(res, 403, { ok: false, error: 'ORDER_ACCESS_DENIED' });
@@ -205,7 +207,23 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       if (!allowedBuyerStatuses.includes(nextStatus) && !roles.includes('PLATFORM_ADMIN') && !roles.includes('COMPLIANCE_OFFICER')) return json(res, 403, { ok: false, error: 'ORDER_STATUS_CHANGE_NOT_ALLOWED' });
       const escrowStatus = body.escrowStatus || order.escrowStatus;
       if (nextStatus === 'Completed' && order.serverVerified !== true) return json(res, 409, { ok: false, error: 'ORDER_PAYMENT_NOT_SERVER_VERIFIED' });
-      const updated = orderRepo.updateStatus(path, nextStatus, escrowStatus, user.username, roles.includes('PLATFORM_ADMIN') ? 'admin' : 'buyer', String(body.note || ''));
+      const timestamp = new Date().toISOString();
+      const updated = await saveDurableOrder({
+        ...order,
+        pstpStatus: nextStatus,
+        escrowStatus,
+        updatedAt: timestamp,
+        timeline: [
+          ...order.timeline,
+          {
+            status: nextStatus,
+            timestamp,
+            actor: user.username,
+            actorRole: roles.includes('PLATFORM_ADMIN') ? 'admin' : 'buyer',
+            note: String(body.note || ''),
+          },
+        ],
+      });
       return json(res, 200, { ok: true, order: updated });
     }
 
