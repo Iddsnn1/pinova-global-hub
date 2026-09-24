@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { formatPiAmount } from './utils/formatters';
 import { Users, Search, ShieldCheck } from 'lucide-react';
 import { Order } from '../../../types';
 
@@ -122,7 +123,7 @@ export const CustomersTab: React.FC<CustomersTabProps> = ({ orders }) => {
                       {customer.orderCount} order(s)
                     </td>
                     <td className="py-3 font-bold text-neutral-900 dark:text-neutral-100">
-                      {customer.totalSpentPi.toFixed(2)} π
+                      {formatPiAmount(customer.totalSpentPi, { minDecimals: 2 })} π
                     </td>
                     <td className="py-3 text-neutral-500 text-[11px]">
                       {customer.lastOrderDate
