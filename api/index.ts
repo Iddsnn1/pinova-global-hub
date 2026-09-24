@@ -92,7 +92,12 @@ async function migrateEligibleCatalogVisibility(): Promise<{ migrated: string[];
       continue;
     }
 
-    if (product.isActive === true && String(product.moderationStatus || '').toUpperCase() === 'APPROVED') {
+    const expectedAvailability = Number(product.stock ?? 0) > 0 ? 'in_stock' : 'out_of_stock';
+    if (
+      product.isActive === true &&
+      String(product.moderationStatus || '').toUpperCase() === 'APPROVED' &&
+      String(product.availabilityStatus || '').toLowerCase() === expectedAvailability
+    ) {
       continue;
     }
 
