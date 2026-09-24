@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { formatPiAmount } from './utils/formatters';
 import { safeFetchJson } from '../lib/safeFetch';
 import { X, Sparkles, Search, ArrowRight, Loader2, Bot, CheckCircle2 } from 'lucide-react';
 import { Product } from '../types';
@@ -177,7 +178,7 @@ export const AiSearchModal: React.FC<AiSearchModalProps> = ({
                       </div>
 
                       <div className="flex items-center gap-3">
-                        <span className="font-black text-amber-500 text-sm">{p.pricePi.toFixed(2)} π</span>
+                        <span className="font-black text-amber-500 text-sm">{formatPiAmount(p.pricePi, { minDecimals: 2 })} π</span>
                         <ArrowRight className="w-4 h-4 text-purple-500" />
                       </div>
                     </div>
