@@ -61,7 +61,6 @@ export const EscrowCheckoutModal: React.FC<EscrowCheckoutModalProps> = ({
   const isPhysicalOrder = cartItems.some((i) => i.product.category === 'physical');
   const shippingCost = isPhysicalOrder ? 2.50 : 0;
   const totalAmountPi = Math.max(0, subtotal - discountAmount + shippingCost);
-  const netSubtotalPi = Math.max(0, subtotal - discountAmount);
 
   const addLog = (msg: string) => {
     setStatusLogs((prev) => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`]);
