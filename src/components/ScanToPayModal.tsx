@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { formatPiAmount } from './utils/formatters';
 import { 
   X, 
   ShieldCheck, 
@@ -220,7 +221,7 @@ export const ScanToPayModal: React.FC<ScanToPayModalProps> = ({
 
     executePiPayment(
       {
-        amount: Number(numericAmount.toFixed(2)),
+        amount: numericAmount,
         memo,
         metadata
       },
@@ -352,7 +353,7 @@ export const ScanToPayModal: React.FC<ScanToPayModalProps> = ({
                 <div>
                   <label className="block text-xs font-extrabold text-slate-300 mb-1 flex items-center justify-between">
                     <span>Payment Amount (π)</span>
-                    <span className="text-[10px] text-slate-400 font-normal">Wallet Balance: {userBalancePi.toFixed(2)} π</span>
+                    <span className="text-[10px] text-slate-400 font-normal">Wallet Balance: {formatPiAmount(userBalancePi, { minDecimals: 2 })} π</span>
                   </label>
                   <div className="relative">
                     <input
