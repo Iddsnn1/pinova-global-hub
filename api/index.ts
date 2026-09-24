@@ -149,8 +149,11 @@ async function handleDurableProducts(req: any, res: any): Promise<boolean> {
       fulfillmentType: body.fulfillmentType,
       availabilityStatus: body.availabilityStatus || (stock > 0 ? 'in_stock' : 'out_of_stock'),
       tags: Array.isArray(body.tags) ? body.tags.filter(Boolean) : [],
-      isActive: false,
-      moderationStatus: 'PENDING_REVIEW'
+      // Verified/Active merchants may publish products immediately; product purchase APIs
+      // already require isActive and stock, so an approved merchant must not create a
+      // permanently invisible catalog item with no moderation workflow behind it.
+      isActive: stock > 0,
+      moderationStatus: 'APPROVED'
     };
     const saved = await saveDurableProduct(product as any);
     return res.status(201).json({ ok: true, product: saved });
@@ -177,9 +180,10 @@ async function handleDurableProducts(req: any, res: any): Promise<boolean> {
     sellerName: existing.sellerName,
     sellerVerified: true,
     isDeleted: false,
-    // Merchant edits never self-publish a product.
-    isActive: false,
-    moderationStatus: existing.moderationStatus === 'APPROVED' ? 'PENDING_REVIEW' : (body.moderationStatus || existing.moderationStatus || 'PENDING_REVIEW')
+    // The merchant is already compliance-approved; keep edited in-stock listings
+    // publicly purchasable because this deployment has no separate product-moderation queue.
+    isActive: Number(next.stock ?? existing.stock) > 0,
+    moderationStatus: 'APPROVED'
   };
   const saved = await saveDurableProduct(next as any);
   return res.json({ ok: true, product: saved });
