@@ -100,7 +100,8 @@ async function migrateEligibleCatalogVisibility(): Promise<{ migrated: string[];
       ...product,
       isDeleted: false,
       isActive: true,
-      moderationStatus: 'APPROVED'
+      moderationStatus: 'APPROVED',
+      availabilityStatus: Number(product.stock ?? 0) > 0 ? 'in_stock' : 'out_of_stock'
     });
     migrated.push(String(product.id));
   }
@@ -212,7 +213,7 @@ async function handleDurableProducts(req: any, res: any): Promise<boolean> {
       specs: body.specs,
       productType: body.productType,
       fulfillmentType: body.fulfillmentType,
-      availabilityStatus: body.availabilityStatus || (stock > 0 ? 'in_stock' : 'out_of_stock'),
+      availabilityStatus: stock > 0 ? 'in_stock' : 'out_of_stock',
       tags: Array.isArray(body.tags) ? body.tags.filter(Boolean) : [],
       // Verified/Active merchants may publish products immediately; product purchase APIs
       // already require isActive and stock, so an approved merchant must not create a
@@ -248,6 +249,7 @@ async function handleDurableProducts(req: any, res: any): Promise<boolean> {
     // The merchant is already compliance-approved; keep edited in-stock listings
     // publicly purchasable because this deployment has no separate product-moderation queue.
     isActive: Number(next.stock ?? existing.stock) > 0,
+    availabilityStatus: Number(next.stock ?? existing.stock) > 0 ? 'in_stock' : 'out_of_stock',
     moderationStatus: 'APPROVED'
   };
   const saved = await saveDurableProduct(next as any);
