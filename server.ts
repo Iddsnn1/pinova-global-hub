@@ -1263,6 +1263,13 @@ app.post(
   handleVendorBrandingRawBody,
   authenticate,
   async (req: AuthenticatedRequest, res) => {
+    console.info('[PRODUCT_IMAGE_UPLOAD_TRACE]', {
+      path: req.path,
+      method: req.method,
+      vercel: process.env.VERCEL === '1',
+      deployment: process.env.VERCEL_DEPLOYMENT_ID || process.env.VERCEL_URL || null,
+      region: process.env.VERCEL_REGION || null
+    });
     try {
       const authUser = req.authenticatedUser || (req as any).user;
       if (!authUser?.username) {
