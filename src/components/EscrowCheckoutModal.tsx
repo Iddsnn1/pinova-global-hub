@@ -83,11 +83,45 @@ export const EscrowCheckoutModal: React.FC<EscrowCheckoutModalProps> = ({
       return;
     }
 
-    const sessionUser = getAuthenticatedPiUser();
-    const accessToken = sessionUser?.accessToken;
-    if (!accessToken) throw new Error('Authenticated Pi session token unavailable.');
-    const idempotencyKey = `checkout-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-    const orderResponse = await fetch('/api/v1/orders', {
+    try {
+      const sessionUser = getAuthenticatedPiUser();
+      const accessToken = sessionUser?.accessToken;
+      if (!accessToken) throw new Error('Authenticated Pi session token unavailable.');
+
+      const idempotencyKey = `checkout-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+      addLog('Creating secure server order...');
+
+      const orderController = new AbortController();
+      const orderTimeout = window.setTimeout(() => orderController.abort(), 30000);
+
+      let orderResponse: Response;
+      try {
+        orderResponse = await fetch('/api/v1/orders', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Idempotency-Key': idempotencyKey,
+            'Authorization': `Bearer ${accessToken}`
+          },
+          body: JSON.stringify({
+            items: cartItems.map((item) => ({
+              productId: item.product.id,
+              quantity: item.quantity,
+              selectedVariant: item.selectedVariant,
+              customDetails: item.customDetails
+            })),
+            promoCode: appliedCoupon?.code || ''
+          }),
+          signal: orderController.signal
+        });
+      } catch (orderError: any) {
+        if (orderError?.name === 'AbortError') {
+          throw new Error('The secure order service did not respond within 30 seconds. Please try again.');
+        }
+        throw orderError;
+      } finally {
+        window.clearTimeout(orderTimeout);
+      }
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -226,6 +260,12 @@ export const EscrowCheckoutModal: React.FC<EscrowCheckoutModalProps> = ({
         }
       }
     );
+    } catch (paymentFlowErr: any) {
+      const errMsg = paymentFlowErr?.message || String(paymentFlowErr);
+      setPaymentStep('failed');
+      setErrorMessage(errMsg || 'Unable to start the Pi payment flow.');
+      addLog(`Payment preparation error: ${errMsg || 'Unknown error'}`);
+    }
   };
 
   return (
@@ -370,8 +410,8 @@ export const EscrowCheckoutModal: React.FC<EscrowCheckoutModalProps> = ({
               </div>
 
               <div>
-                <h4 className="font-black text-lg text-slate-900 dark:text-slate-100">Connecting to Pi Network SDK...</h4>
-                <p className="text-xs text-slate-400 mt-1">Please confirm the payment prompt inside your Pi Wallet.</p>
+                <h4 className="font-black text-lg text-slate-900 dark:text-slate-100">Processing Pi Payment...</h4>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Follow the secure payment status below. Pi Wallet will prompt you when the payment is ready.</p>
               </div>
 
               {/* Status Log Box */}
