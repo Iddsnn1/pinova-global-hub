@@ -5663,7 +5663,7 @@ app.post('/api/products', authenticate, async (req: AuthenticatedRequest, res) =
       specs: body.specs,
       productType: body.productType,
       fulfillmentType: body.fulfillmentType,
-      availabilityStatus: body.availabilityStatus || (stock > 0 ? 'in_stock' : 'out_of_stock'),
+      availabilityStatus: stock > 0 ? 'in_stock' : 'out_of_stock',
       tags: Array.isArray(body.tags) ? body.tags.filter(Boolean) : [],
       // Verified/Active merchants may publish products immediately; product purchase APIs
       // already require isActive and stock, so an approved merchant must not create a
