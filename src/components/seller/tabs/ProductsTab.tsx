@@ -23,6 +23,7 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({ products, openCreateOn
   const [stockFilter, setStockFilter] = useState<'all' | 'in_stock' | 'out_of_stock'>('all');
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [draft, setDraft] = useState<ProductDraft>(EMPTY_DRAFT);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -73,7 +74,9 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({ products, openCreateOn
   const categoryCount = MARKETPLACE_CATEGORIES.length;
 
   const openCreateForm = (product?: Product) => {
+    const durableProductId = product ? String(product.id || (product as any).productId || (product as any).sku || '').trim() : '';
     setEditingProduct(product || null);
+    setEditingProductId(durableProductId || null);
     setDraft(product ? {
       title: product.title || '',
       description: product.description || '',
@@ -147,8 +150,10 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({ products, openCreateOn
         uploadedImageUrl = uploadData.url;
         setIsUploadingImage(false);
       }
+      const durableEditId = editingProductId || (editingProduct ? String(editingProduct.id || (editingProduct as any).productId || (editingProduct as any).sku || '').trim() : '');
+      if (editingProduct && !durableEditId) throw new Error('PRODUCT_ID_MISSING');
       const result = editingProduct
-        ? await updateSellerProduct(editingProduct.id, { title, description, pricePi, category: draft.category, marketplaceCategory: draft.marketplaceCategory, subcategory: draft.subcategory.trim(), images: uploadedImageUrl ? [uploadedImageUrl] : (editingProduct.images || []), stock, productType: draft.category === 'physical' ? 'physical' : draft.category === 'digital' ? 'digital' : 'service' })
+        ? await updateSellerProduct(durableEditId, { title, description, pricePi, category: draft.category, marketplaceCategory: draft.marketplaceCategory, subcategory: draft.subcategory.trim(), images: uploadedImageUrl ? [uploadedImageUrl] : (editingProduct.images || []), stock, productType: draft.category === 'physical' ? 'physical' : draft.category === 'digital' ? 'digital' : 'service' })
         : await createSellerProduct({ title, description, pricePi, category: draft.category, marketplaceCategory: draft.marketplaceCategory, subcategory: draft.subcategory.trim(), images: uploadedImageUrl ? [uploadedImageUrl] : [], stock, features: [], tags: [], productType: draft.category === 'physical' ? 'physical' : draft.category === 'digital' ? 'digital' : 'service' });
       if (!result.ok || !result.product) {
         if (result.status === 403 && result.error === 'MERCHANT_SELLER_ACCESS_REQUIRED') setSubmitError('Seller access denied. Complete merchant verification and activate your store before publishing products.');
@@ -167,6 +172,7 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({ products, openCreateOn
         setSubmitSuccess(`Product created successfully: ${result.product!.title}`);
       }
       setEditingProduct(null);
+      setEditingProductId(null);
       setDraft(EMPTY_DRAFT);
       setImageFile(null);
       setImagePreview(null);
@@ -174,7 +180,9 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({ products, openCreateOn
     } catch (error: any) {
       console.error('[ProductsTab] Product creation failed:', error);
       const message = String(error?.message || '').trim();
-      if (message === 'MERCHANT_SELLER_ACCESS_REQUIRED') {
+      if (message === 'PRODUCT_ID_MISSING') {
+        setSubmitError('Product ID is missing from this catalog record. Refresh Seller Studio and reopen Edit so the durable product identity can be loaded.');
+      } else if (message === 'MERCHANT_SELLER_ACCESS_REQUIRED') {
         setSubmitError('Server-verified merchant access is required. Please refresh Seller Studio and verify that your store is Active.');
       } else if (message === 'AUTHENTICATION_REQUIRED' || message === 'INVALID_SESSION') {
         setSubmitError('Your verified Pi session has expired. Refresh Seller Studio and reconnect your Pi account.');
