@@ -180,7 +180,7 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
                     {order.items?.map(i => `${i.product.title} (x${i.quantity})`).join(', ') || 'Marketplace items'}
                   </div>
                   <div className="font-bold text-sm text-neutral-900 dark:text-neutral-100 shrink-0">
-                    Total: {formatPiAmount(order.totalPi?)} π
+                    Total: {formatPiAmount(order.totalPi || 0)} π
                   </div>
                 </div>
 
