@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { formatPiAmount } from '../utils/formatters';
 import { X, ShieldCheck, Lock, CheckCircle2, Loader2, AlertCircle, ArrowRight, Smartphone, MapPin, Truck } from 'lucide-react';
 import { OrderItem, CartItem, Coupon } from '../types';
 import { executePiPayment, authenticatePiUser, getAuthenticatedPiUser, resetPiAuthState } from '../lib/piSdk';
@@ -272,7 +273,7 @@ export const EscrowCheckoutModal: React.FC<EscrowCheckoutModalProps> = ({
                         <span className="text-slate-500 ml-1">x{item.quantity}</span>
                       </div>
                       <span className="font-mono font-bold text-purple-600 dark:text-purple-400">
-                        {(getItemUnitPrice(item) * item.quantity).toFixed(2)} π
+                        {formatPiAmount((getItemUnitPrice(item) * item.quantity))} π
                       </span>
                     </div>
                   ))}
@@ -323,7 +324,7 @@ export const EscrowCheckoutModal: React.FC<EscrowCheckoutModalProps> = ({
               <div className="p-4 rounded-2xl bg-gradient-to-r from-purple-900/40 to-indigo-900/40 border border-purple-800/40 flex items-center justify-between">
                 <div>
                   <span className="text-xs text-purple-300 font-semibold uppercase tracking-wider">Total Pi to Pay</span>
-                  <div className="text-2xl font-black text-amber-400">{totalAmountPi.toFixed(2)} π</div>
+                  <div className="text-2xl font-black text-amber-400">{formatPiAmount(totalAmountPi)} π</div>
                 </div>
 
                 <div className="text-right">
@@ -337,7 +338,7 @@ export const EscrowCheckoutModal: React.FC<EscrowCheckoutModalProps> = ({
                 onClick={handleStartPayment}
                 className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-purple-600 via-indigo-600 to-amber-500 text-white font-black text-sm shadow-xl shadow-purple-500/20 hover:opacity-95 transition-opacity flex items-center justify-center gap-2"
               >
-                <span>Authorize Pi Payment ({totalAmountPi.toFixed(2)} π)</span>
+                <span>Authorize Pi Payment ({formatPiAmount(totalAmountPi)} π)</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
             </>
