@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { formatPiAmount } from '../../../utils/formatters';
 import { 
   Boxes, 
   Warehouse as WarehouseIcon, 
@@ -244,7 +245,7 @@ export const InventoryWarehousesTab: React.FC<InventoryWarehousesTabProps> = ({
                           {product.category || 'General'}
                         </td>
                         <td className="py-3.5 text-right font-bold text-neutral-900 dark:text-neutral-100">
-                          {product.pricePi ? `${product.pricePi.toFixed(2)} π` : '0.00 π'}
+                          {product.pricePi ? `${formatPiAmount(product.pricePi)} π` : '0.00 π'}
                         </td>
                         <td className="py-3.5 text-center font-semibold text-neutral-800 dark:text-neutral-200">
                           {stock} units
