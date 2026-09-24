@@ -61,6 +61,7 @@ export const EscrowCheckoutModal: React.FC<EscrowCheckoutModalProps> = ({
   const isPhysicalOrder = cartItems.some((i) => i.product.category === 'physical');
   const shippingCost = isPhysicalOrder ? 2.50 : 0;
   const totalAmountPi = Math.max(0, subtotal - discountAmount + shippingCost);
+  const netSubtotalPi = Math.max(0, subtotal - discountAmount);
 
   const addLog = (msg: string) => {
     setStatusLogs((prev) => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`]);
@@ -293,7 +294,7 @@ export const EscrowCheckoutModal: React.FC<EscrowCheckoutModalProps> = ({
                       placeholder="Full Name"
                       value={shippingAddress.fullName}
                       onChange={(e) => setShippingAddress({ ...shippingAddress, fullName: e.target.value })}
-                      className="col-span-2 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 outline-none"
+                      className="col-span-2 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none"
                     />
                     <input
                       type="text"
@@ -307,7 +308,7 @@ export const EscrowCheckoutModal: React.FC<EscrowCheckoutModalProps> = ({
                       placeholder="City"
                       value={shippingAddress.city}
                       onChange={(e) => setShippingAddress({ ...shippingAddress, city: e.target.value })}
-                      className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 outline-none"
+                      className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none"
                     />
                     <input
                       type="text"
@@ -320,16 +321,33 @@ export const EscrowCheckoutModal: React.FC<EscrowCheckoutModalProps> = ({
                 </div>
               )}
 
-              {/* Final Total & Order Protection Box */}
-              <div className="p-4 rounded-2xl bg-gradient-to-r from-purple-900/40 to-indigo-900/40 border border-purple-800/40 flex items-center justify-between">
-                <div>
-                  <span className="text-xs text-purple-300 font-semibold uppercase tracking-wider">Total Pi to Pay</span>
-                  <div className="text-2xl font-black text-amber-400">{formatPiAmount(totalAmountPi)} π</div>
+              {/* Transparent price breakdown + Order Protection */}
+              <div className="p-4 rounded-2xl bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 space-y-3">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-semibold text-slate-700 dark:text-slate-200">Items subtotal</span>
+                  <span className="font-mono font-bold text-slate-900 dark:text-white">{formatPiAmount(subtotal)} π</span>
                 </div>
-
-                <div className="text-right">
-                  <span className="text-[11px] text-emerald-400 font-bold block">100% Order Protection</span>
-                  <span className="text-[10px] text-purple-300">Protected by PiNova Order Protection</span>
+                {discountAmount > 0 && (
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-semibold text-emerald-700 dark:text-emerald-300">Discount</span>
+                    <span className="font-mono font-bold text-emerald-700 dark:text-emerald-300">-{formatPiAmount(discountAmount)} π</span>
+                  </div>
+                )}
+                {shippingCost > 0 && (
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-semibold text-slate-700 dark:text-slate-200">Shipping</span>
+                    <span className="font-mono font-bold text-slate-900 dark:text-white">{formatPiAmount(shippingCost)} π</span>
+                  </div>
+                )}
+                <div className="border-t border-slate-300 dark:border-slate-600 pt-3 flex items-center justify-between">
+                  <div>
+                    <span className="text-xs text-slate-700 dark:text-slate-200 font-bold uppercase tracking-wider">Total Pi to Pay</span>
+                    <div className="text-2xl font-black text-slate-950 dark:text-white">{formatPiAmount(totalAmountPi)} π</div>
+                  </div>
+                  <div className="text-right max-w-[180px]">
+                    <span className="text-[11px] text-emerald-700 dark:text-emerald-300 font-bold block">100% Order Protection</span>
+                    <span className="text-[10px] text-slate-600 dark:text-slate-300">Protected by PiNova Order Protection</span>
+                  </div>
                 </div>
               </div>
 
