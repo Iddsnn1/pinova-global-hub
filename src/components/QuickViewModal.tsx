@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { formatPiAmount } from '../utils/formatters';
 import { X, Star, ShieldCheck, ShoppingBag, Zap, Heart, CheckCircle2, ArrowRight } from 'lucide-react';
 import { Product } from '../types';
 
@@ -126,7 +127,7 @@ export const QuickViewModal: React.FC<QuickViewModalProps> = ({
               <div className="my-3 p-3 rounded-xl bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800/60 flex items-center justify-between">
                 <div>
                   <div className="text-[10px] text-purple-700 dark:text-purple-300 font-semibold uppercase">Price in Pi Coin</div>
-                  <div className="text-2xl font-black text-amber-500">{discountedPrice.toFixed(2)} π</div>
+                  <div className="text-2xl font-black text-amber-500">{formatPiAmount(discountedPrice)} π</div>
                 </div>
                 <span className="text-[11px] font-bold text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
                   Order Protection Active
