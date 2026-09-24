@@ -100,7 +100,7 @@ export const SalesAnalyticsTab: React.FC<SalesAnalyticsTabProps> = ({ orders }) 
         <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-2xl p-4 shadow-xs">
           <span className="text-xs font-medium text-neutral-500 block">In Escrow (Locked)</span>
           <div className="text-xl sm:text-2xl font-bold text-amber-600 dark:text-amber-400 mt-1">
-            {metrics.inEscrowVolumePi.toFixed(2)} <span className="text-amber-600 text-sm font-semibold">π</span>
+            {formatPiAmount(metrics.inEscrowVolumePi, { minDecimals: 2 })} <span className="text-amber-600 text-sm font-semibold">π</span>
           </div>
           <span className="text-[11px] text-neutral-400 mt-1 block">
             {metrics.escrowCount} orders currently in escrow
@@ -110,7 +110,7 @@ export const SalesAnalyticsTab: React.FC<SalesAnalyticsTabProps> = ({ orders }) 
         <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-2xl p-4 shadow-xs">
           <span className="text-xs font-medium text-neutral-500 block">Average Order Value</span>
           <div className="text-xl sm:text-2xl font-bold text-neutral-900 dark:text-neutral-100 mt-1">
-            {metrics.averageOrderValue.toFixed(2)} <span className="text-purple-600 text-sm font-semibold">π</span>
+            {formatPiAmount(metrics.averageOrderValue, { minDecimals: 2 })} <span className="text-purple-600 text-sm font-semibold">π</span>
           </div>
           <span className="text-[11px] text-neutral-400 mt-1 block">
             Per recorded order
