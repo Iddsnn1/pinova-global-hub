@@ -590,7 +590,7 @@ function MainAppContent() {
       {
         id: `notif-${Date.now()}`,
         title: 'Payment Verified & Order Confirmed',
-        message: `Order ${newOrder.id} for ${newOrder.totalPi.toFixed(2)} π successfully authorized and verified via official Pi Network platform API.`,
+        message: `Order ${newOrder.id} for ${formatPiAmount(newOrder.totalPi, { minDecimals: 2 })} π successfully authorized and verified via official Pi Network platform API.`,
         type: 'order_protection',
         timestamp: new Date().toISOString(),
         read: false
