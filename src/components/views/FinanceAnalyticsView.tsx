@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { formatPiAmount } from '../../utils/formatters';
 import {
   DollarSign,
   TrendingUp,
