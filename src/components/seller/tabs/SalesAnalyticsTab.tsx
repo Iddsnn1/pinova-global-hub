@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { formatPiAmount } from './utils/formatters';
 import { TrendingUp, BarChart3, Calendar, ShieldCheck } from 'lucide-react';
 import { Order, Product } from '../../../types';
 
@@ -79,7 +80,7 @@ export const SalesAnalyticsTab: React.FC<SalesAnalyticsTabProps> = ({ orders }) 
         <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-2xl p-4 shadow-xs">
           <span className="text-xs font-medium text-neutral-500 block">Recorded Order Volume</span>
           <div className="text-xl sm:text-2xl font-bold text-neutral-900 dark:text-neutral-100 mt-1">
-            {metrics.totalVolumePi.toFixed(2)} <span className="text-purple-600 text-sm font-semibold">π</span>
+            {formatPiAmount(metrics.totalVolumePi, { minDecimals: 2 })} <span className="text-purple-600 text-sm font-semibold">π</span>
           </div>
           <span className="text-[11px] text-neutral-400 mt-1 block">
             Across {metrics.totalOrders} recorded orders
@@ -89,7 +90,7 @@ export const SalesAnalyticsTab: React.FC<SalesAnalyticsTabProps> = ({ orders }) 
         <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-2xl p-4 shadow-xs">
           <span className="text-xs font-medium text-neutral-500 block">Settled & Released</span>
           <div className="text-xl sm:text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">
-            {metrics.settledVolumePi.toFixed(2)} <span className="text-emerald-600 text-sm font-semibold">π</span>
+            {formatPiAmount(metrics.settledVolumePi, { minDecimals: 2 })} <span className="text-emerald-600 text-sm font-semibold">π</span>
           </div>
           <span className="text-[11px] text-neutral-400 mt-1 block">
             {metrics.settledCount} settled orders
