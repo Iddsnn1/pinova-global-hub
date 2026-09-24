@@ -58,6 +58,56 @@ async function resolveApprovedMerchant(username: string, pioneerUid?: string | s
   }) || null;
 }
 
+async function migrateEligibleCatalogVisibility(): Promise<{ migrated: string[]; skipped: string[] }> {
+  const migrated: string[] = [];
+  const skipped: string[] = [];
+  const records = await listDurableProducts({ includeDeleted: true });
+
+  for (const product of records) {
+    // One-time repair is deliberately fail-closed:
+    // never resurrect deleted/archived products, never publish zero-stock items,
+    // and only repair products owned by a currently approved/verified/active merchant.
+    if (product.isDeleted === true || Number(product.stock ?? 0) <= 0) {
+      skipped.push(String(product.id));
+      continue;
+    }
+
+    const sellerId = String(product.sellerId || '').trim();
+    if (!sellerId) {
+      skipped.push(String(product.id));
+      continue;
+    }
+
+    const merchant = await resolveApprovedMerchant(sellerId, [
+      product.sellerId,
+      (product as any).sellerUid,
+      (product as any).pioneerUid
+    ]);
+    const canSell = merchant?.status === 'APPROVED'
+      && merchant?.verificationStatus === 'Verified'
+      && merchant?.sellerStatus === 'Active';
+
+    if (!canSell) {
+      skipped.push(String(product.id));
+      continue;
+    }
+
+    if (product.isActive === true && String(product.moderationStatus || '').toUpperCase() === 'APPROVED') {
+      continue;
+    }
+
+    await saveDurableProduct({
+      ...product,
+      isDeleted: false,
+      isActive: true,
+      moderationStatus: 'APPROVED'
+    });
+    migrated.push(String(product.id));
+  }
+
+  return { migrated, skipped };
+}
+
 async function handleDurableProducts(req: any, res: any): Promise<boolean> {
   const parsed = new URL(req.url || '/', 'http://localhost');
   const pathname = parsed.pathname;
