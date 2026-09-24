@@ -1,8 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import { createHash, randomBytes } from 'crypto';
-import { authService } from '../src/server/auth/index';
-import { orderRepo, productRepo, paymentLedgerRepo, pstpAuditRepo, idempotencyRepo } from '../src/server/db/index';
-import { verifyPiPaymentAuthoritative } from '../src/server/services/PiPaymentVerificationService';
+import { authService, orderRepo, productRepo, paymentLedgerRepo, pstpAuditRepo, idempotencyRepo, verifyPiPaymentAuthoritative } from '../dist/server.cjs';
 import { listDurableVendorApplications } from '../dist/server.cjs';
 import { durableProductStorageEnabled, getDurableProduct, reserveDurableProductStockBatch } from '../dist/server.cjs';
 import type { Order, OrderItem, PstpOrderStatus } from '../src/types';
