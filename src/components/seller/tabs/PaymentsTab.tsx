@@ -1,4 +1,5 @@
 import React from 'react';
+import { formatPiAmount } from '../../../utils/formatters';
 import { CreditCard, ShieldCheck, CheckCircle2, Lock } from 'lucide-react';
 import { Order } from '../../../types';
 
@@ -44,17 +45,17 @@ export const PaymentsTab: React.FC<PaymentsTabProps> = ({ orders, serverPstpAuth
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-2xl p-5 shadow-xs">
           <span className="text-xs font-medium uppercase tracking-wider text-neutral-500">Settled & Released</span>
-          <div className="text-2xl md:text-3xl font-bold text-neutral-900 dark:text-neutral-100 mt-1">{settledPi.toFixed(2)} π</div>
+          <div className="text-2xl md:text-3xl font-bold text-neutral-900 dark:text-neutral-100 mt-1">{formatPiAmount(settledPi)} π</div>
           <p className="text-xs text-neutral-500 mt-1">{settledOrders.length} released/settled orders</p>
         </div>
         <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-2xl p-5 shadow-xs">
           <span className="text-xs font-medium uppercase tracking-wider text-neutral-500">In PSTP Escrow</span>
-          <div className="text-2xl md:text-3xl font-bold text-neutral-900 dark:text-neutral-100 mt-1">{inEscrowPi.toFixed(2)} π</div>
+          <div className="text-2xl md:text-3xl font-bold text-neutral-900 dark:text-neutral-100 mt-1">{formatPiAmount(inEscrowPi)} π</div>
           <p className="text-xs text-neutral-500 mt-1">{escrowOrders.length} orders currently in escrow</p>
         </div>
         <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-2xl p-5 shadow-xs">
           <span className="text-xs font-medium uppercase tracking-wider text-neutral-500">Recorded Store Volume</span>
-          <div className="text-2xl md:text-3xl font-bold text-neutral-900 dark:text-neutral-100 mt-1">{totalVolumePi.toFixed(2)} π</div>
+          <div className="text-2xl md:text-3xl font-bold text-neutral-900 dark:text-neutral-100 mt-1">{formatPiAmount(totalVolumePi)} π</div>
           <p className="text-xs text-neutral-500 mt-1">{orders.length} recorded orders</p>
         </div>
       </div>
@@ -102,7 +103,7 @@ export const PaymentsTab: React.FC<PaymentsTabProps> = ({ orders, serverPstpAuth
                       <td className="py-3 font-mono text-[11px] text-purple-600 dark:text-purple-400">{txRef || 'Not recorded'}</td>
                       <td className="py-3 font-mono text-neutral-900 dark:text-neutral-100">{order.id}</td>
                       <td className="py-3 text-neutral-600 dark:text-neutral-300">{order.buyerUsername ? `@${order.buyerUsername}` : 'Unknown payer'}</td>
-                      <td className="py-3 font-bold text-neutral-900 dark:text-neutral-100">{(order.totalPi || 0).toFixed(2)} π</td>
+                      <td className="py-3 font-bold text-neutral-900 dark:text-neutral-100">{formatPiAmount((order.totalPi || 0))} π</td>
                       <td className="py-3">
                         <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold flex items-center gap-1 w-fit ${
                           isSettled
