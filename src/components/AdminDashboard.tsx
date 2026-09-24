@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { formatPiAmount } from '../utils/formatters';
 import { ShieldCheck, AlertTriangle, UserCheck, Activity, RefreshCw, Zap, Globe, Package, BarChart3 } from 'lucide-react';
 import { Order, Vendor } from '../types';
 import { PiConversionConfig, ConversionRateLog } from '../types/utility';
