@@ -184,17 +184,12 @@ export const BuyerOrderHub: React.FC<BuyerOrderHubProps> = ({
   };
 
   const handleConfirmOrderReceipt = (order: Order) => {
+    // The server decides whether receipt confirmation and escrow release are allowed.
+    // Do not mutate lifecycle state locally.
+    if (order.pstpStatus !== 'Delivered') return;
     if (onConfirmReceipt) {
       onConfirmReceipt(order.id);
     }
-    const { updatedOrder } = service.lifecycleManager.transitionState(
-      order,
-      'Completed',
-      buyerUsername || order.buyerUsername,
-      'buyer',
-      'Buyer explicitly confirmed order receipt and satisfied condition.'
-    );
-    if (onOrderUpdated) onOrderUpdated(updatedOrder);
   };
 
   const handleCreateReturn = (e: React.FormEvent) => {
