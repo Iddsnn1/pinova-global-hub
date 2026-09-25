@@ -634,23 +634,43 @@ function MainAppContent() {
     handleNavigateSection('orders');
   };
 
-  // Confirm Receipt & Complete Order
-  const handleConfirmReceipt = (orderId: string) => {
-    setOrders((prev) =>
-      prev.map((o) => (o.id === orderId ? { ...o, escrowStatus: 'released', pstpStatus: 'Completed', updatedAt: new Date().toISOString() } : o))
-    );
-
-    setNotifications((prev) => [
-      {
-        id: `notif-${Date.now()}`,
-        title: 'Order Completed',
-        message: `Order ${orderId} has been confirmed received and funds released to seller. Thank you!`,
-        type: 'order_protection',
-        timestamp: new Date().toISOString(),
-        read: false
-      },
-      ...prev
-    ]);
+  // Confirm Receipt & Release Escrow — server-authoritative.
+  const handleConfirmReceipt = async (orderId: string) => {
+    try {
+      const response = await vendorAuthenticatedFetch(`/api/v1/orders/${encodeURIComponent(orderId)}/confirm-receipt`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' }
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || data?.ok !== true || !data?.order) {
+        throw new Error(data?.error || 'RECEIPT_CONFIRMATION_REJECTED');
+      }
+      handleOrderUpdated(data.order);
+      setNotifications((prev) => [
+        {
+          id: `notif-${Date.now()}`,
+          title: 'Order Completed',
+          message: `Order ${orderId} was completed and PSTP escrow was released after server-verified delivery.`,
+          type: 'order_protection',
+          timestamp: new Date().toISOString(),
+          read: false
+        },
+        ...prev
+      ]);
+    } catch (error) {
+      console.error('[ConfirmReceipt]', error);
+      setNotifications((prev) => [
+        {
+          id: `notif-${Date.now()}`,
+          title: 'Receipt Confirmation Rejected',
+          message: 'Receipt confirmation requires server-verified Delivered status. No escrow funds were released.',
+          type: 'order_protection',
+          timestamp: new Date().toISOString(),
+          read: false
+        },
+        ...prev
+      ]);
+    }
   };
 
   // Request Return
