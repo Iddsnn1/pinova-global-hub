@@ -98,8 +98,8 @@ function repairMarketplaceCategory(product: any): string {
 
   // Only auto-repair strong, unambiguous legacy category signals.
   if (current === 'phones_mobile') {
-    if (/\\b(agricultur|farm|farmer|seed|fertili[sz]er|livestock|crop|harvest|poultry|cattle|goat|maize|rice|wheat)\\b/i.test(haystack)) return 'agriculture';
-    if (/\\b(fashion|beauty|clothing|apparel|dress|shoe|shoes|bag|jewelry|jewellery|watch|cosmetic|makeup|skincare)\\b/i.test(haystack)) return 'fashion_beauty';
+    if (/\b(agricultur|farm|farmer|seed|fertili[sz]er|livestock|crop|harvest|poultry|cattle|goat|maize|rice|wheat)\b/i.test(haystack)) return 'agriculture';
+    if (/\b(fashion|beauty|clothing|apparel|dress|shoe|shoes|bag|jewelry|jewellery|watch|cosmetic|makeup|skincare)\b/i.test(haystack)) return 'fashion_beauty';
   }
 
   const aliases: Record<string, string> = {
