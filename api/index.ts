@@ -2,7 +2,6 @@ import type { IncomingMessage, ServerResponse } from 'http';
 import { createRequire } from 'module';
 import path from 'path';
 import crypto from 'crypto';
-import { resolveMarketplaceCategory } from '../src/data/categoryData';
 
 // IMPORTANT: keep dist/server.cjs lazy. Vercel wraps this handler as CommonJS,
 // and importing the server bundle at module scope can crash the function before
@@ -103,7 +102,20 @@ function repairMarketplaceCategory(product: any): string {
     if (/\\b(fashion|beauty|clothing|apparel|dress|shoe|shoes|bag|jewelry|jewellery|watch|cosmetic|makeup|skincare)\\b/i.test(haystack)) return 'fashion_beauty';
   }
 
-  return resolveMarketplaceCategory(current || 'other_general');
+  const aliases: Record<string, string> = {
+    phones_mobile: 'phones_mobile', smartphones: 'phones_mobile', phones: 'phones_mobile', mobile: 'phones_mobile',
+    computers_technology: 'computers_technology', computers: 'computers_technology', technology: 'computers_technology', laptops: 'computers_technology',
+    electronics: 'electronics', automotive_transport: 'automotive_transport', automotive: 'automotive_transport',
+    home_living: 'home_living', home: 'home_living',
+    fashion_beauty: 'fashion_beauty', fashion: 'fashion_beauty', beauty: 'fashion_beauty', clothing: 'fashion_beauty', apparel: 'fashion_beauty',
+    food_groceries: 'food_groceries', food: 'food_groceries', groceries: 'food_groceries',
+    industrial_construction: 'industrial_construction', tools: 'industrial_construction', construction: 'industrial_construction',
+    agriculture: 'agriculture', education: 'education', professional_services: 'professional_services',
+    travel_transport: 'travel_transport', entertainment_creative: 'entertainment_creative', pets_animals: 'pets_animals',
+    baby_kids: 'baby_kids', health_wellness: 'health_wellness', business_office: 'business_office', other_general: 'other_general'
+  };
+  const normalized = current.toLowerCase().trim().replace(/[\\s-&]+/g, '_');
+  return aliases[normalized] || 'other_general';
 }
 
 async function migrateEligibleCatalogVisibility(): Promise<{ migrated: string[]; skipped: string[] }> {
