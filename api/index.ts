@@ -2,17 +2,52 @@ import type { IncomingMessage, ServerResponse } from 'http';
 import { createRequire } from 'module';
 import path from 'path';
 import crypto from 'crypto';
-import { authenticateVendorRequest as authenticateRequest, getDurableVendorApplication, listDurableVendorApplications, durableVendorStorageEnabled } from '../dist/server.cjs';
-import { durableProductStorageEnabled, listDurableProducts, saveDurableProduct } from '../dist/server.cjs';
 
-// Ensure serverless environment flag is set before loading server module
+// IMPORTANT: keep dist/server.cjs lazy. Vercel wraps this handler as CommonJS,
+// and importing the server bundle at module scope can crash the function before
+// /api/health or any isolated route gets a chance to respond.
 process.env.VERCEL = process.env.VERCEL || '1';
 
 declare const require: any;
 
-const req = typeof require === 'function'
-  ? require
-  : createRequire(path.resolve(process.cwd(), 'api/index.js'));
+type ServerModule = {
+  authenticateVendorRequest: (req: any) => Promise<any>;
+  getDurableVendorApplication: (username: string) => Promise<any>;
+  listDurableVendorApplications: () => Promise<any[]>;
+  durableVendorStorageEnabled: () => boolean;
+  durableProductStorageEnabled: () => boolean;
+  listDurableProducts: (options?: any) => Promise<any[]>;
+  saveDurableProduct: (product: any) => Promise<any>;
+};
+
+let serverModule: ServerModule | null = null;
+
+function getServerModule(): ServerModule {
+  if (serverModule) return serverModule;
+
+  try {
+    const runtimeRequire = typeof require === 'function'
+      ? require
+      : createRequire(path.resolve(process.cwd(), 'api/index.js'));
+    const mod = runtimeRequire('../dist/server.cjs');
+    serverModule = (mod?.default || mod) as ServerModule;
+    return serverModule;
+  } catch (error: any) {
+    console.error('[Vercel Handler] Error loading server module:', {
+      name: error?.name,
+      message: error?.message
+    });
+    throw new Error(`Failed to load server module: ${error?.message || String(error)}`);
+  }
+}
+
+const authenticateRequest = (req: any) => getServerModule().authenticateVendorRequest(req);
+const getDurableVendorApplication = (username: string) => getServerModule().getDurableVendorApplication(username);
+const listDurableVendorApplications = () => getServerModule().listDurableVendorApplications();
+const durableVendorStorageEnabled = () => getServerModule().durableVendorStorageEnabled();
+const durableProductStorageEnabled = () => getServerModule().durableProductStorageEnabled();
+const listDurableProducts = (options?: any) => getServerModule().listDurableProducts(options);
+const saveDurableProduct = (product: any) => getServerModule().saveDurableProduct(product);
 
 function getApp() {
   try {
