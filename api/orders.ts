@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'http';
-import { createHash, randomBytes } from 'crypto';
+import { createHash, randomBytes, createHmac, timingSafeEqual } from 'crypto';
 import { authService, paymentLedgerRepo, pstpAuditRepo, idempotencyRepo, verifyPiPaymentAuthoritative, durableOrderStorageEnabled, getDurableOrder, listDurableOrders, saveDurableOrder, markDurableOrderPaymentVerified } from '../dist/server.cjs';
 import { listDurableVendorApplications } from '../dist/server.cjs';
 import { durableProductStorageEnabled, getDurableProduct, reserveDurableProductStockBatch } from '../dist/server.cjs';
@@ -36,6 +36,20 @@ function extractPiUserUid(paymentData: any): string | null {
   const candidates = [paymentData?.user_uid, paymentData?.userUid, paymentData?.payer?.uid, paymentData?.payer?.user_uid];
   const value = candidates.find((candidate) => typeof candidate === 'string' && candidate.trim());
   return value ? value.trim() : null;
+}
+
+
+function verifyCarrierSignature(payload: string, signature: string | null, secret: string): boolean {
+  const normalized = String(signature || '').trim().replace(/^sha256=/i, '');
+  if (!normalized || !secret) return false;
+  const expected = createHmac('sha256', secret).update(payload, 'utf8').digest('hex');
+  try {
+    const a = Buffer.from(normalized, 'hex');
+    const b = Buffer.from(expected, 'hex');
+    return a.length === b.length && timingSafeEqual(a, b);
+  } catch {
+    return false;
+  }
 }
 
 function normalizeUsername(value: unknown): string {
@@ -82,6 +96,95 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   if (req.method === 'OPTIONS') return json(res, 204, {});
 
   try {
+    // Carrier webhook is server-to-server and intentionally sits outside Pioneer session auth.
+    // It accepts only signed, idempotent carrier evidence for the three carrier-controlled milestones.
+    if (req.method === 'POST' && path.endsWith('/carrier-webhook')) {
+      const secret = String(process.env.PINOVA_CARRIER_WEBHOOK_SECRET || '').trim();
+      if (!secret) return json(res, 503, { ok: false, error: 'CARRIER_WEBHOOK_NOT_CONFIGURED' });
+      const signature = Array.isArray(req.headers['x-carrier-signature'])
+        ? req.headers['x-carrier-signature'][0]
+        : (req.headers['x-carrier-signature'] as string | undefined);
+      const rawBody = await (async () => {
+        const chunks: Buffer[] = [];
+        for await (const chunk of req as any) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+        return Buffer.concat(chunks).toString('utf8');
+      })();
+      if (!verifyCarrierSignature(rawBody, signature || null, secret)) {
+        return json(res, 401, { ok: false, error: 'INVALID_CARRIER_SIGNATURE' });
+      }
+
+      let body: any;
+      try { body = JSON.parse(rawBody); } catch { return json(res, 400, { ok: false, error: 'INVALID_JSON' }); }
+      const orderId = String(body.orderId || '').trim();
+      const nextStatus = String(body.status || '').trim() as PstpOrderStatus;
+      const trackingNumber = String(body.trackingNumber || '').trim();
+      const carrier = String(body.carrier || '').trim();
+      const eventId = String(body.eventId || '').trim();
+      const allowed: PstpOrderStatus[] = ['In Transit', 'Out for Delivery', 'Delivered'];
+      if (!orderId || !allowed.includes(nextStatus) || !trackingNumber || !carrier || !eventId) {
+        return json(res, 400, { ok: false, error: 'CARRIER_EVIDENCE_FIELDS_REQUIRED' });
+      }
+
+      const order = await getDurableOrder(orderId);
+      if (!order) return json(res, 404, { ok: false, error: 'ORDER_NOT_FOUND' });
+      if (!order.trackingNumber || order.trackingNumber !== trackingNumber) {
+        return json(res, 409, { ok: false, error: 'TRACKING_NUMBER_MISMATCH' });
+      }
+      const normalizedCarrier = carrier.toLowerCase();
+      if (!String(order.carrier || '').trim() || String(order.carrier).toLowerCase() !== normalizedCarrier) {
+        return json(res, 409, { ok: false, error: 'CARRIER_MISMATCH' });
+      }
+      const duplicate = (Array.isArray(order.timeline) ? order.timeline : []).some((entry: any) =>
+        String(entry?.note || '').includes(`carrier-event:${eventId}`)
+      );
+      if (duplicate) return json(res, 200, { ok: true, duplicate: true, order });
+
+      const allowedTransitions: Record<string, PstpOrderStatus> = {
+        'Shipped': 'In Transit',
+        'In Transit': 'Out for Delivery',
+        'Out for Delivery': 'Delivered'
+      };
+      if (allowedTransitions[order.pstpStatus] !== nextStatus) {
+        return json(res, 409, {
+          ok: false,
+          error: 'INVALID_CARRIER_LIFECYCLE_TRANSITION',
+          currentStatus: order.pstpStatus,
+          requestedStatus: nextStatus
+        });
+      }
+
+      const timestamp = new Date().toISOString();
+      const updated = await saveDurableOrder({
+        ...order,
+        pstpStatus: nextStatus,
+        updatedAt: timestamp,
+        escrowStatus: nextStatus === 'Delivered' ? 'delivered' : 'shipped',
+        timeline: [
+          ...(Array.isArray(order.timeline) ? order.timeline : []),
+          {
+            status: nextStatus,
+            timestamp,
+            actor: carrier,
+            actorRole: 'system',
+            note: `Carrier evidence accepted; carrier-event:${eventId}`
+          }
+        ]
+      });
+
+      pstpAuditRepo.appendLog({
+        orderId: order.id,
+        paymentId: order.piPaymentId,
+        actor: carrier,
+        actorRole: 'system',
+        action: 'CARRIER_LIFECYCLE_EVIDENCE_ACCEPTED',
+        details: `Signed carrier event ${eventId} advanced order to ${nextStatus}.`,
+        ipAddress: 'server',
+        deviceInfo: 'PiNova Carrier Webhook'
+      });
+
+      return json(res, 200, { ok: true, serverAuthoritative: true, order: updated });
+    }
+
     const token = bearer(req);
     if (!token) return json(res, 401, { ok: false, error: 'AUTHENTICATION_REQUIRED' });
     const user = await authService.authenticateToken(token);
