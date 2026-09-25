@@ -73,6 +73,7 @@ import { LanguageSelectorModal } from './components/i18n/LanguageSelectorModal';
 import { SellerStudioV2 } from './components/seller/SellerStudioV2';
 import { VendorApplicationModal } from './components/vendor/VendorApplicationModal';
 import { formatPiAmount } from './utils/formatters';
+import { vendorAuthenticatedFetch } from './lib/vendorAuthBridge';
 
 function MainAppContent() {
   // Dark mode
@@ -683,12 +684,62 @@ function MainAppContent() {
   };
 
   // Update Order Lifecycle Status
-  const handleUpdateOrderStatus = (
+  // Seller fulfillment lifecycle is server-authoritative. Never advance seller
+  // milestones by mutating client/localStorage state alone.
+  const handleUpdateOrderStatus = async (
     orderId: string,
     newStatus: PstpOrderStatus,
     noteOrExtra?: string | { trackingNumber?: string; carrier?: string; note?: string }
   ) => {
-    const noteText = typeof noteOrExtra === 'string' ? noteOrExtra : (noteOrExtra?.note || `Order status updated to ${newStatus}`);
+    const sellerLifecycleStatuses: PstpOrderStatus[] = [
+      'Seller Accepted',
+      'Preparing Order',
+      'Packed',
+      'Shipped',
+      'In Transit',
+      'Out for Delivery',
+      'Delivered'
+    ];
+
+    if (sellerLifecycleStatuses.includes(newStatus)) {
+      const noteText = typeof noteOrExtra === 'string'
+        ? noteOrExtra
+        : (noteOrExtra?.note || `Seller advanced fulfillment to ${newStatus}.`);
+      const extraTracking = typeof noteOrExtra === 'object' ? noteOrExtra.trackingNumber : undefined;
+      const extraCarrier = typeof noteOrExtra === 'object' ? noteOrExtra.carrier : undefined;
+
+      try {
+        const response = await vendorAuthenticatedFetch(`/api/v1/orders/${encodeURIComponent(orderId)}/fulfillment`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify({
+            pstpStatus: newStatus,
+            note: noteText,
+            ...(extraTracking ? { trackingNumber: extraTracking } : {}),
+            ...(extraCarrier ? { carrier: extraCarrier } : {})
+          })
+        });
+
+        const raw = await response.text();
+        let data: any = null;
+        try { data = raw ? JSON.parse(raw) : null; } catch { /* fail closed below */ }
+
+        if (!response.ok || data?.ok !== true || !data?.order) {
+          console.error('[Seller Fulfillment] Server rejected lifecycle transition:', response.status, data || raw);
+          return;
+        }
+
+        handleOrderUpdated(data.order as Order);
+      } catch (error) {
+        console.error('[Seller Fulfillment] Server lifecycle request failed:', error);
+      }
+      return;
+    }
+
+    // Non-seller lifecycle actions retain their existing local behavior for now.
+    const noteText = typeof noteOrExtra === 'string'
+      ? noteOrExtra
+      : (noteOrExtra?.note || `Order status updated to ${newStatus}`);
     const extraTracking = typeof noteOrExtra === 'object' ? noteOrExtra.trackingNumber : undefined;
     const extraCarrier = typeof noteOrExtra === 'object' ? noteOrExtra.carrier : undefined;
     setOrders((prev) =>
