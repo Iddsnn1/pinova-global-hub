@@ -230,11 +230,27 @@ export const MarketplaceView: React.FC<MarketplaceViewProps> = ({
       const selCatLower = String(selectedCategory || '').toLowerCase();
       const canCatLower = String(canonicalSelected || '').toLowerCase();
       
-      const categoryStr = (p.category || '').toLowerCase();
+      // Product type (physical/digital/service) is separate from the
+      // canonical marketplace taxonomy. Category pages must use
+      // marketplaceCategory first; otherwise every physical product has
+      // p.category === "physical" and taxonomy pages incorrectly show 0.
+      const productMarketplaceCategory = resolveMarketplaceCategory(p.marketplaceCategory || '');
+      const categoryStr = productMarketplaceCategory.toLowerCase();
+      const productTypeStr = (p.category || '').toLowerCase();
       const subcategoryStr = (p.subcategory || '').toLowerCase();
       const tagsArr = Array.isArray(p.tags) ? p.tags : [];
       
-      const matchesCategoryDirect = categoryStr === selCatLower || categoryStr === canCatLower || categoryStr.includes(selCatLower) || categoryStr.includes(canCatLower);
+      const matchesCategoryDirect =
+        categoryStr === selCatLower ||
+        categoryStr === canCatLower ||
+        categoryStr.includes(selCatLower) ||
+        categoryStr.includes(canCatLower) ||
+        // Backward compatibility for legacy products that stored the
+        // marketplace taxonomy in the generic category field.
+        productTypeStr === selCatLower ||
+        productTypeStr === canCatLower ||
+        productTypeStr.includes(selCatLower) ||
+        productTypeStr.includes(canCatLower);
       const matchesCategoryTag = tagsArr.some(t => {
         if (typeof t !== 'string') return false;
         const tl = t.toLowerCase();
