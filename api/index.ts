@@ -138,6 +138,23 @@ async function migrateEligibleCatalogVisibility(): Promise<{ migrated: string[];
       continue;
     }
 
+    // Category repair is a data-integrity correction, not a visibility grant.
+    // Apply an unambiguous legacy taxonomy repair before merchant-status checks
+    // so a stale seller-session/identity lookup cannot leave a product stranded
+    // in Phones & Mobile. This does not change isActive, moderation, or deletion.
+    const repairedMarketplaceCategory = repairMarketplaceCategory(product);
+    const needsCategoryRepair =
+      String(product.marketplaceCategory || '').trim() !== repairedMarketplaceCategory;
+
+    if (needsCategoryRepair && product.isActive === true && product.sellerVerified === true) {
+      await saveDurableProduct({
+        ...product,
+        marketplaceCategory: repairedMarketplaceCategory
+      });
+      product.marketplaceCategory = repairedMarketplaceCategory;
+      migrated.push(String(product.id));
+    }
+
     const merchant = await resolveApprovedMerchant(sellerId, [
       product.sellerId,
       (product as any).sellerUid,
@@ -153,14 +170,12 @@ async function migrateEligibleCatalogVisibility(): Promise<{ migrated: string[];
     }
 
     const expectedAvailability = Number(product.stock ?? 0) > 0 ? 'in_stock' : 'out_of_stock';
-    const repairedMarketplaceCategory = repairMarketplaceCategory(product);
-    const needsRepair = String(product.marketplaceCategory || '') !== repairedMarketplaceCategory;
-    if (
-      !needsRepair &&
-      product.isActive === true &&
-      String(product.moderationStatus || '').toUpperCase() === 'APPROVED' &&
-      String(product.availabilityStatus || '').toLowerCase() === expectedAvailability
-    ) {
+    const needsVisibilityRepair =
+      product.isActive !== true ||
+      String(product.moderationStatus || '').toUpperCase() !== 'APPROVED' ||
+      String(product.availabilityStatus || '').toLowerCase() !== expectedAvailability;
+
+    if (!needsVisibilityRepair) {
       continue;
     }
 
@@ -263,15 +278,27 @@ async function handleDurableProducts(req: any, res: any): Promise<boolean> {
     const title = String(body.title || '').trim();
     const description = String(body.description || '').trim();
     const pricePi = Number(body.pricePi ?? 0);
-    if (!title || !description || !Number.isFinite(pricePi) || pricePi < 0) {
-      return res.status(400).json({ ok: false, error: 'INVALID_PRODUCT_INPUT' });
+    const marketplaceCategory = repairMarketplaceCategory({
+      marketplaceCategory: body.marketplaceCategory
+    });
+    const allowedMarketplaceCategories = new Set([
+      'phones_mobile', 'computers_technology', 'electronics', 'automotive_transport',
+      'home_living', 'fashion_beauty', 'food_groceries', 'industrial_construction',
+      'agriculture', 'education', 'professional_services', 'travel_transport',
+      'entertainment_creative', 'pets_animals', 'baby_kids', 'health_wellness',
+      'business_office', 'other_general'
+    ]);
+    if (!title || !description || !Number.isFinite(pricePi) || pricePi < 0 ||
+        !String(body.marketplaceCategory || '').trim() ||
+        !allowedMarketplaceCategories.has(marketplaceCategory)) {
+      return res.status(400).json({ ok: false, error: 'INVALID_MARKETPLACE_CATEGORY' });
     }
 
     const product = {
       id: `prd_${Date.now()}_${crypto.randomBytes(5).toString('hex')}`,
       title, description, pricePi,
       category: body.category || 'physical',
-      marketplaceCategory: String(body.marketplaceCategory || ''),
+      marketplaceCategory,
       subcategory: String(body.subcategory || ''),
       images: Array.isArray(body.images) ? body.images.filter(Boolean) : [],
       stock, rating: 0, reviewsCount: 0,
