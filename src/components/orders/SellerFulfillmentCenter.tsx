@@ -17,6 +17,7 @@ import {
   Send
 } from 'lucide-react';
 import { Order, PstpOrderStatus, ShippingLabel, FulfillmentRecord } from '../../types';
+import { vendorAuthenticatedFetch } from '../../lib/vendorAuthBridge';
 
 interface SellerFulfillmentCenterProps {
   orders: Order[];
@@ -69,10 +70,9 @@ export const SellerFulfillmentCenter: React.FC<SellerFulfillmentCenterProps> = (
     }
 
     try {
-      const response = await fetch(`/api/v1/orders/${encodeURIComponent(activeOrder.id)}/fulfillment`, {
+      const response = await vendorAuthenticatedFetch(`/api/v1/orders/${encodeURIComponent(activeOrder.id)}/fulfillment`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify({
           pstpStatus: nextStatus,
           carrier: carrier.trim(),
@@ -83,7 +83,7 @@ export const SellerFulfillmentCenter: React.FC<SellerFulfillmentCenterProps> = (
 
       const payload = await response.json().catch(() => null);
       if (!response.ok || !payload?.order) {
-        throw new Error(payload?.error || `FULFILLMENT_UPDATE_FAILED_${response.status}`);
+        throw new Error(payload?.error || payload?.message || `FULFILLMENT_UPDATE_FAILED_${response.status}`);
       }
 
       setSelectedOrder(payload.order as Order);
