@@ -1,4 +1,31 @@
-import { authenticateVendorRequest as authenticateRequest, getDurableVendorApplication, saveDurableVendorApplication, durableVendorStorageEnabled, pstpAuditRepo } from '../../dist/server.cjs';
+import { createRequire } from 'module';
+import path from 'path';
+
+type ServerModule = {
+  authenticateVendorRequest: (req: any) => Promise<any>;
+  getDurableVendorApplication: (username: string) => Promise<any>;
+  saveDurableVendorApplication: (application: any) => Promise<any>;
+  durableVendorStorageEnabled: () => boolean;
+  pstpAuditRepo: { appendLog: (entry: any) => Promise<any> | any };
+};
+
+let serverModule: ServerModule | null = null;
+
+function getServerModule(): ServerModule {
+  if (serverModule) return serverModule;
+  const runtimeRequire = createRequire(path.resolve(process.cwd(), 'api/vendor/apply-durable.js'));
+  const mod = runtimeRequire('../../dist/server.cjs');
+  serverModule = (mod?.default || mod) as ServerModule;
+  return serverModule;
+}
+
+const authenticateRequest = (req: any) => getServerModule().authenticateVendorRequest(req);
+const getDurableVendorApplication = (username: string) => getServerModule().getDurableVendorApplication(username);
+const saveDurableVendorApplication = (application: any) => getServerModule().saveDurableVendorApplication(application);
+const durableVendorStorageEnabled = () => getServerModule().durableVendorStorageEnabled();
+const pstpAuditRepo = {
+  appendLog: (entry: any) => getServerModule().pstpAuditRepo.appendLog(entry)
+};
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') return res.status(405).json({ success: false, error: 'METHOD_NOT_ALLOWED' });
@@ -78,7 +105,7 @@ export default async function handler(req: any, res: any) {
     };
 
     const saved = await saveDurableVendorApplication(application);
-    pstpAuditRepo.appendLog({
+    await pstpAuditRepo.appendLog({
       orderId: saved.id,
       actor: effectiveUsername,
       actorRole: 'seller',
