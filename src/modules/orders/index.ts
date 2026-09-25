@@ -87,7 +87,6 @@ export class OrderLifecycleManager {
       timeline: [...(order.timeline || []), logEntry]
     };
 
-    // Auto Dispatch Notification
     let notificationSent = false;
     try {
       this.notificationModule.createNotification(
@@ -141,67 +140,76 @@ export class OrderLifecycleManager {
   }
 }
 
+/**
+ * Legacy compatibility surface only.
+ *
+ * Fulfillment must be driven by persisted server-authoritative order events.
+ * This class deliberately refuses to invent tokens, warehouses, carriers,
+ * timestamps, or fulfillment completion.
+ */
 export class OrderFulfillmentEngine {
-  processFulfillment(order: Order): FulfillmentRecord {
-    const isDigital = order.items.some(i => i.product.category === 'digital' || i.product.category === 'giftcard');
-    const isUtility = order.items.some(i => i.product.category === 'utility' || i.product.category === 'airtime');
-
-    let fulfillmentType: FulfillmentRecord['fulfillmentType'] = 'warehouse';
-    let digitalTokens: string[] = [];
-
-    if (isUtility) {
-      fulfillmentType = 'utility';
-      digitalTokens = order.items.map(i => `UTILITY-TOKEN-${Math.floor(Math.random() * 900000000 + 100000000)}`);
-    } else if (isDigital) {
-      fulfillmentType = 'digital';
-      digitalTokens = order.items.map(i => i.product.digitalKey || `KEY-${Math.floor(Math.random() * 900000 + 100000)}-PINOVA`);
-    }
-
-    return {
-      id: `FULFILL-${Date.now()}`,
-      orderId: order.id,
-      fulfillmentType,
-      status: 'fulfilled',
-      assignedWarehouse: isDigital || isUtility ? 'Digital Cloud Hub' : 'Main Nairobi Fulfillment Center',
-      carrier: isDigital || isUtility ? 'Direct Instant API Gateway' : 'Safaricom Express Logistics',
-      trackingNumber: order.trackingNumber || undefined,
-      digitalTokensReleased: digitalTokens,
-      fulfilledBy: 'System Auto-Fulfillment Engine',
-      fulfilledAt: new Date().toISOString(),
-      notes: `Automated fulfillment execution completed for order type: ${fulfillmentType}`
-    };
+  processFulfillment(_order: Order): FulfillmentRecord {
+    throw new Error('FULFILLMENT_REQUIRES_AUTHORITATIVE_SERVER_EVENT');
   }
 }
 
 export class LogisticsShippingManager {
   private supportedCarriers = [
-    { code: 'DHL', name: 'DHL Express Global', estimatedDays: '2-4 Business Days' },
-    { code: 'FEDEX', name: 'FedEx International', estimatedDays: '3-5 Business Days' },
-    { code: 'SAFARICOM', name: 'Safaricom Express Logistics', estimatedDays: '1-2 Days' },
-    { code: 'LOCAL_COURIER', name: 'Local Pi Partner Courier', estimatedDays: 'Same Day / Next Day' },
-    { code: 'PICKUP', name: 'PiNova Click & Collect Station', estimatedDays: 'Instant / Ready for Pickup' }
+    { code: 'DHL', name: 'DHL Express Global' },
+    { code: 'FEDEX', name: 'FedEx International' },
+    { code: 'SAFARICOM', name: 'Safaricom Express Logistics' },
+    { code: 'LOCAL_COURIER', name: 'Local Pi Partner Courier' },
+    { code: 'PICKUP', name: 'PiNova Click & Collect Station' }
   ];
 
   getAvailableCarriers() {
     return this.supportedCarriers;
   }
 
-  generateShippingLabel(order: Order, carrierCode: string = 'SAFARICOM'): ShippingLabel {
-    const carrierObj = this.supportedCarriers.find(c => c.code === carrierCode) || this.supportedCarriers[2];
-    const trackingNum = `PNV-${carrierCode}-${Date.now().toString().slice(-6)}`;
+  /**
+   * Shipping labels may only represent carrier/tracking data already recorded
+   * on the authoritative order. No synthetic tracking number, address,
+   * warehouse, weight, or ETA is generated here.
+   */
+  generateShippingLabel(order: Order, carrierCode?: string): ShippingLabel {
+    const carrier = String(order.carrier || '').trim();
+    const trackingNumber = String(order.trackingNumber || '').trim();
+
+    if (!carrier || !trackingNumber) {
+      throw new Error('SHIPPING_LABEL_REQUIRES_RECORDED_CARRIER_AND_TRACKING');
+    }
+
+    if (carrierCode && carrier.toLowerCase() !== carrierCode.trim().toLowerCase()) {
+      throw new Error('SHIPPING_LABEL_CARRIER_MISMATCH');
+    }
+
+    if (!order.shippingAddress) {
+      throw new Error('SHIPPING_LABEL_REQUIRES_SHIPPING_ADDRESS');
+    }
+
+    const recipientName = String(order.shippingAddress.fullName || '').trim();
+    const recipientAddress = [
+      order.shippingAddress.street,
+      order.shippingAddress.city,
+      order.shippingAddress.country
+    ].filter(Boolean).join(', ');
+
+    if (!recipientName || !recipientAddress) {
+      throw new Error('SHIPPING_LABEL_REQUIRES_COMPLETE_SHIPPING_ADDRESS');
+    }
 
     return {
-      id: `LABEL-${Date.now()}`,
+      id: `LABEL-${order.id}-${trackingNumber}`,
       orderId: order.id,
-      carrier: carrierObj.name,
-      trackingNumber: trackingNum,
+      carrier,
+      trackingNumber,
       senderName: order.items[0]?.product.sellerName || 'PiNova Global Vendor Store',
-      senderAddress: 'Vendor Fulfillment Hub, Hub 04, Pi Plaza',
-      recipientName: order.shippingAddress?.fullName || order.buyerUsername,
-      recipientAddress: order.shippingAddress ? `${order.shippingAddress.street}, ${order.shippingAddress.city}, ${order.shippingAddress.country}` : 'Digital Delivery Address',
-      weightKg: 1.25,
+      senderAddress: '',
+      recipientName,
+      recipientAddress,
+      weightKg: 0,
       labelFormat: 'PDF',
-      barcodeData: `*${trackingNum}*`,
+      barcodeData: trackingNumber,
       issuedAt: new Date().toISOString()
     };
   }
@@ -258,7 +266,7 @@ export class ReturnRefundManager {
     sellerUsername: string, 
     reason: ReturnRequest['reason'], 
     description: string, 
-    refundAmountPi: number,
+    refundAmountPi: number, 
     evidenceImages: string[] = []
   ): ReturnRequest {
     const req: ReturnRequest = {
@@ -381,7 +389,7 @@ export class DisputeArbitrationManager {
 export class DigitalReceiptGenerator {
   generateReceipt(order: Order): DigitalReceipt {
     const subtotalPi = order.items.reduce((acc, i) => acc + (i.product.pricePi * i.quantity), 0);
-    const taxPi = subtotalPi * 0.05; // 5% reference tax
+    const taxPi = subtotalPi * 0.05;
     const shippingPi = order.items.some(i => i.product.category === 'physical') ? 5.0 : 0.0;
     const discountPi = order.totalPi < subtotalPi ? (subtotalPi + taxPi + shippingPi) - order.totalPi : 0;
 
@@ -417,4 +425,3 @@ export class OrderOrchestrationService {
   disputeManager = new DisputeArbitrationManager();
   receiptGenerator = new DigitalReceiptGenerator();
 }
-
