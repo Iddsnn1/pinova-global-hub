@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'http';
 import { createRequire } from 'module';
 import path from 'path';
 import crypto from 'crypto';
+import { resolveMarketplaceCategory } from '../src/data/categoryData';
 
 // IMPORTANT: keep dist/server.cjs lazy. Vercel wraps this handler as CommonJS,
 // and importing the server bundle at module scope can crash the function before
@@ -87,6 +88,24 @@ async function resolveApprovedMerchant(username: string, pioneerUid?: string | s
   }) || null;
 }
 
+function repairMarketplaceCategory(product: any): string {
+  const current = String(product?.marketplaceCategory || '').trim();
+  const haystack = [
+    product?.title,
+    product?.description,
+    product?.subcategory,
+    ...(Array.isArray(product?.tags) ? product.tags : [])
+  ].filter(Boolean).join(' ').toLowerCase();
+
+  // Only auto-repair strong, unambiguous legacy category signals.
+  if (current === 'phones_mobile') {
+    if (/\\b(agricultur|farm|farmer|seed|fertili[sz]er|livestock|crop|harvest|poultry|cattle|goat|maize|rice|wheat)\\b/i.test(haystack)) return 'agriculture';
+    if (/\\b(fashion|beauty|clothing|apparel|dress|shoe|shoes|bag|jewelry|jewellery|watch|cosmetic|makeup|skincare)\\b/i.test(haystack)) return 'fashion_beauty';
+  }
+
+  return resolveMarketplaceCategory(current || 'other_general');
+}
+
 async function migrateEligibleCatalogVisibility(): Promise<{ migrated: string[]; skipped: string[] }> {
   const migrated: string[] = [];
   const skipped: string[] = [];
@@ -122,7 +141,10 @@ async function migrateEligibleCatalogVisibility(): Promise<{ migrated: string[];
     }
 
     const expectedAvailability = Number(product.stock ?? 0) > 0 ? 'in_stock' : 'out_of_stock';
+    const repairedMarketplaceCategory = repairMarketplaceCategory(product);
+    const needsRepair = String(product.marketplaceCategory || '') !== repairedMarketplaceCategory;
     if (
+      !needsRepair &&
       product.isActive === true &&
       String(product.moderationStatus || '').toUpperCase() === 'APPROVED' &&
       String(product.availabilityStatus || '').toLowerCase() === expectedAvailability
@@ -132,6 +154,7 @@ async function migrateEligibleCatalogVisibility(): Promise<{ migrated: string[];
 
     await saveDurableProduct({
       ...product,
+      marketplaceCategory: repairedMarketplaceCategory,
       isDeleted: false,
       isActive: true,
       moderationStatus: 'APPROVED',
@@ -192,13 +215,13 @@ async function handleDurableProducts(req: any, res: any): Promise<boolean> {
     // see their own pending/inactive products in Seller Studio after refresh.
     const viewer = await authenticateRequest(req);
     const viewerUsername = String(viewer?.username || '').trim();
+    const viewerMerchant = viewerUsername ? await resolveApprovedMerchant(viewerUsername) : null;
+    const canonicalSellerId = String(viewerMerchant?.pioneerUsername || viewerUsername).trim().replace(/^@/, '');
     const products = viewerUsername
-      ? await listDurableProducts({
-          includeDeleted: false,
-          sellerId: viewerUsername,
-          category: category as any,
-          q
-        })
+      ? (await listDurableProducts({ includeDeleted: false, category: category as any, q }))
+          .filter((product: any) =>
+            String(product?.sellerId || '').trim().replace(/^@/, '').toLowerCase() === canonicalSellerId.toLowerCase()
+          )
       : await listDurableProducts({
           activeOnly: true,
           category: category as any,
@@ -240,7 +263,9 @@ async function handleDurableProducts(req: any, res: any): Promise<boolean> {
       subcategory: String(body.subcategory || ''),
       images: Array.isArray(body.images) ? body.images.filter(Boolean) : [],
       stock, rating: 0, reviewsCount: 0,
-      sellerId: String(user.username).trim(),
+      // Keep one canonical merchant identity even when Pi sessions expose
+      // an alternate Pioneer username (for example @pi_pioneer_01).
+      sellerId: String(durableMerchant.pioneerUsername || user.username).trim().replace(/^@/, ''),
       sellerName: String(durableMerchant.storeName || user.username).trim(),
       sellerVerified: true,
       features: Array.isArray(body.features) ? body.features.filter(Boolean) : [],
@@ -262,7 +287,9 @@ async function handleDurableProducts(req: any, res: any): Promise<boolean> {
   if (!id) return res.status(400).json({ ok: false, error: 'PRODUCT_ID_REQUIRED' });
   const existing = (await listDurableProducts({ includeDeleted: true })).find((item) => item.id === id);
   if (!existing || existing.isDeleted === true) return res.status(404).json({ ok: false, error: 'PRODUCT_NOT_FOUND' });
-  if (String(existing.sellerId).trim().toLowerCase() !== String(user.username).trim().toLowerCase()) {
+  const canonicalOwner = String(durableMerchant.pioneerUsername || user.username).trim().replace(/^@/, '').toLowerCase();
+  const existingOwner = String(existing.sellerId || '').trim().replace(/^@/, '').toLowerCase();
+  if (existingOwner !== canonicalOwner) {
     return res.status(403).json({ ok: false, error: 'PRODUCT_OWNERSHIP_REQUIRED' });
   }
 
