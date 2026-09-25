@@ -56,7 +56,7 @@ export class OrderLifecycleManager {
     note?: string
   ): { updatedOrder: Order; auditLog: AuditLogEntry; notificationSent: boolean } {
     if (!this.isValidTransition(order.pstpStatus, nextStatus)) {
-      console.warn(`[OrderLifecycle] Transition from '${order.pstpStatus}' to '${nextStatus}' is invalid. Overriding with system/admin rule.`);
+      throw new Error(`INVALID_ORDER_LIFECYCLE_TRANSITION:${order.pstpStatus}->${nextStatus}`);
     }
 
     const logEntry: StatusTransitionLog = {
@@ -164,7 +164,7 @@ export class OrderFulfillmentEngine {
       status: 'fulfilled',
       assignedWarehouse: isDigital || isUtility ? 'Digital Cloud Hub' : 'Main Nairobi Fulfillment Center',
       carrier: isDigital || isUtility ? 'Direct Instant API Gateway' : 'Safaricom Express Logistics',
-      trackingNumber: order.trackingNumber || `TRACK-${Math.floor(Math.random() * 9000000 + 1000000)}`,
+      trackingNumber: order.trackingNumber || undefined,
       digitalTokensReleased: digitalTokens,
       fulfilledBy: 'System Auto-Fulfillment Engine',
       fulfilledAt: new Date().toISOString(),
