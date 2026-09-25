@@ -38,6 +38,43 @@ function extractPiUserUid(paymentData: any): string | null {
   return value ? value.trim() : null;
 }
 
+function normalizeUsername(value: unknown): string {
+  return String(value || '').trim().replace(/^@/, '').toLowerCase();
+}
+
+const SELLER_LIFECYCLE_TRANSITIONS: Partial<Record<PstpOrderStatus, PstpOrderStatus[]>> = {
+  'Payment Verified': ['Seller Accepted'],
+  'Seller Accepted': ['Preparing Order'],
+  'Preparing Order': ['Packed'],
+  'Packed': ['Shipped'],
+  'Shipped': ['In Transit'],
+  'In Transit': ['Out for Delivery'],
+  'Out for Delivery': ['Delivered'],
+};
+
+function isSellerTransitionAllowed(current: PstpOrderStatus, next: PstpOrderStatus): boolean {
+  return (SELLER_LIFECYCLE_TRANSITIONS[current] || []).includes(next);
+}
+
+function sellerOwnsOrder(order: Order, username: string): boolean {
+  const seller = normalizeUsername(username);
+  if (!seller) return false;
+  return order.items.length > 0 && order.items.every((item) => normalizeUsername(item.product?.sellerId) === seller);
+}
+
+async function isApprovedActiveMerchant(username: string): Promise<boolean> {
+  const target = normalizeUsername(username);
+  if (!target) return false;
+  const applications = await listDurableVendorApplications();
+  return applications.some((application: any) =>
+    normalizeUsername(application?.pioneerUsername) === target &&
+    application?.status === 'APPROVED' &&
+    application?.verificationStatus === 'Verified' &&
+    application?.sellerStatus === 'Active' &&
+    application?.pstpAgreementAccepted === true
+  );
+}
+
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type, Idempotency-Key');
@@ -98,6 +135,89 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       if (!updated) return json(res, 404, { ok: false, verified: false, error: 'ORDER_NOT_FOUND' });
       pstpAuditRepo.appendLog({ orderId: order.id, paymentId, actor: 'system', actorRole: 'system', action: 'PAYMENT_SERVER_VERIFIED', details: `Pi payment server-verified (${verification.source}); PSTP escrow protection activated.`, ipAddress: 'server', deviceInfo: 'PiNova PSTP Payment Verification Service' });
       return json(res, 200, { ok: true, verified: true, escrowStatus: updated?.escrowStatus, pstpStatus: updated?.pstpStatus, order: updated, paymentLedger: ledger });
+    }
+
+
+    if (req.method === 'PATCH' && path.endsWith('/fulfillment')) {
+      const orderId = path.slice(0, -'/fulfillment'.length).replace(/\/$/, '');
+      const order = await getDurableOrder(orderId);
+      if (!order) return json(res, 404, { ok: false, error: 'ORDER_NOT_FOUND' });
+
+      const sellerUsername = normalizeUsername(user.username);
+      if (!sellerOwnsOrder(order, sellerUsername)) {
+        return json(res, 403, { ok: false, error: 'SELLER_ORDER_OWNERSHIP_REQUIRED' });
+      }
+      if (!(await isApprovedActiveMerchant(sellerUsername))) {
+        return json(res, 403, { ok: false, error: 'ACTIVE_VERIFIED_MERCHANT_REQUIRED' });
+      }
+      if (order.serverVerified !== true) {
+        return json(res, 409, { ok: false, error: 'ORDER_PAYMENT_NOT_SERVER_VERIFIED' });
+      }
+
+      const body = await readJson(req);
+      const nextStatus = String(body.pstpStatus || '').trim() as PstpOrderStatus;
+      if (!isSellerTransitionAllowed(order.pstpStatus, nextStatus)) {
+        return json(res, 409, {
+          ok: false,
+          error: 'INVALID_SELLER_LIFECYCLE_TRANSITION',
+          from: order.pstpStatus,
+          to: nextStatus,
+          allowedNext: SELLER_LIFECYCLE_TRANSITIONS[order.pstpStatus] || []
+        });
+      }
+
+      const carrier = String(body.carrier || '').trim();
+      const trackingNumber = String(body.trackingNumber || '').trim();
+
+      if (nextStatus === 'Shipped' && (!carrier || !trackingNumber)) {
+        return json(res, 400, { ok: false, error: 'CARRIER_AND_TRACKING_REQUIRED_FOR_SHIPMENT' });
+      }
+
+      const timestamp = new Date().toISOString();
+      const escrowStatus =
+        nextStatus === 'Delivered'
+          ? 'delivered'
+          : nextStatus === 'Shipped' || nextStatus === 'In Transit' || nextStatus === 'Out for Delivery'
+            ? 'shipped'
+            : 'in_escrow';
+
+      const updated = await saveDurableOrder({
+        ...order,
+        pstpStatus: nextStatus,
+        escrowStatus,
+        ...(carrier ? { carrier } : {}),
+        ...(trackingNumber ? { trackingNumber } : {}),
+        updatedAt: timestamp,
+        timeline: [
+          ...(Array.isArray(order.timeline) ? order.timeline : []),
+          {
+            status: nextStatus,
+            timestamp,
+            actor: user.username,
+            actorRole: 'seller',
+            note: String(body.note || 'Seller advanced fulfillment to ' + nextStatus + '.'),
+          },
+        ],
+      });
+
+      pstpAuditRepo.appendLog({
+        orderId: order.id,
+        paymentId: order.piPaymentId,
+        actor: user.username,
+        actorRole: 'seller',
+        action: 'SELLER_FULFILLMENT_' + nextStatus.toUpperCase().replace(/\s+/g, '_'),
+        details: 'Server-authorized seller lifecycle transition: ' + order.pstpStatus + ' -> ' + nextStatus + '.',
+        ipAddress: 'server',
+        deviceInfo: 'PiNova Seller Fulfillment API'
+      });
+
+      return json(res, 200, {
+        ok: true,
+        order: updated,
+        serverAuthoritative: true,
+        escrowStatus: updated.escrowStatus,
+        pstpStatus: updated.pstpStatus
+      });
     }
 
     if (req.method === 'POST' && !path) {
