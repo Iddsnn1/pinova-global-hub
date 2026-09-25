@@ -95,6 +95,9 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, OPTIONS');
   if (req.method === 'OPTIONS') return json(res, 204, {});
 
+  const url = new URL(req.url || '/', 'http://localhost');
+  const path = url.pathname.replace(/^\/api\/v1\/orders\/?/, '').replace(/\/$/, '');
+
   try {
     // Carrier webhook is server-to-server and intentionally sits outside Pioneer session auth.
     // It accepts only signed, idempotent carrier evidence for the three carrier-controlled milestones.
@@ -191,9 +194,6 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     if (!user?.username) return json(res, 401, { ok: false, error: 'INVALID_SESSION' });
     if (!durableProductStorageEnabled()) return json(res, 503, { ok: false, error: 'DURABLE_PRODUCT_STORAGE_UNAVAILABLE' });
     if (!durableOrderStorageEnabled()) return json(res, 503, { ok: false, error: 'DURABLE_ORDER_STORAGE_UNAVAILABLE' });
-    const url = new URL(req.url || '/', 'http://localhost');
-    const path = url.pathname.replace(/^\/api\/v1\/orders\/?/, '').replace(/\/$/, '');
-
     if (req.method === 'GET') {
       if (!path) return json(res, 200, { ok: true, orders: await listDurableOrders(user.username) });
       const order = await getDurableOrder(path);
