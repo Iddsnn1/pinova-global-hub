@@ -114,7 +114,7 @@ function repairMarketplaceCategory(product: any): string {
     travel_transport: 'travel_transport', entertainment_creative: 'entertainment_creative', pets_animals: 'pets_animals',
     baby_kids: 'baby_kids', health_wellness: 'health_wellness', business_office: 'business_office', other_general: 'other_general'
   };
-  const normalized = current.toLowerCase().trim().replace(/[\\s-&]+/g, '_');
+  const normalized = current.toLowerCase().trim().replace(/[\s&-]+/g, '_');
   return aliases[normalized] || 'other_general';
 }
 
