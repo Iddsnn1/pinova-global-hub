@@ -220,6 +220,69 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       });
     }
 
+    if (req.method === 'POST' && path.endsWith('/confirm-receipt')) {
+      const orderId = path.slice(0, -'/confirm-receipt'.length).replace(/\/$/, '');
+      const order = await getDurableOrder(orderId);
+      if (!order) return json(res, 404, { ok: false, error: 'ORDER_NOT_FOUND' });
+      if (order.buyerUsername !== user.username && !(user.roles || []).includes('PLATFORM_ADMIN')) {
+        return json(res, 403, { ok: false, error: 'BUYER_ORDER_OWNERSHIP_REQUIRED' });
+      }
+      if (order.serverVerified !== true) {
+        return json(res, 409, { ok: false, error: 'ORDER_PAYMENT_NOT_SERVER_VERIFIED' });
+      }
+      if (order.pstpStatus !== 'Delivered') {
+        return json(res, 409, {
+          ok: false,
+          error: 'RECEIPT_CONFIRMATION_REQUIRES_VERIFIED_DELIVERY',
+          currentStatus: order.pstpStatus
+        });
+      }
+
+      const timestamp = new Date().toISOString();
+      const updated = await saveDurableOrder({
+        ...order,
+        pstpStatus: 'Completed',
+        escrowStatus: 'released',
+        updatedAt: timestamp,
+        timeline: [
+          ...(Array.isArray(order.timeline) ? order.timeline : []),
+          {
+            status: 'Buyer Confirmation',
+            timestamp,
+            actor: user.username,
+            actorRole: 'buyer',
+            note: 'Buyer confirmed receipt after server-recorded delivery; PSTP escrow release authorized.'
+          },
+          {
+            status: 'Completed',
+            timestamp,
+            actor: 'system',
+            actorRole: 'system',
+            note: 'Order completed and PSTP escrow released after buyer confirmation.'
+          }
+        ],
+      });
+
+      pstpAuditRepo.appendLog({
+        orderId: order.id,
+        paymentId: order.piPaymentId,
+        actor: user.username,
+        actorRole: 'buyer',
+        action: 'BUYER_RECEIPT_CONFIRMED_ESCROW_RELEASED',
+        details: 'Buyer confirmed receipt after server-verified Delivered state; escrow released and order completed.',
+        ipAddress: 'server',
+        deviceInfo: 'PiNova PSTP Receipt Confirmation'
+      });
+
+      return json(res, 200, {
+        ok: true,
+        order: updated,
+        serverAuthoritative: true,
+        escrowStatus: updated.escrowStatus,
+        pstpStatus: updated.pstpStatus
+      });
+    }
+
     if (req.method === 'POST' && !path) {
       const body = await readJson(req);
       if (!Array.isArray(body.items) || body.items.length === 0) return json(res, 400, { ok: false, error: 'ORDER_ITEMS_REQUIRED' });
