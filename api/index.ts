@@ -31,7 +31,14 @@ function getServerModule(): ServerModule {
       ? require
       : createRequire(path.resolve(process.cwd(), 'api/index.js'));
     const mod = runtimeRequire('../dist/server.cjs');
-    serverModule = (mod?.default || mod) as ServerModule;
+    // Preserve named server exports. The bundled CommonJS module also has a
+    // default Express app, but selecting mod.default here drops durable
+    // product/vendor service exports and causes runtime "...is not a function"
+    // failures in Vercel serverless routes.
+    serverModule = (mod && (
+      typeof mod.durableProductStorageEnabled === 'function' ||
+      typeof mod.authenticateVendorRequest === 'function'
+    ) ? mod : mod?.default) as ServerModule;
     return serverModule;
   } catch (error: any) {
     console.error('[Vercel Handler] Error loading server module:', {
