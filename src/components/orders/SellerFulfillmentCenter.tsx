@@ -100,10 +100,7 @@ export const SellerFulfillmentCenter: React.FC<SellerFulfillmentCenterProps> = (
     'Payment Verified': ['Seller Accepted'],
     'Seller Accepted': ['Preparing Order'],
     'Preparing Order': ['Packed'],
-    'Packed': ['Shipped'],
-    'Shipped': ['In Transit'],
-    'In Transit': ['Out for Delivery'],
-    'Out for Delivery': ['Delivered']
+    'Packed': ['Shipped']
   } as Partial<Record<PstpOrderStatus, PstpOrderStatus[]>>)[activeOrder?.pstpStatus] || [];
 
   if (!activeOrder) {
@@ -268,6 +265,12 @@ export const SellerFulfillmentCenter: React.FC<SellerFulfillmentCenterProps> = (
                   <div className="flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
                     <ShieldCheck className="w-4 h-4" />
                     Payment Verified • PSTP Escrow Protected ({activeOrder.escrowStatus})
+                  </div>
+                )}
+                {activeOrder.pstpStatus === 'Shipped' && (
+                  <div className="flex items-start gap-2 rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
+                    <Truck className="w-4 h-4 mt-0.5 shrink-0" />
+                    <span>Shipment recorded. In Transit, Out for Delivery, and Delivered require carrier/server evidence and cannot be manually fabricated by the seller.</span>
                   </div>
                 )}
                 {transitionError && (
