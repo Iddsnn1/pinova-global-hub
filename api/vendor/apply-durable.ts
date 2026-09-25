@@ -98,8 +98,8 @@ export default async function handler(req: any, res: any) {
       pioneerUsername: effectiveUsername,
       pioneerUid: user.id || body.pioneerUid,
       status,
-      verificationStatus: status === 'APPROVED' ? 'Verified' : 'Pending Verification',
-      sellerStatus: status === 'APPROVED' ? 'Active' : 'Probation',
+      verificationStatus: 'Pending Verification',
+      sellerStatus: 'Probation',
       createdAt: existing?.createdAt || now,
       updatedAt: now
     };
