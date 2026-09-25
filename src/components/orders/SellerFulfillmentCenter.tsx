@@ -17,7 +17,6 @@ import {
   Send
 } from 'lucide-react';
 import { Order, PstpOrderStatus, ShippingLabel, FulfillmentRecord } from '../../types';
-import { OrderOrchestrationService } from '../../modules/orders';
 
 interface SellerFulfillmentCenterProps {
   orders: Order[];
@@ -30,8 +29,6 @@ export const SellerFulfillmentCenter: React.FC<SellerFulfillmentCenterProps> = (
   sellerUsername,
   onOrderUpdated
 }) => {
-  const service = new OrderOrchestrationService();
-
   // Filter orders that belong to this seller or show all if default/admin view
   const sellerOrders = orders.filter((o) => {
     if (!sellerUsername) return true;
@@ -57,6 +54,7 @@ export const SellerFulfillmentCenter: React.FC<SellerFulfillmentCenterProps> = (
   const [carrier, setCarrier] = useState('SAFARICOM');
   const [trackingNumber, setTrackingNumber] = useState('');
   const [transitionNote, setTransitionNote] = useState('');
+  const [transitionError, setTransitionError] = useState('');
 
   const activeOrder = selectedOrder || sellerOrders[0];
 
@@ -68,38 +66,52 @@ export const SellerFulfillmentCenter: React.FC<SellerFulfillmentCenterProps> = (
     return true;
   });
 
-  const handleUpdateStatus = (nextStatus: PstpOrderStatus) => {
+  const handleUpdateStatus = async (nextStatus: PstpOrderStatus) => {
     if (!activeOrder) return;
-    const { updatedOrder } = service.lifecycleManager.transitionState(
-      activeOrder,
-      nextStatus,
-      sellerUsername,
-      'seller',
-      transitionNote || `Seller changed order status to ${nextStatus}`
-    );
-    if (trackingNumber && !updatedOrder.trackingNumber) {
-      updatedOrder.trackingNumber = trackingNumber;
+    setTransitionError('');
+
+    if (nextStatus === 'Shipped' && (!carrier.trim() || !trackingNumber.trim())) {
+      setTransitionError('Carrier and a real tracking number are required before shipment.');
+      return;
     }
-    setSelectedOrder(updatedOrder);
-    setTransitionNote('');
-    if (onOrderUpdated) onOrderUpdated(updatedOrder);
+
+    try {
+      const response = await fetch(`/api/v1/orders/${encodeURIComponent(activeOrder.id)}/fulfillment`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          pstpStatus: nextStatus,
+          carrier: carrier.trim(),
+          trackingNumber: trackingNumber.trim(),
+          note: transitionNote.trim() || undefined
+        })
+      });
+
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload?.order) {
+        throw new Error(payload?.error || `FULFILLMENT_UPDATE_FAILED_${response.status}`);
+      }
+
+      setSelectedOrder(payload.order as Order);
+      setTrackingNumber(payload.order.trackingNumber || '');
+      setCarrier(payload.order.carrier || carrier);
+      setTransitionNote('');
+      if (onOrderUpdated) onOrderUpdated(payload.order as Order);
+    } catch (error: any) {
+      setTransitionError(error?.message || 'Unable to update the server-authoritative order lifecycle.');
+    }
   };
 
-  const handleGenerateLabel = () => {
-    if (!activeOrder) return;
-    const label = service.logisticsManager.generateShippingLabel(activeOrder, carrier);
-    const { updatedOrder } = service.lifecycleManager.transitionState(
-      activeOrder,
-      'Preparing Shipment',
-      sellerUsername,
-      'seller',
-      `Generated shipping label with carrier ${label.carrier} and tracking number ${label.trackingNumber}`
-    );
-    updatedOrder.trackingNumber = label.trackingNumber;
-    updatedOrder.carrier = label.carrier;
-    setSelectedOrder(updatedOrder);
-    if (onOrderUpdated) onOrderUpdated(updatedOrder);
-  };
+  const nextSellerStatuses: PstpOrderStatus[] = ({
+    'Payment Verified': ['Seller Accepted'],
+    'Seller Accepted': ['Preparing Order'],
+    'Preparing Order': ['Packed'],
+    'Packed': ['Shipped'],
+    'Shipped': ['In Transit'],
+    'In Transit': ['Out for Delivery'],
+    'Out for Delivery': ['Delivered']
+  } as Partial<Record<PstpOrderStatus, PstpOrderStatus[]>>)[activeOrder?.pstpStatus] || [];
 
   if (!activeOrder) {
     return (
@@ -110,8 +122,6 @@ export const SellerFulfillmentCenter: React.FC<SellerFulfillmentCenterProps> = (
       </div>
     );
   }
-
-  const generatedLabel = service.logisticsManager.generateShippingLabel(activeOrder, carrier);
 
   return (
     <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xl overflow-hidden my-4">
@@ -244,32 +254,35 @@ export const SellerFulfillmentCenter: React.FC<SellerFulfillmentCenterProps> = (
                 <div className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
                   Advance Order Lifecycle State
                 </div>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  <button
-                    onClick={() => handleUpdateStatus('Processing')}
-                    className="p-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-lg text-xs shadow-sm transition-colors"
-                  >
-                    Set Processing
-                  </button>
-                  <button
-                    onClick={() => handleUpdateStatus('Preparing Shipment')}
-                    className="p-2.5 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-lg text-xs shadow-sm transition-colors"
-                  >
-                    Preparing Shipment
-                  </button>
-                  <button
-                    onClick={() => handleUpdateStatus('Shipped')}
-                    className="p-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg text-xs shadow-sm transition-colors"
-                  >
-                    Mark Shipped
-                  </button>
-                  <button
-                    onClick={() => handleUpdateStatus('Delivered')}
-                    className="p-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg text-xs shadow-sm transition-colors"
-                  >
-                    Mark Delivered
-                  </button>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                  {nextSellerStatuses.map((nextStatus) => (
+                    <button
+                      key={nextStatus}
+                      onClick={() => handleUpdateStatus(nextStatus)}
+                      className="p-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-lg text-xs shadow-sm transition-colors"
+                    >
+                      {nextStatus === 'Seller Accepted' ? 'Confirm Seller Acceptance' :
+                       nextStatus === 'Preparing Order' ? 'Start Preparing Order' :
+                       nextStatus === 'Packed' ? 'Mark Packed' :
+                       nextStatus === 'Shipped' ? 'Mark Shipped' :
+                       nextStatus === 'In Transit' ? 'Mark In Transit' :
+                       nextStatus === 'Out for Delivery' ? 'Out for Delivery' :
+                       'Mark Delivered'}
+                    </button>
+                  ))}
                 </div>
+                {activeOrder.serverVerified && ['approved', 'in_escrow', 'shipped', 'delivered'].includes(activeOrder.escrowStatus) && (
+                  <div className="flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+                    <ShieldCheck className="w-4 h-4" />
+                    Payment Verified • PSTP Escrow Protected ({activeOrder.escrowStatus})
+                  </div>
+                )}
+                {transitionError && (
+                  <div className="flex items-start gap-2 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs font-semibold text-rose-700 dark:text-rose-300">
+                    <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                    <span>{transitionError}</span>
+                  </div>
+                )}
 
                 <div className="space-y-2 pt-2">
                   <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Carrier & Tracking Details</label>
@@ -382,7 +395,7 @@ export const SellerFulfillmentCenter: React.FC<SellerFulfillmentCenterProps> = (
                 <div className="flex justify-between items-center border-b pb-3">
                   <div className="text-base font-extrabold text-slate-900 dark:text-slate-100 flex items-center gap-2">
                     <Truck className="w-5 h-5 text-amber-500" />
-                    {generatedLabel.carrier}
+                    {activeOrder.carrier || 'Carrier not assigned'}
                   </div>
                   <span className="px-2 py-0.5 rounded bg-slate-900 text-white font-mono font-bold text-xs">PRIORITY LOGISTICS</span>
                 </div>
@@ -390,29 +403,30 @@ export const SellerFulfillmentCenter: React.FC<SellerFulfillmentCenterProps> = (
                 <div className="grid grid-cols-2 gap-4 text-xs">
                   <div>
                     <div className="text-[10px] text-slate-400 uppercase font-bold">FROM:</div>
-                    <div className="font-bold">{generatedLabel.senderName}</div>
-                    <div className="text-slate-500">{generatedLabel.senderAddress}</div>
+                    <div className="font-bold">{activeOrder.items[0]?.product.sellerName || sellerUsername}</div>
+                    <div className="text-slate-500">{activeOrder.items[0]?.product.shippingOrigin || 'Seller-provided fulfillment origin'}</div>
                   </div>
                   <div>
                     <div className="text-[10px] text-slate-400 uppercase font-bold">TO:</div>
-                    <div className="font-bold">{generatedLabel.recipientName}</div>
-                    <div className="text-slate-500">{generatedLabel.recipientAddress}</div>
+                    <div className="font-bold">{activeOrder.shippingAddress?.fullName || activeOrder.buyerUsername}</div>
+                    <div className="text-slate-500">{activeOrder.shippingAddress ? `${activeOrder.shippingAddress.street}, ${activeOrder.shippingAddress.city}, ${activeOrder.shippingAddress.country}` : 'Digital Delivery Address'}</div>
                   </div>
                 </div>
 
                 <div className="p-4 bg-slate-100 dark:bg-slate-900 text-center rounded-lg space-y-1">
                   <div className="font-mono text-xl tracking-widest font-extrabold text-slate-900 dark:text-slate-100">
-                    {generatedLabel.barcodeData}
+                    {activeOrder.trackingNumber ? `*${activeOrder.trackingNumber}*` : 'TRACKING NOT RECORDED'}
                   </div>
-                  <div className="text-xs text-slate-500 font-mono">TRACKING #: {generatedLabel.trackingNumber}</div>
+                  <div className="text-xs text-slate-500 font-mono">TRACKING #: {activeOrder.trackingNumber || 'Not assigned'}</div>
                 </div>
 
                 <div className="flex justify-end gap-2 pt-2">
                   <button
-                    onClick={handleGenerateLabel}
-                    className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-lg text-xs font-bold transition-colors"
+                    onClick={() => handleUpdateStatus('Shipped')}
+                    disabled={activeOrder.pstpStatus !== 'Packed' || !trackingNumber.trim()}
+                    className="px-4 py-2 bg-amber-500 hover:bg-amber-400 disabled:opacity-40 disabled:cursor-not-allowed text-slate-950 rounded-lg text-xs font-bold transition-colors"
                   >
-                    Confirm & Save Tracking Label
+                    Confirm Shipment & Save Tracking
                   </button>
                   <button
                     onClick={() => window.print()}
