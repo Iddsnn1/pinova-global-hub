@@ -296,7 +296,8 @@ export const BuyerOrderHub: React.FC<BuyerOrderHubProps> = ({
       ];
     }
 
-    // Physical milestones
+    // Physical milestones are derived strictly from the order's recorded timeline.
+    // Do not manufacture timestamps, carrier locations, or tracking codes for future states.
     const statusOrder: PstpOrderStatus[] = [
       'Pending Payment',
       'Payment Verified',
@@ -311,57 +312,65 @@ export const BuyerOrderHub: React.FC<BuyerOrderHubProps> = ({
     ];
 
     const currentStatusIdx = statusOrder.indexOf(activeOrder.pstpStatus);
+    const timeline = Array.isArray(activeOrder.timeline) ? activeOrder.timeline : [];
 
-    return [
+    const eventFor = (...statuses: PstpOrderStatus[]) =>
+      timeline.find((event) => statuses.includes(event.status));
+
+    const milestones = [
       {
         title: 'Order Authorized & Escrow Locked',
-        status: 'Pending Payment',
-        completed: currentStatusIdx >= 0,
-        active: activeOrder.pstpStatus === 'Pending Payment',
-        timestamp: activeOrder.createdAt,
+        status: 'Payment Verified' as PstpOrderStatus,
+        completed: currentStatusIdx >= 1,
+        active: activeOrder.pstpStatus === 'Payment Verified',
+        timestamp: eventFor('Payment Verified')?.timestamp || activeOrder.createdAt,
         location: 'Pi Platform Non-Custodial Gateway'
       },
       {
         title: 'Seller Confirmed & Item Packed',
-        status: 'Packed',
-        completed: currentStatusIdx >= 4 || ['Shipped', 'In Transit', 'Out for Delivery', 'Delivered', 'Completed'].includes(activeOrder.pstpStatus),
+        status: 'Packed' as PstpOrderStatus,
+        completed: currentStatusIdx >= 4,
         active: ['Seller Accepted', 'Preparing Order', 'Packed'].includes(activeOrder.pstpStatus),
-        timestamp: activeOrder.timeline?.find(t => t.status === 'Packed' || t.status === 'Seller Accepted')?.timestamp || activeOrder.updatedAt,
-        location: activeOrder.items[0]?.product?.sellerName || 'Merchant Warehouse'
+        timestamp: eventFor('Packed', 'Seller Accepted', 'Preparing Order')?.timestamp,
+        location: activeOrder.items[0]?.product?.sellerName
       },
       {
         title: 'Dispatched with Carrier',
-        status: 'Shipped',
-        completed: currentStatusIdx >= 5 || ['In Transit', 'Out for Delivery', 'Delivered', 'Completed'].includes(activeOrder.pstpStatus),
+        status: 'Shipped' as PstpOrderStatus,
+        completed: currentStatusIdx >= 5,
         active: activeOrder.pstpStatus === 'Shipped',
-        timestamp: activeOrder.timeline?.find(t => t.status === 'Shipped')?.timestamp || activeOrder.updatedAt,
-        location: `${activeOrder.carrier || 'Logistics Hub'} (${activeOrder.trackingNumber || 'PNV-SAF-9912'})`
+        timestamp: eventFor('Shipped')?.timestamp,
+        location: activeOrder.carrier
       },
       {
         title: 'In Transit / Hub Transfer',
-        status: 'In Transit',
-        completed: currentStatusIdx >= 6 || ['Out for Delivery', 'Delivered', 'Completed'].includes(activeOrder.pstpStatus),
+        status: 'In Transit' as PstpOrderStatus,
+        completed: currentStatusIdx >= 6,
         active: activeOrder.pstpStatus === 'In Transit',
-        timestamp: activeOrder.updatedAt,
-        location: 'Regional Transit Sorting Facility'
+        timestamp: eventFor('In Transit')?.timestamp
       },
       {
         title: 'Out for Delivery',
-        status: 'Out for Delivery',
-        completed: currentStatusIdx >= 7 || ['Delivered', 'Completed'].includes(activeOrder.pstpStatus),
+        status: 'Out for Delivery' as PstpOrderStatus,
+        completed: currentStatusIdx >= 7,
         active: activeOrder.pstpStatus === 'Out for Delivery',
-        timestamp: activeOrder.updatedAt,
-        location: 'Local Delivery Courier Vehicle'
+        timestamp: eventFor('Out for Delivery')?.timestamp
       },
       {
         title: 'Delivered to Recipient',
-        status: 'Delivered',
-        completed: currentStatusIdx >= 8 || activeOrder.pstpStatus === 'Completed',
+        status: 'Delivered' as PstpOrderStatus,
+        completed: currentStatusIdx >= 8,
         active: activeOrder.pstpStatus === 'Delivered',
-        timestamp: activeOrder.updatedAt,
-        location: activeOrder.shippingAddress ? `${activeOrder.shippingAddress.city}, ${activeOrder.shippingAddress.country}` : 'Destination Address'
+        timestamp: eventFor('Delivered')?.timestamp,
+        location: activeOrder.shippingAddress
+          ? `${activeOrder.shippingAddress.city}, ${activeOrder.shippingAddress.country}`
+          : undefined
       }
     ];
+
+    return milestones.filter((milestone) =>
+      milestone.completed || milestone.active || milestone.timestamp
+    );
   }, [activeOrder, isDigitalOrUtility]);
 
   // If no orders at all exist in the entire system
