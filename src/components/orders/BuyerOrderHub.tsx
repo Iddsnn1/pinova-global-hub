@@ -674,10 +674,14 @@ export const BuyerOrderHub: React.FC<BuyerOrderHubProps> = ({
                     <div className="text-left sm:text-right space-y-0.5">
                       <div className="text-[11px] text-slate-400 font-medium">Estimated Arrival</div>
                       <div className="text-xs sm:text-sm font-black text-slate-900 dark:text-slate-100">
-                        {activeOrder.pstpStatus === 'Delivered' || activeOrder.pstpStatus === 'Completed' ? 'Delivered' : '1 - 3 Business Days'}
+                        {activeOrder.pstpStatus === 'Delivered' || activeOrder.pstpStatus === 'Completed'
+  ? 'Delivered'
+  : activeOrder.trackingNumber
+    ? 'Carrier ETA unavailable'
+    : 'Not available until shipment is recorded'}
                       </div>
                       <div className="text-[10px] text-emerald-500 font-bold flex items-center sm:justify-end gap-1">
-                        <CheckCircle2 className="w-3 h-3" /> Security Seal Verified
+                        <ShieldCheck className="w-3 h-3" /> Server-verified order record
                       </div>
                     </div>
                   </div>
@@ -725,7 +729,9 @@ export const BuyerOrderHub: React.FC<BuyerOrderHubProps> = ({
                               {m.title}
                             </h5>
                             <span className="text-[10px] font-mono text-slate-400">
-                              {new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              {m.timestamp && !Number.isNaN(new Date(m.timestamp).getTime())
+  ? new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  : 'Time unavailable'}
                             </span>
                           </div>
 
@@ -856,13 +862,13 @@ export const BuyerOrderHub: React.FC<BuyerOrderHubProps> = ({
                       <div className="flex justify-between items-center">
                         <span className="text-slate-400 font-medium">Payment ID:</span>
                         <span className="font-mono font-bold text-purple-600 dark:text-purple-400 truncate max-w-[150px]">
-                          {activeOrder.piPaymentId || 'PI-PAY-VERIFIED-01'}
+                          {activeOrder.piPaymentId || 'Not recorded'}
                         </span>
                       </div>
                       <div className="flex justify-between items-center">
                         <span className="text-slate-400 font-medium">Pi TxID:</span>
                         <span className="font-mono font-bold text-amber-500 truncate max-w-[150px]">
-                          {activeOrder.piTxid || '0x9a2f3b8c...SETTLED'}
+                          {activeOrder.piTxid || 'Not recorded'}
                         </span>
                       </div>
                       <div className="flex justify-between items-center pt-1 border-t border-slate-100 dark:border-slate-800">
