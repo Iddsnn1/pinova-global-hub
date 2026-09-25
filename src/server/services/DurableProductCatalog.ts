@@ -98,7 +98,15 @@ export async function listDurableProducts(options?: {
     if (!options?.includeDeleted && product.isDeleted === true) return false;
     if (options?.activeOnly && product.isActive !== true) return false;
     if (options?.sellerId && product.sellerId !== options.sellerId) return false;
-    if (options?.category && product.category !== options.category) return false;
+    if (options?.category) {
+      const requestedCategory = String(options.category).trim().toLowerCase();
+      const productMarketplaceCategory = String(product.marketplaceCategory || '').trim().toLowerCase();
+      const productType = String(product.category || '').trim().toLowerCase();
+      // Marketplace taxonomy belongs in marketplaceCategory. Keep product.category
+      // as the physical/digital/service type, while accepting legacy records that
+      // used the generic field for taxonomy.
+      if (productMarketplaceCategory !== requestedCategory && productType !== requestedCategory) return false;
+    }
     if (normalizedQuery) {
       const haystack = [
         product.title, product.description, product.subcategory, product.sellerName,
