@@ -206,14 +206,46 @@ export class LogisticsShippingManager {
     };
   }
 
-  getDeliveryMilestones(trackingNumber: string) {
-    return [
-      { title: 'Order Confirmed & Prepared', timestamp: new Date(Date.now() - 86400000 * 2).toISOString(), location: 'Vendor Warehouse', completed: true },
-      { title: 'Picked Up by Carrier', timestamp: new Date(Date.now() - 86400000 * 1.5).toISOString(), location: 'Central Logistics Hub', completed: true },
-      { title: 'In Transit / Custom Clearance', timestamp: new Date(Date.now() - 86400000 * 0.8).toISOString(), location: 'Regional Distribution Center', completed: true },
-      { title: 'Out for Delivery', timestamp: new Date(Date.now() - 3600000 * 3).toISOString(), location: 'Local Courier Station', completed: true },
-      { title: 'Delivered to Recipient', timestamp: new Date().toISOString(), location: 'Destination Address', completed: false }
+  /**
+   * Returns only milestones that are actually recorded on the order.
+   * This must never fabricate carrier progress from wall-clock time.
+   */
+  getDeliveryMilestones(order: Order) {
+    const timeline = Array.isArray(order.timeline) ? order.timeline : [];
+    const milestoneStatuses: PstpOrderStatus[] = [
+      'Packed',
+      'Shipped',
+      'In Transit',
+      'Out for Delivery',
+      'Delivered'
     ];
+
+    return milestoneStatuses
+      .map((status) => {
+        const event = timeline.find((entry) => entry.status === status);
+        if (!event) return null;
+
+        return {
+          title:
+            status === 'Packed' ? 'Seller Confirmed & Item Packed' :
+            status === 'Shipped' ? 'Dispatched with Carrier' :
+            status === 'In Transit' ? 'In Transit / Hub Transfer' :
+            status === 'Out for Delivery' ? 'Out for Delivery' :
+            'Delivered to Recipient',
+          status,
+          timestamp: event.timestamp,
+          location:
+            status === 'Shipped'
+              ? order.carrier || 'Carrier'
+              : status === 'Delivered'
+                ? (order.shippingAddress
+                    ? `${order.shippingAddress.city}, ${order.shippingAddress.country}`
+                    : 'Destination Address')
+                : undefined,
+          completed: true
+        };
+      })
+      .filter((milestone): milestone is NonNullable<typeof milestone> => Boolean(milestone));
   }
 }
 
