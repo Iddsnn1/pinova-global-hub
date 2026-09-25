@@ -18,6 +18,7 @@ type ServerModule = {
   durableProductStorageEnabled: () => boolean;
   listDurableProducts: (options?: any) => Promise<any[]>;
   saveDurableProduct: (product: any) => Promise<any>;
+  default?: any;
 };
 
 let serverModule: ServerModule | null = null;
@@ -50,23 +51,9 @@ const listDurableProducts = (options?: any) => getServerModule().listDurableProd
 const saveDurableProduct = (product: any) => getServerModule().saveDurableProduct(product);
 
 function getApp() {
-  try {
-    const mod = req('../dist/server.cjs');
-    return mod.default || mod;
-  } catch (err1: any) {
-    try {
-      const mod = req(path.resolve(process.cwd(), 'dist/server.cjs'));
-      return mod.default || mod;
-    } catch (err2: any) {
-      try {
-        const mod = req('../server');
-        return mod.default || mod;
-      } catch (err3: any) {
-        console.error('[Vercel Handler] Error loading server module:', { err1: err1?.message, err2: err2?.message, err3: err3?.message });
-        throw new Error(`Failed to load server module: ${err1?.message || String(err1)}`);
-      }
-    }
-  }
+  const mod = getServerModule();
+  if (typeof mod.default === 'function') return mod.default;
+  throw new Error('Server application export unavailable');
 }
 
 function getBearerToken(req: IncomingMessage): string | null {
@@ -278,6 +265,7 @@ async function handleDurableProducts(req: any, res: any): Promise<boolean> {
   }
 
   const body = req.body || {};
+  const nextStock = Number((body as any).stock ?? existing.stock);
   const next = {
     ...existing,
     ...body,
@@ -288,8 +276,8 @@ async function handleDurableProducts(req: any, res: any): Promise<boolean> {
     isDeleted: false,
     // The merchant is already compliance-approved; keep edited in-stock listings
     // publicly purchasable because this deployment has no separate product-moderation queue.
-    isActive: Number(next.stock ?? existing.stock) > 0,
-    availabilityStatus: Number(next.stock ?? existing.stock) > 0 ? 'in_stock' : 'out_of_stock',
+    isActive: nextStock > 0,
+    availabilityStatus: nextStock > 0 ? 'in_stock' : 'out_of_stock',
     moderationStatus: 'APPROVED'
   };
   const saved = await saveDurableProduct(next as any);
