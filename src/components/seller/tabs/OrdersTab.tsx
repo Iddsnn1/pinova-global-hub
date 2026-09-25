@@ -196,8 +196,8 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
                         #{order.trackingNumber}
                       </span>
                     </div>
-                    <span className="text-emerald-600 dark:text-emerald-400 font-medium">
-                      In Transit
+                    <span className="text-neutral-600 dark:text-neutral-300 font-medium">
+                      Tracking Recorded • {order.pstpStatus}
                     </span>
                   </div>
                 )}
