@@ -47,9 +47,9 @@ const SELLER_LIFECYCLE_TRANSITIONS: Partial<Record<PstpOrderStatus, PstpOrderSta
   'Seller Accepted': ['Preparing Order'],
   'Preparing Order': ['Packed'],
   'Packed': ['Shipped'],
-  'Shipped': ['In Transit'],
-  'In Transit': ['Out for Delivery'],
-  'Out for Delivery': ['Delivered'],
+  // Carrier-controlled milestones are intentionally not seller-editable.
+  // They must come from a future carrier/webhook evidence path.
+  'Shipped': [],
 };
 
 function isSellerTransitionAllowed(current: PstpOrderStatus, next: PstpOrderStatus): boolean {
@@ -323,6 +323,13 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       if (!canViewOrder(order, user.username, roles)) return json(res, 403, { ok: false, error: 'ORDER_ACCESS_DENIED' });
       const body = await readJson(req);
       const nextStatus = body.pstpStatus as PstpOrderStatus;
+      const sellerLifecycleStatuses: PstpOrderStatus[] = [
+        'Seller Accepted', 'Preparing Order', 'Packed', 'Shipped',
+        'In Transit', 'Out for Delivery', 'Delivered', 'Completed'
+      ];
+      if (sellerLifecycleStatuses.includes(nextStatus)) {
+        return json(res, 403, { ok: false, error: 'SELLER_LIFECYCLE_REQUIRES_FULFILLMENT_OR_CARRIER_EVIDENCE' });
+      }
       const allowedBuyerStatuses: PstpOrderStatus[] = ['Buyer Confirmation', 'Cancelled', 'Refund Requested', 'Disputed'];
       if (!allowedBuyerStatuses.includes(nextStatus) && !roles.includes('PLATFORM_ADMIN') && !roles.includes('COMPLIANCE_OFFICER')) return json(res, 403, { ok: false, error: 'ORDER_STATUS_CHANGE_NOT_ALLOWED' });
       const escrowStatus = body.escrowStatus || order.escrowStatus;
