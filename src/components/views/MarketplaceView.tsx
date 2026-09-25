@@ -294,7 +294,7 @@ export const MarketplaceView: React.FC<MarketplaceViewProps> = ({
         if (categoryFilters.category !== 'all') {
           const selectedDef = getMarketplaceCategoryDef(categoryFilters.category);
           const canonical = resolveMarketplaceCategory(categoryFilters.category).toLowerCase();
-          const categoryText = String(p.category || '').toLowerCase();
+          const categoryText = String(p.marketplaceCategory || p.category || '').toLowerCase();
           const subcategoryText = String(p.subcategory || '').toLowerCase();
           const titleText = String(p.title || '').toLowerCase();
           const tagTexts = Array.isArray(p.tags) ? p.tags.filter((t): t is string => typeof t === 'string').map((t) => t.toLowerCase()) : [];
