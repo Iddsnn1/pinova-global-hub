@@ -47,6 +47,7 @@ productRouter.post('/', authenticate, requireAuthenticatedUser, (req: Authentica
       reviewsCount: Number(body.reviewsCount ?? 0),
       sellerId,
       sellerName: String(body.sellerName || user.username || sellerId),
+      sellerDisplayName: 'PiNova Global Hub',
       sellerVerified: false,
       features: Array.isArray(body.features) ? body.features.filter(Boolean) : [],
       specs: body.specs,
