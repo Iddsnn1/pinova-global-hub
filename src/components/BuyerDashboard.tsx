@@ -192,7 +192,7 @@ export const BuyerDashboard: React.FC<BuyerDashboardProps> = ({
                         <div>
                           <h4 className="font-bold text-xs text-slate-900 dark:text-slate-100">{item.product.title}</h4>
                           <p className="text-[11px] text-slate-400">
-                            Seller: <span className="font-semibold text-purple-600 dark:text-purple-400">{item.product.sellerName}</span> • Qty: {item.quantity}
+                            Seller: <span className="font-semibold text-purple-600 dark:text-purple-400">{item.product.sellerDisplayName || item.product.sellerName}</span> • Qty: {item.quantity}
                           </p>
                         </div>
                       </div>
