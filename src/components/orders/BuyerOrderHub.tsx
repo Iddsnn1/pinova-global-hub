@@ -654,7 +654,7 @@ export const BuyerOrderHub: React.FC<BuyerOrderHubProps> = ({
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">Logistics Carrier:</span>
-                        <span className="text-xs font-black text-slate-900 dark:text-slate-100">{activeOrder.carrier || 'Safaricom Express Logistics'}</span>
+                        <span className="text-xs font-black text-slate-900 dark:text-slate-100">{activeOrder.carrier || 'Carrier not recorded'}</span>
                       </div>
                       <div className="flex items-center gap-2 text-xs">
                         <span className="text-slate-400">Tracking Code:</span>
@@ -924,10 +924,10 @@ export const BuyerOrderHub: React.FC<BuyerOrderHubProps> = ({
                             <div className="text-[11px] text-slate-500 mt-1 flex items-center gap-2">
                               <span>License Code:</span>
                               <span className="font-mono bg-amber-500/10 text-amber-600 dark:text-amber-300 px-2 py-0.5 rounded font-bold border border-amber-500/20">
-                                {i.product?.digitalKey || `PNV-KEY-${activeOrder.id.slice(-6)}-${idx + 1}`}
+                                {i.product?.digitalKey || 'Not recorded'}
                               </span>
                               <button
-                                onClick={() => handleCopy(i.product?.digitalKey || `PNV-KEY-${activeOrder.id.slice(-6)}-${idx + 1}`, `item-key-${idx}`)}
+                                onClick={() => i.product?.digitalKey && handleCopy(i.product.digitalKey, `item-key-${idx}`)}
                                 className="p-1 text-slate-400 hover:text-slate-600"
                               >
                                 {copiedField === `item-key-${idx}` ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
