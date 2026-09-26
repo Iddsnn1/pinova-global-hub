@@ -173,7 +173,7 @@ export const AiSearchModal: React.FC<AiSearchModalProps> = ({
                         <img src={p.images[0]} alt={p.title} referrerPolicy="no-referrer" className="w-12 h-12 rounded-xl object-cover" />
                         <div>
                           <h5 className="font-bold text-xs text-slate-900 dark:text-slate-100 line-clamp-1">{p.title}</h5>
-                          <p className="text-[11px] text-slate-400">{p.sellerName} • {p.category}</p>
+                          <p className="text-[11px] text-slate-400">{p.sellerDisplayName || p.sellerName} • {p.category}</p>
                         </div>
                       </div>
 
