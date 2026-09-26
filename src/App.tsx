@@ -1340,6 +1340,12 @@ function MainAppContent() {
               };
               setProducts((prev) => [fullProd, ...prev]);
             }}
+            onProductCreated={(created) => {
+              setProducts((prev) => [
+                created,
+                ...prev.filter((p) => String(p.id) !== String(created.id))
+              ]);
+            }}
             onUpdateProduct={(updated) => {
               setProducts((prev) => prev.map((p) => p.id === updated.id ? updated : p));
             }}
