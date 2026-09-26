@@ -217,10 +217,13 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({ products, openCreateOn
         uploadedImageUrl = uploadData.url;
         setIsUploadingImage(false);
       }
-      const durableEditId = editingProductId || (editingProduct ? String(editingProduct.id || '').trim() : '');
-      if (editingProduct && !durableEditId) throw new Error('PRODUCT_ID_MISSING');
-      const result = editingProduct
-        ? await updateSellerProduct(durableEditId, { title, description, pricePi, category: draft.category, marketplaceCategory: draft.marketplaceCategory, subcategory: draft.subcategory.trim(), images: uploadedImageUrl ? [uploadedImageUrl] : (editingProduct.images || []), stock, productType: draft.category === 'physical' ? 'physical' : draft.category === 'digital' ? 'digital' : 'service' })
+      // editingProductId is the explicit mode switch. A stale parent product object
+      // must never turn a fresh "Add Product" form into an Edit request.
+      const isEditMode = Boolean(editingProductId);
+      const durableEditId = String(editingProductId || '').trim();
+      if (isEditMode && !durableEditId) throw new Error('PRODUCT_ID_MISSING');
+      const result = isEditMode
+        ? await updateSellerProduct(durableEditId, { title, description, pricePi, category: draft.category, marketplaceCategory: draft.marketplaceCategory, subcategory: draft.subcategory.trim(), images: uploadedImageUrl ? [uploadedImageUrl] : (editingProduct?.images || []), stock, productType: draft.category === 'physical' ? 'physical' : draft.category === 'digital' ? 'digital' : 'service' })
         : await createSellerProduct({ title, description, pricePi, category: draft.category, marketplaceCategory: draft.marketplaceCategory, subcategory: draft.subcategory.trim(), images: uploadedImageUrl ? [uploadedImageUrl] : [], stock, features: [], tags: [], productType: draft.category === 'physical' ? 'physical' : draft.category === 'digital' ? 'digital' : 'service' });
       if (!result.ok || !result.product) {
         if (result.status === 403 && result.error === 'MERCHANT_SELLER_ACCESS_REQUIRED') setSubmitError('Seller access denied. Complete merchant verification and activate your store before publishing products.');
@@ -228,7 +231,7 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({ products, openCreateOn
         else setSubmitError(result.error || 'Product creation failed.');
         return;
       }
-      if (editingProduct) {
+      if (isEditMode) {
         setCreatedProducts(prev => prev.map(product => product.id === result.product!.id ? result.product! : product));
         setServerProducts(prev => [result.product!, ...prev.filter(product => product.id !== result.product!.id)]);
         onEditProduct(result.product!);
