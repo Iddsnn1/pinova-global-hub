@@ -64,10 +64,28 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({ products, openCreateOn
   }, []);
 
   const visibleProducts = useMemo(() => {
+    // The server catalog is authoritative. Legacy parent-state records can lack
+    // a durable id; never render such a duplicate when the server has the same
+    // merchant/title record, otherwise Edit can open the id-less legacy card.
+    const canonical = [...serverProducts, ...createdProducts];
+    const canonicalKeys = new Set(canonical.map(product => {
+      const seller = String(product.sellerId || '').trim().replace(/^@/, '').toLowerCase();
+      const title = String(product.title || '').trim().toLowerCase();
+      return `${seller}\u0000${title}`;
+    }));
     const merged = new Map<string, Product>();
-    for (const product of products) merged.set(product.id, product);
-    for (const product of serverProducts) merged.set(product.id, product);
-    for (const product of createdProducts) merged.set(product.id, product);
+    for (const product of products) {
+      const id = String(product.id || '').trim();
+      const seller = String(product.sellerId || '').trim().replace(/^@/, '').toLowerCase();
+      const title = String(product.title || '').trim().toLowerCase();
+      const key = `${seller}\u0000${title}`;
+      if (!id && canonicalKeys.has(key)) continue;
+      merged.set(id || `legacy:${key}`, product);
+    }
+    for (const product of canonical) {
+      const id = String(product.id || '').trim();
+      if (id) merged.set(id, product);
+    }
     return Array.from(merged.values());
   }, [createdProducts, products, serverProducts]);
   const filteredProducts = visibleProducts.filter(product => {
@@ -247,7 +265,17 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({ products, openCreateOn
     if (isSubmitting || isUploadingImage) return;
     setSubmitError(null);
     try {
-      const durableProduct = await resolveDurableProductForEdit(product);
+      // Prefer the already-loaded authoritative server record. This prevents an
+      // id-less legacy parent record from ever reaching the edit form.
+      const legacySeller = String(product.sellerId || '').trim().replace(/^@/, '').toLowerCase();
+      const legacyTitle = String(product.title || '').trim().toLowerCase();
+      const serverMatch = serverProducts.find(item => {
+        const seller = String(item.sellerId || '').trim().replace(/^@/, '').toLowerCase();
+        return String(item.id || '').trim() &&
+          String(item.title || '').trim().toLowerCase() === legacyTitle &&
+          (!legacySeller || seller === legacySeller);
+      });
+      const durableProduct = serverMatch || await resolveDurableProductForEdit(product);
       openCreateForm(durableProduct);
     } catch (error: any) {
       const message = String(error?.message || '').trim();
