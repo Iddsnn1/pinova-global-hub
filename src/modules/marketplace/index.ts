@@ -182,7 +182,7 @@ export class ProductComparisonEngine {
         pricePi: p.pricePi,
         rating: p.rating,
         stock: p.stock,
-        seller: p.sellerName,
+        seller: p.sellerDisplayName || p.sellerName,
         category: p.category,
         features: p.features
       }))
@@ -255,7 +255,7 @@ export class SeoMetadataGenerator {
         availability: product.stock > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
         seller: {
           '@type': 'Organization',
-          name: product.sellerName
+          name: product.sellerDisplayName || product.sellerName
         }
       },
       aggregateRating: product.reviewsCount > 0 ? {
