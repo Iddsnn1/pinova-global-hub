@@ -9,6 +9,7 @@ import { vendorAuthenticatedFetch } from '../../../lib/vendorAuthBridge';
 interface ProductsTabProps {
   products: Product[];
   onOpenAddProduct?: () => void;
+  onProductCreated?: (product: Product) => void;
   openCreateOnMount?: boolean;
   onCreateFormOpened?: () => void;
   onEditProduct: (product: Product) => void;
@@ -18,7 +19,7 @@ interface ProductsTabProps {
 type ProductDraft = { title: string; description: string; category: ProductCategory; marketplaceCategory: string; subcategory: string; pricePi: string; stock: string; imageUrl: string };
 const EMPTY_DRAFT: ProductDraft = { title: '', description: '', category: 'physical', marketplaceCategory: MARKETPLACE_CATEGORIES[0]?.id || 'other_general', subcategory: '', pricePi: '', stock: '0', imageUrl: '' };
 
-export const ProductsTab: React.FC<ProductsTabProps> = ({ products, openCreateOnMount = false, onCreateFormOpened, onEditProduct, onDeleteProduct }) => {
+export const ProductsTab: React.FC<ProductsTabProps> = ({ products, openCreateOnMount = false, onCreateFormOpened, onProductCreated, onEditProduct, onDeleteProduct }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [stockFilter, setStockFilter] = useState<'all' | 'in_stock' | 'out_of_stock'>('all');
@@ -40,7 +41,7 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({ products, openCreateOn
     setIsLoadingServerProducts(true);
     setSubmitError(null);
     try {
-      const response = await vendorAuthenticatedFetch('/api/products', { method: 'GET' });
+      // Catalog reads are server-authoritative but do not require a fresh Pi/vendor authentication round-trip.\n      // Seller mutations remain protected by vendorAuthenticatedFetch; this keeps catalog refresh fast and deterministic.\n      const response = await fetch('/api/products', { method: 'GET', headers: { Accept: 'application/json' }, cache: 'no-store' });
       const text = await response.text();
       if (!response.ok) {
         let data: any = null;
