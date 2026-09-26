@@ -2248,11 +2248,15 @@ export class PiSdkManagerService {
         }
 
         try {
-          window.Pi.init({
-            version: '2.0',
-            sandbox:
-              resolvedSandbox
-          });
+          // Pi.init() is async in the current Pi SDK contract.
+          // Await it so authentication/payment calls cannot race SDK initialization.
+          await Promise.resolve(
+            window.Pi.init({
+              version: '2.0',
+              sandbox:
+                resolvedSandbox
+            })
+          );
 
           this.sdkLoaded = true;
           this.sdkInitialized = true;
