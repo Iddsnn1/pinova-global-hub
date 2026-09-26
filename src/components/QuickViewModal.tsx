@@ -104,7 +104,7 @@ export const QuickViewModal: React.FC<QuickViewModalProps> = ({
                   onClick={() => onOpenStorefront?.(product.sellerName)}
                   className="hover:underline text-slate-500 dark:text-slate-400 font-semibold flex items-center gap-1"
                 >
-                  <span>{product.sellerName}</span>
+                  <span>{product.sellerDisplayName || product.sellerName}</span>
                   {product.sellerVerified && (
                     <ShieldCheck className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
                   )}
