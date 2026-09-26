@@ -32,6 +32,8 @@ export interface Product {
   reviewsCount: number;
   sellerId: string;
   sellerName: string;
+  /** Global platform-facing seller label; does not replace merchant/legal identity. */
+  sellerDisplayName?: string;
   sellerVerified: boolean;
   features: string[];
   specs?: Record<string, string>;
