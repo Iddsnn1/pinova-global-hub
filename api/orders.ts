@@ -103,9 +103,171 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   if (req.method === 'OPTIONS') return json(res, 204, {});
 
   const url = new URL(req.url || '/', 'http://localhost');
-  const path = url.pathname.replace(/^\/api\/v1\/orders\/?/, '').replace(/\/$/, '');
+  const path = url.pathname
+    .replace(/^\/api\/v1\/orders\/?/, '')
+    .replace(/^\/api\/orders\/?/, '')
+    .replace(/\/$/, '');
 
   try {
+    // DHL Unified Push adapter. DHL sends the official hook secret in
+    // DHL-API-Hook-Secret; keep it separate from the generic PiNova HMAC secret.
+    // This endpoint remains fail-closed until the real DHL subscription secret
+    // is provisioned in Vercel.
+    if (req.method === 'POST' && path === 'carriers/dhl/webhook') {
+      const configuredSecret = String(process.env.DHL_UNIFIED_PUSH_WEBHOOK_SECRET || '').trim();
+      if (!configuredSecret) {
+        return json(res, 503, { ok: false, error: 'DHL_UNIFIED_PUSH_WEBHOOK_NOT_CONFIGURED' });
+      }
+
+      const suppliedSecret = String(
+        Array.isArray(req.headers['dhl-api-hook-secret'])
+          ? req.headers['dhl-api-hook-secret'][0]
+          : req.headers['dhl-api-hook-secret'] || ''
+      ).trim();
+
+      if (!suppliedSecret || suppliedSecret !== configuredSecret) {
+        return json(res, 401, { ok: false, error: 'INVALID_DHL_WEBHOOK_SECRET' });
+      }
+
+      const body = await readJson(req);
+      const scope = String(body?.scope || '').trim();
+      if (scope === 'subscription.validate' || scope === 'subscription.ready') {
+        return json(res, 200, { ok: true, acknowledged: scope });
+      }
+      if (scope !== 'subscription.push') {
+        return json(res, 400, { ok: false, error: 'UNSUPPORTED_DHL_WEBHOOK_SCOPE' });
+      }
+
+      const shipments = Array.isArray(body?.shipments) ? body.shipments : [];
+      const results: any[] = [];
+
+      for (const shipment of shipments) {
+        const trackingNumber = String(
+          shipment?.id ||
+          shipment?.status?.pieceIds?.[0] ||
+          ''
+        ).trim();
+        const statusCode = String(shipment?.status?.statusCode || '').trim().toLowerCase();
+        const statusText = String(
+          shipment?.status?.simplifiedStatus ||
+          shipment?.status?.status ||
+          shipment?.status?.description ||
+          ''
+        ).trim().toLowerCase();
+
+        let nextStatus: PstpOrderStatus | null = null;
+        if (/deliver/.test(statusCode) || /deliver/.test(statusText)) {
+          nextStatus = 'Delivered';
+        } else if (
+          /out.?for.?delivery|delivery.*progress/.test(statusCode) ||
+          /out for delivery|with courier|delivery in progress/.test(statusText)
+        ) {
+          nextStatus = 'Out for Delivery';
+        } else if (
+          /transit|customs|processing|pre.?transit/.test(statusCode) ||
+          /transit|customs|processed|departed|arrived/.test(statusText)
+        ) {
+          nextStatus = 'In Transit';
+        }
+
+        if (!trackingNumber || !nextStatus) {
+          results.push({
+            trackingNumber: trackingNumber || null,
+            status: 'ignored',
+            reason: 'UNMAPPED_DHL_STATUS'
+          });
+          continue;
+        }
+
+        const matchingOrders = (await listDurableOrders()).filter((order) =>
+          String(order.trackingNumber || '').trim() === trackingNumber &&
+          String(order.carrier || '').trim().toLowerCase() === 'dhl'
+        );
+
+        if (matchingOrders.length !== 1) {
+          results.push({
+            trackingNumber,
+            status: 'ignored',
+            reason: matchingOrders.length === 0
+              ? 'ORDER_NOT_FOUND_FOR_TRACKING'
+              : 'AMBIGUOUS_ORDER_FOR_TRACKING'
+          });
+          continue;
+        }
+
+        const order = matchingOrders[0];
+        const allowedTransitions: Record<string, PstpOrderStatus> = {
+          'Shipped': 'In Transit',
+          'In Transit': 'Out for Delivery',
+          'Out for Delivery': 'Delivered'
+        };
+
+        if (allowedTransitions[order.pstpStatus] !== nextStatus) {
+          results.push({
+            orderId: order.id,
+            trackingNumber,
+            status: 'ignored',
+            reason: 'INVALID_CARRIER_LIFECYCLE_TRANSITION',
+            currentStatus: order.pstpStatus,
+            requestedStatus: nextStatus
+          });
+          continue;
+        }
+
+        const eventId = [
+          String(body?.self || 'dhl'),
+          trackingNumber,
+          String(shipment?.status?.timestamp || ''),
+          String(shipment?.status?.statusCode || ''),
+          String(shipment?.status?.description || '')
+        ].join('|');
+
+        const duplicate = (Array.isArray(order.timeline) ? order.timeline : []).some((entry: any) =>
+          String(entry?.note || '').includes('dhl-event:' + eventId)
+        );
+        if (duplicate) {
+          results.push({ orderId: order.id, trackingNumber, status: 'duplicate' });
+          continue;
+        }
+
+        const timestamp = String(shipment?.status?.timestamp || '').trim() || new Date().toISOString();
+        const updated = await saveDurableOrder({
+          ...order,
+          pstpStatus: nextStatus,
+          updatedAt: new Date().toISOString(),
+          escrowStatus: nextStatus === 'Delivered' ? 'delivered' : 'shipped',
+          timeline: [
+            ...(Array.isArray(order.timeline) ? order.timeline : []),
+            {
+              status: nextStatus,
+              timestamp,
+              actor: 'DHL',
+              actorRole: 'system',
+              note: 'DHL Unified Push evidence accepted; dhl-event:' + eventId,
+              carrier: 'DHL',
+              trackingNumber,
+              location: shipment?.status?.location?.address || undefined
+            }
+          ]
+        });
+
+        pstpAuditRepo.appendLog({
+          orderId: order.id,
+          paymentId: order.piPaymentId,
+          actor: 'DHL',
+          actorRole: 'system',
+          action: 'DHL_CARRIER_LIFECYCLE_EVIDENCE_ACCEPTED',
+          details: 'DHL Unified Push advanced order to ' + nextStatus + '.',
+          ipAddress: 'server',
+          deviceInfo: 'DHL Shipment Tracking Unified Push'
+        });
+
+        results.push({ orderId: order.id, trackingNumber, status: 'accepted', pstpStatus: updated?.pstpStatus });
+      }
+
+      return json(res, 200, { ok: true, serverAuthoritative: true, results });
+    }
+
     // Carrier webhook is server-to-server and intentionally sits outside Pioneer session auth.
     // It accepts only signed, idempotent carrier evidence for the three carrier-controlled milestones.
     if (req.method === 'POST' && path.endsWith('/carrier-webhook')) {
