@@ -79,7 +79,7 @@ export const UniversalSearchModal: React.FC<UniversalSearchModalProps> = ({
       const descStr = (p.description || '').toLowerCase();
       const catStr = (p.category || '').toLowerCase();
       const subcatStr = (p.subcategory || '').toLowerCase();
-      const sellerStr = (p.sellerName || '').toLowerCase();
+      const sellerStr = (p.sellerDisplayName || p.sellerName || '').toLowerCase();
       const tagsArr = Array.isArray(p.tags) ? p.tags : [];
 
       return (
