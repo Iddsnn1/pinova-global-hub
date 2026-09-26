@@ -62,6 +62,7 @@ function normalize(product: Product, existing?: Product): Product {
     description: String(product.description || '').trim(),
     sellerId: String(product.sellerId || '').trim(),
     sellerName: String(product.sellerName || '').trim(),
+    sellerDisplayName: String(product.sellerDisplayName || '').trim() || undefined,
     images: Array.isArray(product.images) ? product.images.filter(Boolean) : [],
     features: Array.isArray(product.features) ? product.features.filter(Boolean) : [],
     tags: Array.isArray(product.tags) ? product.tags.filter(Boolean) : [],
