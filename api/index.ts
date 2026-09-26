@@ -172,6 +172,18 @@ async function migrateEligibleCatalogVisibility(): Promise<{ migrated: string[];
       continue;
     }
 
+    // Global marketplace branding is display-only. Preserve sellerName as the
+    // merchant/store identity used for ownership, storefront routing and records.
+    if (product.isActive === true && product.sellerVerified === true &&
+        String(product.sellerDisplayName || '').trim() !== 'PiNova Global Hub') {
+      await saveDurableProduct({
+        ...product,
+        sellerDisplayName: 'PiNova Global Hub'
+      });
+      product.sellerDisplayName = 'PiNova Global Hub';
+      migrated.push(String(product.id));
+    }
+
     const expectedAvailability = Number(product.stock ?? 0) > 0 ? 'in_stock' : 'out_of_stock';
     const needsVisibilityRepair =
       product.isActive !== true ||
@@ -312,6 +324,7 @@ async function handleDurableProducts(req: any, res: any): Promise<boolean> {
       sellerId: String(durableMerchant.pioneerUsername || user.username).trim().replace(/^@/, ''),
       sellerName: String(durableMerchant.storeName || user.username).trim(),
       sellerDisplayName: 'PiNova Global Hub',
+      sellerDisplayName: 'PiNova Global Hub',
       sellerVerified: true,
       features: Array.isArray(body.features) ? body.features.filter(Boolean) : [],
       specs: body.specs,
@@ -351,6 +364,7 @@ async function handleDurableProducts(req: any, res: any): Promise<boolean> {
     id: existing.id,
     sellerId: existing.sellerId,
     sellerName: existing.sellerName,
+    sellerDisplayName: 'PiNova Global Hub',
     sellerVerified: true,
     isDeleted: false,
     // The merchant is already compliance-approved; keep edited in-stock listings
