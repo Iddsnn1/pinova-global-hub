@@ -250,9 +250,10 @@ export async function vendorAuthenticatedFetch(
     headers: mergeHeaders(authToken)
   });
 
-  // A browser-level "Failed to fetch" means no HTTP response reached the
-  // application. Retry once after rebuilding the server session. This is
-  // deliberately limited to one retry and does not weaken server authorization.
+  // A browser-level network exception is not proof that the server session is
+  // invalid. Preserve the established session for the first request and only
+  // rebuild it when the server explicitly returns 401. This prevents Edit/Save
+  // requests from triggering a second Pi authentication flow in Pi Browser.
   try {
     let response = await request(token);
 
@@ -266,20 +267,11 @@ export async function vendorAuthenticatedFetch(
 
     return response;
   } catch (networkError: any) {
-    console.warn('[vendorAuthBridge] Protected request failed before receiving an HTTP response; retrying once:', networkError?.message || networkError);
-    clearVendorAuthToken();
-    token = await ensureServerSession(true);
-    username = getVendorUsername();
-
-    if (!token) throw networkError;
-
-    try {
-      return await request(token);
-    } catch (retryError: any) {
-      const original = String(networkError?.message || 'NETWORK_ERROR');
-      const retry = String(retryError?.message || 'NETWORK_RETRY_FAILED');
-      throw new Error(`VENDOR_REQUEST_NETWORK_FAILED: ${retry || original}`);
-    }
+    const message = String(networkError?.message || 'NETWORK_ERROR').trim();
+    console.warn('[vendorAuthBridge] Protected request failed before receiving an HTTP response:', message);
+    // Do not discard a valid server session or re-enter Pi authentication here.
+    // The caller receives a deterministic network error and can retry explicitly.
+    throw new Error(`VENDOR_REQUEST_NETWORK_FAILED: ${message || 'NETWORK_ERROR'}`);
   }
 }
 
