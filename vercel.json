@@ -61,6 +61,10 @@
       "destination": "/api/orders"
     },
     {
+      "source": "/api/v1/carriers/dhl/webhook",
+      "destination": "/api/orders/carriers/dhl/webhook"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "/api/index?__path=/$1"
     },
