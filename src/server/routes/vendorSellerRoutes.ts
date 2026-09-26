@@ -44,7 +44,24 @@ async function resolveMerchant(req: AuthenticatedRequest) {
     throw error;
   }
 
-  return getDurableVendorApplication(username);
+  // Prefer exact Pioneer username. Only if no record exists may the server
+  // resolve the same merchant by the authenticated Pi UID. This preserves
+  // ownership boundaries while supporting Pi sessions whose display username
+  // differs from the merchant application username.
+  const direct = await getDurableVendorApplication(username);
+  if (direct) return direct;
+
+  const uidCandidates = [req.user?.piUid, req.user?.uid, req.user?.id]
+    .map(value => String(value || '').trim())
+    .filter(Boolean);
+  if (!uidCandidates.length) return null;
+
+  const { listDurableVendorApplications } = await import('../services/DurableVendorApplicationStore');
+  const applications = await listDurableVendorApplications();
+  return applications.find((application: any) => {
+    const storedUid = String(application?.pioneerUid || '').trim();
+    return storedUid && uidCandidates.includes(storedUid);
+  }) || null;
 }
 
 vendorSellerRouter.get('/access', authenticate, async (req: AuthenticatedRequest, res) => {
