@@ -82,7 +82,7 @@ export default async function handler(req: any, res: any) {
     const product = {
       id: `prd_${Date.now()}_${crypto.randomBytes(5).toString('hex')}`,
       title, description, pricePi, category, subcategory: 'General', images: [], stock,
-      rating: 0, reviewsCount: 0, sellerId: user.username, sellerName: merchant.storeName || user.username,
+      rating: 0, reviewsCount: 0, sellerId: user.username, sellerName: merchant.storeName || user.username, sellerDisplayName: 'PiNova Global Hub',
       sellerVerified: true, features: ['Bulk Imported'], tags,
       availabilityStatus: stock > 0 ? 'in_stock' : 'out_of_stock',
       isActive: false, moderationStatus: 'PENDING_REVIEW'
