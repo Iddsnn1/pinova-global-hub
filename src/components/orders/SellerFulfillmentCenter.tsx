@@ -157,12 +157,9 @@ export const SellerFulfillmentCenter: React.FC<SellerFulfillmentCenterProps> = (
           </div>
           <div>
             <h2 className="text-lg font-bold flex items-center gap-2">
-              Seller Fulfillment & Dispatch Center
-              <span className="text-xs px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-medium">
-                SLA Operational
-              </span>
+              Seller Fulfillment Center
             </h2>
-            <p className="text-xs text-slate-400">Process incoming orders, print packing slips, generate shipping labels, and update tracking.</p>
+            <p className="text-xs text-slate-400">Process verified orders, prepare shipments, record real carrier tracking, and advance only server-authorized lifecycle states.</p>
           </div>
         </div>
       </div>
@@ -317,13 +314,13 @@ export const SellerFulfillmentCenter: React.FC<SellerFulfillmentCenterProps> = (
                 <div className="space-y-2 pt-2">
                   <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Carrier & Tracking Details</label>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <select
+                    <input
+                      type="text"
                       value={carrier}
                       onChange={(e) => setCarrier(e.target.value)}
+                      placeholder="Actual carrier name"
                       className="text-xs p-2 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900"
-                    >
-                      <option value="">Select the actual carrier used</option>
-                    </select>
+                    />
                     <input
                       type="text"
                       value={trackingNumber}
