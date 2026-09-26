@@ -121,7 +121,7 @@ export const CartView: React.FC<CartViewProps> = ({
                     {item.product.title}
                   </h3>
                   <div className="text-xs text-slate-500 dark:text-slate-400">
-                    Seller: <span className="text-purple-400 font-semibold">{item.product.sellerName}</span>
+                    Seller: <span className="text-purple-400 font-semibold">{item.product.sellerDisplayName || item.product.sellerName}</span>
                   </div>
 
                   {item.customDetails?.variant && (
