@@ -116,7 +116,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
               }}
               className="truncate max-w-[120px] font-semibold hover:text-purple-600 dark:hover:text-purple-400 hover:underline"
             >
-              {product.sellerName}
+              {product.sellerDisplayName || product.sellerName}
             </span>
             {product.sellerVerified && (
               <span className="inline-flex items-center text-purple-700 dark:text-purple-300 font-bold text-[9px] bg-purple-50 dark:bg-purple-950/80 px-1 py-0.5 rounded border border-purple-200 dark:border-purple-800/60">
