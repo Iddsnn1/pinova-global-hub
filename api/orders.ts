@@ -76,17 +76,24 @@ function sellerOwnsOrder(order: Order, username: string): boolean {
   return order.items.length > 0 && order.items.every((item) => normalizeUsername(item.product?.sellerId) === seller);
 }
 
-async function isApprovedActiveMerchant(username: string): Promise<boolean> {
-  const target = normalizeUsername(username);
-  if (!target) return false;
+async function getApprovedActiveMerchant(user: any): Promise<any | null> {
+  const usernames = new Set(
+    [user?.username].filter(Boolean).map((value: unknown) => normalizeUsername(value))
+  );
+  const uids = new Set(
+    [user?.piUid, user?.uid, user?.id].filter(Boolean).map((value: unknown) => String(value).trim()).filter(Boolean)
+  );
   const applications = await listDurableVendorApplications();
-  return applications.some((application: any) =>
-    normalizeUsername(application?.pioneerUsername) === target &&
+  return applications.find((application: any) =>
     application?.status === 'APPROVED' &&
     application?.verificationStatus === 'Verified' &&
     application?.sellerStatus === 'Active' &&
-    application?.pstpAgreementAccepted === true
-  );
+    application?.pstpAgreementAccepted === true &&
+    (
+      usernames.has(normalizeUsername(application?.pioneerUsername)) ||
+      (application?.pioneerUid && uids.has(String(application.pioneerUid).trim()))
+    )
+  ) || null;
 }
 
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
@@ -195,7 +202,17 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     if (!durableProductStorageEnabled()) return json(res, 503, { ok: false, error: 'DURABLE_PRODUCT_STORAGE_UNAVAILABLE' });
     if (!durableOrderStorageEnabled()) return json(res, 503, { ok: false, error: 'DURABLE_ORDER_STORAGE_UNAVAILABLE' });
     if (req.method === 'GET') {
-      if (!path) return json(res, 200, { ok: true, orders: await listDurableOrders(user.username) });
+      if (!path) {
+        const requestedRole = String(url.searchParams.get('role') || '').trim().toLowerCase();
+        if (requestedRole === 'seller') {
+          const merchant = await getApprovedActiveMerchant(user);
+          if (!merchant) return json(res, 403, { ok: false, error: 'ACTIVE_VERIFIED_MERCHANT_REQUIRED' });
+          const merchantUsername = normalizeUsername(merchant.pioneerUsername);
+          const orders = (await listDurableOrders()).filter((order) => sellerOwnsOrder(order, merchantUsername));
+          return json(res, 200, { ok: true, role: 'seller', merchantUsername, orders });
+        }
+        return json(res, 200, { ok: true, orders: await listDurableOrders(user.username) });
+      }
       const order = await getDurableOrder(path);
       if (!order) return json(res, 404, { ok: false, error: 'ORDER_NOT_FOUND' });
       if (!canViewOrder(order, user.username, user.roles || [])) return json(res, 403, { ok: false, error: 'ORDER_ACCESS_DENIED' });
@@ -246,12 +263,13 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       const order = await getDurableOrder(orderId);
       if (!order) return json(res, 404, { ok: false, error: 'ORDER_NOT_FOUND' });
 
-      const sellerUsername = normalizeUsername(user.username);
-      if (!sellerOwnsOrder(order, sellerUsername)) {
-        return json(res, 403, { ok: false, error: 'SELLER_ORDER_OWNERSHIP_REQUIRED' });
-      }
-      if (!(await isApprovedActiveMerchant(sellerUsername))) {
+      const merchant = await getApprovedActiveMerchant(user);
+      if (!merchant) {
         return json(res, 403, { ok: false, error: 'ACTIVE_VERIFIED_MERCHANT_REQUIRED' });
+      }
+      const merchantUsername = normalizeUsername(merchant.pioneerUsername);
+      if (!sellerOwnsOrder(order, merchantUsername)) {
+        return json(res, 403, { ok: false, error: 'SELLER_ORDER_OWNERSHIP_REQUIRED' });
       }
       if (order.serverVerified !== true) {
         return json(res, 409, { ok: false, error: 'ORDER_PAYMENT_NOT_SERVER_VERIFIED' });
