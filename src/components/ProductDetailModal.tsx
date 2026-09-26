@@ -189,7 +189,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                   }}
                   className="flex items-center gap-1.5 font-black text-slate-900 dark:text-slate-100 text-sm cursor-pointer hover:text-purple-600 dark:hover:text-purple-400 truncate"
                 >
-                  <span className="truncate">{product.sellerName}</span>
+                  <span className="truncate">{product.sellerDisplayName || product.sellerName}</span>
                   {product.sellerVerified && (
                     <span className="inline-flex items-center text-[10px] font-bold text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-950/80 px-1.5 py-0.5 rounded-full border border-purple-200 dark:border-purple-800 shrink-0">
                       <ShieldCheck className="w-3.5 h-3.5 mr-0.5" />
