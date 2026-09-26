@@ -70,10 +70,13 @@ function getBearerToken(req: IncomingMessage): string | null {
 }
 
 async function resolveApprovedMerchant(username: string, pioneerUid?: string | string[] | null): Promise<any | null> {
-  const direct = await getDurableVendorApplication(username);
+  // Merchant identity is durable and may arrive from Pi as either "name" or "@name".
+  // Normalize both sides before falling back to the verified Pioneer UID.
+  const rawUsername = String(username || '').trim();
+  const target = rawUsername.replace(/^@/, '').toLowerCase();
+  const direct = rawUsername ? await getDurableVendorApplication(rawUsername) : null;
   if (direct) return direct;
 
-  const target = String(username || '').trim().replace(/^@/, '').toLowerCase();
   const uidCandidates = (Array.isArray(pioneerUid) ? pioneerUid : [pioneerUid])
     .map((value) => String(value || '').trim())
     .filter(Boolean);
