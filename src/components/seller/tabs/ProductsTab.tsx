@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { formatPiAmount } from '../../../utils/formatters';
-import { Package, Plus, Search, Edit3, Trash2, X, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Package, Plus, Search, Edit3, Trash2, X, Loader2, AlertCircle, CheckCircle2, RefreshCw } from 'lucide-react';
 import { Product, ProductCategory } from '../../../types';
 import { MARKETPLACE_CATEGORIES } from '../../../data/categoryData';
 import { createSellerProduct, updateSellerProduct, deleteSellerProduct } from '../../../lib/productApi';
@@ -36,24 +36,31 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({ products, openCreateOn
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    const loadServerProducts = async () => {
-      setIsLoadingServerProducts(true);
-      try {
-        const response = await vendorAuthenticatedFetch('/api/products', { method: 'GET' });
-        const text = await response.text();
-        if (!response.ok || !text) return;
-        const data = JSON.parse(text);
-        if (!cancelled && Array.isArray(data?.products)) setServerProducts(data.products);
-      } catch (error) {
-        console.warn('[ProductsTab] Failed to hydrate products from durable catalog:', error);
-      } finally {
-        if (!cancelled) setIsLoadingServerProducts(false);
+  const refreshServerProducts = async () => {
+    setIsLoadingServerProducts(true);
+    setSubmitError(null);
+    try {
+      const response = await vendorAuthenticatedFetch('/api/products', { method: 'GET' });
+      const text = await response.text();
+      if (!response.ok) {
+        let data: any = null;
+        try { data = text ? JSON.parse(text) : null; } catch {}
+        throw new Error(data?.error || `PRODUCT_CATALOG_HTTP_${response.status}`);
       }
-    };
-    loadServerProducts();
-    return () => { cancelled = true; };
+      const data = text ? JSON.parse(text) : null;
+      if (!Array.isArray(data?.products)) throw new Error('PRODUCT_CATALOG_INVALID_RESPONSE');
+      setServerProducts(data.products);
+      setSubmitSuccess(`Catalog refreshed • ${data.products.length} server product${data.products.length === 1 ? '' : 's'}`);
+    } catch (error: any) {
+      console.warn('[ProductsTab] Failed to refresh durable catalog:', error);
+      setSubmitError(String(error?.message || 'Unable to refresh the server catalog.'));
+    } finally {
+      setIsLoadingServerProducts(false);
+    }
+  };
+
+  useEffect(() => {
+    void refreshServerProducts();
   }, []);
 
   const visibleProducts = useMemo(() => {
@@ -278,7 +285,12 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({ products, openCreateOn
     <div className="space-y-6" id="seller-products-tab">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div><h3 className="text-lg font-bold text-neutral-900 dark:text-neutral-100 flex items-center gap-2"><Package className="w-5 h-5 text-purple-600 dark:text-purple-400" />Product Catalog</h3><p className="text-xs text-neutral-500 mt-0.5">Manage your listings, inventory quantities, and Pi pricing</p></div>
-        <button id="add-product-btn" onClick={openCreateForm} className="px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold flex items-center justify-center gap-2 transition-colors shadow-xs shrink-0"><Plus className="w-4 h-4" />Add Product</button>
+        <div className="flex items-center gap-2 shrink-0">
+          <button id="refresh-products-btn" type="button" onClick={() => void refreshServerProducts()} disabled={isLoadingServerProducts} className="px-3 py-2.5 rounded-xl border border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-200 text-xs font-semibold flex items-center justify-center gap-2 disabled:opacity-50">
+            <RefreshCw className={`w-4 h-4 ${isLoadingServerProducts ? 'animate-spin' : ''}`} />{isLoadingServerProducts ? 'Refreshing…' : 'Refresh Products'}
+          </button>
+          <button id="add-product-btn" onClick={openCreateForm} className="px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold flex items-center justify-center gap-2 transition-colors shadow-xs shrink-0"><Plus className="w-4 h-4" />Add Product</button>
+        </div>
       </div>
 
       <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-2xl p-4 shadow-xs"><div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
