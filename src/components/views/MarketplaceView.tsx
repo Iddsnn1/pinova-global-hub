@@ -174,7 +174,7 @@ export const MarketplaceView: React.FC<MarketplaceViewProps> = ({
         const matchDesc = (p.description || '').toLowerCase().includes(q);
         const matchCat = (p.category || '').toLowerCase().includes(q);
         const matchSubcat = (p.subcategory || '').toLowerCase().includes(q);
-        const matchSeller = (p.sellerName || '').toLowerCase().includes(q);
+        const matchSeller = (p.sellerDisplayName || p.sellerName || '').toLowerCase().includes(q);
         const matchTags = Array.isArray(p.tags) && p.tags.some((t) => typeof t === 'string' && t.toLowerCase().includes(q));
         const matchFeatures = Array.isArray(p.features) && p.features.some((f) => typeof f === 'string' && f.toLowerCase().includes(q));
         
