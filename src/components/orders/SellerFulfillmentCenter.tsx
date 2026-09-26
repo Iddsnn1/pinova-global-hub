@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   Package, 
   Truck, 
@@ -30,27 +30,58 @@ export const SellerFulfillmentCenter: React.FC<SellerFulfillmentCenterProps> = (
   sellerUsername,
   onOrderUpdated
 }) => {
-  // Seller queue is fail-closed: only orders whose durable product sellerId
-  // exactly matches the authenticated merchant username are shown.
-  const normalizedSellerUsername = sellerUsername.trim().replace(/^@/, '').toLowerCase();
-  const sellerOrders = orders.filter((o) =>
-    o.items.length > 0 &&
-    o.items.every((item) =>
-      String(item.product?.sellerId || '').trim().replace(/^@/, '').toLowerCase() === normalizedSellerUsername
-    )
-  );
-
-  const [selectedOrder, setSelectedOrder] = useState<Order | null>(sellerOrders[0] || null);
+  // Seller queue is loaded from the server. The server resolves the verified
+  // merchant by Pioneer username or verified Pi UID; the client never decides
+  // seller ownership from the current session username.
+  const [sellerOrders, setSellerOrders] = useState<Order[]>([]);
+  const [queueLoading, setQueueLoading] = useState(true);
+  const [queueError, setQueueError] = useState('');
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [activeTab, setActiveTab] = useState<'queue' | 'packing' | 'label' | 'tracking'>('queue');
 
   // Shipping Form State
-  const [carrier, setCarrier] = useState('SAFARICOM');
+  const [carrier, setCarrier] = useState('');
   const [trackingNumber, setTrackingNumber] = useState('');
   const [transitionNote, setTransitionNote] = useState('');
   const [transitionError, setTransitionError] = useState('');
 
   const activeOrder = selectedOrder || sellerOrders[0];
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadSellerQueue = async () => {
+      setQueueLoading(true);
+      setQueueError('');
+      try {
+        const response = await vendorAuthenticatedFetch('/api/v1/orders?role=seller', {
+          method: 'GET',
+          headers: { Accept: 'application/json' },
+        });
+        const payload = await response.json().catch(() => null);
+        if (!response.ok || !Array.isArray(payload?.orders)) {
+          throw new Error(payload?.error || `SELLER_QUEUE_LOAD_FAILED_${response.status}`);
+        }
+        if (!cancelled) {
+          setSellerOrders(payload.orders as Order[]);
+          setSelectedOrder((current) => {
+            if (!current) return (payload.orders[0] as Order) || null;
+            return (payload.orders as Order[]).find((order) => order.id === current.id) || (payload.orders[0] as Order) || null;
+          });
+        }
+      } catch (error: any) {
+        if (!cancelled) {
+          setSellerOrders([]);
+          setSelectedOrder(null);
+          setQueueError(error?.message || 'Unable to load the server-authoritative seller queue.');
+        }
+      } finally {
+        if (!cancelled) setQueueLoading(false);
+      }
+    };
+    void loadSellerQueue();
+    return () => { cancelled = true; };
+  }, [sellerUsername]);
 
   const filteredOrders = sellerOrders.filter((o) => {
     if (filterStatus === 'all') return true;
@@ -86,6 +117,7 @@ export const SellerFulfillmentCenter: React.FC<SellerFulfillmentCenterProps> = (
         throw new Error(payload?.error || payload?.message || `FULFILLMENT_UPDATE_FAILED_${response.status}`);
       }
 
+      setSellerOrders((current) => current.map((order) => order.id === payload.order.id ? payload.order as Order : order));
       setSelectedOrder(payload.order as Order);
       setTrackingNumber(payload.order.trackingNumber || '');
       setCarrier(payload.order.carrier || carrier);
@@ -108,7 +140,9 @@ export const SellerFulfillmentCenter: React.FC<SellerFulfillmentCenterProps> = (
       <div className="p-8 text-center text-slate-500 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800">
         <Package className="w-12 h-12 mx-auto mb-3 text-slate-400" />
         <h3 className="text-lg font-bold text-slate-700 dark:text-slate-200">No Orders in Queue</h3>
-        <p className="text-xs mt-1">There are no customer orders assigned to your storefront.</p>
+        <p className="text-xs mt-1">
+          {queueLoading ? 'Loading the server-authoritative seller queue…' : queueError || 'There are no customer orders assigned to your verified storefront.'}
+        </p>
       </div>
     );
   }
@@ -288,16 +322,13 @@ export const SellerFulfillmentCenter: React.FC<SellerFulfillmentCenterProps> = (
                       onChange={(e) => setCarrier(e.target.value)}
                       className="text-xs p-2 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900"
                     >
-                      <option value="SAFARICOM">Safaricom Express Logistics</option>
-                      <option value="DHL">DHL Express Global</option>
-                      <option value="FEDEX">FedEx International</option>
-                      <option value="LOCAL_COURIER">Local Pi Partner Courier</option>
+                      <option value="">Select the actual carrier used</option>
                     </select>
                     <input
                       type="text"
                       value={trackingNumber}
                       onChange={(e) => setTrackingNumber(e.target.value)}
-                      placeholder="Enter Tracking Number e.g. PNV-9981"
+                      placeholder="Enter the real carrier tracking number"
                       className="text-xs p-2 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900"
                     />
                   </div>
@@ -359,7 +390,7 @@ export const SellerFulfillmentCenter: React.FC<SellerFulfillmentCenterProps> = (
                 <div>
                   <span className="font-bold text-slate-700 dark:text-slate-300">FULFILLED BY:</span><br />
                   <div>{activeOrder.items[0]?.product.sellerName || sellerUsername}</div>
-                  <div>PiNova Vendor Station Hub 04</div>
+                  <div className="text-slate-500">Merchant fulfillment origin</div>
                 </div>
               </div>
 
@@ -393,14 +424,14 @@ export const SellerFulfillmentCenter: React.FC<SellerFulfillmentCenterProps> = (
                     <Truck className="w-5 h-5 text-amber-500" />
                     {activeOrder.carrier || 'Carrier not assigned'}
                   </div>
-                  <span className="px-2 py-0.5 rounded bg-slate-900 text-white font-mono font-bold text-xs">PRIORITY LOGISTICS</span>
+                  <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 font-medium text-xs">Shipment record</span>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4 text-xs">
                   <div>
                     <div className="text-[10px] text-slate-400 uppercase font-bold">FROM:</div>
                     <div className="font-bold">{activeOrder.items[0]?.product.sellerName || sellerUsername}</div>
-                    <div className="text-slate-500">{activeOrder.items[0]?.product.shippingOrigin || 'Seller-provided fulfillment origin'}</div>
+                    <div className="text-slate-500">{activeOrder.items[0]?.product.shippingOrigin || 'Origin not recorded'}</div>
                   </div>
                   <div>
                     <div className="text-[10px] text-slate-400 uppercase font-bold">TO:</div>
@@ -426,9 +457,10 @@ export const SellerFulfillmentCenter: React.FC<SellerFulfillmentCenterProps> = (
                   </button>
                   <button
                     onClick={() => window.print()}
-                    className="px-4 py-2 bg-slate-900 text-white rounded-lg text-xs font-bold transition-colors"
+                    disabled={!activeOrder.trackingNumber}
+                    className="px-4 py-2 bg-slate-900 text-white rounded-lg text-xs font-bold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                   >
-                    Print Label
+                    Print Shipment Record
                   </button>
                 </div>
               </div>
