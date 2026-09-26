@@ -5662,6 +5662,7 @@ app.post('/api/products', authenticate, async (req: AuthenticatedRequest, res) =
       reviewsCount: 0,
       sellerId: String(req.user.username).trim(),
       sellerName: String(req.user.username).trim(),
+      sellerDisplayName: 'PiNova Global Hub',
       sellerVerified: false,
       features: Array.isArray(body.features) ? body.features.filter(Boolean) : [],
       specs: body.specs,
