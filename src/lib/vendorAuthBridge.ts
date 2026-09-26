@@ -233,50 +233,54 @@ export async function vendorAuthenticatedFetch(
   input: RequestInfo | URL,
   init: RequestInit = {}
 ): Promise<Response> {
-  // Ensure we have an active session token
+  // Establish a verified server session before protected vendor requests.
   let token = await ensureServerSession(false);
-  const username = getVendorUsername();
+  let username = getVendorUsername();
 
   const mergeHeaders = (authToken: string | null): HeadersInit => {
     const headers = new Headers(init.headers || {});
-    if (authToken) {
-      headers.set('Authorization', `Bearer ${authToken}`);
-    }
-    if (username) {
-      headers.set('X-Pioneer-Username', username);
-    }
+    if (authToken) headers.set('Authorization', `Bearer ${authToken}`);
+    if (username) headers.set('X-Pioneer-Username', username);
+    headers.set('Accept', 'application/json');
     return headers;
   };
 
-  let response: Response;
+  const request = (authToken: string | null) => fetch(input, {
+    ...init,
+    headers: mergeHeaders(authToken)
+  });
+
+  // A browser-level "Failed to fetch" means no HTTP response reached the
+  // application. Retry once after rebuilding the server session. This is
+  // deliberately limited to one retry and does not weaken server authorization.
   try {
-    response = await fetch(input, {
-      ...init,
-      headers: mergeHeaders(token)
-    });
-  } catch (netErr) {
-    throw netErr;
-  }
+    let response = await request(token);
 
-  // On 401 Unauthorized: token may have expired. Invalidate and retry once with fresh session.
-  if (response.status === 401) {
-    console.warn('[vendorAuthBridge] 401 received. Attempting session refresh and retry.');
+    if (response.status === 401) {
+      console.warn('[vendorAuthBridge] 401 received. Refreshing server session.');
+      clearVendorAuthToken();
+      token = await ensureServerSession(true);
+      username = getVendorUsername();
+      if (token) response = await request(token);
+    }
+
+    return response;
+  } catch (networkError: any) {
+    console.warn('[vendorAuthBridge] Protected request failed before receiving an HTTP response; retrying once:', networkError?.message || networkError);
     clearVendorAuthToken();
-    const freshToken = await ensureServerSession(true);
+    token = await ensureServerSession(true);
+    username = getVendorUsername();
 
-    if (freshToken) {
-      try {
-        response = await fetch(input, {
-          ...init,
-          headers: mergeHeaders(freshToken)
-        });
-      } catch (retryErr) {
-        throw retryErr;
-      }
+    if (!token) throw networkError;
+
+    try {
+      return await request(token);
+    } catch (retryError: any) {
+      const original = String(networkError?.message || 'NETWORK_ERROR');
+      const retry = String(retryError?.message || 'NETWORK_RETRY_FAILED');
+      throw new Error(`VENDOR_REQUEST_NETWORK_FAILED: ${retry || original}`);
     }
   }
-
-  return response;
 }
 
 /**
