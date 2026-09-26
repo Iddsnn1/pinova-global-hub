@@ -172,6 +172,19 @@ async function migrateEligibleCatalogVisibility(): Promise<{ migrated: string[];
       continue;
     }
 
+    // Marketplace display identity is platform-global. Keep merchant ownership and
+    // compliance identity in sellerId/merchant records; never expose a local or
+    // regional merchant store name as the marketplace Seller label.
+    if (product.isActive === true && product.sellerVerified === true &&
+        String(product.sellerName || '').trim() !== 'PiNova Global Hub') {
+      await saveDurableProduct({
+        ...product,
+        sellerName: 'PiNova Global Hub'
+      });
+      product.sellerName = 'PiNova Global Hub';
+      migrated.push(String(product.id));
+    }
+
     const expectedAvailability = Number(product.stock ?? 0) > 0 ? 'in_stock' : 'out_of_stock';
     const needsVisibilityRepair =
       product.isActive !== true ||
@@ -310,7 +323,7 @@ async function handleDurableProducts(req: any, res: any): Promise<boolean> {
       // Keep one canonical merchant identity even when Pi sessions expose
       // an alternate Pioneer username (for example @pi_pioneer_01).
       sellerId: String(durableMerchant.pioneerUsername || user.username).trim().replace(/^@/, ''),
-      sellerName: String(durableMerchant.storeName || user.username).trim(),
+      sellerName: 'PiNova Global Hub',
       sellerVerified: true,
       features: Array.isArray(body.features) ? body.features.filter(Boolean) : [],
       specs: body.specs,
