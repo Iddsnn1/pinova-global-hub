@@ -245,7 +245,9 @@ async function handleDurableProducts(req: any, res: any): Promise<boolean> {
     // see their own pending/inactive products in Seller Studio after refresh.
     const viewer = await authenticateRequest(req);
     const viewerUsername = String(viewer?.username || '').trim();
-    const viewerMerchant = viewerUsername ? await resolveApprovedMerchant(viewerUsername) : null;
+    const viewerMerchant = viewerUsername
+      ? await resolveApprovedMerchant(viewerUsername, [viewer?.piUid, viewer?.id])
+      : null;
     const canonicalSellerId = String(viewerMerchant?.pioneerUsername || viewerUsername).trim().replace(/^@/, '');
     const products = viewerUsername
       ? (await listDurableProducts({ includeDeleted: false, category: category as any, q }))
