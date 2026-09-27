@@ -1103,6 +1103,21 @@ export const MarketplaceView: React.FC<MarketplaceViewProps> = ({
             <CatalogFilterBar
               filters={categoryFilters}
               onFilterChange={(updated) => setCategoryFilters((prev) => ({ ...prev, ...updated }))}
+              onNavigateCategory={(category) => {
+                setActiveSubcategory('all');
+                setCategoryFilters({
+                  category,
+                  subcategory: '',
+                  minPrice: 0,
+                  maxPrice: 500,
+                  verifiedOnly: false,
+                  orderProtectionOnly: false,
+                  minRating: 0,
+                  discountOnly: false,
+                  sortBy: 'featured'
+                });
+                onSelectCategory(category);
+              }}
               onResetFilters={() => {
                 setActiveSubcategory('all');
                 setCategoryFilters({
