@@ -30,13 +30,16 @@ interface CatalogFilterBarProps {
   onFilterChange: (updated: Partial<FilterOptions>) => void;
   onResetFilters: () => void;
   totalResults: number;
+  /** Navigate to the real Marketplace category page, not just filter the current page. */
+  onNavigateCategory?: (category: MarketplaceCategory | 'all') => void;
 }
 
 export const CatalogFilterBar: React.FC<CatalogFilterBarProps> = ({
   filters,
   onFilterChange,
   onResetFilters,
-  totalResults
+  totalResults,
+  onNavigateCategory
 }) => {
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
 
@@ -65,7 +68,13 @@ export const CatalogFilterBar: React.FC<CatalogFilterBarProps> = ({
           {categories.map((cat) => (
             <button
               key={cat.id}
-              onClick={() => onFilterChange({ category: cat.id })}
+              onClick={() => {
+                if (onNavigateCategory) {
+                  onNavigateCategory(cat.id);
+                } else {
+                  onFilterChange({ category: cat.id, subcategory: '' });
+                }
+              }}
               className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex-shrink-0 ${
                 filters.category === cat.id
                   ? 'bg-purple-600 text-white shadow-md shadow-purple-600/20'
@@ -81,7 +90,14 @@ export const CatalogFilterBar: React.FC<CatalogFilterBarProps> = ({
         <div className="flex items-center gap-2 w-full lg:w-auto">
           <select
             value={filters.category}
-            onChange={(e) => onFilterChange({ category: resolveMarketplaceCategory(e.target.value), subcategory: '' })}
+            onChange={(e) => {
+              const category = resolveMarketplaceCategory(e.target.value) as MarketplaceCategory | 'all';
+              if (onNavigateCategory) {
+                onNavigateCategory(category);
+              } else {
+                onFilterChange({ category, subcategory: '' });
+              }
+            }}
             className="min-w-[190px] max-w-full px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold text-xs border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-purple-500 cursor-pointer"
             aria-label="Marketplace category"
           >
