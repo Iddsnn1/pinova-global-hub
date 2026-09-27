@@ -9,6 +9,19 @@ export interface MarketplaceCategoryDef {
   subcategories: string[];
 }
 
+export type SubcategoryListingType = 'product' | 'service' | 'booking' | 'digital';
+
+export interface MarketplaceSubcategoryDef {
+  id: string;
+  categoryId: MarketplaceCategory;
+  name: string;
+  description: string;
+  listingType: SubcategoryListingType;
+  facets: string[];
+  searchTerms: string[];
+}
+
+
 export interface UtilityCategoryDef {
   id: UtilityCategory;
   name: string;
@@ -307,6 +320,71 @@ export const MARKETPLACE_CATEGORIES: MarketplaceCategoryDef[] = [
   }
 ];
 
+export const MARKETPLACE_SUBCATEGORY_DEFS: MarketplaceSubcategoryDef[] = MARKETPLACE_CATEGORIES.flatMap((category) =>
+  category.subcategories.map((name) => {
+    const id = name
+      .trim()
+      .toLowerCase()
+      .replace(/&/g, 'and')
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_|_$/g, '');
+    const serviceLike = /service|repair|consult|cleaning|rental|rental|training|tutoring|legal|accounting|marketing|delivery|logistics|catering|photography|video|music|design|construction|travel|booking|car rental/i.test(name);
+    const digitalLike = /software|digital|course|certification|materials|media/i.test(name);
+    const bookingLike = /flight|hotel|bus|train|events|car rental/i.test(name);
+    const listingType: SubcategoryListingType = bookingLike
+      ? 'booking'
+      : digitalLike
+        ? 'digital'
+        : serviceLike
+          ? 'service'
+          : 'product';
+    const facetByCategory: Record<string, string[]> = {
+      phones_mobile: ['brand', 'model', 'condition', 'price', 'stock', 'seller', 'verification'],
+      computers_technology: ['brand', 'model', 'processor', 'memory', 'storage', 'condition', 'price', 'stock', 'seller', 'verification'],
+      electronics: ['brand', 'model', 'condition', 'specifications', 'price', 'stock', 'seller', 'verification'],
+      automotive_transport: ['make', 'model', 'year', 'condition', 'location', 'price', 'availability', 'seller', 'verification'],
+      home_living: ['brand', 'material', 'dimensions', 'condition', 'price', 'stock', 'seller', 'verification'],
+      fashion_beauty: ['brand', 'size', 'color', 'material', 'condition', 'price', 'stock', 'seller', 'verification'],
+      food_groceries: ['brand', 'quantity', 'unit', 'expiry', 'location', 'price', 'stock', 'seller', 'verification'],
+      industrial_construction: ['brand', 'model', 'specification', 'condition', 'capacity', 'price', 'stock', 'seller', 'verification'],
+      agriculture: ['type', 'variety', 'quantity', 'unit', 'condition', 'location', 'price', 'stock', 'seller', 'verification'],
+      education: ['provider', 'level', 'format', 'duration', 'location', 'price', 'availability', 'verification'],
+      professional_services: ['serviceType', 'provider', 'coverage', 'location', 'availability', 'price', 'verification'],
+      travel_transport: ['provider', 'origin', 'destination', 'date', 'availability', 'price', 'verification'],
+      entertainment_creative: ['provider', 'format', 'location', 'date', 'availability', 'price', 'verification'],
+      pets_animals: ['type', 'breed', 'age', 'location', 'availability', 'price', 'seller', 'verification'],
+      baby_kids: ['brand', 'ageRange', 'size', 'condition', 'price', 'stock', 'seller', 'verification'],
+      health_wellness: ['brand', 'type', 'condition', 'size', 'price', 'stock', 'seller', 'verification'],
+      business_office: ['brand', 'model', 'capacity', 'condition', 'price', 'stock', 'seller', 'verification'],
+      other_general: ['type', 'condition', 'price', 'availability', 'seller', 'verification']
+    };
+    const facets = facetByCategory[category.id] || ['type', 'condition', 'price', 'availability', 'seller', 'verification'];
+    return {
+      id: id + '_' + category.id,
+      categoryId: category.id,
+      name,
+      description: `${name} listings within ${category.name}, with authoritative seller, availability, pricing and verification data.`,
+      listingType,
+      facets,
+      searchTerms: [name, category.name]
+    };
+  })
+);
+
+export const getMarketplaceSubcategoryDef = (
+  categoryId?: string,
+  subcategory?: string
+): MarketplaceSubcategoryDef | undefined => {
+  if (!categoryId || !subcategory) return undefined;
+  const canonicalCategory = resolveMarketplaceCategory(categoryId);
+  const normalized = subcategory.trim().toLowerCase();
+  return MARKETPLACE_SUBCATEGORY_DEFS.find(
+    (item) =>
+      item.categoryId === canonicalCategory &&
+      item.name.trim().toLowerCase() === normalized
+  );
+};
+
 export const MARKETPLACE_CATEGORY_ALIASES: Record<string, MarketplaceCategory> = {
   phones_mobile: 'phones_mobile',
   computers_technology: 'computers_technology',
@@ -393,6 +471,12 @@ export const getMarketplaceCategoryDef = (id?: string): MarketplaceCategoryDef |
   if (!id || id === 'all') return undefined;
   const canonicalId = resolveMarketplaceCategory(id);
   return MARKETPLACE_CATEGORIES.find((c) => c.id === canonicalId) || MARKETPLACE_CATEGORIES.find((c) => c.id === id);
+};
+
+export const getMarketplaceSubcategories = (categoryId?: string): MarketplaceSubcategoryDef[] => {
+  if (!categoryId || categoryId === 'all') return [];
+  const canonicalId = resolveMarketplaceCategory(categoryId);
+  return MARKETPLACE_SUBCATEGORY_DEFS.filter((item) => item.categoryId === canonicalId);
 };
 
 export const UTILITY_CATEGORIES: UtilityCategoryDef[] = [
