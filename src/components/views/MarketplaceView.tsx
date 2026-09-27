@@ -45,7 +45,7 @@ import {
 } from 'lucide-react';
 import { Product, Vendor } from '../../types';
 import { MarketplaceCategory } from '../../types/navigation';
-import { MARKETPLACE_CATEGORIES, getMarketplaceCategoryDef, resolveMarketplaceCategory } from '../../data/categoryData';
+import { MARKETPLACE_CATEGORIES, getMarketplaceCategoryDef, getMarketplaceSubcategories, resolveMarketplaceCategory } from '../../data/categoryData';
 import { ProductCard } from '../ProductCard';
 import { CatalogFilterBar, FilterOptions } from '../CatalogFilterBar';
 
@@ -147,6 +147,16 @@ export const MarketplaceView: React.FC<MarketplaceViewProps> = ({
   };
 
   const currentCategoryDef = getMarketplaceCategoryDef(selectedCategory);
+  const currentSubcategoryDefs = useMemo(() => getMarketplaceSubcategories(selectedCategory), [selectedCategory]);
+
+  const subcategoryCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    categoryProducts.forEach((product) => {
+      const key = String(product.subcategory || '').trim().toLowerCase();
+      if (key) counts[key] = (counts[key] || 0) + 1;
+    });
+    return counts;
+  }, [categoryProducts]);
 
   // Recommended products: featured or high rated items
   const recommendedProducts = useMemo(() => {
@@ -995,45 +1005,41 @@ export const MarketplaceView: React.FC<MarketplaceViewProps> = ({
                 </div>
               </div>
 
-              {/* Subcategories interactive pill bar */}
-              {currentCategoryDef?.subcategories && (
-                <div className="flex flex-wrap items-center gap-2 pt-1 relative z-20">
-                  <button
-                    type="button"
-                    onClick={() => setActiveSubcategory('all')}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm cursor-pointer ${
-                      activeSubcategory === 'all'
-                        ? 'bg-purple-600 text-white border border-purple-400 shadow-purple-500/30'
-                        : 'bg-slate-800/90 hover:bg-slate-700/90 text-purple-300 border border-purple-900/60'
-                    }`}
-                  >
-                    <span>All {selectedCategory === 'deals' ? 'Deals' : 'Items'}</span>
-                  </button>
-
-                  {currentCategoryDef.subcategories.map((sub, idx) => {
-                    const isActive = activeSubcategory === sub;
-                    return (
-                      <button
-                        key={idx}
-                        type="button"
-                        onClick={() => setActiveSubcategory(isActive ? 'all' : sub)}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all flex items-center gap-1.5 shadow-sm cursor-pointer ${
-                          isActive
-                            ? 'bg-gradient-to-r from-amber-500 to-purple-600 text-white border border-amber-300 shadow-amber-500/30'
-                            : 'bg-slate-800/90 hover:bg-slate-700/90 text-purple-200 border border-purple-900/60 hover:text-white'
-                        }`}
-                      >
-                        {selectedCategory === 'deals' && (
-                          <Flame className={`w-3.5 h-3.5 ${isActive ? 'text-amber-200' : 'text-amber-400'}`} />
-                        )}
-                        <span>{sub}</span>
-                      </button>
-                    );
-                  })}
+              {/* Canonical subcategory navigation: every item is a real data domain. */}
+              {currentCategoryDef && (
+                <div className="space-y-3 pt-2 relative z-20">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button type="button" onClick={() => { setActiveSubcategory('all'); setCategoryFilters((prev) => ({ ...prev, subcategory: '' })); }}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm cursor-pointer ${activeSubcategory === 'all' ? 'bg-purple-600 text-white border border-purple-400' : 'bg-slate-800/90 text-purple-300 border border-purple-900/60'}`}>
+                      <span>All Items</span><span className="opacity-70">({categoryProducts.length})</span>
+                    </button>
+                    {currentSubcategoryDefs.map((sub) => {
+                      const isActive = activeSubcategory === sub.name;
+                      const count = subcategoryCounts[sub.name.toLowerCase()] || 0;
+                      return (
+                        <button key={sub.id} type="button" title={sub.description}
+                          onClick={() => { setActiveSubcategory(isActive ? 'all' : sub.name); setCategoryFilters((prev) => ({ ...prev, subcategory: isActive ? '' : sub.name })); }}
+                          className={`px-3 py-2 rounded-xl text-left transition-all shadow-sm cursor-pointer border ${isActive ? 'bg-gradient-to-r from-amber-500 to-purple-600 text-white border-amber-300' : 'bg-slate-800/90 hover:bg-slate-700/90 text-purple-200 border-purple-900/60'}`}>
+                          <span className="block text-xs font-extrabold">{sub.name}</span>
+                          <span className="block text-[10px] opacity-70 mt-0.5">{count} {count === 1 ? 'item' : 'items'} · {sub.listingType}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {activeSubcategory !== 'all' && (
+                    <div className="rounded-2xl border border-purple-900/60 bg-slate-900/70 px-4 py-3">
+                      {(() => {
+                        const def = currentSubcategoryDefs.find((item) => item.name === activeSubcategory);
+                        return def ? (<>
+                          <p className="text-sm font-bold text-white">{def.name}</p>
+                          <p className="text-xs text-slate-300 mt-1">{def.description}</p>
+                          <p className="text-[10px] text-purple-300 mt-2">Data facets: {def.facets.join(' · ')}</p>
+                        </>) : null;
+                      })()}
+                    </div>
+                  )}
                 </div>
               )}
-            </div>
-          </div>
 
           {/* Filter & Sorting Controls */}
           <div className="max-w-7xl mx-auto px-4 sm:px-6">
