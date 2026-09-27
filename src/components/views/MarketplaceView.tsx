@@ -104,9 +104,17 @@ export const MarketplaceView: React.FC<MarketplaceViewProps> = ({
     sortBy: 'featured'
   });
 
-  // Reset activeSubcategory whenever selectedCategory changes
+  // Keep the category page and the global filter taxonomy on the same
+  // canonical category. A stale filter category must never leak another
+  // category's subcategories into Explore.
   useEffect(() => {
+    const canonicalCategory = resolveMarketplaceCategory(selectedCategory) as MarketplaceCategory;
     setActiveSubcategory('all');
+    setCategoryFilters((prev) => ({
+      ...prev,
+      category: canonicalCategory,
+      subcategory: ''
+    }));
   }, [selectedCategory]);
 
   // Map category icons
@@ -198,92 +206,34 @@ export const MarketplaceView: React.FC<MarketplaceViewProps> = ({
     });
   }, [vendors, searchQuery]);
 
-  // Category page products logic
+  // Category page products logic.
+  // Taxonomy is authoritative: marketplaceCategory selects the category and
+  // subcategory selects the exact subcategory. Do not infer taxonomy from
+  // product title, tags, or free-form legacy category text.
   const categoryProducts = useMemo(() => {
+    const canonicalSelected = resolveMarketplaceCategory(selectedCategory);
+
     return products.filter((p) => {
       if (!p) return false;
       if (selectedCategory === 'all') return true;
-      
-      const canonicalSelected = resolveMarketplaceCategory(selectedCategory);
 
-      if (canonicalSelected === 'other_general' || selectedCategory === 'deals') {
-        const isBaseDeal = Boolean((p.discountPercent && p.discountPercent > 0) || p.featured || p.rating >= 4.7);
-        if (selectedCategory === 'deals' && !isBaseDeal) return false;
+      const productCategory = resolveMarketplaceCategory(
+        String(p.marketplaceCategory || '')
+      );
 
-        if (activeSubcategory && activeSubcategory !== 'all' && activeSubcategory !== '') {
-          if (activeSubcategory === 'Merchant Week Offers') {
-            return Boolean((p.sellerVerified && ((p.discountPercent && p.discountPercent > 0) || p.featured)) || p.rating >= 4.8);
-          } else if (activeSubcategory === 'Featured Deals' || activeSubcategory === 'Flash Deals & Promotions') {
-            return Boolean(p.featured || (p.discountPercent && p.discountPercent > 0));
-          } else if (activeSubcategory === 'Flash Sales') {
-            return Boolean((p.discountPercent && p.discountPercent >= 15) || (Array.isArray(p.tags) && p.tags.some(t => typeof t === 'string' && t.toLowerCase().includes('flash'))));
-          } else if (activeSubcategory === 'Limited-Time Discounts') {
-            return Boolean(p.discountPercent && p.discountPercent >= 10);
-          } else if (activeSubcategory === 'Recommended Promotions') {
-            return Boolean(p.rating >= 4.7 || p.featured);
-          }
-        }
-        if (selectedCategory === 'deals') return true;
-      }
-      
-      const catNameLower = (currentCategoryDef?.name || '').toLowerCase();
-      const selCatLower = String(selectedCategory || '').toLowerCase();
-      const canCatLower = String(canonicalSelected || '').toLowerCase();
-      
-      // Product type (physical/digital/service) is separate from the
-      // canonical marketplace taxonomy. Category pages must use
-      // marketplaceCategory first; otherwise every physical product has
-      // p.category === "physical" and taxonomy pages incorrectly show 0.
-      const productMarketplaceCategory = resolveMarketplaceCategory(p.marketplaceCategory || '');
-      const categoryStr = productMarketplaceCategory.toLowerCase();
-      const productTypeStr = (p.category || '').toLowerCase();
-      const subcategoryStr = (p.subcategory || '').toLowerCase();
-      const tagsArr = Array.isArray(p.tags) ? p.tags : [];
-      
-      const matchesCategoryDirect =
-        categoryStr === selCatLower ||
-        categoryStr === canCatLower ||
-        categoryStr.includes(selCatLower) ||
-        categoryStr.includes(canCatLower) ||
-        // Backward compatibility for legacy products that stored the
-        // marketplace taxonomy in the generic category field.
-        productTypeStr === selCatLower ||
-        productTypeStr === canCatLower ||
-        productTypeStr.includes(selCatLower) ||
-        productTypeStr.includes(canCatLower);
-      const matchesCategoryTag = tagsArr.some(t => {
-        if (typeof t !== 'string') return false;
-        const tl = t.toLowerCase();
-        return tl.includes(selCatLower) || selCatLower.includes(tl) || tl.includes(canCatLower) || canCatLower.includes(tl);
-      });
-      const matchesSubcat = (subcategoryStr && (
-        subcategoryStr.includes(catNameLower) || 
-        catNameLower.includes(subcategoryStr) || 
-        subcategoryStr.includes(selCatLower) ||
-        subcategoryStr.includes(canCatLower)
-      ));
-      
-      // Also check if any of the category's canonical subcategories matches the product
-      const subcategoriesList = currentCategoryDef?.subcategories || [];
-      const matchesKnownSubcategory = subcategoriesList.some(sub => {
-        const subL = sub.toLowerCase();
-        return subcategoryStr.includes(subL) || tagsArr.some(t => typeof t === 'string' && t.toLowerCase().includes(subL)) || (p.title || '').toLowerCase().includes(subL);
-      });
-
-      const matchesCat = matchesCategoryDirect || matchesCategoryTag || matchesSubcat || matchesKnownSubcategory;
-      if (!matchesCat) return false;
+      // A product without an authoritative marketplaceCategory must not be
+      // pulled into a category through title/tag substring matching.
+      if (productCategory !== canonicalSelected) return false;
 
       if (activeSubcategory && activeSubcategory !== 'all' && activeSubcategory !== '') {
-        const subLower = String(activeSubcategory).toLowerCase();
-        const matchSub = subcategoryStr.includes(subLower);
-        const matchTags = tagsArr.some(t => typeof t === 'string' && (t.toLowerCase().includes(subLower) || subLower.includes(t.toLowerCase())));
-        const matchTitle = (p.title || '').toLowerCase().includes(subLower);
-        return matchSub || matchTags || matchTitle;
+        const productSubcategory = String(p.subcategory || '').trim().toLowerCase();
+        const selectedSubcategory = String(activeSubcategory).trim().toLowerCase();
+        return productSubcategory === selectedSubcategory;
       }
 
       return true;
     });
-  }, [products, selectedCategory, currentCategoryDef, activeSubcategory]);
+  }, [products, selectedCategory, activeSubcategory]);
 
   const filteredCategoryProducts = useMemo(() => {
     return categoryProducts
@@ -292,30 +242,17 @@ export const MarketplaceView: React.FC<MarketplaceViewProps> = ({
 
         // Apply the same canonical 18-category taxonomy used by the marketplace filter.
         if (categoryFilters.category !== 'all') {
-          const selectedDef = getMarketplaceCategoryDef(categoryFilters.category);
-          const canonical = resolveMarketplaceCategory(categoryFilters.category).toLowerCase();
-          const categoryText = String(p.marketplaceCategory || p.category || '').toLowerCase();
-          const subcategoryText = String(p.subcategory || '').toLowerCase();
-          const titleText = String(p.title || '').toLowerCase();
-          const tagTexts = Array.isArray(p.tags) ? p.tags.filter((t): t is string => typeof t === 'string').map((t) => t.toLowerCase()) : [];
-          const selectedName = String(selectedDef?.name || '').toLowerCase();
-          const categoryMatch =
-            categoryText === canonical ||
-            categoryText.includes(canonical) ||
-            categoryText.includes(selectedName) ||
-            selectedName.includes(categoryText) ||
-            subcategoryText.includes(selectedName) ||
-            titleText.includes(selectedName) ||
-            tagTexts.some((tag) => tag.includes(canonical) || tag.includes(selectedName));
-          if (!categoryMatch) return false;
+          const canonical = resolveMarketplaceCategory(categoryFilters.category);
+          const productCategory = resolveMarketplaceCategory(
+            String(p.marketplaceCategory || '')
+          );
+
+          if (productCategory !== canonical) return false;
 
           if (categoryFilters.subcategory) {
-            const sub = categoryFilters.subcategory.toLowerCase();
-            const subMatch =
-              subcategoryText.includes(sub) ||
-              titleText.includes(sub) ||
-              tagTexts.some((tag) => tag.includes(sub));
-            if (!subMatch) return false;
+            const productSubcategory = String(p.subcategory || '').trim().toLowerCase();
+            const selectedSubcategory = String(categoryFilters.subcategory).trim().toLowerCase();
+            if (productSubcategory !== selectedSubcategory) return false;
           }
         }
 
