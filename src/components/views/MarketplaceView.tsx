@@ -149,15 +149,6 @@ export const MarketplaceView: React.FC<MarketplaceViewProps> = ({
   const currentCategoryDef = getMarketplaceCategoryDef(selectedCategory);
   const currentSubcategoryDefs = useMemo(() => getMarketplaceSubcategories(selectedCategory), [selectedCategory]);
 
-  const subcategoryCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    categoryProducts.forEach((product) => {
-      const key = String(product.subcategory || '').trim().toLowerCase();
-      if (key) counts[key] = (counts[key] || 0) + 1;
-    });
-    return counts;
-  }, [categoryProducts]);
-
   // Recommended products: featured or high rated items
   const recommendedProducts = useMemo(() => {
     return products
@@ -244,6 +235,15 @@ export const MarketplaceView: React.FC<MarketplaceViewProps> = ({
       return true;
     });
   }, [products, selectedCategory, activeSubcategory]);
+
+  const subcategoryCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    categoryProducts.forEach((product) => {
+      const key = String(product.subcategory || '').trim().toLowerCase();
+      if (key) counts[key] = (counts[key] || 0) + 1;
+    });
+    return counts;
+  }, [categoryProducts]);
 
   const filteredCategoryProducts = useMemo(() => {
     return categoryProducts
