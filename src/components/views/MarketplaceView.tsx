@@ -45,7 +45,7 @@ import {
 } from 'lucide-react';
 import { Product, Vendor } from '../../types';
 import { MarketplaceCategory } from '../../types/navigation';
-import { MARKETPLACE_CATEGORIES, getMarketplaceCategoryDef, resolveMarketplaceCategory } from '../../data/categoryData';
+import { MARKETPLACE_CATEGORIES, getMarketplaceCategoryDef, getMarketplaceSubcategories, resolveMarketplaceCategory } from '../../data/categoryData';
 import { ProductCard } from '../ProductCard';
 import { CatalogFilterBar, FilterOptions } from '../CatalogFilterBar';
 
@@ -147,6 +147,7 @@ export const MarketplaceView: React.FC<MarketplaceViewProps> = ({
   };
 
   const currentCategoryDef = getMarketplaceCategoryDef(selectedCategory);
+  const currentSubcategoryDefs = useMemo(() => getMarketplaceSubcategories(selectedCategory), [selectedCategory]);
 
   // Recommended products: featured or high rated items
   const recommendedProducts = useMemo(() => {
@@ -995,38 +996,39 @@ export const MarketplaceView: React.FC<MarketplaceViewProps> = ({
                 </div>
               </div>
 
-              {/* Subcategories interactive pill bar */}
-              {currentCategoryDef?.subcategories && (
+              {/* Canonical subcategory navigation: every item is a real data domain. */}
+              {currentCategoryDef && (
                 <div className="flex flex-wrap items-center gap-2 pt-1 relative z-20">
                   <button
                     type="button"
-                    onClick={() => setActiveSubcategory('all')}
+                    onClick={() => { setActiveSubcategory('all'); setCategoryFilters((prev) => ({ ...prev, subcategory: '' })); }}
                     className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm cursor-pointer ${
                       activeSubcategory === 'all'
                         ? 'bg-purple-600 text-white border border-purple-400 shadow-purple-500/30'
                         : 'bg-slate-800/90 hover:bg-slate-700/90 text-purple-300 border border-purple-900/60'
                     }`}
                   >
-                    <span>All {selectedCategory === 'deals' ? 'Deals' : 'Items'}</span>
+                    <span>All Items</span>
                   </button>
-
-                  {currentCategoryDef.subcategories.map((sub, idx) => {
-                    const isActive = activeSubcategory === sub;
+                  {currentSubcategoryDefs.map((sub) => {
+                    const isActive = activeSubcategory === sub.name;
                     return (
                       <button
-                        key={idx}
+                        key={sub.id}
                         type="button"
-                        onClick={() => setActiveSubcategory(isActive ? 'all' : sub)}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all flex items-center gap-1.5 shadow-sm cursor-pointer ${
+                        title={sub.description}
+                        onClick={() => {
+                          setActiveSubcategory(isActive ? 'all' : sub.name);
+                          setCategoryFilters((prev) => ({ ...prev, subcategory: isActive ? '' : sub.name }));
+                        }}
+                        className={`px-3 py-2 rounded-xl text-left transition-all shadow-sm cursor-pointer border ${
                           isActive
-                            ? 'bg-gradient-to-r from-amber-500 to-purple-600 text-white border border-amber-300 shadow-amber-500/30'
-                            : 'bg-slate-800/90 hover:bg-slate-700/90 text-purple-200 border border-purple-900/60 hover:text-white'
+                            ? 'bg-gradient-to-r from-amber-500 to-purple-600 text-white border-amber-300'
+                            : 'bg-slate-800/90 hover:bg-slate-700/90 text-purple-200 border-purple-900/60'
                         }`}
                       >
-                        {selectedCategory === 'deals' && (
-                          <Flame className={`w-3.5 h-3.5 ${isActive ? 'text-amber-200' : 'text-amber-400'}`} />
-                        )}
-                        <span>{sub}</span>
+                        <span className="block text-xs font-extrabold">{sub.name}</span>
+                        <span className="block text-[10px] opacity-70 mt-0.5">{sub.listingType}</span>
                       </button>
                     );
                   })}
