@@ -249,32 +249,28 @@ export const BuyerOrderHub: React.FC<BuyerOrderHubProps> = ({
     if (!activeOrder) return [];
 
     if (isDigitalOrUtility) {
+      const timeline = Array.isArray(activeOrder.timeline) ? activeOrder.timeline : [];
+      const eventFor = (...statuses: PstpOrderStatus[]) =>
+        timeline.find((event) => statuses.includes(event.status));
+
       return [
         {
-          title: 'Order Placed & Pi Authorized',
+          title: 'Order Placed',
           status: 'Pending Payment',
-          completed: true,
+          completed: Boolean(activeOrder.createdAt),
           active: activeOrder.pstpStatus === 'Pending Payment',
           timestamp: activeOrder.createdAt,
-          location: 'Pi Network Platform Gateway'
+          location: 'PiNova Order System'
         },
         {
           title: 'Pi Payment Server-Verified',
           status: 'Payment Verified',
-          completed: ['Payment Verified', 'Completed', 'Delivered'].includes(activeOrder.pstpStatus),
+          completed: ['Payment Verified', 'Seller Accepted', 'Preparing Order', 'Packed', 'Shipped', 'In Transit', 'Out for Delivery', 'Delivered', 'Completed'].includes(activeOrder.pstpStatus),
           active: activeOrder.pstpStatus === 'Payment Verified',
-          timestamp: activeOrder.updatedAt,
+          timestamp: eventFor('Payment Verified')?.timestamp,
           location: 'PiNova PSTP Protection Server'
-        },
-        {
-          title: 'Instant Electronic Key / Token Dispatch',
-          status: 'Completed',
-          completed: ['Delivered', 'Completed'].includes(activeOrder.pstpStatus),
-          active: ['Delivered', 'Completed'].includes(activeOrder.pstpStatus),
-          timestamp: activeOrder.updatedAt,
-          location: 'Secure Digital Delivery Server'
         }
-      ];
+      ].filter((milestone) => milestone.completed || milestone.active || milestone.timestamp);
     }
 
     // Physical milestones are derived strictly from the order's recorded timeline.
@@ -304,15 +300,15 @@ export const BuyerOrderHub: React.FC<BuyerOrderHubProps> = ({
         status: 'Payment Verified' as PstpOrderStatus,
         completed: currentStatusIdx >= 1,
         active: activeOrder.pstpStatus === 'Payment Verified',
-        timestamp: eventFor('Payment Verified')?.timestamp || activeOrder.createdAt,
+        timestamp: eventFor('Payment Verified')?.timestamp,
         location: 'Pi Platform Non-Custodial Gateway'
       },
       {
-        title: 'Seller Confirmed & Item Packed',
+        title: 'Seller Fulfillment',
         status: 'Packed' as PstpOrderStatus,
         completed: currentStatusIdx >= 4,
         active: ['Seller Accepted', 'Preparing Order', 'Packed'].includes(activeOrder.pstpStatus),
-        timestamp: eventFor('Packed', 'Seller Accepted', 'Preparing Order')?.timestamp,
+        timestamp: eventFor('Seller Accepted', 'Preparing Order', 'Packed')?.timestamp,
         location: activeOrder.items[0]?.product?.sellerName
       },
       {
