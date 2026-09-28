@@ -85,9 +85,9 @@ export const SellerFulfillmentCenter: React.FC<SellerFulfillmentCenterProps> = (
 
   const filteredOrders = sellerOrders.filter((o) => {
     if (filterStatus === 'all') return true;
-    if (filterStatus === 'pending') return ['Payment Verified', 'Order Confirmed', 'Processing'].includes(o.pstpStatus);
+    if (filterStatus === 'pending') return ['Payment Verified', 'Seller Accepted', 'Preparing Order', 'Packed'].includes(o.pstpStatus);
     if (filterStatus === 'shipped') return ['Shipped', 'In Transit', 'Out for Delivery'].includes(o.pstpStatus);
-    if (filterStatus === 'completed') return ['Delivered', 'Completed'].includes(o.pstpStatus);
+    if (filterStatus === 'completed') return ['Delivered', 'Buyer Confirmation', 'Completed'].includes(o.pstpStatus);
     return true;
   });
 
