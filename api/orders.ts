@@ -753,6 +753,16 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       }
       const allowedBuyerStatuses: PstpOrderStatus[] = ['Buyer Confirmation', 'Cancelled', 'Refund Requested', 'Disputed'];
       if (!allowedBuyerStatuses.includes(nextStatus) && !roles.includes('PLATFORM_ADMIN') && !roles.includes('COMPLIANCE_OFFICER')) return json(res, 403, { ok: false, error: 'ORDER_STATUS_CHANGE_NOT_ALLOWED' });
+      // Buyer Confirmation is a lifecycle gate, not a free-form status update.
+      // Keep the authoritative confirmation endpoint as the only path to confirmation/release.
+      if (nextStatus === 'Buyer Confirmation') {
+        return json(res, 409, {
+          ok: false,
+          error: 'RECEIPT_CONFIRMATION_REQUIRES_VERIFIED_DELIVERY',
+          currentStatus: order.pstpStatus,
+          message: 'Use the confirm-receipt endpoint after server-recorded Delivered status.'
+        });
+      }
       const escrowStatus = body.escrowStatus || order.escrowStatus;
       if (nextStatus === 'Completed' && order.serverVerified !== true) return json(res, 409, { ok: false, error: 'ORDER_PAYMENT_NOT_SERVER_VERIFIED' });
       const timestamp = new Date().toISOString();
