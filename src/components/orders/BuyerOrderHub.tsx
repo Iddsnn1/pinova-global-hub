@@ -296,23 +296,39 @@ export const BuyerOrderHub: React.FC<BuyerOrderHubProps> = ({
 
     const milestones = [
       {
-        title: 'Order Authorized & Escrow Locked',
+        title: 'Payment Verified',
         status: 'Payment Verified' as PstpOrderStatus,
         completed: currentStatusIdx >= 1,
         active: activeOrder.pstpStatus === 'Payment Verified',
         timestamp: eventFor('Payment Verified')?.timestamp,
-        location: 'Pi Platform Non-Custodial Gateway'
+        location: 'PiNova PSTP Protection Server'
       },
       {
-        title: 'Seller Fulfillment',
-        status: 'Packed' as PstpOrderStatus,
-        completed: currentStatusIdx >= 4,
-        active: ['Seller Accepted', 'Preparing Order', 'Packed'].includes(activeOrder.pstpStatus),
-        timestamp: eventFor('Seller Accepted', 'Preparing Order', 'Packed')?.timestamp,
+        title: 'Seller Accepted',
+        status: 'Seller Accepted' as PstpOrderStatus,
+        completed: currentStatusIdx >= 2,
+        active: activeOrder.pstpStatus === 'Seller Accepted',
+        timestamp: eventFor('Seller Accepted')?.timestamp,
         location: activeOrder.items[0]?.product?.sellerName
       },
       {
-        title: 'Dispatched with Carrier',
+        title: 'Preparing Order',
+        status: 'Preparing Order' as PstpOrderStatus,
+        completed: currentStatusIdx >= 3,
+        active: activeOrder.pstpStatus === 'Preparing Order',
+        timestamp: eventFor('Preparing Order')?.timestamp,
+        location: activeOrder.items[0]?.product?.sellerName
+      },
+      {
+        title: 'Packed',
+        status: 'Packed' as PstpOrderStatus,
+        completed: currentStatusIdx >= 4,
+        active: activeOrder.pstpStatus === 'Packed',
+        timestamp: eventFor('Packed')?.timestamp,
+        location: activeOrder.items[0]?.product?.sellerName
+      },
+      {
+        title: 'Shipped',
         status: 'Shipped' as PstpOrderStatus,
         completed: currentStatusIdx >= 5,
         active: activeOrder.pstpStatus === 'Shipped',
@@ -320,7 +336,7 @@ export const BuyerOrderHub: React.FC<BuyerOrderHubProps> = ({
         location: activeOrder.carrier
       },
       {
-        title: 'In Transit / Hub Transfer',
+        title: 'In Transit',
         status: 'In Transit' as PstpOrderStatus,
         completed: currentStatusIdx >= 6,
         active: activeOrder.pstpStatus === 'In Transit',
@@ -334,7 +350,7 @@ export const BuyerOrderHub: React.FC<BuyerOrderHubProps> = ({
         timestamp: eventFor('Out for Delivery')?.timestamp
       },
       {
-        title: 'Delivered to Recipient',
+        title: 'Delivered',
         status: 'Delivered' as PstpOrderStatus,
         completed: currentStatusIdx >= 8,
         active: activeOrder.pstpStatus === 'Delivered',
@@ -342,6 +358,14 @@ export const BuyerOrderHub: React.FC<BuyerOrderHubProps> = ({
         location: activeOrder.shippingAddress
           ? `${activeOrder.shippingAddress.city}, ${activeOrder.shippingAddress.country}`
           : undefined
+      },
+      {
+        title: 'Completed / PSTP Released',
+        status: 'Completed' as PstpOrderStatus,
+        completed: currentStatusIdx >= 9,
+        active: activeOrder.pstpStatus === 'Completed',
+        timestamp: eventFor('Completed')?.timestamp,
+        location: 'PiNova PSTP Protection Server'
       }
     ];
 
