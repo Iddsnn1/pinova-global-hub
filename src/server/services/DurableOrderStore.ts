@@ -70,6 +70,17 @@ export async function listDurableOrders(buyerUsername?: string): Promise<Order[]
     .filter((order) => !buyerUsername || order.buyerUsername === buyerUsername);
 }
 
+export async function softDeleteDurableOrder(id: string): Promise<Order | null> {
+  const existing = await getDurableOrder(id);
+  if (!existing) return null;
+  if (existing.isDeleted === true) return existing;
+  return saveDurableOrder({
+    ...existing,
+    isDeleted: true,
+    updatedAt: new Date().toISOString(),
+  });
+}
+
 export async function saveDurableOrder(order: Order): Promise<Order> {
   if (!enabled()) throw new Error('DURABLE_ORDER_STORAGE_UNAVAILABLE');
   const existing = await getDurableOrder(order.id);
