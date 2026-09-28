@@ -757,20 +757,55 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       if (sellerLifecycleStatuses.includes(nextStatus)) {
         return json(res, 403, { ok: false, error: 'SELLER_LIFECYCLE_REQUIRES_FULFILLMENT_OR_CARRIER_EVIDENCE' });
       }
-      const allowedBuyerStatuses: PstpOrderStatus[] = ['Buyer Confirmation', 'Cancelled', 'Refund Requested', 'Disputed'];
-      if (!allowedBuyerStatuses.includes(nextStatus) && !roles.includes('PLATFORM_ADMIN') && !roles.includes('COMPLIANCE_OFFICER')) return json(res, 403, { ok: false, error: 'ORDER_STATUS_CHANGE_NOT_ALLOWED' });
-      // Buyer Confirmation is a lifecycle gate, not a free-form status update.
-      // Keep the authoritative confirmation endpoint as the only path to confirmation/release.
-      if (nextStatus === 'Buyer Confirmation') {
+      const allowedBuyerStatuses: PstpOrderStatus[] = ['Cancelled', 'Refund Requested', 'Disputed'];
+      if (!allowedBuyerStatuses.includes(nextStatus) && !roles.includes('PLATFORM_ADMIN') && !roles.includes('COMPLIANCE_OFFICER')) {
+        return json(res, 403, { ok: false, error: 'ORDER_STATUS_CHANGE_NOT_ALLOWED' });
+      }
+
+      // Buyer Confirmation and Completed are authoritative lifecycle outcomes.
+      // They can only be reached through their dedicated server-controlled paths.
+      if (nextStatus === 'Buyer Confirmation' || nextStatus === 'Completed') {
         return json(res, 409, {
           ok: false,
-          error: 'RECEIPT_CONFIRMATION_REQUIRES_VERIFIED_DELIVERY',
+          error: nextStatus === 'Completed'
+            ? 'ORDER_COMPLETION_REQUIRES_RECEIPT_CONFIRMATION'
+            : 'RECEIPT_CONFIRMATION_REQUIRES_VERIFIED_DELIVERY',
           currentStatus: order.pstpStatus,
-          message: 'Use the confirm-receipt endpoint after server-recorded Delivered status.'
+          message: nextStatus === 'Completed'
+            ? 'Use the confirm-receipt endpoint after server-recorded Delivered status.'
+            : 'Use the confirm-receipt endpoint after server-recorded Delivered status.'
         });
       }
+
+      // Buyer-initiated exception states are also lifecycle-gated.
+      // They cannot be opened after completion/release, and a dispute/refund
+      // cannot be fabricated before an authoritative payment exists.
+      if (nextStatus === 'Refund Requested' || nextStatus === 'Disputed') {
+        if (order.pstpStatus === 'Completed' || order.escrowStatus === 'released') {
+          return json(res, 409, {
+            ok: false,
+            error: 'ORDER_EXCEPTION_NOT_ALLOWED_AFTER_COMPLETION',
+            currentStatus: order.pstpStatus,
+            escrowStatus: order.escrowStatus
+          });
+        }
+        if (order.serverVerified !== true) {
+          return json(res, 409, {
+            ok: false,
+            error: 'ORDER_PAYMENT_NOT_SERVER_VERIFIED'
+          });
+        }
+      }
+
+      if (nextStatus === 'Cancelled' && order.serverVerified === true) {
+        return json(res, 409, {
+          ok: false,
+          error: 'PAID_ORDER_CANCELLATION_REQUIRES_REFUND_FLOW',
+          currentStatus: order.pstpStatus
+        });
+      }
+
       const escrowStatus = body.escrowStatus || order.escrowStatus;
-      if (nextStatus === 'Completed' && order.serverVerified !== true) return json(res, 409, { ok: false, error: 'ORDER_PAYMENT_NOT_SERVER_VERIFIED' });
       const timestamp = new Date().toISOString();
       const updated = await saveDurableOrder({
         ...order,
