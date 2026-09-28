@@ -374,14 +374,43 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         return json(res, 400, { ok: false, error: 'EXPLICIT_CLEANUP_CONFIRMATION_REQUIRED' });
       }
 
-      const cutoff = '2026-09-28T00:00:00.000Z';
-      const candidates = (await listDurableOrders()).filter((order) => {
-        const created = Date.parse(String(order.createdAt || ''));
-        return Number.isFinite(created) && created < Date.parse(cutoff);
-      });
+      const orderIds = Array.isArray(body.orderIds)
+        ? body.orderIds.map((value: unknown) => String(value || '').trim()).filter(Boolean)
+        : [];
 
+      // Safety gate: cleanup is explicit-ID only. Never sweep by date because
+      // historical ORD-PI-* commerce orders may contain real Pi payments/PSTP state.
+      if (orderIds.length === 0 || orderIds.length > 100) {
+        return json(res, 400, {
+          ok: false,
+          error: 'EXPLICIT_ORDER_IDS_REQUIRED',
+          message: 'Provide the exact legacy test order IDs to soft-delete.'
+        });
+      }
+
+      const allOrders = await listDurableOrders();
+      const byId = new Map(allOrders.map((order) => [order.id, order]));
+      const missing: string[] = [];
+      const protectedOrders: string[] = [];
       const deleted: string[] = [];
-      for (const order of candidates) {
+
+      for (const orderId of orderIds) {
+        const order = byId.get(orderId);
+        if (!order) {
+          missing.push(orderId);
+          continue;
+        }
+
+        const isPaidCommerce = order.id.startsWith('ORD-PI-') ||
+          Number(order.totalPi || 0) > 0 ||
+          order.serverVerified === true ||
+          ['Payment Verified', 'Seller Accepted', 'Preparing Order', 'Packed', 'Shipped', 'In Transit', 'Out for Delivery', 'Delivered'].includes(order.pstpStatus);
+
+        if (isPaidCommerce && body.allowPaidCommerceDeletion !== true) {
+          protectedOrders.push(order.id);
+          continue;
+        }
+
         const updated = await softDeleteDurableOrder(order.id);
         if (updated?.isDeleted === true) deleted.push(order.id);
       }
@@ -392,7 +421,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         actor: user.username,
         actorRole: 'admin',
         action: 'LEGACY_TEST_ORDERS_SOFT_DELETED',
-        details: `Soft-deleted ${deleted.length} legacy orders created before ${cutoff}; payment/PSTP audit records were preserved.`,
+        details: `Soft-deleted ${deleted.length} explicitly selected legacy orders; protected paid-commerce orders were skipped unless allowPaidCommerceDeletion was explicitly true.`,
         ipAddress: 'server',
         deviceInfo: 'PiNova Legacy Order Cleanup'
       });
@@ -401,7 +430,9 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         ok: true,
         serverAuthoritative: true,
         mode: 'soft-delete',
-        cutoff,
+        requestedOrderIds: orderIds,
+        missingOrderIds: missing,
+        protectedOrderIds: protectedOrders,
         deletedCount: deleted.length,
         deletedOrderIds: deleted
       });
