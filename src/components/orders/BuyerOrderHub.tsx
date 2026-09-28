@@ -191,7 +191,7 @@ export const BuyerOrderHub: React.FC<BuyerOrderHubProps> = ({
 
   const handleCreateReturn = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!activeOrder) return;
+    if (!activeOrder || !canRequestBuyerException) return;
     const note = `Buyer requested return & refund. Reason: ${returnReason} - ${returnDesc}`;
     try {
       const response = await fetch(`/api/v1/orders/${encodeURIComponent(activeOrder.id)}`, {
@@ -211,7 +211,7 @@ export const BuyerOrderHub: React.FC<BuyerOrderHubProps> = ({
 
   const handleCreateDispute = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!activeOrder) return;
+    if (!activeOrder || !canRequestBuyerException) return;
     const note = `Buyer raised official dispute: ${disputeReason} - ${disputeDesc}`;
     try {
       const response = await fetch(`/api/v1/orders/${encodeURIComponent(activeOrder.id)}`, {
@@ -228,6 +228,15 @@ export const BuyerOrderHub: React.FC<BuyerOrderHubProps> = ({
       setDisputeSuccessNote('Dispute could not be submitted. No local order state was changed.');
     }
   };
+
+  const canRequestBuyerException = Boolean(
+    activeOrder &&
+    activeOrder.serverVerified === true &&
+    activeOrder.pstpStatus !== 'Completed' &&
+    activeOrder.escrowStatus !== 'released' &&
+    activeOrder.pstpStatus !== 'Refund Requested' &&
+    activeOrder.pstpStatus !== 'Disputed'
+  );
 
   // Dynamic Milestones calculation
   const isPhysical = activeOrder?.items.some(i => i.product?.category === 'physical');
@@ -1001,7 +1010,11 @@ export const BuyerOrderHub: React.FC<BuyerOrderHubProps> = ({
             {/* TAB 5: RETURN & REFUND */}
             {activeTab === 'return' && (
               <div className="space-y-4">
-                {returnSuccessNote ? (
+                {!canRequestBuyerException && !returnSuccessNote ? (
+                  <div className="p-4 rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300 text-xs font-bold">
+                    Return/refund requests require a server-verified payment and an order that has not been completed or escrow-released.
+                  </div>
+                ) : returnSuccessNote ? (
                   <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-xs font-bold flex items-center gap-2">
                     <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
                     <span>{returnSuccessNote}</span>
@@ -1054,7 +1067,11 @@ export const BuyerOrderHub: React.FC<BuyerOrderHubProps> = ({
             {/* TAB 6: DISPUTE ARBITRATION PORTAL */}
             {activeTab === 'dispute' && (
               <div className="space-y-4">
-                {disputeSuccessNote ? (
+                {!canRequestBuyerException && !disputeSuccessNote ? (
+                  <div className="p-4 rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300 text-xs font-bold">
+                    Disputes require a server-verified payment and an order that has not been completed or escrow-released.
+                  </div>
+                ) : disputeSuccessNote ? (
                   <div className="p-4 rounded-2xl bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800 text-purple-800 dark:text-purple-300 text-xs font-bold flex items-center gap-2">
                     <ShieldAlert className="w-5 h-5 text-purple-600 shrink-0" />
                     <span>{disputeSuccessNote}</span>
