@@ -70,11 +70,8 @@ export const BuyerOrderHub: React.FC<BuyerOrderHubProps> = ({
       return orderBuyer === userLower || (userLower === '' && orderBuyer !== '');
     });
 
-    // 2. If matched has results, return them. If user is DemoBuyer or default demo Pioneer, return all available
-    if (matched.length > 0) return matched;
-    
-    // Fallback: If no strict username match, display user's orders or sample orders so users never see a false "No Orders Found"
-    return orders;
+    // Fail closed: never display another buyer's orders or demo/sample orders.
+    return matched;
   }, [orders, buyerUsername]);
 
   // Selected Order State
@@ -139,7 +136,7 @@ export const BuyerOrderHub: React.FC<BuyerOrderHubProps> = ({
       if (!matchesSearch) return false;
 
       if (statusFilter === 'active') {
-        return ['Pending Payment', 'Payment Verified', 'Seller Accepted', 'Processing', 'Preparing Shipment', 'Packed', 'Shipped', 'In Transit', 'Out for Delivery'].includes(o.pstpStatus);
+        return ['Pending Payment', 'Payment Verified', 'Seller Accepted', 'Preparing Order', 'Packed', 'Shipped', 'In Transit', 'Out for Delivery'].includes(o.pstpStatus);
       }
       if (statusFilter === 'completed') {
         return ['Delivered', 'Buyer Confirmation', 'Completed'].includes(o.pstpStatus);
@@ -167,7 +164,7 @@ export const BuyerOrderHub: React.FC<BuyerOrderHubProps> = ({
     const term = directLookupInput.trim().toLowerCase();
     if (!term) return;
 
-    const matched = orders.find(o => 
+    const matched = buyerOrders.find(o => 
       (o?.id || '').toLowerCase() === term ||
       (o?.trackingNumber || '').toLowerCase() === term ||
       (o?.piPaymentId || '').toLowerCase() === term ||
@@ -192,64 +189,44 @@ export const BuyerOrderHub: React.FC<BuyerOrderHubProps> = ({
     }
   };
 
-  const handleCreateReturn = (e: React.FormEvent) => {
+  const handleCreateReturn = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeOrder) return;
-    
-    if (onRequestReturn) {
-      onRequestReturn(activeOrder.id, `${returnReason}: ${returnDesc}`);
+    const note = `Buyer requested return & refund. Reason: ${returnReason} - ${returnDesc}`;
+    try {
+      const response = await fetch(`/api/v1/orders/${encodeURIComponent(activeOrder.id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ pstpStatus: 'Refund Requested', note })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || data?.ok !== true || !data?.order) throw new Error(data?.error || 'RETURN_REQUEST_REJECTED');
+      onOrderUpdated?.(data.order as Order);
+      setReturnSuccessNote('Return request submitted to the server for review. No escrow release was performed.');
+      setReturnDesc('');
+    } catch {
+      setReturnSuccessNote('Return request could not be submitted. No local order state was changed.');
     }
-
-    service.returnRefundManager.createReturnRequest(
-      activeOrder.id,
-      buyerUsername || activeOrder.buyerUsername,
-      activeOrder.items[0]?.product?.sellerName || 'Vendor',
-      returnReason,
-      returnDesc,
-      activeOrder.totalPi
-    );
-
-    const { updatedOrder } = service.lifecycleManager.transitionState(
-      activeOrder,
-      'Refund Requested',
-      buyerUsername || activeOrder.buyerUsername,
-      'buyer',
-      `Buyer requested return & refund. Reason: ${returnReason} - ${returnDesc}`
-    );
-
-    if (onOrderUpdated) onOrderUpdated(updatedOrder);
-    setReturnSuccessNote('Return request successfully filed and transmitted to seller and PiNova arbitration.');
-    setReturnDesc('');
   };
 
-  const handleCreateDispute = (e: React.FormEvent) => {
+  const handleCreateDispute = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeOrder) return;
-
-    if (onOpenDispute) {
-      onOpenDispute(activeOrder.id, `${disputeReason}: ${disputeDesc}`);
+    const note = `Buyer raised official dispute: ${disputeReason} - ${disputeDesc}`;
+    try {
+      const response = await fetch(`/api/v1/orders/${encodeURIComponent(activeOrder.id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ pstpStatus: 'Disputed', note })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || data?.ok !== true || !data?.order) throw new Error(data?.error || 'DISPUTE_REQUEST_REJECTED');
+      onOrderUpdated?.(data.order as Order);
+      setDisputeSuccessNote('Dispute submitted to the server for review. No escrow release was performed.');
+      setDisputeDesc('');
+    } catch {
+      setDisputeSuccessNote('Dispute could not be submitted. No local order state was changed.');
     }
-
-    service.disputeManager.openDispute(
-      activeOrder.id,
-      buyerUsername || activeOrder.buyerUsername,
-      activeOrder.items[0]?.product?.sellerName || 'Vendor',
-      disputeReason,
-      disputeDesc,
-      activeOrder.totalPi
-    );
-
-    const { updatedOrder } = service.lifecycleManager.transitionState(
-      activeOrder,
-      'Disputed',
-      buyerUsername || activeOrder.buyerUsername,
-      'buyer',
-      `Buyer raised official dispute: ${disputeReason}`
-    );
-
-    if (onOrderUpdated) onOrderUpdated(updatedOrder);
-    setDisputeSuccessNote('Official dispute opened. PiNova Arbitration Team and Seller have been notified.');
-    setDisputeDesc('');
   };
 
   // Dynamic Milestones calculation
