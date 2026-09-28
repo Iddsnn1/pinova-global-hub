@@ -581,7 +581,7 @@ export const BuyerOrderHub: React.FC<BuyerOrderHubProps> = ({
               </div>
 
               {/* Confirm Receipt Action Button */}
-              {(activeOrder.pstpStatus === 'Delivered' || activeOrder.pstpStatus === 'Shipped') && (
+              {activeOrder.pstpStatus === 'Delivered' && (
                 <button
                   onClick={() => handleConfirmOrderReceipt(activeOrder)}
                   className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black flex items-center gap-2 shadow-lg shadow-emerald-900/30 transition-all hover:scale-105 shrink-0"
