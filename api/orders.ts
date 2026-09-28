@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import { createHash, randomBytes, createHmac, timingSafeEqual } from 'crypto';
-import { authService, paymentLedgerRepo, pstpAuditRepo, idempotencyRepo, verifyPiPaymentAuthoritative, durableOrderStorageEnabled, getDurableOrder, listDurableOrders, saveDurableOrder, markDurableOrderPaymentVerified } from '../dist/server.cjs';
+import { authService, paymentLedgerRepo, pstpAuditRepo, idempotencyRepo, verifyPiPaymentAuthoritative, durableOrderStorageEnabled, getDurableOrder, listDurableOrders, saveDurableOrder, softDeleteDurableOrder, markDurableOrderPaymentVerified } from '../dist/server.cjs';
 import { listDurableVendorApplications } from '../dist/server.cjs';
 import { durableProductStorageEnabled, getDurableProduct, reserveDurableProductStockBatch } from '../dist/server.cjs';
 import type { Order, OrderItem, PstpOrderStatus } from '../src/types';
@@ -363,6 +363,50 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     if (!user?.username) return json(res, 401, { ok: false, error: 'INVALID_SESSION' });
     if (!durableProductStorageEnabled()) return json(res, 503, { ok: false, error: 'DURABLE_PRODUCT_STORAGE_UNAVAILABLE' });
     if (!durableOrderStorageEnabled()) return json(res, 503, { ok: false, error: 'DURABLE_ORDER_STORAGE_UNAVAILABLE' });
+    // One-time-safe-by-cutoff legacy cleanup: only PLATFORM_ADMIN may invoke it.
+    // The fixed cutoff prevents future orders from being swept accidentally.
+    if (req.method === 'POST' && path === 'admin/legacy-test-cleanup') {
+      if (!(user.roles || []).includes('PLATFORM_ADMIN')) {
+        return json(res, 403, { ok: false, error: 'PLATFORM_ADMIN_REQUIRED' });
+      }
+      const body = await readJson(req);
+      if (String(body.confirmation || '') !== 'LEGACY_TEST_ORDERS_2026-09-28') {
+        return json(res, 400, { ok: false, error: 'EXPLICIT_CLEANUP_CONFIRMATION_REQUIRED' });
+      }
+
+      const cutoff = '2026-09-28T00:00:00.000Z';
+      const candidates = (await listDurableOrders()).filter((order) => {
+        const created = Date.parse(String(order.createdAt || ''));
+        return Number.isFinite(created) && created < Date.parse(cutoff);
+      });
+
+      const deleted: string[] = [];
+      for (const order of candidates) {
+        const updated = await softDeleteDurableOrder(order.id);
+        if (updated?.isDeleted === true) deleted.push(order.id);
+      }
+
+      pstpAuditRepo.appendLog({
+        orderId: 'ORDER_CLEANUP',
+        paymentId: undefined,
+        actor: user.username,
+        actorRole: 'admin',
+        action: 'LEGACY_TEST_ORDERS_SOFT_DELETED',
+        details: `Soft-deleted ${deleted.length} legacy orders created before ${cutoff}; payment/PSTP audit records were preserved.`,
+        ipAddress: 'server',
+        deviceInfo: 'PiNova Legacy Order Cleanup'
+      });
+
+      return json(res, 200, {
+        ok: true,
+        serverAuthoritative: true,
+        mode: 'soft-delete',
+        cutoff,
+        deletedCount: deleted.length,
+        deletedOrderIds: deleted
+      });
+    }
+
     if (req.method === 'GET') {
       if (!path) {
         const requestedRole = String(url.searchParams.get('role') || '').trim().toLowerCase();
