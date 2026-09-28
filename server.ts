@@ -41,7 +41,7 @@ import { StudentVerificationService } from './src/server/services/StudentVerific
 import { EducationRepository } from './src/server/db/repositories/EducationRepository';
 import { ProductRepository } from './src/server/db/repositories/ProductRepository';
 import { durableProductStorageEnabled, getDurableProduct, listDurableProducts, saveDurableProduct, updateDurableProductAvailability, reserveDurableProductStockBatch, softDeleteDurableProduct, deleteDurableProductBlob } from './src/server/services/DurableProductCatalog';
-import { durableOrderStorageEnabled, getDurableOrder, listDurableOrders, saveDurableOrder, markDurableOrderPaymentVerified } from './src/server/services/DurableOrderStore';
+import { durableOrderStorageEnabled, getDurableOrder, listDurableOrders, saveDurableOrder, markDurableOrderPaymentVerified, softDeleteDurableOrder } from './src/server/services/DurableOrderStore';
 import { get, list, put } from '@vercel/blob';
 
 dotenv.config();
@@ -5742,10 +5742,10 @@ if (!isVercelServerless) {
   });
 }
 
-export { authService, vendorApplicationRepo, ProductRepository, pstpAuditRepo, orderRepo, productRepo, paymentLedgerRepo, idempotencyRepo };
+export { authService, vendorApplicationRepo, ProductRepository, pstpAuditRepo, orderRepo, productRepo, paymentLedgerRepo, idempotencyRepo, listDurableVendorApplications };
 export { VendorApplicationRepository } from './src/server/db/repositories/VendorApplicationRepository';
 export default app;
 
 
 export { durableProductStorageEnabled, getDurableProduct, listDurableProducts, saveDurableProduct, updateDurableProductAvailability, reserveDurableProductStockBatch, softDeleteDurableProduct, deleteDurableProductBlob };
-export { durableOrderStorageEnabled, getDurableOrder, listDurableOrders, saveDurableOrder, markDurableOrderPaymentVerified };
+export { durableOrderStorageEnabled, getDurableOrder, listDurableOrders, saveDurableOrder, markDurableOrderPaymentVerified, softDeleteDurableOrder };
