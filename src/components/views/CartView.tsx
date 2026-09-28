@@ -269,9 +269,9 @@ export const CartView: React.FC<CartViewProps> = ({
           {/* Checkout Trigger */}
           <button
             onClick={onOpenCheckoutModal}
-            className="w-full py-3.5 rounded-xl bg-gradient-to-r from-purple-600 via-indigo-600 to-amber-500 text-white font-black text-sm shadow-xl hover:opacity-95 transition-opacity flex items-center justify-center gap-2"
+            className="w-full py-3.5 rounded-xl bg-gradient-to-r from-purple-600 via-indigo-600 to-amber-500 text-white font-black text-sm shadow-xl hover:opacity-95 transition-opacity flex items-center justify-center gap-2" aria-label="Checkout with cart"
           >
-            <span>Proceed to Escrow Checkout</span>
+            <span>Checkout</span>
             <ArrowRight className="w-4 h-4" />
           </button>
         </div>
