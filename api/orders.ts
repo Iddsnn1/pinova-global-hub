@@ -156,13 +156,19 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         ).trim().toLowerCase();
 
         let nextStatus: PstpOrderStatus | null = null;
-        if (/deliver/.test(statusCode) || /deliver/.test(statusText)) {
-          nextStatus = 'Delivered';
-        } else if (
+        // Evaluate the specific carrier milestone before generic delivery wording.
+        // "Out for Delivery" contains the word "delivery" and must never be
+        // misclassified as "Delivered".
+        if (
           /out.?for.?delivery|delivery.*progress/.test(statusCode) ||
           /out for delivery|with courier|delivery in progress/.test(statusText)
         ) {
           nextStatus = 'Out for Delivery';
+        } else if (
+          /^(delivered|delivery_complete|delivery_completed)$/.test(statusCode) ||
+          /^(delivered|delivery complete|delivery completed)$/.test(statusText)
+        ) {
+          nextStatus = 'Delivered';
         } else if (
           /transit|customs|processing|pre.?transit/.test(statusCode) ||
           /transit|customs|processed|departed|arrived/.test(statusText)
