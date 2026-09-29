@@ -16,6 +16,7 @@ import {
   EducationAuditLog
 } from '../../../types/education';
 import { normalizeCountryCode, matchesSubdivision } from '../../../data/countrySubdivisions';
+import { calculatePiFromUsd, PI_ORACLE_RATE_USD } from '../../../config/piOracle';
 export class EducationRepository {
   private institutionsEngine: StorageEngine<InstitutionProfile>;
   private studentsEngine: StorageEngine<StudentIdentity>;
@@ -436,18 +437,13 @@ export class EducationRepository {
 
     if (params.paymentMethod === 'PI_NETWORK') {
       if (!params.piPaymentId) throw new Error('PI_PAYMENT_ID_REQUIRED');
-      if (String(invoice.currency || '').trim().toUpperCase() !== 'PI') {
-        throw new Error('PI_FX_PROVIDER_REQUIRED');
-      }
-      if (!Number.isFinite(params.piAmount) || Number(params.piAmount) <= 0) {
-        throw new Error('PI_AMOUNT_REQUIRED');
-      }
-      if (Math.abs(Number(params.amountPaid) - Number(params.piAmount)) > 0.00000001) {
-        throw new Error('PI_AMOUNT_MISMATCH');
-      }
-      if (String(params.currency || '').trim().toUpperCase() !== 'PI') {
-        throw new Error('INVOICE_CURRENCY_MISMATCH');
-      }
+      const invoiceCurrency = String(invoice.currency || '').trim().toUpperCase();
+      const paymentCurrency = String(params.currency || '').trim().toUpperCase();
+      if (invoiceCurrency !== 'USD') throw new Error('PI_FIAT_REFERENCE_REQUIRED');
+      if (paymentCurrency !== invoiceCurrency) throw new Error('INVOICE_CURRENCY_MISMATCH');
+      if (!Number.isFinite(params.piAmount) || Number(params.piAmount) <= 0) throw new Error('PI_AMOUNT_REQUIRED');
+      const expectedPiAmount = calculatePiFromUsd(Number(params.amountPaid));
+      if (Math.abs(Number(params.piAmount) - expectedPiAmount) > 0.000000000001) throw new Error('PI_ORACLE_AMOUNT_MISMATCH');
     }
 
     // Phase 10: Prevent overpayment beyond outstanding balance
@@ -558,7 +554,7 @@ export class EducationRepository {
       entityId: paymentId,
       actorUsername: params.payerUsername,
       actorRole: 'PARENT',
-      details: `Paid $${params.amountPaid} (${params.piAmount} π) for Invoice ${invoice.invoiceNumber}. Receipt ${receiptNumber} generated.`
+      details: `Paid ${params.amountPaid} USD (${params.piAmount} π at 1 π = ${PI_ORACLE_RATE_USD.toLocaleString('en-US')}) for Invoice ${invoice.invoiceNumber}. Receipt ${receiptNumber} generated.`
     });
 
     return {
