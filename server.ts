@@ -1,4 +1,3 @@
-import { verifyPiPaymentAuthoritative } from './src/server/services/PiPaymentVerificationService';
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
@@ -50,7 +49,7 @@ dotenv.config();
 // Temporary diagnostic: capture the full stack for Node DEP0169 warnings.
 // This does not suppress the warning; it only identifies the exact dependency/call site.
 process.on('warning', (warning) => {
-  if (warning?.name === 'DeprecationWarning' && warning?.code === 'DEP0169') {
+  if (warning?.name === 'DeprecationWarning' && (warning as NodeJS.ErrnoException)?.code === 'DEP0169') {
     console.error('[DEP0169 TRACE]', warning.stack || warning.message);
   }
 });
@@ -3359,7 +3358,7 @@ app.get('/api/education/students/:id', authenticate, (req: AuthenticatedRequest,
     const requestedId = String(req.params.id || '').trim();
     const roles = req.user?.roles || [];
     const isAdmin = roles.some((r: string) => ['PLATFORM_ADMIN', 'BURSAR', 'FINANCE_ADMIN', 'INSTITUTION_ADMIN'].includes(r));
-    if (!isAdmin && ![String(req.user?.id || ''), String(req.user?.username || ''), String(req.user?.studentId || '')].includes(requestedId)) {
+    if (!isAdmin && ![String(req.user?.id || ''), String(req.user?.username || '')].includes(requestedId)) {
       res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Student access requires the authenticated student context.' });
       return;
     }
@@ -3418,7 +3417,7 @@ app.get('/api/education/invoices', authenticate, (req: AuthenticatedRequest, res
       studentId &&
       ((currentUser && String(studentId).toLowerCase() === currentUser.toLowerCase()) ||
        (currentUserId && String(studentId) === currentUserId) ||
-       (req.user?.studentId && String(studentId).toLowerCase() === String(req.user.studentId).toLowerCase()))
+       false)
     );
 
     if (!isAdmin && !isInstitutionStaff && !ownsGuardianFilter && !ownsStudentFilter) {
@@ -3457,7 +3456,7 @@ app.get('/api/education/invoices/:id', authenticate, (req: AuthenticatedRequest,
       Boolean(req.user?.guardianId && invoice.guardianId && req.user.guardianId.toLowerCase() === invoice.guardianId.toLowerCase()) ||
       Boolean(currentUser && invoice.studentId && invoice.studentId.toLowerCase() === currentUser.toLowerCase()) ||
       Boolean(currentUserId && invoice.studentId === currentUserId) ||
-      Boolean(req.user?.studentId && invoice.studentId && String(req.user.studentId).toLowerCase() === invoice.studentId.toLowerCase());
+      false;
     if (!authorized) {
       res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Access denied to this invoice.' });
       return;
@@ -3826,7 +3825,7 @@ app.get('/api/education/receipts/:receiptNumber', authenticate, (req: Authentica
     }
     const roles = req.user?.roles || [];
     const isAdmin = roles.some((r: string) => ['PLATFORM_ADMIN', 'BURSAR', 'FINANCE_ADMIN', 'INSTITUTION_ADMIN'].includes(r));
-    const userRefs = [String(req.user?.id || ''), String(req.user?.username || ''), String(req.user?.studentId || '')].map(v => v.trim().toLowerCase()).filter(Boolean);
+    const userRefs = [String(req.user?.id || ''), String(req.user?.username || ''), ''].map(v => v.trim().toLowerCase()).filter(Boolean);
     if (!isAdmin && (!receipt.studentId || !userRefs.includes(receipt.studentId.trim().toLowerCase()))) {
       res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Receipt access requires the authenticated student context.' });
       return;
@@ -3899,7 +3898,7 @@ app.post('/api/education/admissions/apply', authenticate, (req: AuthenticatedReq
 });
 
 // Admissions State Machine Transition (Requires Institution Admin or Compliance Officer)
-app.post('/api/education/admissions/:id/status', authenticate, requireRole(['PLATFORM_ADMIN', 'INSTITUTION_ADMIN', 'COMPLIANCE_OFFICER']), (req: AuthenticatedRequest, res) => {
+app.post('/api/education/admissions/:id/status', authenticate, requireRole(['PLATFORM_ADMIN', 'INSTITUTION_ADMIN', 'COMPLIANCE_OFFICER']), async (req: AuthenticatedRequest, res) => {
   try {
     const { id } = req.params;
     const { status, reason } = req.body;
