@@ -199,80 +199,9 @@ export const EducationDiscovery: React.FC<EducationDiscoveryProps> = ({
 
   // Process Pi Payment for Tuition / Fee Clearance
   const handleProcessPayment = async () => {
-    setErrorMessage('Education payments are currently unavailable: a verified institution payment provider and server-side fulfillment integration are required.');
-    return;
-
-    if (!selectedInstitution) {
-      setErrorMessage('Please select an educational institution.');
-      return;
-    }
-    if (!selectedEducationService) {
-      setErrorMessage('Please select an education clearance fee type.');
-      return;
-    }
-    if (!accountNumber.trim()) {
-      setErrorMessage('Please provide the student matriculation / registration ID.');
-      return;
-    }
-    if (effectiveFiatAmount <= 0 || effectivePiAmount <= 0) {
-      setErrorMessage('Please specify a valid fee deposit amount.');
-      return;
-    }
-    if (userBalancePi < effectivePiAmount) {
-      setErrorMessage(`Insufficient balance: You need ${formatPiAmount(effectivePiAmount)} π but have ${formatPiAmount(userBalancePi)} π.`);
-      return;
-    }
-
-    setIsProcessingPayment(true);
-    setErrorMessage(null);
-
-    try {
-      const memo = `PiNova Education Clearance: ${selectedInstitution.name} - ${selectedEducationService} (${accountNumber.trim()})`;
-      const metadata = {
-        category: 'education',
-        providerId: selectedInstitution.id,
-        institutionName: selectedInstitution.name,
-        serviceName: selectedEducationService,
-        accountNumber: accountNumber.trim(),
-        fiatAmount: effectiveFiatAmount,
-        countryCode: selectedCountryCode,
-        state: selectedState
-      };
-
-      const payment = await createPiPayment({
-        amountPi: effectivePiAmount,
-        memo,
-        metadata
-      });
-
-      const receipt: UtilityTransactionReceipt = {
-        transactionId: payment.txid || `TX-EDU-${Date.now().toString(36).toUpperCase()}`,
-        piTxid: payment.txid,
-        piPaymentId: payment.paymentId || `PAY-EDU-${Date.now().toString(36).toUpperCase()}`,
-        category: 'education',
-        providerId: selectedInstitution.id,
-        providerName: selectedInstitution.name,
-        accountNumber: accountNumber.trim(),
-        accountName: studentFullName || `${buyerUsername} (Student Clearance)`,
-        fiatAmount: effectiveFiatAmount,
-        fiatCurrency: selectedInstitution.currency || 'USD',
-        appliedPiRateUsd: activeRate,
-        piAmount: effectivePiAmount,
-        packageName: selectedPackage?.name || selectedEducationService,
-        tokenOrCode: `CLR-PIN-${Math.floor(1000 + Math.random() * 9000)}-${Math.floor(1000 + Math.random() * 9000)}`,
-        status: 'SUCCESS',
-        timestamp: new Date().toISOString(),
-        orderProtectionGuaranteed: true,
-        buyerUsername: buyerUsername || 'Pioneer_User'
-      };
-
-      setGeneratedReceipt(receipt);
-      onTransactionSuccess?.(receipt);
-    } catch (err: any) {
-      setErrorMessage(err?.message || 'Payment processing encountered an error. Please try again.');
-    } finally {
-      setIsProcessingPayment(false);
-    }
+    setErrorMessage(
+      'Education payments are currently unavailable: a verified institution payment provider and server-side fulfillment integration are required.'
+    );
   };
 
   return (
