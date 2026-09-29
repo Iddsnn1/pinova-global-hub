@@ -113,53 +113,8 @@ export const ExamCardsPortal: React.FC<ExamCardsPortalProps> = ({
 
   const handlePurchase = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!candidateEmail.trim()) {
-      alert('Please enter a valid recipient email for backup PIN delivery.');
-      return;
-    }
-
-    setIsProcessing(true);
-
-    try {
-      // Simulate cryptographic settlement & PIN generation
-      await new Promise(resolve => setTimeout(resolve, 1400));
-
-      const randomSerial = `${activeBoard.shortCode}-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`;
-      const randomPin = `${Math.floor(1000 + Math.random() * 9000)}-${Math.floor(1000 + Math.random() * 9000)}-${Math.floor(1000 + Math.random() * 9000)}-${Math.floor(1000 + Math.random() * 9000)}`;
-      const txId = `PI-EXAM-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
-
-      const newRecord: GeneratedPinRecord = {
-        id: txId,
-        boardName: activeBoard.name,
-        packageName: activePackage.name,
-        serialNumber: randomSerial,
-        pinCode: randomPin,
-        purchaseDate: new Date().toLocaleString(),
-        candidateIdentifier: candidateRegNumber.trim() || candidateEmail.trim(),
-        amountPi: pricePi,
-        txHash: `0x${Array.from({ length: 16 }, () => Math.floor(Math.random() * 16).toString(16)).join('')}`,
-        portalUrl: activeBoard.officialPortal
-      };
-
-      setLatestReceipt(newRecord);
-      setPurchasedPins(prev => [newRecord, ...prev]);
-
-      if (onTransactionSuccess) {
-        onTransactionSuccess({
-          providerName: activeBoard.name,
-          accountNumber: candidateRegNumber.trim() || candidateEmail.trim(),
-          piAmount: pricePi,
-          tokenOrCode: randomPin,
-          transactionId: txId,
-          category: 'exam',
-          packageName: activePackage.name,
-          piPaymentId: txId,
-          piTxid: newRecord.txHash
-        });
-      }
-    } finally {
-      setIsProcessing(false);
-    }
+    setIsProcessing(false);
+    alert('Exam card purchases are currently unavailable: a verified examination-board provider and server-side fulfillment integration are required.');
   };
 
   return (
