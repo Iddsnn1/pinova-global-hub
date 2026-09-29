@@ -152,22 +152,8 @@ export const UniversalSearchModal: React.FC<UniversalSearchModalProps> = ({
     }));
   }, [trimmed]);
 
-  // Search Services
-  const sampleServices = [
-    { id: 'srv-1', title: 'Pi Network App & Smart Contract Dev', provider: 'CryptoCode Solutions', category: 'freelance_tech', pricePi: 150.00, rating: 4.9 },
-    { id: 'srv-2', title: 'Pi Merchant Accounting & Tax Legal Settle', provider: 'Pioneer Legal Group', category: 'consultation', pricePi: 45.00, rating: 5.0 },
-    { id: 'srv-3', title: 'Hardware POS & Crypto Terminal Repair', provider: 'TechFix Global', category: 'repairs_maintenance', pricePi: 30.00, rating: 4.8 },
-    { id: 'srv-4', title: 'Professional Web Design & UI/UX Audit', provider: 'Studio PiNova Design', category: 'freelance_tech', pricePi: 65.00, rating: 4.95 }
-  ];
-
-  const filteredServices = useMemo(() => {
-    if (!trimmed) return sampleServices;
-    return sampleServices.filter(s => 
-      (s.title || '').toLowerCase().includes(trimmed) ||
-      (s.provider || '').toLowerCase().includes(trimmed) ||
-      (s.category || '').toLowerCase().includes(trimmed)
-    );
-  }, [trimmed]);
+  // Services are server-backed only. No synthetic provider listings are exposed.
+  const filteredServices = useMemo(() => [], []);
 
   // Search Orders
   const filteredOrders = useMemo(() => {
