@@ -2289,18 +2289,19 @@ const handlePostUtilityConfig = async (req: express.Request, res: express.Respon
     return;
   }
 
-  const { piRateUsd, minPurchasePi, maxPurchasePi, reason } = req.body;
-  if (!piRateUsd || Number(piRateUsd) <= 0) {
-    res.status(400).json({ error: 'Pricing rate must be greater than zero' });
-    return;
-  }
+  const { minPurchasePi, maxPurchasePi, reason } = req.body;
 
   const updatedBy = auth.user?.username || 'Platform_Admin';
   const previousConfig = platformConfigRepo.getConfig();
+
+  // The PiNova reference value is a platform-wide reference, not an admin-editable
+  // settlement rate. Native Pi amounts remain canonical across the Hub.
   const updatedConfig = platformConfigRepo.updateConfig({
-    piRateUsd: Number(piRateUsd),
-    minPurchasePi: minPurchasePi ? Number(minPurchasePi) : previousConfig.minPurchasePi,
-    maxPurchasePi: maxPurchasePi ? Number(maxPurchasePi) : previousConfig.maxPurchasePi,
+    piRateUsd: 314159,
+    minPurchasePi: minPurchasePi !== undefined ? Number(minPurchasePi) : previousConfig.minPurchasePi,
+    maxPurchasePi: maxPurchasePi !== undefined ? Number(maxPurchasePi) : previousConfig.maxPurchasePi,
+    autoRateUpdateEnabled: false,
+    autoUpdateSource: 'PiNova Reference Value — Community-Supported Target',
     updatedBy
   });
 
@@ -2308,7 +2309,7 @@ const handlePostUtilityConfig = async (req: express.Request, res: express.Respon
     previousRate: previousConfig.piRateUsd,
     newRate: updatedConfig.piRateUsd,
     currency: 'USD',
-    source: reason || 'Pricing updated via Admin Console',
+    source: reason || 'PiNova reference policy reaffirmed via Admin Console',
     updatedBy,
     ipAddress: req.ip || '127.0.0.1'
   });
