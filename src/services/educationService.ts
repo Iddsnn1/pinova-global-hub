@@ -14,7 +14,6 @@ import {
   EducationPaymentTransaction
 } from '../types/education';
 import { getTaxonomyByCountry } from '../data/educationTaxonomyData';
-import { GLOBAL_EDUCATION_INSTITUTIONS } from '../data/educationInstitutionsData';
 import { normalizeCountryCode, matchesSubdivision } from '../data/countrySubdivisions';
 export const educationService = {
   async getInstitutions(filter?: {
@@ -44,32 +43,10 @@ export const educationService = {
         return data.institutions || [];
       }
     } catch (e) {
-      console.warn('[educationService] Fallback to local institutions data:', e);
+      console.warn('[educationService] Authoritative institution API unavailable:', e);
     }
-    // Fallback with client-side filtering
-    let list = GLOBAL_EDUCATION_INSTITUTIONS;
-    const rawCountry = filter?.countryCode || filter?.country;
-    const normalizedCountry = rawCountry ? normalizeCountryCode(rawCountry) : undefined;
-    if (normalizedCountry && normalizedCountry !== 'ALL' && normalizedCountry !== 'GLOBAL') {
-      list = list.filter((i) => i.countryCode.toUpperCase() === normalizedCountry.toUpperCase());
-    }
-    if (filter?.state && filter.state !== 'all') {
-      list = list.filter((i) => matchesSubdivision(i.countryCode, i.state, filter.state));
-    }
-    if (filter?.tier && filter.tier !== 'all') {
-      list = list.filter((i) => i.supportedTiers?.includes(filter.tier as any));
-    }
-    if (filter?.institutionType && filter.institutionType !== 'all') {
-      list = list.filter((i) => i.institutionType === filter.institutionType);
-    }
-    if (filter?.isPublic !== undefined) {
-      list = list.filter((i) => i.isPublic === filter.isPublic);
-    }
-    if (filter?.search) {
-      const q = filter.search.toLowerCase();
-      list = list.filter((i) => i.name.toLowerCase().includes(q) || i.institutionCode?.toLowerCase().includes(q) || i.city?.toLowerCase().includes(q));
-    }
-    return list;
+    // Production safety: never expose static institution records when the authoritative provider API is unavailable.
+    return [];
   },
 
   async getInstitution(id: string): Promise<InstitutionProfile | null> {
@@ -82,7 +59,8 @@ export const educationService = {
     } catch (e) {
       console.warn('[educationService] Failed fetching institution by ID:', e);
     }
-    return GLOBAL_EDUCATION_INSTITUTIONS.find((i) => i.id === id) || null;
+    // No local/static institution fallback; provider data must be authoritative.
+    return null;
   },
 
   async getFaculties(institutionId: string): Promise<UniversityFaculty[]> {
@@ -95,8 +73,8 @@ export const educationService = {
     } catch (e) {
       console.warn('[educationService] Failed fetching faculties via API:', e);
     }
-    const inst = GLOBAL_EDUCATION_INSTITUTIONS.find((i) => i.id === institutionId);
-    return inst?.faculties || [];
+    // No local/static institution fallback.
+    return [];
   },
 
   async getDepartments(institutionId: string, facultyId: string): Promise<AcademicDepartment[]> {
@@ -109,9 +87,8 @@ export const educationService = {
     } catch (e) {
       console.warn('[educationService] Failed fetching departments via API:', e);
     }
-    const inst = GLOBAL_EDUCATION_INSTITUTIONS.find((i) => i.id === institutionId);
-    const faculty = inst?.faculties?.find((f) => f.id === facultyId);
-    return faculty?.departments || [];
+    // No local/static institution fallback.
+    return [];
   },
 
   async getProgrammes(
@@ -139,32 +116,8 @@ export const educationService = {
       console.warn('[educationService] Failed fetching programmes via API:', e);
     }
 
-    const inst = GLOBAL_EDUCATION_INSTITUTIONS.find((i) => i.id === institutionId);
-    if (!inst) return [];
-
-    if (facultyId && departmentId) {
-      const faculty = inst.faculties?.find((f) => f.id === facultyId);
-      const dept = faculty?.departments?.find((d) => d.id === departmentId);
-      return dept?.programmes || [];
-    }
-
-    if (inst.programmes && inst.programmes.length > 0) {
-      return inst.programmes;
-    }
-
-    const allProgs: EducationProgramme[] = [];
-    if (inst.faculties) {
-      for (const f of inst.faculties) {
-        if (f.departments) {
-          for (const d of f.departments) {
-            if (d.programmes) {
-              allProgs.push(...d.programmes);
-            }
-          }
-        }
-      }
-    }
-    return allProgs;
+    // No local/static programme fallback.
+    return [];
   },
 
   async getTaxonomy(countryCode: string = 'NG'): Promise<CountryEducationTaxonomy> {
@@ -175,7 +128,7 @@ export const educationService = {
         return data.taxonomy;
       }
     } catch (e) {
-      console.warn('[educationService] Using local taxonomy config:', e);
+      console.warn('[educationService] Using canonical taxonomy config:', e);
     }
     return getTaxonomyByCountry(countryCode);
   },
@@ -188,7 +141,7 @@ export const educationService = {
         return data.children || [];
       }
     } catch (e) {
-      console.warn('[educationService] Fallback to seed children summaries:', e);
+      console.warn('[educationService] Authoritative children API unavailable:', e);
     }
     return [];
   },
@@ -212,7 +165,7 @@ export const educationService = {
         return data.invoices || [];
       }
     } catch (e) {
-      console.warn('[educationService] Fallback to seed invoices:', e);
+      console.warn('[educationService] Authoritative invoice API unavailable:', e);
     }
     return [];
   },
@@ -319,7 +272,7 @@ export const educationService = {
         return data.applications || [];
       }
     } catch (e) {
-      console.warn('[educationService] Using seed admissions:', e);
+      console.warn('[educationService] Authoritative admissions API unavailable:', e);
     }
     return [];
   },
