@@ -3506,7 +3506,13 @@ app.post('/api/education/invoices/:id/apply-scholarship', authenticate, requireR
       return;
     }
 
-    const updatedInvoice = educationRepo.applyScholarshipToInvoice(id, scholarshipId, notes);
+    const actorUsername = String(req.user?.username || '').trim();
+    if (!actorUsername) {
+      res.status(401).json({ success: false, error: 'AUTHENTICATION_REQUIRED', message: 'Authenticated actor is required.' });
+      return;
+    }
+
+    const updatedInvoice = educationRepo.applyScholarshipToInvoice(id, scholarshipId, actorUsername);
     res.json({
       success: true,
       message: 'Scholarship credit applied to invoice',
@@ -3872,7 +3878,15 @@ app.post('/api/education/admissions/:id/offer/accept', authenticate, (req: Authe
       return;
     }
 
-    const updated = educationRepo.acceptAdmissionOffer(req.params.id);
+    const updated = educationRepo.acceptAdmissionOffer(req.params.id, req.user?.username);
+    if (!updated) {
+      res.status(409).json({
+        success: false,
+        error: 'OFFER_ACCEPTANCE_REQUIRES_VERIFIED_PROVIDER',
+        message: 'Admission offer acceptance is unavailable until the authoritative institution admissions provider and any required acceptance-fee settlement are verified.'
+      });
+      return;
+    }
     res.json({ success: true, message: 'Admission offer accepted', application: updated });
   } catch (err: any) {
     res.status(500).json({ success: false, error: 'OFFER_ACCEPT_FAILED', message: err.message });
@@ -3884,6 +3898,16 @@ app.get('/api/education/scholarships', (req, res) => {
   try {
     const { tier, countryCode } = req.query;
     const scholarships = educationRepo.getScholarships(tier as string, countryCode as string);
+    if (scholarships.length === 0) {
+      res.json({
+        success: true,
+        count: 0,
+        scholarships: [],
+        availability: 'PROVIDER_INTEGRATION_REQUIRED',
+        message: 'Scholarship listings are unavailable until a verified scholarship provider/catalog is connected.'
+      });
+      return;
+    }
     res.json({ success: true, count: scholarships.length, scholarships });
   } catch (err: any) {
     res.status(500).json({ success: false, error: 'SCHOLARSHIPS_FETCH_FAILED', message: err.message });
@@ -3892,7 +3916,12 @@ app.get('/api/education/scholarships', (req, res) => {
 
 app.post('/api/education/scholarships', authenticate, requireRole(['PLATFORM_ADMIN', 'INSTITUTION_ADMIN']), (req: AuthenticatedRequest, res) => {
   try {
-    const scholarship = educationRepo.createScholarship(req.body);
+    const actorUsername = String(req.user?.username || '').trim();
+    if (!actorUsername) {
+      res.status(401).json({ success: false, error: 'AUTHENTICATION_REQUIRED', message: 'Authenticated actor is required.' });
+      return;
+    }
+    const scholarship = educationRepo.createScholarship(req.body, actorUsername);
     res.json({ success: true, message: 'Scholarship created successfully', scholarship });
   } catch (err: any) {
     res.status(400).json({ success: false, error: 'SCHOLARSHIP_CREATION_FAILED', message: err.message });
