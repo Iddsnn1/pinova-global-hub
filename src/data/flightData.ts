@@ -160,7 +160,7 @@ export function generateVerifiedCarrierOffers(
   destinationCode: string,
   departureDate: string,
   cabinClass: 'economy' | 'premium_economy' | 'business' | 'first' = 'economy',
-  piRateUsd: number = 10.0
+  piRateUsd: number = 314159.0
 ): FlightOffer[] {
   const origin = originCode.toUpperCase();
   const dest = destinationCode.toUpperCase();
