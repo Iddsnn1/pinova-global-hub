@@ -3,6 +3,7 @@ import { EducationInvoice, DigitalEducationReceipt, InstitutionProfile, Educatio
 import { educationService } from '../../services/educationService';
 import { executePiPayment } from '../../lib/piSdk';
 import { DigitalReceiptModal } from './DigitalReceiptModal';
+import { calculatePiFromUsd, PI_ORACLE_DECIMAL_PLACES, PI_ORACLE_RATE_USD } from '../../config/piOracle';
 import {
   CreditCard,
   Building2,
@@ -47,8 +48,8 @@ export const SchoolFeesEngine: React.FC<SchoolFeesEngineProps> = ({
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Conversion rate: $10 USD = 1 Pi (Base Pi conversion rate)
-  const PI_RATE_USD = 10.0;
+  // PiNova Oracle settlement reference: 1 Pi = $314,159 USD.
+  const PI_RATE_USD = PI_ORACLE_RATE_USD;
 
   useEffect(() => {
     loadInvoices();
@@ -134,7 +135,7 @@ export const SchoolFeesEngine: React.FC<SchoolFeesEngineProps> = ({
     }
   };
 
-  const calculatedPi = Number((customAmount / PI_RATE_USD).toFixed(6));
+  const calculatedPi = calculatePiFromUsd(customAmount);
 
   const handleExecutePayment = async () => {
     if (!selectedInvoice) return;
@@ -181,7 +182,7 @@ export const SchoolFeesEngine: React.FC<SchoolFeesEngineProps> = ({
         });
 
         if (res.success) {
-          setSuccessMessage(`Payment of $${customAmount.toFixed(2)} (${calculatedPi.toFixed(4)} π) successfully verified and settled.`);
+          setSuccessMessage(`Payment of $${customAmount.toFixed(2)} (${calculatedPi.toFixed(12)} π) successfully verified and settled.`);
           setActiveReceipt(res.receipt);
           setSelectedInvoice(res.invoice);
           // Refresh invoices and payment history
@@ -205,7 +206,7 @@ export const SchoolFeesEngine: React.FC<SchoolFeesEngineProps> = ({
       // Execute through official Pi SDK
       executePiPayment(
         {
-          amount: Number(calculatedPi.toFixed(6)),
+          amount: Number(calculatedPi.toFixed(12)),
           memo,
           metadata
         },
@@ -272,7 +273,7 @@ export const SchoolFeesEngine: React.FC<SchoolFeesEngineProps> = ({
       chargeDescription: selectedInvoice.items?.[0]?.description || 'Academic Tuition & Fees',
       amountPaid: payment.amountPaid,
       currency: payment.currency,
-      piAmount: payment.piAmount || Number((payment.amountPaid / PI_RATE_USD).toFixed(6)),
+      piAmount: payment.piAmount || calculatePiFromUsd(payment.amountPaid),
       piPaymentId: payment.piPaymentId,
       piTxid: payment.piTxid,
       paymentMethod: payment.paymentMethod,
@@ -346,7 +347,7 @@ export const SchoolFeesEngine: React.FC<SchoolFeesEngineProps> = ({
           <div className="bg-slate-950 px-4 py-2.5 rounded-xl border border-slate-800 text-xs flex items-center gap-3">
             <div>
               <span className="text-slate-400 block">Pi Rate Reference</span>
-              <span className="text-white font-mono font-bold">1 π = ${PI_RATE_USD.toFixed(2)} USD</span>
+              <span className="text-white font-mono font-bold">1 π = ${PI_RATE_USD.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} USD</span>
             </div>
             <div className="h-6 w-px bg-slate-800" />
             <div>
@@ -543,7 +544,7 @@ export const SchoolFeesEngine: React.FC<SchoolFeesEngineProps> = ({
                           <span>Pi Amount Due</span>
                         </span>
                         <div className="text-xl font-bold text-amber-300 font-mono mt-0.5">
-                          {calculatedPi.toFixed(6)} π
+                          {calculatedPi.toFixed(12)} π
                         </div>
                       </div>
                     </div>
@@ -586,7 +587,7 @@ export const SchoolFeesEngine: React.FC<SchoolFeesEngineProps> = ({
                         ) : (
                           <>
                             <CreditCard className="w-4 h-4" />
-                            <span>Pay {calculatedPi.toFixed(4)} π with Pi</span>
+                            <span>Pay {calculatedPi.toFixed(12)} π with Pi</span>
                           </>
                         )}
                       </button>
@@ -653,7 +654,7 @@ export const SchoolFeesEngine: React.FC<SchoolFeesEngineProps> = ({
                             </span>
                             {p.piAmount && (
                               <span className="text-amber-400 font-mono font-semibold">
-                                ({p.piAmount.toFixed(4)} π)
+                                ({p.piAmount.toFixed(12)} π)
                               </span>
                             )}
                             <span className="px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-800 text-[10px] font-bold">
