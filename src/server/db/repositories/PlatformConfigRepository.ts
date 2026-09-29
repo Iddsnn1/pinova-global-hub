@@ -57,6 +57,11 @@ export class PlatformConfigRepository {
     const updated: PricingConfigEntity = {
       ...current,
       ...newConfig,
+      // Hub-wide invariant: the PiNova reference value is fixed and cannot
+      // be changed through repository callers or admin/UI payloads.
+      piRateUsd: 314159,
+      autoRateUpdateEnabled: false,
+      autoUpdateSource: 'PiNova Reference Value — Community-Supported Target',
       id: 'current_pricing',
       lastUpdated: new Date().toISOString()
     };
