@@ -3,7 +3,6 @@ import { EducationInvoice, DigitalEducationReceipt, InstitutionProfile, Educatio
 import { educationService } from '../../services/educationService';
 import { executePiPayment } from '../../lib/piSdk';
 import { DigitalReceiptModal } from './DigitalReceiptModal';
-import { calculatePiFromUsd, PI_ORACLE_RATE_USD } from '../../config/piOracle';
 import {
   CreditCard,
   Building2,
@@ -47,9 +46,6 @@ export const SchoolFeesEngine: React.FC<SchoolFeesEngineProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-
-  // PiNova Oracle settlement reference: 1 Pi = $314,159 USD.
-  const PI_RATE_USD = PI_ORACLE_RATE_USD;
 
   useEffect(() => {
     loadInvoices();
@@ -135,13 +131,14 @@ export const SchoolFeesEngine: React.FC<SchoolFeesEngineProps> = ({
     }
   };
 
-  const calculatedPi = calculatePiFromUsd(customAmount);
-  const fiatSettlementCurrency = 'USD';
+  // Education invoices are natively denominated in Pi.
+  const nativePiAmount = customAmount;
+  const nativeSettlementCurrency = 'PI';
 
   const handleExecutePayment = async () => {
     if (!selectedInvoice) return;
-    if (String(selectedInvoice.currency || '').trim().toUpperCase() !== fiatSettlementCurrency) {
-      setErrorMessage('Pi settlement is enabled only for USD-denominated education invoices under the configured Oracle reference.');
+    if (String(selectedInvoice.currency || '').trim().toUpperCase() !== nativeSettlementCurrency) {
+      setErrorMessage('This invoice is not Pi-native and cannot be settled through native Pi checkout.');
       return;
     }
     if (customAmount <= 0) {
@@ -149,7 +146,7 @@ export const SchoolFeesEngine: React.FC<SchoolFeesEngineProps> = ({
       return;
     }
     if (customAmount > selectedInvoice.outstandingBalance + 0.01) {
-      setErrorMessage(`Payment amount cannot exceed the remaining balance of $${selectedInvoice.outstandingBalance.toFixed(2)}.`);
+      setErrorMessage(`Payment amount cannot exceed the remaining Pi balance of ${selectedInvoice.outstandingBalance.toFixed(12)} π.`);
       return;
     }
 
@@ -167,8 +164,8 @@ export const SchoolFeesEngine: React.FC<SchoolFeesEngineProps> = ({
       studentId: selectedInvoice.studentId,
       studentName: selectedInvoice.studentName,
       institutionId: selectedInvoice.institutionId,
-      amountPaidFiat: customAmount,
-      currency: fiatSettlementCurrency
+      amountPaidPi: nativePiAmount,
+      currency: nativeSettlementCurrency
     };
 
     const processServerSettlement = async (paymentId: string, txid: string) => {
@@ -176,9 +173,9 @@ export const SchoolFeesEngine: React.FC<SchoolFeesEngineProps> = ({
       try {
         const res = await educationService.payInvoice({
           invoiceId: selectedInvoice.id,
-          amountPaid: customAmount,
-          currency: fiatSettlementCurrency,
-          piAmount: calculatedPi,
+          amountPaid: nativePiAmount,
+          currency: nativeSettlementCurrency,
+          piAmount: nativePiAmount,
           piPaymentId: paymentId,
           piTxid: txid,
           paymentMethod: 'PI_NETWORK',
@@ -187,7 +184,7 @@ export const SchoolFeesEngine: React.FC<SchoolFeesEngineProps> = ({
         });
 
         if (res.success) {
-          setSuccessMessage(`Payment of $${customAmount.toFixed(2)} (${calculatedPi.toFixed(12)} π) successfully verified and settled.`);
+          setSuccessMessage(`Payment of ${nativePiAmount.toFixed(12)} π successfully verified and settled.`);
           setActiveReceipt(res.receipt);
           setSelectedInvoice(res.invoice);
           // Refresh invoices and payment history
@@ -211,7 +208,7 @@ export const SchoolFeesEngine: React.FC<SchoolFeesEngineProps> = ({
       // Execute through official Pi SDK
       executePiPayment(
         {
-          amount: Number(calculatedPi.toFixed(12)),
+          amount: Number(nativePiAmount.toFixed(12)),
           memo,
           metadata
         },
@@ -278,7 +275,7 @@ export const SchoolFeesEngine: React.FC<SchoolFeesEngineProps> = ({
       chargeDescription: selectedInvoice.items?.[0]?.description || 'Academic Tuition & Fees',
       amountPaid: payment.amountPaid,
       currency: payment.currency,
-      piAmount: payment.piAmount || calculatePiFromUsd(payment.amountPaid),
+      piAmount: payment.piAmount || payment.amountPaid,
       piPaymentId: payment.piPaymentId,
       piTxid: payment.piTxid,
       paymentMethod: payment.paymentMethod,
@@ -290,7 +287,7 @@ export const SchoolFeesEngine: React.FC<SchoolFeesEngineProps> = ({
         institutionName: selectedInvoice.institutionName,
         academicSession: selectedInvoice.academicSession,
         termOrSemester: selectedInvoice.termOrSemester,
-        amountPaidFormatted: `$${payment.amountPaid.toFixed(2)} ${payment.currency}`,
+        amountPaidFormatted: `${payment.piAmount.toFixed(12)} π`,
         verifiedAt: payment.verifiedAt || new Date().toISOString(),
         isAuthentic: true
       }
@@ -351,8 +348,8 @@ export const SchoolFeesEngine: React.FC<SchoolFeesEngineProps> = ({
 
           <div className="bg-slate-950 px-4 py-2.5 rounded-xl border border-slate-800 text-xs flex items-center gap-3">
             <div>
-              <span className="text-slate-400 block">Pi Rate Reference</span>
-              <span className="text-white font-mono font-bold">1 π = ${PI_RATE_USD.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} USD</span>
+              <span className="text-slate-400 block">Settlement Currency</span>
+              <span className="text-white font-mono font-bold">Pi (π)</span>
             </div>
             <div className="h-6 w-px bg-slate-800" />
             <div>
@@ -424,7 +421,7 @@ export const SchoolFeesEngine: React.FC<SchoolFeesEngineProps> = ({
                       <span className="font-mono text-[10px] text-slate-400">{inv.studentMatricOrReg}</span>
                       <div className="text-right">
                         <span className="text-[10px] text-slate-400 block">Balance:</span>
-                        <span className="font-bold text-white">${inv.outstandingBalance.toFixed(2)} USD</span>
+                        <span className="font-bold text-white">{inv.outstandingBalance.toFixed(12)} π</span>
                       </div>
                     </div>
                   </div>
