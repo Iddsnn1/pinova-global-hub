@@ -47,7 +47,7 @@ export const UtilityAdminPanel: React.FC<UtilityAdminPanelProps> = ({
   const [newRateUsd, setNewRateUsd] = useState<number>(config.piRateUsd);
   const [minPi, setMinPi] = useState<number>(config.minPurchasePi);
   const [maxPi, setMaxPi] = useState<number>(config.maxPurchasePi);
-  const [updateNote, setUpdateNote] = useState<string>('Routine Rate Adjustment');
+  const [updateNote, setUpdateNote] = useState<string>('PiNova Reference Policy');
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
 
   // Providers & Packages Manager
@@ -68,11 +68,9 @@ export const UtilityAdminPanel: React.FC<UtilityAdminPanelProps> = ({
   // Handle Rate Update Submit
   const handleSaveRateConfig = (e: React.FormEvent) => {
     e.preventDefault();
-    if (newRateUsd <= 0) return;
-
     const updatedConfig: PiConversionConfig = {
       ...config,
-      piRateUsd: Number(newRateUsd),
+      piRateUsd: 314159,
       minPurchasePi: Number(minPi),
       maxPurchasePi: Number(maxPi),
       lastUpdated: new Date().toISOString(),
@@ -80,7 +78,7 @@ export const UtilityAdminPanel: React.FC<UtilityAdminPanelProps> = ({
     };
 
     onUpdateConfig(updatedConfig, updateNote);
-    setSaveSuccessMsg('Active Pi Conversion Rate updated successfully across platform.');
+    setSaveSuccessMsg('PiNova reference value locked at 1 π = $314,159. Purchase limits updated.');
     setTimeout(() => setSaveSuccessMsg(null), 3000);
   };
 
