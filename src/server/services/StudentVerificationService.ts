@@ -1,5 +1,9 @@
 import { accreditationAdapterRegistry, StudentVerificationResult } from './AccreditationProviderAdapter';
 import { EducationRepository } from '../db/repositories/EducationRepository';
+import {
+  getNigeriaAuthoritativeProviderForCapability,
+  getAuthoritativeEducationProvider
+} from './AuthoritativeEducationProviderRegistry';
 
 export interface VerifyStudentRequestParams {
   institutionId: string;
@@ -7,6 +11,7 @@ export interface VerifyStudentRequestParams {
   academicSession?: string;
   dateOfBirth?: string;
   nationalId?: string;
+  countryCode?: string;
 }
 
 export class StudentVerificationService {
@@ -25,7 +30,22 @@ export class StudentVerificationService {
   }
 
   public async verifyInstitution(institutionId: string, countryCode: string = 'NG', registryNumber?: string) {
-    const adapter = accreditationAdapterRegistry.getAdapter(countryCode);
+    const code = (countryCode || 'GLOBAL').trim().toUpperCase();
+
+    if (code === 'NG') {
+      const providers = getNigeriaAuthoritativeProviderForCapability('INSTITUTION_REGISTRY');
+      const configured = providers.find((provider) => provider.integrationStatus === 'CONFIGURED');
+      if (!configured) {
+        return {
+          accredited: false,
+          status: 'UNAVAILABLE',
+          authority: providers.map((provider) => provider.id).join(', '),
+          notes: 'Authoritative Nigerian institution registry integration is not configured. No verification claim was made.'
+        };
+      }
+    }
+
+    const adapter = accreditationAdapterRegistry.getAdapter(code);
     const result = await adapter.verifyInstitution(registryNumber || institutionId);
     return {
       accredited: result.valid,
@@ -40,22 +60,20 @@ export class StudentVerificationService {
     const institutionId = params.institutionId;
     const studentReference = params.studentReference || params.matricOrRegistrationNumber || params.studentId;
     const academicSession = params.academicSession;
-    const countryCode = params.countryCode || 'NG';
+    const countryCode = (params.countryCode || 'NG').trim().toUpperCase();
 
     if (!studentReference) {
       return {
         verified: false,
         status: 'NOT_FOUND',
         verificationStatus: 'REJECTED',
-        authorityName: 'Central Student Verification Engine',
-        referenceId: studentReference || 'UNKNOWN',
+        authorityName: 'Authoritative Student Verification Provider',
+        referenceId: 'UNKNOWN',
         notes: 'Student reference is strictly required.',
         checkedAt: new Date().toISOString()
       };
     }
 
-    // Query Authoritative Accreditation Adapter
-    const adapter = accreditationAdapterRegistry.getAdapter(countryCode);
     if (!institutionId || !institutionId.trim()) {
       return {
         verified: false,
@@ -68,10 +86,35 @@ export class StudentVerificationService {
       };
     }
 
+    if (countryCode === 'NG') {
+      const admissionProviders = getNigeriaAuthoritativeProviderForCapability('ADMISSION_STATUS');
+      const configuredAdmissionProvider = admissionProviders.find(
+        (provider) => provider.integrationStatus === 'CONFIGURED'
+      );
+      const registryProviders = getNigeriaAuthoritativeProviderForCapability('INSTITUTION_REGISTRY');
+      const configuredRegistryProvider = registryProviders.find(
+        (provider) => provider.integrationStatus === 'CONFIGURED'
+      );
+
+      if (!configuredAdmissionProvider && !configuredRegistryProvider) {
+        return {
+          verified: false,
+          status: 'UNAVAILABLE',
+          verificationStatus: 'REJECTED',
+          authorityName: admissionProviders
+            .map((provider) => getAuthoritativeEducationProvider(provider.id).authorityName)
+            .join(' / '),
+          referenceId: studentReference,
+          notes: 'Authoritative Nigerian student/admission provider integration is not configured. No verification claim was made.',
+          checkedAt: new Date().toISOString()
+        };
+      }
+    }
+
+    const adapter = accreditationAdapterRegistry.getAdapter(countryCode);
     const verificationResult = await adapter.verifyStudent(institutionId.trim(), studentReference, academicSession);
 
-    // If verified and institution exists, enrich profile with institution branding
-    if (verificationResult.verified && verificationResult.verifiedProfile && institutionId) {
+    if (verificationResult.verified && verificationResult.verifiedProfile) {
       const institution = this.educationRepo.getInstitutionById(institutionId);
       if (institution) {
         verificationResult.verifiedProfile.institutionName = institution.name;
