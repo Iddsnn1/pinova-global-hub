@@ -16,17 +16,6 @@ import {
   EducationAuditLog
 } from '../../../types/education';
 import { normalizeCountryCode, matchesSubdivision } from '../../../data/countrySubdivisions';
-import {
-  SEED_STUDENTS,
-  SEED_CHILDREN_SUMMARIES,
-  SEED_INVOICES,
-  SEED_RECEIPTS,
-  SEED_PAYMENTS,
-  SEED_ADMISSION_APPLICATIONS,
-  SEED_SCHOLARSHIPS,
-  SEED_PARENT_USER_ID
-} from '../../../data/educationSeedData';
-
 export class EducationRepository {
   private institutionsEngine: StorageEngine<InstitutionProfile>;
   private studentsEngine: StorageEngine<StudentIdentity>;
@@ -47,37 +36,37 @@ export class EducationRepository {
     this.studentsEngine = new StorageEngine<StudentIdentity>(
       'education_students',
       'id',
-      SEED_STUDENTS
+      []
     );
     this.childrenSummariesEngine = new StorageEngine<GuardianChildSummary>(
       'education_guardian_children',
       'studentId',
-      SEED_CHILDREN_SUMMARIES
+      []
     );
     this.invoicesEngine = new StorageEngine<EducationInvoice>(
       'education_invoices',
       'id',
-      SEED_INVOICES
+      []
     );
     this.paymentsEngine = new StorageEngine<EducationPaymentTransaction>(
       'education_payments',
       'id',
-      SEED_PAYMENTS
+      []
     );
     this.receiptsEngine = new StorageEngine<DigitalEducationReceipt>(
       'education_receipts',
       'receiptNumber',
-      SEED_RECEIPTS
+      []
     );
     this.admissionsEngine = new StorageEngine<AdmissionApplication>(
       'education_admissions',
       'id',
-      SEED_ADMISSION_APPLICATIONS
+      []
     );
     this.scholarshipsEngine = new StorageEngine<ScholarshipOpportunity>(
       'education_scholarships',
       'id',
-      SEED_SCHOLARSHIPS
+      []
     );
     this.auditEngine = new StorageEngine<EducationAuditLog>(
       'education_audit_logs',
@@ -230,7 +219,7 @@ export class EducationRepository {
   }
 
   // --- Students & Guardian ---
-  public getStudentsByGuardian(guardianId: string = SEED_PARENT_USER_ID): StudentIdentity[] {
+  public getStudentsByGuardian(guardianId: string): StudentIdentity[] {
     return this.studentsEngine.filter((s) => s.guardianId === guardianId);
   }
 
@@ -238,7 +227,7 @@ export class EducationRepository {
     return this.studentsEngine.get(id);
   }
 
-  public getGuardianChildrenSummaries(guardianId: string = SEED_PARENT_USER_ID): GuardianChildSummary[] {
+  public getGuardianChildrenSummaries(guardianId: string): GuardianChildSummary[] {
     // Dynamically recalculate balances based on active invoices
     const children = this.childrenSummariesEngine.getAll();
     return children.map((c) => {
