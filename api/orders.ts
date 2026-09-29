@@ -681,7 +681,12 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
             if (!variant) throw new Error(`PRODUCT_VARIANT_NOT_AVAILABLE:${productId}`);
             variantDeltaPi = Number(variant.priceDeltaPi || 0);
           }
-          subtotalPi += (product.pricePi + variantDeltaPi) * quantity;
+          const discountPercent = Number(product.discountPercent || 0);
+          const discountMultiplier = Number.isFinite(discountPercent) && discountPercent > 0
+            ? Math.max(0, 1 - discountPercent / 100)
+            : 1;
+          const canonicalUnitPricePi = (product.pricePi * discountMultiplier) + variantDeltaPi;
+          subtotalPi += canonicalUnitPricePi * quantity;
           items.push({ product, quantity, selectedVariant: input.selectedVariant, customDetails: input.customDetails });
         }
 
@@ -706,7 +711,11 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
           const eligibleSubtotal = items.reduce((sum, item) => {
             if (item.product.sellerId !== match.sellerUsername) return sum;
             const variantDelta = Number(item.customDetails?.variant?.priceDeltaPi || 0);
-            return sum + (item.product.pricePi + variantDelta) * item.quantity;
+            const discountPercent = Number(item.product.discountPercent || 0);
+            const discountMultiplier = Number.isFinite(discountPercent) && discountPercent > 0
+              ? Math.max(0, 1 - discountPercent / 100)
+              : 1;
+            return sum + ((item.product.pricePi * discountMultiplier) + variantDelta) * item.quantity;
           }, 0);
           if (eligibleSubtotal < Number(match.promo.minPurchasePi)) throw new Error('PROMO_MINIMUM_SPEND_NOT_MET');
           discountPi = Math.min(eligibleSubtotal, eligibleSubtotal * (Number(match.promo.discountPercent) / 100));
