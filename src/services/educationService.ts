@@ -200,7 +200,7 @@ export const educationService = {
     } catch (e) {
       console.warn('[educationService] Fallback to seed children summaries:', e);
     }
-    return SEED_CHILDREN_SUMMARIES;
+    return [];
   },
 
   async getInvoices(filter?: {
@@ -224,7 +224,7 @@ export const educationService = {
     } catch (e) {
       console.warn('[educationService] Fallback to seed invoices:', e);
     }
-    return SEED_INVOICES;
+    return [];
   },
 
   async payInvoice(payload: {
@@ -279,7 +279,7 @@ export const educationService = {
     } catch (e) {
       console.warn('[educationService] Failed fetching invoice payments from server:', e);
     }
-    return SEED_PAYMENTS.filter((p) => p.invoiceId === invoiceId);
+    return [];
   },
 
   async verifyReceipt(receiptNumber: string): Promise<{
@@ -331,7 +331,7 @@ export const educationService = {
     } catch (e) {
       console.warn('[educationService] Using seed admissions:', e);
     }
-    return SEED_ADMISSION_APPLICATIONS;
+    return [];
   },
 
   async submitAdmission(appData: any): Promise<AdmissionApplication> {
@@ -374,7 +374,7 @@ export const educationService = {
     } catch (e) {
       console.warn('[educationService] Using seed scholarships:', e);
     }
-    return SEED_SCHOLARSHIPS;
+    return [];
   },
 
   async getMarketplaceItems(category?: string, tier?: string): Promise<EducationMarketplaceItem[]> {
@@ -391,7 +391,7 @@ export const educationService = {
     } catch (e) {
       console.warn('[educationService] Using seed marketplace items:', e);
     }
-    return SEED_MARKETPLACE_ITEMS;
+    return [];
   },
 
   async getInstitutionAnalytics(institutionId: string): Promise<any> {
