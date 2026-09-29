@@ -380,6 +380,8 @@ export interface AdmissionApplication {
   applicantFullName: string;
   applicantEmail: string;
   applicantPhone: string;
+  /** Candidate reference used only for authoritative JAMB CAPS verification. */
+  jambCandidateReference?: string;
   guardianName?: string;
   guardianPhone?: string;
   dateOfBirth: string;
