@@ -167,7 +167,7 @@ export const UtilityAdminPanel: React.FC<UtilityAdminPanelProps> = ({
           }`}
         >
           <Sliders className="w-4 h-4" />
-          <span>Dynamic Pi Rate Engine</span>
+          <span>PiNova Reference Value</span>
         </button>
 
         <button
@@ -203,7 +203,7 @@ export const UtilityAdminPanel: React.FC<UtilityAdminPanelProps> = ({
           }`}
         >
           <Globe className="w-4 h-4" />
-          <span>Automated Oracle Feed Config</span>
+          <span>Display Rate Feed (Optional)</span>
         </button>
       </div>
 
@@ -216,7 +216,7 @@ export const UtilityAdminPanel: React.FC<UtilityAdminPanelProps> = ({
             <div className="flex items-center justify-between">
               <h3 className="font-extrabold text-sm text-slate-900 dark:text-slate-100 flex items-center gap-2">
                 <Sliders className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-                <span>Configure Active Pi Conversion Rate</span>
+                <span>PiNova Reference Value (Locked)</span>
               </h3>
             </div>
 
@@ -230,21 +230,19 @@ export const UtilityAdminPanel: React.FC<UtilityAdminPanelProps> = ({
             <form onSubmit={handleSaveRateConfig} className="space-y-4">
               <div className="space-y-1">
                 <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                  Active Conversion Rate (USD per 1 Pi)
+                  PiNova Reference Value (USD per 1 π)
                 </label>
                 <div className="relative">
                   <span className="absolute left-3.5 top-2.5 text-slate-400 font-bold">$</span>
                   <input
-                    type="number"
-                    step="0.01"
-                    min="0.01"
-                    value={newRateUsd}
-                    onChange={(e) => setNewRateUsd(Number(e.target.value))}
-                    className="w-full pl-8 pr-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 font-black text-base text-slate-900 dark:text-slate-100 focus:outline-none focus:border-purple-500"
-                    required
+                    type="text"
+                    value="$314,159.00"
+                    readOnly
+                    aria-readonly="true"
+                    className="w-full pl-8 pr-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 font-black text-base text-slate-900 dark:text-slate-100 cursor-not-allowed"
                   />
                 </div>
-                <p className="text-[11px] text-slate-400">Example: Setting to $314,159.00 means 1 Pi Coin converts to $314,159.00 USD worth of utility value.</p>
+                <p className="text-[11px] text-slate-400">Locked application reference: 1 π = $314,159 USD. This is a PiNova application/community reference for display and reference calculations, not an official Pi Network market rate. Native Pi settlement remains authoritative.</p>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
