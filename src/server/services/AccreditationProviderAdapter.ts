@@ -33,44 +33,24 @@ export interface IAccreditationProviderAdapter {
   verifyStudent(institutionId: string, studentReference: string, academicSession?: string): Promise<StudentVerificationResult>;
 }
 
-/**
- * Nigeria Accreditation Provider (NUC, NBTE, NCCE, WAEC, JAMB)
- */
-export class NigerianAccreditationAdapter extends UnconfiguredAccreditationAdapter {
-  constructor() {
-    super('NG', ['NUC', 'NBTE', 'NCCE', 'JAMB', 'WAEC']);
-  }
-}
+class UnconfiguredAccreditationAdapter implements IAccreditationProviderAdapter {
+  constructor(public countryCode: string, public authorities: string[]) {}
 
-class LegacyRemovedNigerianAdapter implements IAccreditationProviderAdapter {
-  public countryCode = 'NG';
-  public authorities = [
-    'National Universities Commission (NUC)',
-    'National Board for Technical Education (NBTE)',
-    'National Commission for Colleges of Education (NCCE)',
-    'Joint Admissions and Matriculation Board (JAMB)',
-    'West African Examinations Council (WAEC)'
-  ];
-
-  // Production safety: no static institution registry is used.
-  private officialRegistry: Record<string, never> = {};
-  private studentRecords: Record<string, never> = {};
-
-  public async verifyInstitution(institutionCode: string): Promise<InstitutionVerificationResult> {
+  async verifyInstitution(_institutionCode: string): Promise<InstitutionVerificationResult> {
     return {
       valid: false,
       status: 'UNAVAILABLE',
-      authorityName: 'Authoritative accreditation provider',
+      authorityName: this.authorities[0] || 'Authoritative accreditation provider',
       notes: 'Authoritative accreditation provider integration is not configured. No verification claim was made.',
       checkedAt: new Date().toISOString()
     };
   }
 
-  public async verifyStudent(institutionId: string, studentReference: string, academicSession?: string): Promise<StudentVerificationResult> {
+  async verifyStudent(_institutionId: string, studentReference: string, _academicSession?: string): Promise<StudentVerificationResult> {
     return {
       verified: false,
       status: 'UNAVAILABLE',
-      authorityName: 'Authoritative student registry provider',
+      authorityName: this.authorities[0] || 'Authoritative student registry provider',
       referenceId: studentReference,
       notes: 'Authoritative student registry integration is not configured. No verification claim was made.',
       checkedAt: new Date().toISOString()
@@ -78,9 +58,12 @@ class LegacyRemovedNigerianAdapter implements IAccreditationProviderAdapter {
   }
 }
 
-/**
- * United States Accreditation Provider (Regional Agencies / USDE)
- */
+export class NigerianAccreditationAdapter extends UnconfiguredAccreditationAdapter {
+  constructor() {
+    super('NG', ['NUC', 'NBTE', 'NCCE', 'JAMB', 'WAEC']);
+  }
+}
+
 export class UsAccreditationAdapter extends UnconfiguredAccreditationAdapter {
   constructor() {
     super('US', ['U.S. Department of Education', 'CHEA']);
@@ -94,7 +77,7 @@ export class GlobalAccreditationAdapter extends UnconfiguredAccreditationAdapter
 }
 
 export class AccreditationAdapterRegistry {
-  private adapters: Map<string, IAccreditationProviderAdapter> = new Map();
+  private adapters = new Map<string, IAccreditationProviderAdapter>();
 
   constructor() {
     this.register(new NigerianAccreditationAdapter());
@@ -102,13 +85,12 @@ export class AccreditationAdapterRegistry {
     this.register(new GlobalAccreditationAdapter());
   }
 
-  public register(adapter: IAccreditationProviderAdapter): void {
+  register(adapter: IAccreditationProviderAdapter): void {
     this.adapters.set(adapter.countryCode.toUpperCase(), adapter);
   }
 
-  public getAdapter(countryCode: string = 'GLOBAL'): IAccreditationProviderAdapter {
-    const code = countryCode.toUpperCase().trim();
-    return this.adapters.get(code) || this.adapters.get('GLOBAL') || this.adapters.get('NG')!;
+  getAdapter(countryCode = 'GLOBAL'): IAccreditationProviderAdapter {
+    return this.adapters.get(countryCode.toUpperCase()) || this.adapters.get('GLOBAL')!;
   }
 }
 
