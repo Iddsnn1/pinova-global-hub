@@ -34,7 +34,7 @@ export function runPiPrecisionTests() {
   assert(
     '$0.50 formatted display never rounds to 0.0000',
     formatPiAmount(amt0_50),
-    '0.00000159'
+    '0.000001591551'
   );
 
   // Test 2: $1.00 USD at 1 PI = $314,159 USD
@@ -47,7 +47,7 @@ export function runPiPrecisionTests() {
   assert(
     '$1.00 formatted display',
     formatPiAmount(amt1_00),
-    '0.00000318'
+    '0.000003183102'
   );
 
   // Test 3: $10.00 USD at 1 PI = $314,159 USD
@@ -60,7 +60,7 @@ export function runPiPrecisionTests() {
   assert(
     '$10.00 formatted display',
     formatPiAmount(amt10_00),
-    '0.00003183'
+    '0.000031831016'
   );
 
   // Test 4: $100.00 USD at 1 PI = $314,159 USD
@@ -73,7 +73,7 @@ export function runPiPrecisionTests() {
   assert(
     '$100.00 formatted display',
     formatPiAmount(amt100_00),
-    '0.0003183'
+    '0.000318310155'
   );
 
   // Test 5: Very small Pi amounts
