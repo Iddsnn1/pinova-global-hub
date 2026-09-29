@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Briefcase, UserCheck, Code, Wrench, Sparkles, Camera, Star, CheckCircle2, ShieldCheck, Clock, Calendar } from 'lucide-react';
+import { Briefcase, CheckCircle2, Calendar, ShieldCheck } from 'lucide-react';
 import { SERVICE_CATEGORIES } from '../../data/categoryData';
 
 interface ServicesViewProps {
@@ -8,10 +8,6 @@ interface ServicesViewProps {
 
 export const ServicesView: React.FC<ServicesViewProps> = ({ userBalancePi }) => {
   const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
-  const [bookingSuccess, setBookingSuccess] = useState<boolean>(false);
-
-  const activeService = SERVICE_CATEGORIES.find((s) => s.id === selectedServiceId);
-
   return (
     <div className="space-y-8 pb-20 max-w-7xl mx-auto px-4 sm:px-6">
       
@@ -43,8 +39,8 @@ export const ServicesView: React.FC<ServicesViewProps> = ({ userBalancePi }) => 
                 <div className="w-12 h-12 rounded-xl bg-blue-50 dark:bg-blue-950/60 flex items-center justify-center border border-blue-200 dark:border-blue-800 text-blue-500">
                   <Briefcase className="w-6 h-6" />
                 </div>
-                <span className="text-xs font-black text-amber-500 bg-amber-500/10 px-2.5 py-1 rounded-full border border-amber-500/20">
-                  Avg. {serv.averagePricePi} π
+                <span className="text-xs font-bold text-slate-500 bg-slate-500/10 px-2.5 py-1 rounded-full border border-slate-500/20">
+                  Provider listings required
                 </span>
               </div>
 
@@ -57,25 +53,16 @@ export const ServicesView: React.FC<ServicesViewProps> = ({ userBalancePi }) => 
                 </p>
               </div>
 
-              <div className="space-y-1.5 pt-2">
-                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Popular Services:</span>
-                <ul className="text-xs space-y-1 text-slate-600 dark:text-slate-300">
-                  {serv.popularServices.map((ps, idx) => (
-                    <li key={idx} className="flex items-center gap-1.5">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-blue-400" />
-                      <span>{ps}</span>
-                    </li>
-                  ))}
-                </ul>
+              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400">
+                Service discovery is available, but no verified provider listings are currently connected to the Hub. Booking and escrow remain disabled until provider, availability, pricing, and server-side booking records exist.
               </div>
             </div>
 
             <button
-              onClick={() => {
-                setSelectedServiceId(serv.id);
-                setBookingSuccess(false);
-              }}
-              className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-xl transition-colors flex items-center justify-center gap-2"
+              disabled
+              title="Booking is unavailable until verified provider listings and server-side booking are available"
+              onClick={() => setSelectedServiceId(null)}
+              className="w-full py-2.5 bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-bold text-xs rounded-xl flex items-center justify-center gap-2 cursor-not-allowed"
             >
               <Calendar className="w-4 h-4" />
               <span>Book Appointment</span>
@@ -84,83 +71,7 @@ export const ServicesView: React.FC<ServicesViewProps> = ({ userBalancePi }) => 
         ))}
       </div>
 
-      {/* Booking Modal / Form */}
-      {selectedServiceId && activeService && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 max-w-lg w-full p-6 space-y-5 relative shadow-2xl">
-            
-            <div className="flex justify-between items-center border-b border-slate-200 dark:border-slate-800 pb-3">
-              <h3 className="font-black text-lg text-slate-900 dark:text-slate-100">
-                Book {activeService.name}
-              </h3>
-              <button
-                onClick={() => setSelectedServiceId(null)}
-                className="text-slate-400 hover:text-white font-bold text-xs"
-              >
-                Close ✕
-              </button>
-            </div>
 
-            {bookingSuccess ? (
-              <div className="p-4 bg-emerald-50 dark:bg-emerald-950/50 rounded-2xl border border-emerald-200 dark:border-emerald-800 text-center space-y-3">
-                <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto" />
-                <h4 className="font-extrabold text-sm text-emerald-800 dark:text-emerald-300">
-                  Service Request Escrow Locked Successfully!
-                </h4>
-                <p className="text-xs text-slate-600 dark:text-slate-300">
-                  {activeService.averagePricePi} π held safely in PSTP Escrow. Verified provider assigned.
-                </p>
-                <button
-                  onClick={() => setSelectedServiceId(null)}
-                  className="px-4 py-2 bg-emerald-600 text-white font-bold text-xs rounded-xl"
-                >
-                  Done
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Select a date and describe your task requirements. Your funds remain protected in PSTP Escrow until the work is verified completed.
-                </p>
-
-                <div>
-                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                    Preferred Service Date
-                  </label>
-                  <input
-                    type="date"
-                    className="w-full text-xs p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                    Task / Project Brief
-                  </label>
-                  <textarea
-                    rows={3}
-                    placeholder="Describe your requirements or specific issues..."
-                    className="w-full text-xs p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100"
-                  />
-                </div>
-
-                <div className="p-3 bg-slate-950 rounded-xl flex justify-between items-center text-xs text-white">
-                  <span>Escrow Service Deposit:</span>
-                  <span className="font-black text-amber-400">{activeService.averagePricePi} π</span>
-                </div>
-
-                <button
-                  onClick={() => setBookingSuccess(true)}
-                  className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-extrabold text-xs rounded-xl shadow-lg"
-                >
-                  Confirm & Lock {activeService.averagePricePi} π in Escrow
-                </button>
-              </div>
-            )}
-
-          </div>
-        </div>
-      )}
 
     </div>
   );
