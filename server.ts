@@ -3365,12 +3365,27 @@ app.get('/api/education/students/:id', (req, res) => {
   }
 });
 
-app.get('/api/education/guardians/:id/children', (req, res) => {
+app.get('/api/education/guardians/:id/children', authenticate, (req: AuthenticatedRequest, res) => {
   try {
-    const children = educationRepo.getGuardianChildrenSummaries(req.params.id);
+    const requestedGuardianId = String(req.params.id || '').trim();
+    const currentUser = String(req.user?.username || '').trim();
+    const currentUserId = String(req.user?.id || '').trim();
+    const roles = req.user?.roles || [];
+    const isAdmin = roles.some((r: string) => ['PLATFORM_ADMIN', 'BURSAR', 'FINANCE_ADMIN', 'INSTITUTION_ADMIN'].includes(r));
+    const ownsGuardian = Boolean(
+      isAdmin ||
+      (currentUser && requestedGuardianId.toLowerCase() === currentUser.toLowerCase()) ||
+      (currentUserId && requestedGuardianId === currentUserId) ||
+      (req.user?.guardianId && requestedGuardianId.toLowerCase() === String(req.user.guardianId).toLowerCase())
+    );
+    if (!ownsGuardian) {
+      res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Guardian child access requires the authenticated guardian context.' });
+      return;
+    }
+    const children = educationRepo.getGuardianChildrenSummaries(requestedGuardianId);
     res.json({ success: true, count: children.length, children });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: 'GUARDIAN_CHILDREN_FETCH_FAILED', message: err.message });
+    res.status(500).json({ success: false, error: 'GUARDIAN_CHILDREN_FETCH_FAILED', message: 'Unable to load guardian children.' });
   }
 });
 
