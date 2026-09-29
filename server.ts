@@ -3352,9 +3352,16 @@ app.post('/api/education/institutions/:id/verify-accreditation', studentVerifyRa
   }
 });
 
-app.get('/api/education/students/:id', (req, res) => {
+app.get('/api/education/students/:id', authenticate, (req: AuthenticatedRequest, res) => {
   try {
-    const student = educationRepo.getStudentById(req.params.id);
+    const requestedId = String(req.params.id || '').trim();
+    const roles = req.user?.roles || [];
+    const isAdmin = roles.some((r: string) => ['PLATFORM_ADMIN', 'BURSAR', 'FINANCE_ADMIN', 'INSTITUTION_ADMIN'].includes(r));
+    if (!isAdmin && ![String(req.user?.id || ''), String(req.user?.username || ''), String(req.user?.studentId || '')].includes(requestedId)) {
+      res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Student access requires the authenticated student context.' });
+      return;
+    }
+    const student = educationRepo.getStudentById(requestedId);
     if (!student) {
       res.status(404).json({ success: false, error: 'STUDENT_NOT_FOUND' });
       return;
@@ -3756,23 +3763,37 @@ app.get('/api/education/receipts/:receiptNumber/verify', receiptVerifyRateLimite
   }
 });
 
-app.get('/api/education/receipts/:receiptNumber', (req, res) => {
+app.get('/api/education/receipts/:receiptNumber', authenticate, (req: AuthenticatedRequest, res) => {
   try {
     const receipt = educationRepo.getReceiptByNumber(req.params.receiptNumber);
     if (!receipt) {
       res.status(404).json({ success: false, error: 'RECEIPT_NOT_FOUND' });
       return;
     }
+    const roles = req.user?.roles || [];
+    const isAdmin = roles.some((r: string) => ['PLATFORM_ADMIN', 'BURSAR', 'FINANCE_ADMIN', 'INSTITUTION_ADMIN'].includes(r));
+    const userRefs = [String(req.user?.id || ''), String(req.user?.username || ''), String(req.user?.studentId || '')].map(v => v.trim().toLowerCase()).filter(Boolean);
+    if (!isAdmin && (!receipt.studentId || !userRefs.includes(receipt.studentId.trim().toLowerCase()))) {
+      res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Receipt access requires the authenticated student context.' });
+      return;
+    }
     res.json({ success: true, receipt });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: 'RECEIPT_FETCH_FAILED', message: err.message });
+    res.status(500).json({ success: false, error: 'RECEIPT_FETCH_FAILED', message: 'Unable to retrieve receipt.' });
   }
 });
 
 // 7. Admissions & Application Pipeline (Phase 5 & 10 Remediation)
-app.get('/api/education/admissions', (req, res) => {
+app.get('/api/education/admissions', authenticate, (req: AuthenticatedRequest, res) => {
   try {
     const { institutionId, status, applicantEmail } = req.query;
+    const roles = req.user?.roles || [];
+    const isAdmin = roles.some((r: string) => ['PLATFORM_ADMIN', 'INSTITUTION_ADMIN', 'COMPLIANCE_OFFICER'].includes(r));
+    const currentUsername = String(req.user?.username || '').trim().toLowerCase();
+    if (!isAdmin && (!applicantEmail || String(applicantEmail).trim().toLowerCase() !== currentUsername)) {
+      res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Admission access is limited to the authenticated applicant.' });
+      return;
+    }
     const filter: any = {};
     if (institutionId) filter.institutionId = String(institutionId);
     if (status) filter.status = String(status);
