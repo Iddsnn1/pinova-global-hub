@@ -364,9 +364,10 @@ export const GLOBAL_EDUCATION_TAXONOMIES: Record<string, CountryEducationTaxonom
 };
 
 /**
- * Helper to retrieve taxonomy for country code, falling back safely to Nigeria or Global structure
+ * Helper to retrieve taxonomy for a configured country only; never cross-country fallback
  */
-export function getTaxonomyByCountry(countryCode: string): CountryEducationTaxonomy {
-  const code = (countryCode || 'NG').toUpperCase();
-  return GLOBAL_EDUCATION_TAXONOMIES[code] || GLOBAL_EDUCATION_TAXONOMIES.NG;
+export function getTaxonomyByCountry(countryCode: string): CountryEducationTaxonomy | null {
+  const code = (countryCode || '').trim().toUpperCase();
+  if (!code) return null;
+  return GLOBAL_EDUCATION_TAXONOMIES[code] || null;
 }
