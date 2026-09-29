@@ -30,7 +30,6 @@ import {
 } from '../../../types/utility';
 import { searchInstitutions } from '../../../lib/utility/serviceDiscovery';
 import { LocationSelector } from './LocationSelector';
-import { createPiPayment } from '../../../lib/piSdk';
 import { DigitalReceiptModal } from '../DigitalReceiptModal';
 import { formatPiAmount, calculateAuthoritativePiAmount } from '../../../utils/formatters';
 
@@ -191,19 +190,18 @@ export const EducationDiscovery: React.FC<EducationDiscoveryProps> = ({
       return;
     }
     setIsValidatingAccount(true);
-    setErrorMessage(null);
-
-    setTimeout(() => {
-      setIsValidatingAccount(false);
-      setIsAccountVerified(true);
-      if (!studentFullName) {
-        setStudentFullName(`${buyerUsername} (Portal Verified)`);
-      }
-    }, 450);
+    setIsAccountVerified(false);
+    setErrorMessage(
+      'Live student/account verification is not configured for this institution. No verification claim will be made.'
+    );
+    setIsValidatingAccount(false);
   };
 
   // Process Pi Payment for Tuition / Fee Clearance
   const handleProcessPayment = async () => {
+    setErrorMessage('Education payments are currently unavailable: a verified institution payment provider and server-side fulfillment integration are required.');
+    return;
+
     if (!selectedInstitution) {
       setErrorMessage('Please select an educational institution.');
       return;
@@ -290,7 +288,7 @@ export const EducationDiscovery: React.FC<EducationDiscoveryProps> = ({
               <h3 className="text-base font-bold text-white flex items-center gap-2">
                 Education & Tuition Clearance Hub
                 <span className="text-[10px] font-semibold bg-pink-500/20 text-pink-300 border border-pink-500/30 px-2 py-0.5 rounded-full">
-                  Verified Portal
+                  Directory / Provider Integration Required
                 </span>
               </h3>
               <p className="text-xs text-slate-300 mt-0.5">
@@ -409,12 +407,7 @@ export const EducationDiscovery: React.FC<EducationDiscoveryProps> = ({
                   ? inst.availableServices
                   : fullProvider.designations && fullProvider.designations.length > 0
                   ? fullProvider.designations
-                  : [
-                      'Semester Tuition Fee Deposit',
-                      'Acceptance Fee Clearance',
-                      'Campus Accommodation Levy',
-                      'E-Learning Certification Pass'
-                    ];
+                  : [];
 
               return (
                 <div
