@@ -51,7 +51,7 @@ async function resolveMerchant(req: AuthenticatedRequest) {
   const direct = await getDurableVendorApplication(username);
   if (direct) return direct;
 
-  const uidCandidates = [req.user?.piUid, req.user?.uid, req.user?.id]
+  const uidCandidates = [req.user?.piUid, req.user?.id]
     .map(value => String(value || '').trim())
     .filter(Boolean);
   if (!uidCandidates.length) return null;
