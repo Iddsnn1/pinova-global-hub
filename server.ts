@@ -3375,9 +3375,33 @@ app.get('/api/education/guardians/:id/children', (req, res) => {
 });
 
 // 4. Invoices & Authoritative School Fees Engine (Phase 5 & 11 Remediation)
-app.get('/api/education/invoices', (req, res) => {
+app.get('/api/education/invoices', authenticate, (req: AuthenticatedRequest, res) => {
   try {
     const { studentId, institutionId, status, guardianId } = req.query;
+    const currentUser = req.user?.username;
+    const currentUserId = req.user?.id;
+    const roles = req.user?.roles || [];
+    const isAdmin = roles.some((r: string) => ['PLATFORM_ADMIN', 'BURSAR', 'FINANCE_ADMIN', 'INSTITUTION_ADMIN'].includes(r));
+    const isInstitutionStaff = Boolean(req.user?.institutionId && institutionId && req.user.institutionId === String(institutionId));
+    const requestedGuardian = guardianId ? String(guardianId) : undefined;
+    const ownsGuardianFilter = Boolean(
+      requestedGuardian &&
+      ((currentUser && requestedGuardian.toLowerCase() === currentUser.toLowerCase()) ||
+       (currentUserId && requestedGuardian === currentUserId) ||
+       (req.user?.guardianId && requestedGuardian.toLowerCase() === req.user.guardianId.toLowerCase()))
+    );
+    const ownsStudentFilter = Boolean(
+      studentId &&
+      ((currentUser && String(studentId).toLowerCase() === currentUser.toLowerCase()) ||
+       (currentUserId && String(studentId) === currentUserId) ||
+       (req.user?.studentId && String(studentId).toLowerCase() === String(req.user.studentId).toLowerCase()))
+    );
+
+    if (!isAdmin && !isInstitutionStaff && !ownsGuardianFilter && !ownsStudentFilter) {
+      res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Invoice access requires an authorized student, guardian, or institution context.' });
+      return;
+    }
+
     const filter: any = {};
     if (studentId) filter.studentId = String(studentId);
     if (institutionId) filter.institutionId = String(institutionId);
@@ -3391,11 +3415,27 @@ app.get('/api/education/invoices', (req, res) => {
   }
 });
 
-app.get('/api/education/invoices/:id', (req, res) => {
+app.get('/api/education/invoices/:id', authenticate, (req: AuthenticatedRequest, res) => {
   try {
     const invoice = educationRepo.getInvoiceById(req.params.id);
     if (!invoice) {
       res.status(404).json({ success: false, error: 'INVOICE_NOT_FOUND' });
+      return;
+    }
+    const roles = req.user?.roles || [];
+    const isAdmin = roles.some((r: string) => ['PLATFORM_ADMIN', 'BURSAR', 'FINANCE_ADMIN', 'INSTITUTION_ADMIN'].includes(r));
+    const currentUser = req.user?.username;
+    const currentUserId = req.user?.id;
+    const authorized = isAdmin ||
+      Boolean(req.user?.institutionId && req.user.institutionId === invoice.institutionId) ||
+      Boolean(currentUser && invoice.guardianId && invoice.guardianId.toLowerCase() === currentUser.toLowerCase()) ||
+      Boolean(currentUserId && invoice.guardianId === currentUserId) ||
+      Boolean(req.user?.guardianId && invoice.guardianId && req.user.guardianId.toLowerCase() === invoice.guardianId.toLowerCase()) ||
+      Boolean(currentUser && invoice.studentId && invoice.studentId.toLowerCase() === currentUser.toLowerCase()) ||
+      Boolean(currentUserId && invoice.studentId === currentUserId) ||
+      Boolean(req.user?.studentId && invoice.studentId && String(req.user.studentId).toLowerCase() === invoice.studentId.toLowerCase());
+    if (!authorized) {
+      res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Access denied to this invoice.' });
       return;
     }
     res.json({ success: true, invoice });
@@ -3560,8 +3600,20 @@ app.post('/api/education/invoices/pay', paymentRateLimiter, authenticate, async 
     }
 
     // Authoritatively derive payer username
-    const payerUsername = req.user?.username || req.body.payerUsername || 'pioneer_parent';
-    const effectiveIdempotencyKey = idempotencyKey || piPaymentId || `IDEMP-EDU-${invoiceId}-${Date.now()}`;
+    if (paymentMethod !== 'PI_NETWORK') {
+      res.status(400).json({ success: false, error: 'UNSUPPORTED_PAYMENT_METHOD', message: 'Education fee settlement currently supports only authoritative Pi Network payments.' });
+      return;
+    }
+    if (!idempotencyKey && !piPaymentId) {
+      res.status(400).json({ success: false, error: 'MISSING_IDEMPOTENCY_KEY', message: 'A client idempotency key or authoritative Pi payment ID is required.' });
+      return;
+    }
+    const payerUsername = req.user?.username;
+    if (!payerUsername) {
+      res.status(401).json({ success: false, error: 'AUTHENTICATED_USERNAME_REQUIRED', message: 'Authenticated payer identity is required.' });
+      return;
+    }
+    const effectiveIdempotencyKey = idempotencyKey || piPaymentId;
 
     // Execute atomic settlement in repository with canonical SHA-256 digest creation
     const result = educationRepo.recordPayment({
