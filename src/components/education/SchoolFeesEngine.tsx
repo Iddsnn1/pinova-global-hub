@@ -469,7 +469,7 @@ export const SchoolFeesEngine: React.FC<SchoolFeesEngineProps> = ({
                           <span className="text-slate-200 font-medium">{item.description}</span>
                           <span className="text-[10px] text-slate-400 block capitalize">{item.category.replace('_', ' ')}</span>
                         </div>
-                        <span className="font-bold text-white">${item.amount.toFixed(2)}</span>
+                        <span className="font-bold text-white">{item.amount.toFixed(12)} π</span>
                       </div>
                     ))}
                   </div>
@@ -479,15 +479,15 @@ export const SchoolFeesEngine: React.FC<SchoolFeesEngineProps> = ({
                 <div className="grid grid-cols-3 gap-3 bg-slate-950 p-4 rounded-xl border border-slate-800 text-xs">
                   <div>
                     <span className="text-slate-400 block mb-0.5">Total Billed</span>
-                    <span className="text-sm font-bold text-white">${selectedInvoice.totalAmount.toFixed(2)}</span>
+                    <span className="text-sm font-bold text-white">{selectedInvoice.totalAmount.toFixed(12)} π</span>
                   </div>
                   <div>
                     <span className="text-slate-400 block mb-0.5">Amount Paid</span>
-                    <span className="text-sm font-bold text-emerald-400">${selectedInvoice.amountPaid.toFixed(2)}</span>
+                    <span className="text-sm font-bold text-emerald-400">{selectedInvoice.amountPaid.toFixed(12)} π</span>
                   </div>
                   <div>
                     <span className="text-slate-400 block mb-0.5">Remaining Balance</span>
-                    <span className="text-sm font-bold text-amber-400 font-mono">${selectedInvoice.outstandingBalance.toFixed(2)}</span>
+                    <span className="text-sm font-bold text-amber-400 font-mono">{selectedInvoice.outstandingBalance.toFixed(12)} π</span>
                   </div>
                 </div>
 
@@ -510,7 +510,7 @@ export const SchoolFeesEngine: React.FC<SchoolFeesEngineProps> = ({
                         >
                           <span className="block font-bold">Pay Full Balance</span>
                           <span className="text-[11px] text-slate-400 mt-0.5 block">
-                            ${selectedInvoice.outstandingBalance.toFixed(2)} USD
+                            ${selectedInvoice.outstandingBalance.toFixed(12)} π
                           </span>
                         </button>
 
@@ -525,7 +525,7 @@ export const SchoolFeesEngine: React.FC<SchoolFeesEngineProps> = ({
                         >
                           <span className="block font-bold">Pay 50% Installment</span>
                           <span className="text-[11px] text-slate-400 mt-0.5 block">
-                            ${(selectedInvoice.outstandingBalance / 2).toFixed(2)} USD
+                            ${(selectedInvoice.outstandingBalance / 2).toFixed(12)} π
                           </span>
                         </button>
                       </div>
@@ -534,9 +534,9 @@ export const SchoolFeesEngine: React.FC<SchoolFeesEngineProps> = ({
                     {/* Payment Amount Confirmation */}
                     <div className="bg-gradient-to-r from-amber-950/40 via-slate-950 to-slate-950 p-4 rounded-xl border border-amber-500/30 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                       <div>
-                        <span className="text-xs text-slate-400">Total Settlement Amount (USD)</span>
+                        <span className="text-xs text-slate-400">Total Settlement Amount (Pi)</span>
                         <div className="text-2xl font-black text-white mt-0.5">
-                          ${customAmount.toFixed(2)} <span className="text-xs text-slate-400 font-normal">USD</span>
+                          ${customAmount.toFixed(12)} <span className="text-xs text-slate-400 font-normal">π</span>
                         </div>
                       </div>
 
@@ -546,7 +546,7 @@ export const SchoolFeesEngine: React.FC<SchoolFeesEngineProps> = ({
                           <span>Pi Amount Due</span>
                         </span>
                         <div className="text-xl font-bold text-amber-300 font-mono mt-0.5">
-                          {calculatedPi.toFixed(12)} π
+                          {nativePiAmount.toFixed(12)} π
                         </div>
                       </div>
                     </div>
@@ -589,7 +589,7 @@ export const SchoolFeesEngine: React.FC<SchoolFeesEngineProps> = ({
                         ) : (
                           <>
                             <CreditCard className="w-4 h-4" />
-                            <span>Pay {calculatedPi.toFixed(12)} π with Pi</span>
+                            <span>Pay {nativePiAmount.toFixed(12)} π with Pi</span>
                           </>
                         )}
                       </button>
@@ -652,7 +652,7 @@ export const SchoolFeesEngine: React.FC<SchoolFeesEngineProps> = ({
                         <div className="space-y-1">
                           <div className="flex items-center gap-2">
                             <span className="font-bold text-emerald-400">
-                              +${p.amountPaid.toFixed(2)} USD
+                              +{p.amountPaid.toFixed(12)} π
                             </span>
                             {p.piAmount && (
                               <span className="text-amber-400 font-mono font-semibold">
