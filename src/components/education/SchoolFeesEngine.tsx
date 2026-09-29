@@ -222,25 +222,15 @@ export const SchoolFeesEngine: React.FC<SchoolFeesEngineProps> = ({
             setProcessingStatus('');
             setErrorMessage(`Pi payment cancelled by user (Ref: ${paymentId || 'N/A'}). The invoice remains unchanged.`);
           },
-          onError: async (err) => {
+          onError: (err) => {
             console.warn('Pi SDK execution notice:', err);
-            // In web preview / sandbox when window.Pi is unavailable, fallback gracefully to authenticated direct payment
-            if (
-              err.message?.includes('Pi Browser') ||
-              err.message?.includes('window.Pi') ||
-              err.message?.includes('not initialized') ||
-              err.message?.includes('preflight')
-            ) {
-              setProcessingStatus('Simulating verified Pi testnet settlement in sandbox preview...');
-              const fallbackPaymentId = `pi-pay-edu-${Date.now()}`;
-              const fallbackTxid = `pi-tx-${Math.floor(100000000000 + Math.random() * 900000000000)}`;
-              await processServerSettlement(fallbackPaymentId, fallbackTxid);
-            } else {
-              setIsProcessing(false);
-              setProcessingStatus('');
-              setErrorMessage(err.message || 'Pi payment execution failed. The invoice remains unchanged.');
-            }
-          }
+            setIsProcessing(false);
+            setProcessingStatus('');
+            setErrorMessage(
+              err.message ||
+              'Pi payment could not be completed. No simulated payment or synthetic transaction will be created.'
+            );
+          }}
         }
       );
     } catch (sdkError: any) {
@@ -257,10 +247,15 @@ export const SchoolFeesEngine: React.FC<SchoolFeesEngineProps> = ({
     if (!selectedInvoice) return;
     const rcpNum = payment.receiptNumber || `RCP-EDU-${payment.id.slice(-6).toUpperCase()}`;
     const verificationRef = `PINOVA-VERIF-${payment.id.slice(-8).toUpperCase()}`;
+    if (!payment.auditHash) {
+      setErrorMessage('This payment has no server-generated verification hash. The receipt cannot be reconstructed locally.');
+      return;
+    }
+
     const receiptFromPayment: DigitalEducationReceipt = {
       receiptNumber: rcpNum,
       verificationReference: verificationRef,
-      verificationHash: payment.auditHash || `0x${Math.random().toString(16).substring(2, 10)}${Math.random().toString(16).substring(2, 10)}`,
+      verificationHash: payment.auditHash || '',
       algorithm: 'SHA-256',
       invoiceId: selectedInvoice.id,
       invoiceNumber: selectedInvoice.invoiceNumber,
