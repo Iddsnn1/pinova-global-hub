@@ -4000,7 +4000,52 @@ app.post('/api/education/admin/institutions/:id/verify', async (req, res) => {
       res.status(400).json({ success: false, error: 'MISSING_VERIFICATION_STATUS' });
       return;
     }
-    const updated = educationRepo.verifyInstitution(req.params.id, status, notes);
+
+    const requestedStatus = String(status).trim().toUpperCase();
+    const authoritativeStatuses = new Set(['VERIFIED', 'VERIFIED_WITH_LIMITATIONS']);
+
+    // Administrative access alone must never create an authoritative accreditation claim.
+    // Positive verification requires a configured official provider and a successful
+    // provider-backed verification result for this exact institution.
+    if (authoritativeStatuses.has(requestedStatus)) {
+      const providers = getNigeriaAuthoritativeProviderForCapability('INSTITUTION_REGISTRY');
+      const configuredProvider = providers.find((provider) => provider.integrationStatus === 'CONFIGURED');
+
+      if (!configuredProvider) {
+        res.status(503).json({
+          success: false,
+          error: 'PROVIDER_INTEGRATION_REQUIRED',
+          availability: 'UNAVAILABLE',
+          provider: providers.map((provider) => provider.id),
+          message: 'Institution verification cannot be marked as authoritative until an authorized NUC/NBTE institution registry integration is configured.'
+        });
+        return;
+      }
+
+      const verification = await studentVerificationService.verifyInstitution(
+        req.params.id,
+        'NG',
+        typeof req.body.registryNumber === 'string' ? req.body.registryNumber : undefined
+      );
+
+      if (!verification.accredited) {
+        res.status(409).json({
+          success: false,
+          error: 'AUTHORITATIVE_VERIFICATION_FAILED',
+          provider: verification.authority,
+          status: verification.status,
+          message: 'The configured authoritative provider did not return a positive verification result. No authoritative status was written.'
+        });
+        return;
+      }
+    }
+
+    if (!['VERIFIED', 'VERIFIED_WITH_LIMITATIONS', 'SUSPENDED', 'REJECTED'].includes(requestedStatus)) {
+      res.status(400).json({ success: false, error: 'INVALID_VERIFICATION_STATUS' });
+      return;
+    }
+
+    const updated = educationRepo.verifyInstitution(req.params.id, requestedStatus as any, notes);
     if (!updated) {
       res.status(404).json({ success: false, error: 'INSTITUTION_NOT_FOUND' });
       return;
