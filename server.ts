@@ -3467,33 +3467,15 @@ app.get('/api/education/invoices/:id', authenticate, (req: AuthenticatedRequest,
   }
 });
 
-// Authoritative fee calculation endpoint (prevents client-side price tampering)
-app.post('/api/education/invoices/calculate', (req, res) => {
-  try {
-    const { items, subtotal, discountAmount, taxAmount } = req.body;
-    let computedSubtotal = Number(subtotal) || 0;
-
-    if (Array.isArray(items) && items.length > 0) {
-      computedSubtotal = items.reduce((acc: number, item: any) => {
-        const itemAmount = Number(item.amount || item.unitPrice || 0);
-        const itemQty = Number(item.quantity || 1);
-        return acc + (itemAmount * itemQty);
-      }, 0);
-    }
-
-    const totals = EducationRepository.calculateInvoiceTotals({
-      subtotal: computedSubtotal,
-      discount: Number(discountAmount) || 0,
-      tax: Number(taxAmount) || 0
-    });
-
-    res.json({
-      success: true,
-      totals
-    });
-  } catch (err: any) {
-    res.status(400).json({ success: false, error: 'CALCULATION_ERROR', message: err.message });
-  }
+// Fee calculation is intentionally not an authoritative pricing source.
+// Provider-backed invoices must exist before PiNova can quote or settle an education fee.
+app.post('/api/education/invoices/calculate', authenticate, (req: AuthenticatedRequest, res) => {
+  res.status(503).json({
+    success: false,
+    error: 'PROVIDER_INTEGRATION_REQUIRED',
+    availability: 'UNAVAILABLE',
+    message: 'Education fee calculation is unavailable until an authorized institution/provider fee catalog is connected. Client-supplied prices are never treated as authoritative.'
+  });
 });
 
 // Apply Scholarship to Invoice (Requires Financial/Institutional Admin Role)
@@ -3616,8 +3598,42 @@ app.post('/api/education/invoices/pay', paymentRateLimiter, authenticate, async 
         });
         return;
       }
-      const authoritativePiAmount = Number(verification.paymentData?.amount);
-      const authoritativeTxid = String(verification.paymentData?.transaction?.txid || '').trim();
+      const paymentData = verification.paymentData;
+      const authoritativePiAmount = Number(paymentData?.amount);
+      const authoritativeTxid = String(paymentData?.transaction?.txid || '').trim();
+      const authoritativeUserUid = String(paymentData?.user_uid || '').trim();
+      const authenticatedPiUid = String((req.user as any)?.piUid || '').trim();
+      const direction = String(paymentData?.direction || '').trim();
+      const expectedNetwork = process.env.VITE_PI_ENV === 'production' || process.env.PI_SANDBOX_MODE === 'false'
+        ? 'Pi Network'
+        : 'Pi Testnet';
+
+      if (!authoritativeUserUid || !authenticatedPiUid || authoritativeUserUid !== authenticatedPiUid) {
+        res.status(403).json({
+          success: false,
+          error: 'PI_PAYMENT_USER_MISMATCH',
+          message: 'The verified Pi payment belongs to a different authenticated Pioneer.'
+        });
+        return;
+      }
+
+      if (direction !== 'user_to_app') {
+        res.status(400).json({
+          success: false,
+          error: 'PI_PAYMENT_DIRECTION_INVALID',
+          message: 'The verified Pi payment is not a user-to-app payment.'
+        });
+        return;
+      }
+
+      if (String(paymentData?.network || '').trim() !== expectedNetwork) {
+        res.status(400).json({
+          success: false,
+          error: 'PI_PAYMENT_NETWORK_MISMATCH',
+          message: 'The verified Pi payment network does not match the application environment.'
+        });
+        return;
+      }
       if (!Number.isFinite(authoritativePiAmount) || authoritativePiAmount <= 0) {
         res.status(400).json({
           success: false,
@@ -3626,6 +3642,29 @@ app.post('/api/education/invoices/pay', paymentRateLimiter, authenticate, async 
         });
         return;
       }
+      // A fiat-denominated invoice cannot be settled from an arbitrary
+      // client-side USD/NGN amount against a Pi payment without an
+      // authoritative FX/fee provider. Only a Pi-denominated invoice can
+      // be settled directly from the verified Pi amount.
+      if (String(invoice.currency || '').trim().toUpperCase() !== 'PI') {
+        res.status(503).json({
+          success: false,
+          error: 'PI_FX_PROVIDER_REQUIRED',
+          availability: 'UNAVAILABLE',
+          message: 'This invoice is denominated in fiat. An authorized fee/FX provider is required before a Pi amount can be derived and settled.'
+        });
+        return;
+      }
+
+      if (Math.abs(numericAmount - authoritativePiAmount) > 0.00000001) {
+        res.status(400).json({
+          success: false,
+          error: 'PI_AMOUNT_MISMATCH',
+          message: 'The requested settlement amount does not match the authoritative Pi payment amount.'
+        });
+        return;
+      }
+
       req.body.piAmount = authoritativePiAmount;
       req.body.piTxid = authoritativeTxid || undefined;
     } else if (piPaymentId) {
