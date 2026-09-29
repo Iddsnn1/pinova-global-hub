@@ -326,8 +326,14 @@ export class EducationRepository {
       tax: invoiceData.taxAmount
     });
 
+    const invoiceCurrency = String(invoiceData.currency || '').trim().toUpperCase();
+    if (invoiceCurrency !== 'PI') {
+      throw new Error('PI_NATIVE_INVOICE_REQUIRED');
+    }
+
     const invoice: EducationInvoice = {
       ...invoiceData,
+      currency: 'PI',
       subtotal: totals.subtotal,
       discountAmount: totals.discount,
       taxAmount: totals.tax,
@@ -342,7 +348,7 @@ export class EducationRepository {
       entityId: invoice.id,
       actorUsername: 'school_bursar',
       actorRole: 'FINANCE_OFFICER',
-      details: `Created invoice ${invoice.invoiceNumber} for student ${invoice.studentName} amount $${invoice.totalAmount}`
+      details: `Created Pi-native invoice ${invoice.invoiceNumber} for student ${invoice.studentName} amount ${invoice.totalAmount} π`
     });
     return invoice;
   }
@@ -369,7 +375,7 @@ export class EducationRepository {
       (params.studentId || '').trim(),
       (params.institutionId || '').trim(),
       Number(params.amount).toFixed(2),
-      (params.currency || 'USD').trim().toUpperCase(),
+      (params.currency || 'PI').trim().toUpperCase(),
       (params.paymentTimestamp || '').trim(),
       (params.settlementStatus || 'SETTLED').trim().toUpperCase()
     ].join('|');
@@ -450,7 +456,7 @@ export class EducationRepository {
 
     // Phase 10: Prevent overpayment beyond outstanding balance
     if (params.amountPaid > invoice.outstandingBalance + 0.001) {
-      throw new Error(`Payment amount ($${params.amountPaid}) exceeds outstanding balance ($${invoice.outstandingBalance}). Overpayment rejected.`);
+      throw new Error(`Payment amount (${params.amountPaid} π) exceeds outstanding balance (${invoice.outstandingBalance} π). Overpayment rejected.`);
     }
 
     const timestamp = new Date().toISOString();
