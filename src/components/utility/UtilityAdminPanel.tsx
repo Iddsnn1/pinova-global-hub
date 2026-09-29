@@ -151,7 +151,7 @@ export const UtilityAdminPanel: React.FC<UtilityAdminPanelProps> = ({
         <div className="flex items-center gap-2">
           <div className="px-4 py-2 rounded-2xl bg-slate-950 border border-slate-800 text-center">
             <span className="text-[10px] text-slate-400 uppercase font-bold block">Active Pricing Rule</span>
-            <span className="text-lg font-black text-amber-400">1 π = ${config.piRateUsd.toFixed(2)} USD</span>
+            <span className="text-lg font-black text-amber-400">1 π = $314,159.00 USD</span>
           </div>
         </div>
       </div>
