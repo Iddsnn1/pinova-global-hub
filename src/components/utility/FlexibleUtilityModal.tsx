@@ -457,9 +457,11 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
       });
     } catch {
       setAccountValidationResult({
-        valid: true,
-        name: `Verified Account #${accountNumber}`,
-        message: 'Account details recorded for settlement verification.'
+        valid: false,
+        message: 'Live account verification is unavailable. No verification is claimed; please retry when the provider validation service is available.',
+        requiresManualVerification: true,
+        verificationMethod: 'UNCONFIGURED',
+        disclaimer: 'Account details have not been verified by the provider.'
       });
     } finally {
       setIsValidatingAccount(false);
@@ -505,6 +507,10 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
       setErrorMessage(`Calculated Pi amount (${formatPiAmount(finalPiAmount)} π) is outside allowable limits.`);
       return;
     }
+    if (!accountValidationResult?.valid) {
+      setErrorMessage('Live provider/account verification is required before payment. No unverified utility payment will be submitted.');
+      return;
+    }
 
     setErrorMessage(null);
     setIsProcessingPayment(true);
@@ -536,10 +542,17 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
         const isFulfilled = paymentResult.fulfillmentStatus === 'FULFILLED';
         const token = isFulfilled ? (paymentResult.data?.tokenOrCode || paymentResult.data?.providerReference) : undefined;
         
+        const transactionId = paymentResult.data?.transactionId;
+        const piPaymentId = paymentResult.paymentId;
+        const piTxid = paymentResult.txid;
+        if (!transactionId || !piPaymentId || !piTxid) {
+          setErrorMessage('Payment was not accepted because the server did not return complete payment identifiers. No synthetic receipt was created.');
+          return;
+        }
         const receipt: UtilityTransactionReceipt = {
-          transactionId: paymentResult.data?.transactionId || `UTIL-TX-${Date.now().toString().slice(-6)}`,
-          piPaymentId: paymentResult.paymentId || `pi_pay_${Date.now()}`,
-          piTxid: paymentResult.txid || `0x${Math.random().toString(16).substring(2, 10)}`,
+          transactionId,
+          piPaymentId,
+          piTxid,
           category: selectedCategory,
           providerId: selectedProvider.id,
           providerName: selectedProvider.name,
@@ -550,10 +563,10 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
           fiatCurrency: selectedProvider.currency,
           timestamp: new Date().toISOString(),
           status: isFulfilled ? 'SUCCESS' : 'PROCESSING',
-          tokenOrCode: token || `PIN-${Math.floor(1000 + Math.random() * 9000)}-${Math.floor(1000 + Math.random() * 9000)}`,
+          tokenOrCode: token,
           packageName: selectedPackage?.name,
           appliedPiRateUsd: piConversionConfig.piRateUsd,
-          orderProtectionGuaranteed: true,
+          orderProtectionGuaranteed: paymentResult.data?.orderProtectionGuaranteed === true,
           buyerUsername: buyerUsername || 'Pioneer_User'
         };
 
