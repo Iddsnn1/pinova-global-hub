@@ -19,55 +19,22 @@ export async function softDeleteDurableProduct(id:string):Promise<boolean>{const
 export async function reserveDurableProductStockBatch(requests:Array<{id:string;quantity:number}>):Promise<Product[]|undefined>{
   if(!neonDatabaseEnabled())throw new Error('DURABLE_PRODUCT_STORAGE_UNAVAILABLE');
   const merged=new Map<string,number>();
-  for(const r of requests){
-    if(!r.id||!Number.isInteger(r.quantity)||r.quantity<1)throw new Error('INVALID_STOCK_RESERVATION_QUANTITY');
-    merged.set(r.id,(merged.get(r.id)||0)+r.quantity);
-  }
+  for(const r of requests){if(!r.id||!Number.isInteger(r.quantity)||r.quantity<1)throw new Error('INVALID_STOCK_RESERVATION_QUANTITY');merged.set(r.id,(merged.get(r.id)||0)+r.quantity);}
   if(merged.size===0)return [];
   const payload=JSON.stringify(Array.from(merged,([id,quantity])=>({id,quantity})));
   const sql=getNeonSql();
   const rows=await sql`WITH requested AS (
-    SELECT id, quantity::integer AS quantity
-    FROM jsonb_to_recordset(${payload}::jsonb) AS x(id text, quantity integer)
+    SELECT id, quantity::integer AS quantity FROM jsonb_to_recordset(${payload}::jsonb) AS x(id text, quantity integer)
   ), eligible AS (
-    SELECT p.id,p.stock,COALESCE(p.data->>'fulfillmentType','') AS fulfillment_type,r.quantity
-    FROM products p JOIN requested r ON r.id=p.id
-    WHERE p.is_deleted=FALSE AND p.is_active=TRUE
-  ), physical AS (
-    SELECT * FROM eligible WHERE fulfillment_type NOT IN ('digital_download','instant_key')
-  ), reservation_guard AS (
-    SELECT
-      (SELECT COUNT(*) FROM eligible)=(SELECT COUNT(*) FROM requested) AS all_found,
-      NOT EXISTS (SELECT 1 FROM physical WHERE stock < quantity) AS stock_ok
-  )
-  UPDATE products p
-  SET stock=p.stock-r.quantity,
-      availability_status=CASE WHEN p.stock-r.quantity<=0 THEN 'out_of_stock' ELSE p.availability_status END,
-      is_active=CASE WHEN p.stock-r.quantity>0 THEN p.is_active ELSE FALSE END,
-      updated_at=NOW(),
-      data=jsonb_set(
-        jsonb_set(p.data,'{stock}',to_jsonb(p.stock-r.quantity),true),
-        '{availabilityStatus}',
-        to_jsonb(CASE WHEN p.stock-r.quantity<=0 THEN 'out_of_stock' ELSE p.availability_status END),
-        true
-      )
-  FROM requested r, reservation_guard g
-  WHERE p.id=r.id
-    AND COALESCE(p.data->>'fulfillmentType','') NOT IN ('digital_download','instant_key')
-    AND g.all_found AND g.stock_ok
-  RETURNING p.data`;
-  const physicalCount=Array.from(merged.keys()).filter(id=>!rows.some(r=>(r.data as Product)?.id===id)).length;
+    SELECT p.id,p.stock,COALESCE(p.data->>'fulfillmentType','') AS fulfillment_type,r.quantity FROM products p JOIN requested r ON r.id=p.id WHERE p.is_deleted=FALSE AND p.is_active=TRUE
+  ), physical AS (SELECT * FROM eligible WHERE fulfillment_type NOT IN ('digital_download','instant_key')),
+  reservation_guard AS (SELECT (SELECT COUNT(*) FROM eligible)=(SELECT COUNT(*) FROM requested) AS all_found, NOT EXISTS (SELECT 1 FROM physical WHERE stock < quantity) AS stock_ok)
+  UPDATE products p SET stock=p.stock-r.quantity,availability_status=CASE WHEN p.stock-r.quantity<=0 THEN 'out_of_stock' ELSE p.availability_status END,is_active=CASE WHEN p.stock-r.quantity>0 THEN p.is_active ELSE FALSE END,updated_at=NOW(),data=jsonb_set(jsonb_set(p.data,'{stock}',to_jsonb(p.stock-r.quantity),true),'{availabilityStatus}',to_jsonb(CASE WHEN p.stock-r.quantity<=0 THEN 'out_of_stock' ELSE p.availability_status END),true)
+  FROM requested r,reservation_guard g WHERE p.id=r.id AND COALESCE(p.data->>'fulfillmentType','') NOT IN ('digital_download','instant_key') AND g.all_found AND g.stock_ok RETURNING p.data`;
   const all=await sql`SELECT data FROM products WHERE id IN (SELECT id FROM jsonb_to_recordset(${payload}::jsonb) AS x(id text, quantity integer)) AND is_deleted=FALSE`;
   if(all.length!==merged.size)throw new Error('STOCK_RESERVATION_FAILED');
-  const products=all.map(rowToProduct);
-  for(const p of products){
-    const requestedQty=merged.get(p.id)||0;
-    const fulfillmentType=String(p.fulfillmentType||'');
-    if(fulfillmentType!=='digital_download'&&fulfillmentType!=='instant_key'&&physicalCount===0&&p.stock<0)throw new Error('STOCK_RESERVATION_FAILED');
-    if(fulfillmentType!=='digital_download'&&fulfillmentType!=='instant_key'&&rows.length===0)throw new Error('STOCK_RESERVATION_FAILED');
-    void requestedQty;
-  }
-  if(rows.length===0 && products.some(p=>!['digital_download','instant_key'].includes(String(p.fulfillmentType||''))))throw new Error('STOCK_RESERVATION_FAILED');
-  return products;
+  const physicalCount=all.filter(r=>!['digital_download','instant_key'].includes(String((r.data as Product)?.fulfillmentType||''))).length;
+  if(rows.length!==physicalCount)throw new Error('STOCK_RESERVATION_FAILED');
+  return all.map(rowToProduct);
 }
 export async function deleteDurableProductBlob(id:string){return softDeleteDurableProduct(id);}
