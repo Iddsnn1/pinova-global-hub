@@ -120,7 +120,7 @@ export const educationService = {
     return [];
   },
 
-  async getTaxonomy(countryCode: string = 'NG'): Promise<CountryEducationTaxonomy> {
+  async getTaxonomy(countryCode: string = 'NG'): Promise<CountryEducationTaxonomy | null> {
     try {
       const res = await fetch(`/api/education/taxonomy/${encodeURIComponent(countryCode)}`);
       if (res.ok) {
