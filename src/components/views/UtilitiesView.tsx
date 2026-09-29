@@ -386,7 +386,7 @@ export const UtilitiesView: React.FC<UtilitiesViewProps> = ({
                     <Globe2 className="w-3.5 h-3.5 text-amber-400" />
                     <span>GLOBAL UTILITIES ECOSYSTEM</span>
                     <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-                    <span className="text-[11px] font-bold text-purple-200 lowercase">{UTILITY_CATEGORIES.length} verified services</span>
+                    <span className="text-[11px] font-bold text-purple-200 lowercase">{UTILITY_CATEGORIES.length} service categories</span>
                   </div>
                   
                   <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-white">
@@ -394,7 +394,7 @@ export const UtilitiesView: React.FC<UtilitiesViewProps> = ({
                   </h1>
                   
                   <p className="text-sm text-slate-300 max-w-2xl font-medium leading-relaxed">
-                    Discover and access everyday digital, financial, travel, communication, and essential utility services across supported locations worldwide.
+                    Discover utility categories and access only services with an available provider integration and server-side fulfillment path. Availability varies by location.
                   </p>
                 </div>
 
