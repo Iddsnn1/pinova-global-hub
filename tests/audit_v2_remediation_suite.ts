@@ -355,6 +355,11 @@ async function runTestSuite() {
     programmeName: 'B.Sc. Computer Science',
     applicantFullName: 'Emeka Okonkwo',
     applicantEmail: 'emeka@example.com',
+    educationTier: 'tertiary',
+    dateOfBirth: '2005-01-15',
+    applicantPhone: '+2348000000000',
+    applicationFeeFiat: 50,
+    applicationFeePaid: false,
     academicSession: '2025/2026',
     documents: []
   });
