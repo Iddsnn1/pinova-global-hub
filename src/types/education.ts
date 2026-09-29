@@ -190,6 +190,7 @@ export interface StudentIdentity {
 }
 
 export interface GuardianChildSummary {
+  guardianId?: string;
   studentId: string;
   fullName: string;
   institutionId: string;
@@ -277,6 +278,7 @@ export interface EducationInvoice {
   amountPaid: number;
   outstandingBalance: number;
   currency: string;
+  countryCode?: string;
   dueDate: string;
   issuedDate?: string;
   status: InvoicePaymentStatus;
