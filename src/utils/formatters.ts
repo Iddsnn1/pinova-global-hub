@@ -18,14 +18,13 @@ export interface FormatPiOptions {
  */
 export function calculateAuthoritativePiAmount(
   fiatAmount: number,
-  piRateUsd: number
+  _piRateUsd?: number
 ): number {
-  if (!fiatAmount || fiatAmount <= 0 || !piRateUsd || piRateUsd <= 0) {
-    return 0;
-  }
-  // PiNova Oracle reference precision: preserve 12 decimal places so
-  // micro-Pi values such as $0.01 -> 0.000000031831 Pi are not lost.
-  return Number((fiatAmount / piRateUsd).toFixed(12));
+  if (!Number.isFinite(fiatAmount) || fiatAmount <= 0) return 0;
+  // Hub-wide fixed PiNova reference. The optional second argument remains
+  // only for backward-compatible callers and is intentionally ignored.
+  const PI_REFERENCE_RATE_USD = 314159;
+  return Number((fiatAmount / PI_REFERENCE_RATE_USD).toFixed(12));
 }
 
 /**
