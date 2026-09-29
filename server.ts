@@ -43,7 +43,7 @@ import { ProductRepository } from './src/server/db/repositories/ProductRepositor
 import { durableProductStorageEnabled, getDurableProduct, listDurableProducts, saveDurableProduct, updateDurableProductAvailability, reserveDurableProductStockBatch, softDeleteDurableProduct, deleteDurableProductBlob } from './src/server/services/DurableProductCatalog';
 import { durableOrderStorageEnabled, getDurableOrder, listDurableOrders, saveDurableOrder, markDurableOrderPaymentVerified, softDeleteDurableOrder } from './src/server/services/DurableOrderStore';
 import { durableVendorStorageEnabled, getDurableVendorApplication, getDurableVendorApplicationByIdentity, listDurableVendorApplications, saveDurableVendorApplication } from './src/server/services/DurableVendorApplicationStore';
-import { get, list, put } from '@vercel/blob';
+import { objectStorageEnabled, putObject, getObject, deleteObject, publicObjectUrl } from './src/server/services/ObjectStorage';
 
 dotenv.config();
 
@@ -1135,35 +1135,20 @@ app.post(
       // 8. Generate cryptographically random document ID
       const randomDocId = crypto.randomBytes(16).toString('hex');
 
-      // 9. Store encrypted binary and metadata with restricted permissions (0600)
-      const docsDir = getVendorDocumentsDir();
-      const encPath = path.join(docsDir, `${randomDocId}.enc`);
-      const metaPath = path.join(docsDir, `${randomDocId}.meta.json`);
-
-      // Write raw ciphertext bytes (no base64 storage)
-      fs.writeFileSync(encPath, encryptedBytes, { mode: 0o600 });
-      try { fs.chmodSync(encPath, 0o600); } catch {}
-
+      // 9. Store encrypted ciphertext and metadata in durable object storage.
+      if (!objectStorageEnabled()) {
+        return res.status(503).json({ success: false, error: 'OBJECT_STORAGE_NOT_CONFIGURED', message: 'Durable encrypted document storage is not configured.' });
+      }
+      await putObject(`vendor-documents/${randomDocId}.enc`, encryptedBytes, 'application/octet-stream');
       const metadata = {
-        id: randomDocId,
-        originalFilename: sanitizedFilename,
-        mimeType,
-        documentType: docType,
-        owner: ownerUsername.toLowerCase(),
-        uploadedAt: new Date().toISOString(),
-        iv: iv.toString('hex'),
-        authTag: authTag.toString('hex'),
-        encryptedByteLength: encryptedBytes.length,
-        originalSize: fileBuffer.length
+        id: randomDocId, originalFilename: sanitizedFilename, mimeType, documentType: docType,
+        owner: ownerUsername.toLowerCase(), uploadedAt: new Date().toISOString(),
+        iv: iv.toString('hex'), authTag: authTag.toString('hex'),
+        encryptedByteLength: encryptedBytes.length, originalSize: fileBuffer.length
       };
-      fs.writeFileSync(metaPath, JSON.stringify(metadata, null, 2), { mode: 0o600 });
-      try { fs.chmodSync(metaPath, 0o600); } catch {}
+      await putObject(`vendor-documents/${randomDocId}.meta.json`, JSON.stringify(metadata), 'application/json');
+      res.status(201).json({ success: true, reference: `private://vendor-documents/${randomDocId}` });
 
-      // 10. Return only private reference (never expose filesystem path)
-      res.status(201).json({
-        success: true,
-        reference: `private://vendor-documents/${randomDocId}`
-      });
     } catch (err: any) {
       res.status(500).json({
         success: false,
@@ -1173,6 +1158,20 @@ app.post(
     }
   }
 );
+
+app.get('/api/vendor/product-image', async (req, res) => {
+  try {
+    const pathname = typeof req.query.path === 'string' ? req.query.path : '';
+    if (!/^product-images\/[A-Za-z0-9_-]{1,80}\/[A-Za-z0-9._-]{1,180}$/.test(pathname)) return res.status(400).json({ success: false, error: 'INVALID_IMAGE_PATH' });
+    if (!objectStorageEnabled()) return res.status(503).json({ success: false, error: 'OBJECT_STORAGE_NOT_CONFIGURED' });
+    const object = await getObject(pathname);
+    if (!object) return res.status(404).json({ success: false, error: 'IMAGE_NOT_FOUND' });
+    res.setHeader('Content-Type', object.contentType);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    res.send(Buffer.from(object.body));
+  } catch { res.status(500).json({ success: false, error: 'PRODUCT_IMAGE_READ_ERROR' }); }
+});
 
 // POST /api/vendor/product-image-upload
 // Authenticated merchant product image upload; uses the public catalog Blob store.
@@ -1216,9 +1215,10 @@ app.post(
       const extension = mimeType === 'image/jpeg' ? 'jpg' : mimeType.split('/')[1];
       const assetId = crypto.randomBytes(12).toString('hex');
       const pathname = `product-images/${safeUsername}/${Date.now()}-${assetId}.${extension}`;
-      const { put } = await import('@vercel/blob');
-      const blob = await put(pathname, fileBuffer, { access: 'public', contentType: mimeType, addRandomSuffix: false, allowOverwrite: false });
-      return res.status(200).json({ success: true, url: blob.url, pathname: blob.pathname, contentType: mimeType, size: fileBuffer.length });
+      if (!objectStorageEnabled()) return res.status(503).json({ success: false, error: 'OBJECT_STORAGE_NOT_CONFIGURED', message: 'Durable image storage is not configured.' });
+      await putObject(pathname, fileBuffer, mimeType);
+      const url = publicObjectUrl(pathname) || `/api/vendor/product-image?path=${encodeURIComponent(pathname)}`;
+      return res.status(200).json({ success: true, url, pathname, contentType: mimeType, size: fileBuffer.length });
     } catch (error: any) {
       console.error('[Product Image Upload]', error);
       return res.status(500).json({ success: false, error: 'PRODUCT_IMAGE_UPLOAD_FAILED' });
@@ -1240,8 +1240,7 @@ app.get(
       status: 'ok',
       runtime: process.env.VERCEL === '1' ? 'vercel' : 'node',
       brandingRouteLoaded: true,
-      blobPackageAvailable: true,
-      blobTokenConfigured: Boolean(process.env.BLOB_READ_WRITE_TOKEN),
+      objectStorageConfigured: objectStorageEnabled(),
       maxFileSize: 5 * 1024 * 1024,
       allowedFormats: ['image/jpeg', 'image/png', 'image/webp']
     });
@@ -1333,98 +1332,24 @@ app.post(
       const randomId = crypto.randomBytes(16).toString('hex');
       const assetId = `${brandingType}_${randomId}.${ext}`;
 
-      const isVercel = process.env.VERCEL === '1' || Boolean(process.env.VERCEL_ENV);
-      const blobToken = process.env.BLOB_READ_WRITE_TOKEN;
-      const shouldUseBlob = isProduction || isVercel || Boolean(blobToken);
-
-      console.log('[Branding Upload] Processing upload:', {
-        route: req.path || req.url,
-        brandingType,
-        assetId,
-        ownerUsernamePresent: Boolean(ownerUsername),
-        mimeAccepted: mimeType,
-        fileSize: fileBuffer.length,
-        signatureAccepted: true,
-        blobTokenConfigured: Boolean(blobToken),
-        storageTarget: shouldUseBlob ? 'vercel-blob' : 'local-disk'
-      });
-
-      let assetUrl = '';
-
-      if (shouldUseBlob) {
-        try {
-          const { put } = await import('@vercel/blob');
-
-          if (!blobToken) {
-            throw Object.assign(
-              new Error('BLOB_READ_WRITE_TOKEN is not configured for Vercel branding uploads.'),
-              { code: 'BLOB_CONFIGURATION_ERROR' }
-            );
-          }
-
-          console.log('[Branding Upload] Starting Vercel Blob put for asset:', assetId);
-
-          const blob = await put(
-            `vendor-branding/${assetId}`,
-            fileBuffer,
-            {
-              access: 'public',
-              contentType: mimeType,
-              addRandomSuffix: false,
-              token: blobToken
-            }
-          );
-          assetUrl = blob.url;
-          console.log('[Branding Upload] Vercel Blob put succeeded:', { assetId, url: assetUrl });
-        } catch (blobErr: any) {
-          console.error('[Branding Upload] Vercel Blob error:', {
-            code: blobErr?.code || 'UNKNOWN_ERROR',
-            name: blobErr?.name,
-            message: blobErr?.message || String(blobErr)
-          });
-          const isConfigError = blobErr?.code === 'BLOB_CONFIGURATION_ERROR' || blobErr?.message?.includes('BLOB_READ_WRITE_TOKEN');
-          res.status(isConfigError ? 500 : 502).json({
-            success: false,
-            error: isConfigError ? 'BLOB_CONFIGURATION_ERROR' : 'BLOB_UPLOAD_FAILED',
-            message: isConfigError
-              ? 'Cloud storage is not configured for branding uploads. Please verify BLOB_READ_WRITE_TOKEN.'
-              : 'Failed to upload branding image to cloud storage. Please retry.'
-          });
-          return;
-        }
-      } else {
-        // Local disk storage fallback for local development only
-        const brandingDir = getVendorBrandingDir();
-        const filePath = path.join(brandingDir, assetId);
-        fs.writeFileSync(filePath, fileBuffer, { mode: 0o644 });
-        try { fs.chmodSync(filePath, 0o644); } catch {}
-        assetUrl = `/api/vendor/branding-asset/${assetId}`;
+      if (!objectStorageEnabled()) {
+        return res.status(503).json({ success: false, error: 'OBJECT_STORAGE_NOT_CONFIGURED', message: 'Durable branding storage is not configured.' });
       }
+      const brandingPath = `vendor-branding/${assetId}`;
+      await putObject(brandingPath, fileBuffer, mimeType);
+      const assetUrl = `/api/vendor/branding-asset/${assetId}`;
 
-      // Store metadata when filesystem permits
-      try {
-        const brandingDir = getVendorBrandingDir();
-        const metaPath = path.join(brandingDir, `${assetId}.meta.json`);
-        const rawFilename = (req.headers['x-filename'] as string) || (req.query?.filename as string) || `store_${brandingType}`;
-        let originalFilename = `store_${brandingType}.${ext}`;
-        try { originalFilename = decodeURIComponent(rawFilename); } catch { originalFilename = rawFilename; }
-        const sanitizedFilename = sanitizeVendorFilename(originalFilename);
+      const rawFilename = (req.headers['x-filename'] as string) || (req.query?.filename as string) || `store_${brandingType}`;
+      let originalFilename = `store_${brandingType}.${ext}`;
+      try { originalFilename = decodeURIComponent(rawFilename); } catch { originalFilename = rawFilename; }
+      const sanitizedFilename = sanitizeVendorFilename(originalFilename);
+      const metadata = {
+        assetId, brandingType, owner: ownerUsername.toLowerCase(), mimeType,
+        originalFilename: sanitizedFilename, size: fileBuffer.length,
+        url: assetUrl, uploadedAt: new Date().toISOString()
+      };
+      await putObject(`vendor-branding-meta/${assetId}.json`, JSON.stringify(metadata), 'application/json');
 
-        const metadata = {
-          assetId,
-          brandingType,
-          owner: ownerUsername.toLowerCase(),
-          mimeType,
-          originalFilename: sanitizedFilename,
-          size: fileBuffer.length,
-          url: assetUrl,
-          uploadedAt: new Date().toISOString()
-        };
-        fs.writeFileSync(metaPath, JSON.stringify(metadata, null, 2), { mode: 0o644 });
-        try { fs.chmodSync(metaPath, 0o644); } catch {}
-      } catch (metaErr) {
-        // Ephemeral filesystem on serverless is non-fatal if blob put succeeded
-      }
 
       res.status(201).json({
         success: true,
@@ -1445,73 +1370,24 @@ app.post(
 );
 
 // GET /api/vendor/branding-asset/:assetId & /api/v1/vendor/branding-asset/:assetId
-// Publicly accessible to buyers and storefront visitors
 app.get(
   ['/api/vendor/branding-asset/:assetId', '/api/v1/vendor/branding-asset/:assetId'],
   async (req, res) => {
     try {
       const { assetId } = req.params;
       if (!assetId || !/^(logo|banner)_[a-f0-9]{32}\.(png|jpg|jpeg|webp)$/i.test(assetId)) {
-        res.status(400).json({
-          success: false,
-          error: 'INVALID_ASSET_ID',
-          message: 'Invalid branding asset identifier.'
-        });
-        return;
+        return res.status(400).json({ success: false, error: 'INVALID_ASSET_ID' });
       }
-
-      const brandingDir = getVendorBrandingDir();
-      const filePath = path.resolve(brandingDir, assetId);
-
-      // Path traversal prevention
-      if (!filePath.startsWith(brandingDir)) {
-        res.status(403).json({
-          success: false,
-          error: 'PATH_TRAVERSAL_DETECTED',
-          message: 'Access denied.'
-        });
-        return;
-      }
-
-      if (fs.existsSync(filePath)) {
-        const ext = path.extname(filePath).toLowerCase();
-        const contentType = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
-        res.setHeader('Content-Type', contentType);
-        res.setHeader('X-Content-Type-Options', 'nosniff');
-        res.setHeader('Cache-Control', 'public, max-age=86400, immutable');
-        res.setHeader('Content-Disposition', 'inline');
-
-        const stream = fs.createReadStream(filePath);
-        stream.pipe(res);
-        return;
-      }
-
-      // Check Vercel Blob storage if local file is absent
-      const blobToken = process.env.BLOB_READ_WRITE_TOKEN;
-      if (blobToken) {
-        try {
-          const { head } = await import('@vercel/blob');
-          const blobDetails = await head(`vendor-branding/${assetId}`, { token: blobToken });
-          if (blobDetails && blobDetails.url) {
-            res.redirect(302, blobDetails.url);
-            return;
-          }
-        } catch (headErr) {
-          // Asset not found in blob
-        }
-      }
-
-      res.status(404).json({
-        success: false,
-        error: 'ASSET_NOT_FOUND',
-        message: 'Branding image asset not found.'
-      });
-    } catch (err: any) {
-      res.status(500).json({
-        success: false,
-        error: 'BRANDING_ASSET_READ_ERROR',
-        message: 'Internal server error occurred while retrieving branding image.'
-      });
+      if (!objectStorageEnabled()) return res.status(503).json({ success: false, error: 'OBJECT_STORAGE_NOT_CONFIGURED' });
+      const object = await getObject(`vendor-branding/${assetId}`);
+      if (!object) return res.status(404).json({ success: false, error: 'ASSET_NOT_FOUND' });
+      res.setHeader('Content-Type', object.contentType);
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.setHeader('Cache-Control', 'public, max-age=86400, immutable');
+      res.setHeader('Content-Disposition', 'inline');
+      res.send(Buffer.from(object.body));
+    } catch {
+      res.status(500).json({ success: false, error: 'BRANDING_ASSET_READ_ERROR' });
     }
   }
 );
@@ -1557,17 +1433,9 @@ app.delete(
         return;
       }
 
-      // Check Vercel Blob deletion
-      const blobToken = process.env.BLOB_READ_WRITE_TOKEN;
-      if (blobToken) {
-        try {
-          const { del } = await import('@vercel/blob');
-          await del(`vendor-branding/${assetId}`, { token: blobToken });
-        } catch (delErr) {
-          console.warn('[Branding Delete] Vercel Blob del warning:', delErr);
-        }
-      }
-
+      if (!objectStorageEnabled()) return res.status(503).json({ success: false, error: 'OBJECT_STORAGE_NOT_CONFIGURED' });
+      await deleteObject(`vendor-branding/${assetId}`);
+      await deleteObject(`vendor-branding-meta/${assetId}.json`);
       const brandingDir = getVendorBrandingDir();
       const filePath = path.resolve(brandingDir, assetId);
       const metaPath = path.resolve(brandingDir, `${assetId}.meta.json`);
@@ -1639,22 +1507,14 @@ app.get(
         return;
       }
 
-      const docsDir = getVendorDocumentsDir();
-      const metaPath = path.join(docsDir, `${id}.meta.json`);
-      const encPath = path.join(docsDir, `${id}.enc`);
-
-      if (!fs.existsSync(metaPath) || !fs.existsSync(encPath)) {
-        res.status(404).json({
-          success: false,
-          error: 'DOCUMENT_NOT_FOUND',
-          message: 'The requested document does not exist.'
-        });
-        return;
-      }
+      if (!objectStorageEnabled()) return res.status(503).json({ success: false, error: 'OBJECT_STORAGE_NOT_CONFIGURED' });
+      const metaObject = await getObject(`vendor-documents/${id}.meta.json`);
+      const encryptedObject = await getObject(`vendor-documents/${id}.enc`);
+      if (!metaObject || !encryptedObject) return res.status(404).json({ success: false, error: 'DOCUMENT_NOT_FOUND' });
 
       let meta: any;
       try {
-        meta = JSON.parse(fs.readFileSync(metaPath, 'utf-8'));
+        meta = JSON.parse(Buffer.from(metaObject.body).toString('utf8'));
       } catch {
         res.status(500).json({
           success: false,
@@ -1698,7 +1558,7 @@ app.get(
 
       const iv = Buffer.from(meta.iv, 'hex');
       const authTag = Buffer.from(meta.authTag, 'hex');
-      const encryptedBytes = fs.readFileSync(encPath);
+      const encryptedBytes = Buffer.from(encryptedObject.body);
 
       const decipher = crypto.createDecipheriv('aes-256-gcm', encryptionKey, iv);
       decipher.setAuthTag(authTag);
