@@ -341,13 +341,13 @@ export interface GenericServiceDiscoveryResult {
 }
 
 export interface PiConversionConfig {
-  piRateUsd: number; // e.g. 314159.00 ($314,159.00 USD per 1 Pi)
+  piRateUsd: number; // PiNova reference value: 314159 USD per 1 π; reference/display only.
   minPurchasePi: number; // e.g. 0.05 Pi
   maxPurchasePi: number; // e.g. 1000.00 Pi
   currencyCode: string; // "USD"
   currencySymbol: string; // "$"
-  autoRateUpdateEnabled: boolean;
-  autoUpdateSource?: string; // e.g. "Pi Market Index Oracle API"
+  autoRateUpdateEnabled: boolean; // Live market updates are display-only and never settlement authority.
+  autoUpdateSource?: string; // Display-rate source only; never used to alter native Pi settlement.
   lastUpdated: string;
   updatedBy: string;
 }
