@@ -2478,6 +2478,30 @@ app.post('/api/v1/utility/electricity/verify', handleElectricityVerify);
 
 // Official Pi Platform API Proxy: Payment Handlers
 
+
+const fetchPiPaymentServerAuthoritative = async (paymentId: string, piApiKey: string): Promise<any | null> => {
+  const cleanPaymentId = String(paymentId || '').trim();
+  if (!cleanPaymentId || !piApiKey) return null;
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000);
+  try {
+    const response = await fetch(`https://api.minepi.com/v2/payments/${encodeURIComponent(cleanPaymentId)}`, {
+      headers: {
+        'Authorization': `Key ${piApiKey}`,
+        'Content-Type': 'application/json'
+      },
+      signal: controller.signal
+    });
+    if (!response.ok) return null;
+    return await response.json();
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+};
+
 const handleApprovePayment = async (req: express.Request, res: express.Response) => {
   const timestamp = new Date().toISOString();
   try {
@@ -2517,6 +2541,56 @@ const handleApprovePayment = async (req: express.Request, res: express.Response)
           success: false,
           error: 'PI_SERVER_CREDENTIAL_MISSING',
           message: 'Pi Platform API key (PI_API_KEY or PI_SERVER_KEY) is missing in server environment variables. Real payments cannot be approved without credentials.'
+        });
+        return;
+      }
+
+      // Re-read the payment from Pi before approval. This prevents a caller from
+      // approving an unknown/cancelled payment identifier without first proving
+      // that the payment exists in this app's Pi Platform account.
+      const paymentData = await fetchPiPaymentServerAuthoritative(cleanPaymentId, piApiKey);
+      if (!paymentData) {
+        res.status(502).json({
+          success: false,
+          error: 'PI_PAYMENT_LOOKUP_FAILED',
+          message: 'Unable to retrieve the payment from Pi Platform before approval.'
+        });
+        return;
+      }
+      if (paymentData?.status?.cancelled === true || paymentData?.status?.user_cancelled === true) {
+        res.status(409).json({
+          success: false,
+          error: 'PI_PAYMENT_ALREADY_CANCELLED',
+          message: 'Cancelled Pi payments cannot be approved.'
+        });
+        return;
+      }
+      const paymentAmount = Number(paymentData?.amount);
+      if (!Number.isFinite(paymentAmount) || paymentAmount <= 0) {
+        res.status(409).json({
+          success: false,
+          error: 'PI_PAYMENT_INVALID_AMOUNT',
+          message: 'Pi Platform returned an invalid payment amount.'
+        });
+        return;
+      }
+      if (paymentData?.status?.developer_completed === true) {
+        paymentLedgerRepo.recordCompletion(cleanPaymentId, paymentData?.transaction?.txid || undefined);
+        res.json({
+          success: true,
+          paymentId: cleanPaymentId,
+          status: 'completed',
+          message: 'Payment is already completed on Pi Platform.'
+        });
+        return;
+      }
+      if (paymentData?.status?.developer_approved === true) {
+        paymentLedgerRepo.recordApproval(cleanPaymentId);
+        res.json({
+          success: true,
+          paymentId: cleanPaymentId,
+          status: 'approved',
+          message: 'Payment is already approved on Pi Platform.'
         });
         return;
       }
@@ -2653,6 +2727,44 @@ const handleCompletePayment = async (req: express.Request, res: express.Response
           success: false,
           error: 'PI_SERVER_CREDENTIAL_MISSING',
           message: 'Pi Platform API key (PI_API_KEY or PI_SERVER_KEY) is missing in server environment variables. Real payments cannot be completed without credentials.'
+        });
+        return;
+      }
+
+      // Re-read the payment from Pi before completion so the server never
+      // completes a cancelled/unknown payment or accepts a conflicting txid.
+      const paymentData = await fetchPiPaymentServerAuthoritative(cleanPaymentId, piApiKey);
+      if (!paymentData) {
+        res.status(502).json({
+          success: false,
+          error: 'PI_PAYMENT_LOOKUP_FAILED',
+          message: 'Unable to retrieve the payment from Pi Platform before completion.'
+        });
+        return;
+      }
+      if (paymentData?.status?.cancelled === true || paymentData?.status?.user_cancelled === true) {
+        res.status(409).json({
+          success: false,
+          error: 'PI_PAYMENT_ALREADY_CANCELLED',
+          message: 'Cancelled Pi payments cannot be completed.'
+        });
+        return;
+      }
+      const platformTxid = String(paymentData?.transaction?.txid || '').trim();
+      if (platformTxid && platformTxid !== cleanTxid) {
+        res.status(409).json({
+          success: false,
+          error: 'PI_TRANSACTION_ID_MISMATCH',
+          message: 'The supplied transaction ID does not match the Pi Platform payment.'
+        });
+        return;
+      }
+      const paymentAmount = Number(paymentData?.amount);
+      if (!Number.isFinite(paymentAmount) || paymentAmount <= 0) {
+        res.status(409).json({
+          success: false,
+          error: 'PI_PAYMENT_INVALID_AMOUNT',
+          message: 'Pi Platform returned an invalid payment amount.'
         });
         return;
       }
