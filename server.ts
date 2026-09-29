@@ -37,6 +37,7 @@ import { createRateLimiter } from './src/server/auth/rateLimit';
 import { AuditService } from './src/server/services/AuditService';
 import { EducationClassificationEngine } from './src/server/services/EducationClassificationEngine';
 import { StudentVerificationService } from './src/server/services/StudentVerificationService';
+import { getNigeriaAuthoritativeProviderForCapability } from './src/server/services/AuthoritativeEducationProviderRegistry';
 import { EducationRepository } from './src/server/db/repositories/EducationRepository';
 import { ProductRepository } from './src/server/db/repositories/ProductRepository';
 import { durableProductStorageEnabled, getDurableProduct, listDurableProducts, saveDurableProduct, updateDurableProductAvailability, reserveDurableProductStockBatch, softDeleteDurableProduct, deleteDurableProductBlob } from './src/server/services/DurableProductCatalog';
@@ -3311,7 +3312,7 @@ app.get(['/api/education/taxonomy', '/api/education/taxonomy/:countryCode?'], (r
 });
 
 // 3. Student Identity & Verification Engine (Phase 7 Remediation)
-app.post('/api/education/students/verify', studentVerifyRateLimiter, authenticate, (req: AuthenticatedRequest, res) => {
+app.post('/api/education/students/verify', studentVerifyRateLimiter, authenticate, async (req: AuthenticatedRequest, res) => {
   try {
     const { studentId, matricOrRegistrationNumber, institutionId, countryCode, claimedFullName, nationalStudentNumber } = req.body;
     if (!studentId && !matricOrRegistrationNumber) {
@@ -3323,7 +3324,7 @@ app.post('/api/education/students/verify', studentVerifyRateLimiter, authenticat
       return;
     }
 
-    const verificationResult = studentVerificationService.verifyStudent({
+    const verificationResult = await studentVerificationService.verifyStudent({
       studentId,
       matricOrRegistrationNumber,
       institutionId,
@@ -3341,11 +3342,11 @@ app.post('/api/education/students/verify', studentVerifyRateLimiter, authenticat
   }
 });
 
-app.post('/api/education/institutions/:id/verify-accreditation', studentVerifyRateLimiter, (req, res) => {
+app.post('/api/education/institutions/:id/verify-accreditation', studentVerifyRateLimiter, authenticate, async (req: AuthenticatedRequest, res) => {
   try {
     const { id } = req.params;
     const { countryCode, registryNumber } = req.body;
-    const result = studentVerificationService.verifyInstitution(id, countryCode || 'NG', registryNumber);
+    const result = await studentVerificationService.verifyInstitution(id, countryCode || 'NG', registryNumber);
     res.json({ success: true, accreditation: result });
   } catch (err: any) {
     res.status(500).json({ success: false, error: 'ACCREDITATION_CHECK_FAILED', message: err.message });
@@ -3822,11 +3823,25 @@ app.post('/api/education/admissions/apply', authenticate, (req: AuthenticatedReq
       return;
     }
 
+    const jambProviders = getNigeriaAuthoritativeProviderForCapability('ADMISSION_PROCESSING');
+    const configuredJamb = jambProviders.find((provider) => provider.integrationStatus === 'CONFIGURED');
+    if (!configuredJamb) {
+      res.status(503).json({
+        success: false,
+        error: 'PROVIDER_INTEGRATION_REQUIRED',
+        availability: 'UNAVAILABLE',
+        provider: 'JAMB_CAPS',
+        message: 'Admission applications are unavailable until authorized JAMB CAPS admission processing and an authoritative programme catalog are connected.'
+      });
+      return;
+    }
+
     res.status(503).json({
       success: false,
       error: 'PROVIDER_INTEGRATION_REQUIRED',
       availability: 'UNAVAILABLE',
-      message: 'Admission applications are unavailable until a verified institution admissions provider and authoritative programme catalog are connected.'
+      provider: 'JAMB_CAPS',
+      message: 'JAMB CAPS is registered as the authoritative admission processor, but its authorized integration is not yet available in PiNova.'
     });
     return;
 
@@ -3844,6 +3859,19 @@ app.post('/api/education/admissions/:id/status', authenticate, requireRole(['PLA
 
     if (!status) {
       res.status(400).json({ success: false, error: 'MISSING_STATUS', message: 'Status field is required' });
+      return;
+    }
+
+    const jambProviders = getNigeriaAuthoritativeProviderForCapability('ADMISSION_STATUS');
+    const configuredJamb = jambProviders.find((provider) => provider.integrationStatus === 'CONFIGURED');
+    if (!configuredJamb) {
+      res.status(503).json({
+        success: false,
+        error: 'PROVIDER_INTEGRATION_REQUIRED',
+        availability: 'UNAVAILABLE',
+        provider: 'JAMB_CAPS',
+        message: 'Admission status cannot be advanced until the authoritative JAMB CAPS integration is configured.'
+      });
       return;
     }
 
@@ -3875,6 +3903,19 @@ app.post('/api/education/admissions/:id/offer/accept', authenticate, (req: Authe
 
     if (isProduction && !isAdmin && !isOwner) {
       res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Access denied: You are not authorized to accept this offer.' });
+      return;
+    }
+
+    const jambProviders = getNigeriaAuthoritativeProviderForCapability('ADMISSION_STATUS');
+    const configuredJamb = jambProviders.find((provider) => provider.integrationStatus === 'CONFIGURED');
+    if (!configuredJamb) {
+      res.status(503).json({
+        success: false,
+        error: 'PROVIDER_INTEGRATION_REQUIRED',
+        availability: 'UNAVAILABLE',
+        provider: 'JAMB_CAPS',
+        message: 'Admission offer acceptance is unavailable until the authoritative JAMB CAPS admission status integration is configured and any required acceptance-fee settlement is verified.'
+      });
       return;
     }
 
