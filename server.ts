@@ -3787,17 +3787,17 @@ app.get('/api/education/admissions', (req, res) => {
 
 app.post('/api/education/admissions/apply', authenticate, (req: AuthenticatedRequest, res) => {
   try {
-    const appData = req.body;
-    if (!appData.institutionId || !appData.applicantFullName || !appData.programmeName) {
-      res.status(400).json({ success: false, error: 'MISSING_REQUIRED_FIELDS' });
+    const appData = req.body || {};
+    if (!appData.institutionId || !appData.applicantFullName || !appData.programmeName || !String(appData.applicantEmail || '').trim()) {
+      res.status(400).json({ success: false, error: 'MISSING_REQUIRED_FIELDS', message: 'Institution, programme, applicant name, and applicant email are required.' });
       return;
     }
 
     const application = educationRepo.submitAdmissionApplication({
       ...appData,
-      applicantEmail: req.user?.username ? `${req.user.username}@pinova.hub` : appData.applicantEmail || 'applicant@pinova.hub',
-      applicationFeePaid: Boolean(appData.applicationFeePaid),
-      documents: appData.documents || []
+      applicantEmail: String(appData.applicantEmail).trim(),
+      applicationFeePaid: false,
+      documents: Array.isArray(appData.documents) ? appData.documents : []
     });
 
     res.json({ success: true, message: 'Admission application submitted successfully', application });
