@@ -23,15 +23,9 @@ export function calculateAuthoritativePiAmount(
   if (!fiatAmount || fiatAmount <= 0 || !piRateUsd || piRateUsd <= 0) {
     return 0;
   }
-  const rawPi = fiatAmount / piRateUsd;
-  if (rawPi < 0.0001) {
-    // Preserve 8 decimal places for micro-purchases (e.g. $0.50 / 314,159 = 0.00000159)
-    return Number(rawPi.toFixed(8));
-  }
-  if (rawPi < 1) {
-    return Number(rawPi.toFixed(7));
-  }
-  return Number(rawPi.toFixed(6));
+  // PiNova Oracle reference precision: preserve 12 decimal places so
+  // micro-Pi values such as $0.01 -> 0.000000031831 Pi are not lost.
+  return Number((fiatAmount / piRateUsd).toFixed(12));
 }
 
 /**
@@ -39,7 +33,7 @@ export function calculateAuthoritativePiAmount(
  *
  * Requirements:
  * 1. A non-zero positive Pi amount is NEVER displayed as "0.0000" or "0".
- * 2. Uses minimum 8 decimal places where necessary for micro-amounts.
+ * 2. Uses up to 12 decimal places where necessary for micro-amounts.
  * 3. Removes unnecessary trailing zeros while preserving all meaningful significant digits.
  * 4. Supports large amounts, standard decimals, and micro-amounts.
  */
@@ -85,18 +79,18 @@ export function formatPiAmount(
     formatted = fixedStr.replace(/(\.\d*?[1-9])0+$/, '$1').replace(/\.0+$/, '');
   } else {
     // Micro-amounts, e.g. 0.0000015915 or 0.000002
-    const maxDec = Math.max(8, options?.maxDecimals ?? 8);
+    const maxDec = Math.max(12, options?.maxDecimals ?? 12);
     let fixedStr = num.toFixed(maxDec);
 
     if (parseFloat(fixedStr) === 0 && absNum > 0) {
-      fixedStr = num.toFixed(10);
+      fixedStr = num.toFixed(12);
     }
 
     formatted = fixedStr.replace(/(\.\d*?[1-9])0+$/, '$1').replace(/\.0+$/, '');
 
     // Critical invariant: Never display a non-zero number as "0" or "0.0000"
     if (formatted === '0' || formatted === '0.0000' || parseFloat(formatted) === 0) {
-      formatted = num.toFixed(8);
+      formatted = num.toFixed(12);
     }
   }
 
