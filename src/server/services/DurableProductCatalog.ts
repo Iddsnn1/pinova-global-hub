@@ -16,5 +16,58 @@ export async function listDurableProducts(options?:{includeDeleted?:boolean;acti
 export async function saveDurableProduct(product:Product):Promise<Product>{if(!neonDatabaseEnabled())throw new Error('DURABLE_PRODUCT_STORAGE_UNAVAILABLE');const existing=await getDurableProduct(product.id);const p=normalize(product,existing||undefined);const sql=getNeonSql();const data=JSON.stringify(p);await sql`INSERT INTO products(id,seller_id,title,marketplace_category,category,price_pi,stock,availability_status,is_active,is_deleted,moderation_status,data,created_at,updated_at) VALUES(${p.id},${p.sellerId},${p.title},${p.marketplaceCategory||null},${p.category||null},${p.pricePi},${p.stock},${p.availabilityStatus||null},${p.isActive},${p.isDeleted},${p.moderationStatus},${data}::jsonb,${p.createdAt},${p.updatedAt}) ON CONFLICT(id) DO UPDATE SET seller_id=EXCLUDED.seller_id,title=EXCLUDED.title,marketplace_category=EXCLUDED.marketplace_category,category=EXCLUDED.category,price_pi=EXCLUDED.price_pi,stock=EXCLUDED.stock,availability_status=EXCLUDED.availability_status,is_active=EXCLUDED.is_active,is_deleted=EXCLUDED.is_deleted,moderation_status=EXCLUDED.moderation_status,data=EXCLUDED.data,updated_at=EXCLUDED.updated_at`;return p;}
 export async function updateDurableProductAvailability(id:string,status:AvailabilityStatus,stock:number):Promise<Product|null>{if(!Number.isInteger(stock)||stock<0)throw new Error('INVALID_PRODUCT_STOCK');const p=await getDurableProduct(id);if(!p||p.isDeleted)return null;return saveDurableProduct({...p,stock,availabilityStatus:status,isActive:status!=='out_of_stock'&&p.isActive!==false});}
 export async function softDeleteDurableProduct(id:string):Promise<boolean>{const p=await getDurableProduct(id);if(!p)return false;await saveDurableProduct({...p,isDeleted:true,isActive:false});return true;}
-export async function reserveDurableProductStockBatch(requests:Array<{id:string;quantity:number}>):Promise<Product[]|undefined>{if(!neonDatabaseEnabled())throw new Error('DURABLE_PRODUCT_STORAGE_UNAVAILABLE');const merged=new Map<string,number>();for(const r of requests){if(!r.id||!Number.isInteger(r.quantity)||r.quantity<1)throw new Error('INVALID_STOCK_RESERVATION_QUANTITY');merged.set(r.id,(merged.get(r.id)||0)+r.quantity);}const reserved:Product[]=[];for(const[id,qty]of merged){const p=await getDurableProduct(id);if(!p||p.isDeleted||p.isActive!==true)return undefined;if(p.fulfillmentType==='digital_download'||p.fulfillmentType==='instant_key'){reserved.push(p);continue;}const sql=getNeonSql();const rows=await sql`UPDATE products SET stock=stock-${qty},availability_status=CASE WHEN stock-${qty}<=0 THEN 'out_of_stock' ELSE availability_status END,is_active=CASE WHEN stock-${qty}>0 THEN is_active ELSE FALSE END,updated_at=NOW(),data=jsonb_set(jsonb_set(data,'{stock}',to_jsonb(stock-${qty}),true),'{availabilityStatus}',to_jsonb(CASE WHEN stock-${qty}<=0 THEN 'out_of_stock' ELSE availability_status END),true) WHERE id=${id} AND is_deleted=FALSE AND is_active=TRUE AND stock>=${qty} AND COALESCE(data->>'fulfillmentType','') NOT IN ('digital_download','instant_key') RETURNING data`;if(!rows.length)throw new Error('INSUFFICIENT_STOCK');reserved.push(rowToProduct(rows[0]));}return reserved;}
+export async function reserveDurableProductStockBatch(requests:Array<{id:string;quantity:number}>):Promise<Product[]|undefined>{
+  if(!neonDatabaseEnabled())throw new Error('DURABLE_PRODUCT_STORAGE_UNAVAILABLE');
+  const merged=new Map<string,number>();
+  for(const r of requests){
+    if(!r.id||!Number.isInteger(r.quantity)||r.quantity<1)throw new Error('INVALID_STOCK_RESERVATION_QUANTITY');
+    merged.set(r.id,(merged.get(r.id)||0)+r.quantity);
+  }
+  if(merged.size===0)return [];
+  const payload=JSON.stringify(Array.from(merged,([id,quantity])=>({id,quantity})));
+  const sql=getNeonSql();
+  const rows=await sql`WITH requested AS (
+    SELECT id, quantity::integer AS quantity
+    FROM jsonb_to_recordset(${payload}::jsonb) AS x(id text, quantity integer)
+  ), eligible AS (
+    SELECT p.id,p.stock,COALESCE(p.data->>'fulfillmentType','') AS fulfillment_type,r.quantity
+    FROM products p JOIN requested r ON r.id=p.id
+    WHERE p.is_deleted=FALSE AND p.is_active=TRUE
+  ), physical AS (
+    SELECT * FROM eligible WHERE fulfillment_type NOT IN ('digital_download','instant_key')
+  ), reservation_guard AS (
+    SELECT
+      (SELECT COUNT(*) FROM eligible)=(SELECT COUNT(*) FROM requested) AS all_found,
+      NOT EXISTS (SELECT 1 FROM physical WHERE stock < quantity) AS stock_ok
+  )
+  UPDATE products p
+  SET stock=p.stock-r.quantity,
+      availability_status=CASE WHEN p.stock-r.quantity<=0 THEN 'out_of_stock' ELSE p.availability_status END,
+      is_active=CASE WHEN p.stock-r.quantity>0 THEN p.is_active ELSE FALSE END,
+      updated_at=NOW(),
+      data=jsonb_set(
+        jsonb_set(p.data,'{stock}',to_jsonb(p.stock-r.quantity),true),
+        '{availabilityStatus}',
+        to_jsonb(CASE WHEN p.stock-r.quantity<=0 THEN 'out_of_stock' ELSE p.availability_status END),
+        true
+      )
+  FROM requested r, reservation_guard g
+  WHERE p.id=r.id
+    AND COALESCE(p.data->>'fulfillmentType','') NOT IN ('digital_download','instant_key')
+    AND g.all_found AND g.stock_ok
+  RETURNING p.data`;
+  const physicalCount=Array.from(merged.keys()).filter(id=>!rows.some(r=>(r.data as Product)?.id===id)).length;
+  const all=await sql`SELECT data FROM products WHERE id IN (SELECT id FROM jsonb_to_recordset(${payload}::jsonb) AS x(id text, quantity integer)) AND is_deleted=FALSE`;
+  if(all.length!==merged.size)throw new Error('STOCK_RESERVATION_FAILED');
+  const products=all.map(rowToProduct);
+  for(const p of products){
+    const requestedQty=merged.get(p.id)||0;
+    const fulfillmentType=String(p.fulfillmentType||'');
+    if(fulfillmentType!=='digital_download'&&fulfillmentType!=='instant_key'&&physicalCount===0&&p.stock<0)throw new Error('STOCK_RESERVATION_FAILED');
+    if(fulfillmentType!=='digital_download'&&fulfillmentType!=='instant_key'&&rows.length===0)throw new Error('STOCK_RESERVATION_FAILED');
+    void requestedQty;
+  }
+  if(rows.length===0 && products.some(p=>!['digital_download','instant_key'].includes(String(p.fulfillmentType||''))))throw new Error('STOCK_RESERVATION_FAILED');
+  return products;
+}
 export async function deleteDurableProductBlob(id:string){return softDeleteDurableProduct(id);}
