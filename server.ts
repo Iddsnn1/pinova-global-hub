@@ -3750,12 +3750,7 @@ app.get('/api/education/receipts/:receiptNumber/verify', receiptVerifyRateLimite
       academicSession: verification.receipt.academicSession,
       termOrSemester: verification.receipt.termOrSemester,
       educationLevel: verification.receipt.educationLevel,
-      amountPaid: verification.receipt.amountPaid,
-      currency: verification.receipt.currency,
-      piAmount: verification.receipt.piAmount,
-      paymentDate: verification.receipt.paymentDate,
       verifiedByServer: verification.receipt.verifiedByServer,
-      chargeDescription: verification.receipt.chargeDescription,
       publicSummary: verification.receipt.publicSafeSummary
     });
   } catch (err: any) {
@@ -3809,17 +3804,25 @@ app.get('/api/education/admissions', authenticate, (req: AuthenticatedRequest, r
 app.post('/api/education/admissions/apply', authenticate, (req: AuthenticatedRequest, res) => {
   try {
     const appData = req.body || {};
-    if (!appData.institutionId || !appData.applicantFullName || !appData.programmeName || !String(appData.applicantEmail || '').trim()) {
-      res.status(400).json({ success: false, error: 'MISSING_REQUIRED_FIELDS', message: 'Institution, programme, applicant name, and applicant email are required.' });
+    const authenticatedUsername = String(req.user?.username || '').trim();
+    if (!appData.institutionId || !appData.applicantFullName || !appData.programmeName || !authenticatedUsername) {
+      res.status(400).json({ success: false, error: 'MISSING_REQUIRED_FIELDS', message: 'Institution, programme, applicant name, and authenticated applicant context are required.' });
       return;
     }
 
-    const application = educationRepo.submitAdmissionApplication({
-      ...appData,
-      applicantEmail: String(appData.applicantEmail).trim(),
-      applicationFeePaid: false,
-      documents: Array.isArray(appData.documents) ? appData.documents : []
+    const submittedEmail = String(appData.applicantEmail || '').trim();
+    if (submittedEmail && submittedEmail.toLowerCase() !== authenticatedUsername.toLowerCase()) {
+      res.status(403).json({ success: false, error: 'APPLICANT_CONTEXT_MISMATCH', message: 'Applicant identity must match the authenticated Pioneer session.' });
+      return;
+    }
+
+    res.status(503).json({
+      success: false,
+      error: 'PROVIDER_INTEGRATION_REQUIRED',
+      availability: 'UNAVAILABLE',
+      message: 'Admission applications are unavailable until a verified institution admissions provider and authoritative programme catalog are connected.'
     });
+    return;
 
     res.json({ success: true, message: 'Admission application submitted successfully', application });
   } catch (err: any) {
@@ -3859,12 +3862,10 @@ app.post('/api/education/admissions/:id/offer/accept', authenticate, (req: Authe
       return;
     }
 
-    const currentUser = req.user?.username;
-    const isOwner = currentUser && admission.applicantEmail && (
-      admission.applicantEmail.toLowerCase().includes(currentUser.toLowerCase()) ||
-      admission.applicantFullName.toLowerCase().includes(currentUser.toLowerCase())
-    );
-    const isAdmin = req.user?.roles.some((r) => r === 'PLATFORM_ADMIN' || r === 'INSTITUTION_ADMIN');
+    const currentUser = String(req.user?.username || '').trim().toLowerCase();
+    const applicantEmail = String(admission.applicantEmail || '').trim().toLowerCase();
+    const isOwner = Boolean(currentUser && applicantEmail && applicantEmail === currentUser);
+    const isAdmin = (req.user?.roles || []).some((r) => r === 'PLATFORM_ADMIN' || r === 'INSTITUTION_ADMIN');
 
     if (isProduction && !isAdmin && !isOwner) {
       res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Access denied: You are not authorized to accept this offer.' });
