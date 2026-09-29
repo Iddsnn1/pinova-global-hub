@@ -131,7 +131,7 @@ export const TransportDiscovery: React.FC<TransportDiscoveryProps> = ({
 
   // Pi Fare Calculator
   const calculatePi = (fiatAmount: number): number => {
-    const rate = piConversionConfig?.piRateUsd > 0 ? piConversionConfig.piRateUsd : 10.0;
+    const rate = piConversionConfig?.piRateUsd > 0 ? piConversionConfig.piRateUsd : 314159;
     const raw = typeof fiatAmount === 'number' && Number.isFinite(fiatAmount) && fiatAmount > 0 ? fiatAmount : 25.0;
     return calculateAuthoritativePiAmount(raw, rate);
   };
