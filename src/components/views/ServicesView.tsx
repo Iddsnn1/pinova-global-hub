@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Briefcase, CheckCircle2, Calendar, ShieldCheck } from 'lucide-react';
+import React from 'react';
+import { Briefcase, Calendar } from 'lucide-react';
 import { SERVICE_CATEGORIES } from '../../data/categoryData';
 
 interface ServicesViewProps {
@@ -7,7 +7,6 @@ interface ServicesViewProps {
 }
 
 export const ServicesView: React.FC<ServicesViewProps> = ({ userBalancePi }) => {
-  const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
   return (
     <div className="space-y-8 pb-20 max-w-7xl mx-auto px-4 sm:px-6">
       
@@ -61,7 +60,6 @@ export const ServicesView: React.FC<ServicesViewProps> = ({ userBalancePi }) => 
             <button
               disabled
               title="Booking is unavailable until verified provider listings and server-side booking are available"
-              onClick={() => setSelectedServiceId(null)}
               className="w-full py-2.5 bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-bold text-xs rounded-xl flex items-center justify-center gap-2 cursor-not-allowed"
             >
               <Calendar className="w-4 h-4" />
