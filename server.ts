@@ -2867,7 +2867,7 @@ app.post('/api/v2/utility/fulfill', paymentRateLimiter, async (req, res) => {
   if (isNaN(numericFiatAmount) || !isFinite(numericFiatAmount) || numericFiatAmount <= 0) {
     const numPi = Number(piAmount);
     if (numPi > 0) {
-      const cfgRate = platformConfigRepo.getConfig().piRateUsd || 10.0;
+      const cfgRate = platformConfigRepo.getConfig().piRateUsd || 314159;
       numericFiatAmount = numPi * cfgRate;
     }
   }
