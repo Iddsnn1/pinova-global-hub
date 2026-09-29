@@ -3513,11 +3513,11 @@ app.post('/api/education/invoices/:id/apply-scholarship', authenticate, requireR
       return;
     }
 
-    const updatedInvoice = educationRepo.applyScholarshipToInvoice(id, scholarshipId, actorUsername);
-    res.json({
-      success: true,
-      message: 'Scholarship credit applied to invoice',
-      invoice: updatedInvoice
+    res.status(503).json({
+      success: false,
+      error: 'PROVIDER_INTEGRATION_REQUIRED',
+      availability: 'UNAVAILABLE',
+      message: 'Scholarship credits cannot be applied until an authorized scholarship provider/catalog integration is connected.'
     });
   } catch (err: any) {
     res.status(400).json({ success: false, error: 'SCHOLARSHIP_APPLICATION_FAILED', message: err.message });
