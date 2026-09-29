@@ -230,7 +230,7 @@ export const SchoolFeesEngine: React.FC<SchoolFeesEngineProps> = ({
               err.message ||
               'Pi payment could not be completed. No simulated payment or synthetic transaction will be created.'
             );
-          }}
+          }
         }
       );
     } catch (sdkError: any) {
