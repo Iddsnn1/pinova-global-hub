@@ -3859,7 +3859,7 @@ app.get('/api/education/admissions', authenticate, (req: AuthenticatedRequest, r
   }
 });
 
-app.post('/api/education/admissions/apply', authenticate, (req: AuthenticatedRequest, res) => {
+app.post('/api/education/admissions/apply', authenticate, async (req: AuthenticatedRequest, res) => {
   try {
     const appData = req.body || {};
     const authenticatedUsername = String(req.user?.username || '').trim();
@@ -3891,7 +3891,14 @@ app.post('/api/education/admissions/apply', authenticate, (req: AuthenticatedReq
       return;
     }
 
-    res.json({ success: true, message: 'Admission application submitted successfully', application });
+    res.status(503).json({
+      success: false,
+      error: 'ADMISSION_PROVIDER_INTEGRATION_REQUIRED',
+      availability: 'UNAVAILABLE',
+      provider: 'JAMB_CAPS',
+      message: 'JAMB CAPS authorization was verified, but authoritative institution admission processing is not connected. No admission record was created.'
+    });
+    return;
   } catch (err: any) {
     res.status(500).json({ success: false, error: 'ADMISSION_SUBMISSION_FAILED', message: err.message });
   }
@@ -3939,7 +3946,7 @@ app.post('/api/education/admissions/:id/status', authenticate, requireRole(['PLA
   }
 });
 
-app.post('/api/education/admissions/:id/offer/accept', authenticate, (req: AuthenticatedRequest, res) => {
+app.post('/api/education/admissions/:id/offer/accept', authenticate, async (req: AuthenticatedRequest, res) => {
   try {
     const admission = educationRepo.getAdmissionById(req.params.id);
     if (!admission) {
