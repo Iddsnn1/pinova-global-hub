@@ -1,4 +1,5 @@
 import { PiConversionConfig } from '../../types/utility';
+import { PI_ORACLE_RATE_USD } from '../../config/piOracle';
 
 export interface IPricingRuleEngine {
   calculatePiFromFiat(fiatAmount: number, config: PiConversionConfig): number;
@@ -13,7 +14,7 @@ export class PricingRuleEngine implements IPricingRuleEngine {
   }
 
   calculateFiatFromPi(piAmount: number, config: PiConversionConfig): number {
-    return piAmount * (config.piRateUsd || 314159.00);
+    return piAmount * (config.piRateUsd || PI_ORACLE_RATE_USD);
   }
 
   getPricingDisclaimer(): string {
