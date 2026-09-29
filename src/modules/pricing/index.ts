@@ -8,13 +8,14 @@ export interface IPricingRuleEngine {
 }
 
 export class PricingRuleEngine implements IPricingRuleEngine {
-  calculatePiFromFiat(fiatAmount: number, config: PiConversionConfig): number {
-    if (!config.piRateUsd || config.piRateUsd <= 0) return 0;
-    return fiatAmount / config.piRateUsd;
+  calculatePiFromFiat(fiatAmount: number, _config: PiConversionConfig): number {
+    if (!Number.isFinite(fiatAmount) || fiatAmount <= 0) return 0;
+    return Number((fiatAmount / PI_REFERENCE_RATE_USD).toFixed(12));
   }
 
-  calculateFiatFromPi(piAmount: number, config: PiConversionConfig): number {
-    return piAmount * (config.piRateUsd || PI_REFERENCE_RATE_USD);
+  calculateFiatFromPi(piAmount: number, _config: PiConversionConfig): number {
+    if (!Number.isFinite(piAmount) || piAmount <= 0) return 0;
+    return piAmount * PI_REFERENCE_RATE_USD;
   }
 
   getPricingDisclaimer(): string {
