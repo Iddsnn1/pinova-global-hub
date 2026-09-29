@@ -229,7 +229,11 @@ export class EducationRepository {
 
   public getGuardianChildrenSummaries(guardianId: string): GuardianChildSummary[] {
     // Dynamically recalculate balances based on active invoices
-    const children = this.childrenSummariesEngine.getAll();
+    const cleanGuardianId = (guardianId || '').trim();
+    if (!cleanGuardianId) return [];
+    const children = this.childrenSummariesEngine.filter((c) =>
+      String(c.guardianId || '').trim().toLowerCase() === cleanGuardianId.toLowerCase()
+    );
     return children.map((c) => {
       const studentInvoices = this.invoicesEngine.filter((inv) => inv.studentId === c.studentId);
       const activeInvoices = studentInvoices.filter((inv) => inv.status !== 'PAID' && inv.status !== 'CANCELLED');
@@ -468,7 +472,7 @@ export class EducationRepository {
       status: 'VERIFIED_COMPLETED',
       receiptNumber,
       payerUsername: params.payerUsername,
-      idempotencyKey: params.idempotencyKey || (`IDEM-${Date.now()}`),
+      idempotencyKey: params.idempotencyKey || params.piPaymentId || paymentId,
       verifiedAt: timestamp,
       auditHash
     };
