@@ -13,6 +13,7 @@
     "test:edu": "tsx tests/education_ecosystem_verification_suite.ts",
     "test:edu:directory": "tsx tests/education_directory_functional_suite.ts",
     "test:edu:integrity": "tsx tests/education_data_integrity_suite.ts && tsx tests/education_data_integrity_edge_suite.ts",
+    "test:edu:providers": "tsx tests/authoritative_education_provider_registry_suite.ts",
     "test:audit": "tsx tests/audit_v2_remediation_suite.ts",
     "test:flight": "tsx tests/duffel_flight_audit_suite.ts",
     "test:kyc": "tsx tests/vendor_kyc_document_upload_suite.ts",
