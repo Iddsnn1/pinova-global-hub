@@ -136,9 +136,14 @@ export const SchoolFeesEngine: React.FC<SchoolFeesEngineProps> = ({
   };
 
   const calculatedPi = calculatePiFromUsd(customAmount);
+  const fiatSettlementCurrency = 'USD';
 
   const handleExecutePayment = async () => {
     if (!selectedInvoice) return;
+    if (String(selectedInvoice.currency || '').trim().toUpperCase() !== fiatSettlementCurrency) {
+      setErrorMessage('Pi settlement is enabled only for USD-denominated education invoices under the configured Oracle reference.');
+      return;
+    }
     if (customAmount <= 0) {
       setErrorMessage('Please enter a valid payment amount greater than zero.');
       return;
@@ -163,7 +168,7 @@ export const SchoolFeesEngine: React.FC<SchoolFeesEngineProps> = ({
       studentName: selectedInvoice.studentName,
       institutionId: selectedInvoice.institutionId,
       amountPaidFiat: customAmount,
-      currency: selectedInvoice.currency
+      currency: fiatSettlementCurrency
     };
 
     const processServerSettlement = async (paymentId: string, txid: string) => {
@@ -172,7 +177,7 @@ export const SchoolFeesEngine: React.FC<SchoolFeesEngineProps> = ({
         const res = await educationService.payInvoice({
           invoiceId: selectedInvoice.id,
           amountPaid: customAmount,
-          currency: selectedInvoice.currency,
+          currency: fiatSettlementCurrency,
           piAmount: calculatedPi,
           piPaymentId: paymentId,
           piTxid: txid,
