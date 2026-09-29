@@ -29,7 +29,7 @@ export function runPiPrecisionTests() {
   assert(
     '$0.50 calculation precision',
     amt0_50.toString(),
-    '0.00000159'
+    '0.000001591551'
   );
   assert(
     '$0.50 formatted display never rounds to 0.0000',
@@ -42,7 +42,7 @@ export function runPiPrecisionTests() {
   assert(
     '$1.00 calculation precision',
     amt1_00.toString(),
-    '0.00000318'
+    '0.000003183102'
   );
   assert(
     '$1.00 formatted display',
@@ -55,7 +55,7 @@ export function runPiPrecisionTests() {
   assert(
     '$10.00 calculation precision',
     amt10_00.toString(),
-    '0.00003183'
+    '0.000031831016'
   );
   assert(
     '$10.00 formatted display',
@@ -68,7 +68,7 @@ export function runPiPrecisionTests() {
   assert(
     '$100.00 calculation precision',
     amt100_00.toString(),
-    '0.0003183'
+    '0.000318310155'
   );
   assert(
     '$100.00 formatted display',
@@ -80,13 +80,19 @@ export function runPiPrecisionTests() {
   assert(
     'Very small Pi amount: 0.0000015915',
     formatPiAmount(0.0000015915),
-    '0.00000159'
+    '0.0000015915'
   );
   assert(
     'Very small Pi amount: 0.000002',
     formatPiAmount(0.000002),
     '0.000002'
   );
+
+
+  // GCV/Oracle reference checks: 1 Pi = $314,159 USD.
+  assert('$0.01 Oracle conversion', calculateAuthoritativePiAmount(0.01, PI_RATE).toString(), '0.000000031831');
+  assert('$1000 Oracle conversion', calculateAuthoritativePiAmount(1000, PI_RATE).toString(), '0.003183102031');
+  assert('$0.01 display precision', formatPiAmount(calculateAuthoritativePiAmount(0.01, PI_RATE)), '0.000000031831');
 
   // Test 6: Normal & intermediate Pi amounts
   assert(
