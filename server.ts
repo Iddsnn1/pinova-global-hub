@@ -3292,6 +3292,14 @@ app.get(['/api/education/taxonomy', '/api/education/taxonomy/:countryCode?'], (r
     }
 
     const taxonomy = classificationEngine.getTaxonomy(countryCode);
+    if (!taxonomy) {
+      res.status(404).json({
+        success: false,
+        error: 'TAXONOMY_NOT_CONFIGURED',
+        message: 'No authoritative education taxonomy is configured for this country.'
+      });
+      return;
+    }
     res.json({
       success: true,
       countryCode: taxonomy.countryCode,
