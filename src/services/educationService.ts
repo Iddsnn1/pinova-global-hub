@@ -16,16 +16,6 @@ import {
 import { getTaxonomyByCountry } from '../data/educationTaxonomyData';
 import { GLOBAL_EDUCATION_INSTITUTIONS } from '../data/educationInstitutionsData';
 import { normalizeCountryCode, matchesSubdivision } from '../data/countrySubdivisions';
-import {
-  SEED_CHILDREN_SUMMARIES,
-  SEED_INVOICES,
-  SEED_RECEIPTS,
-  SEED_PAYMENTS,
-  SEED_ADMISSION_APPLICATIONS,
-  SEED_SCHOLARSHIPS,
-  SEED_MARKETPLACE_ITEMS
-} from '../data/educationSeedData';
-
 export const educationService = {
   async getInstitutions(filter?: {
     countryCode?: string;
