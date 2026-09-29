@@ -2,12 +2,12 @@ import { StorageEngine } from '../StorageEngine';
 
 export interface PricingConfigEntity {
   id: string;
-  piRateUsd: number;
+  piRateUsd: number; // Fixed PiNova reference value; not admin-editable.
   minPurchasePi: number;
   maxPurchasePi: number;
   currencyCode: string;
   currencySymbol: string;
-  autoRateUpdateEnabled: boolean;
+  autoRateUpdateEnabled: boolean; // Live market feeds may be used for display only.
   autoUpdateSource: string;
   lastUpdated: string;
   updatedBy: string;
@@ -27,16 +27,16 @@ export interface PricingAuditLogEntity {
 
 const DEFAULT_PRICING_CONFIG: PricingConfigEntity = {
   id: 'current_pricing',
-  piRateUsd: 10.00,
+  piRateUsd: 314159.00,
   minPurchasePi: 0.000001,
   maxPurchasePi: 1000.00,
   currencyCode: 'USD',
   currencySymbol: '$',
-  autoRateUpdateEnabled: true,
-  autoUpdateSource: 'Platform Pricing Administration Rule',
+  autoRateUpdateEnabled: false,
+  autoUpdateSource: 'PiNova Reference Value — Community-Supported Target',
   lastUpdated: new Date().toISOString(),
   updatedBy: 'Platform Governance Engine',
-  disclaimer: 'Pricing configuration established by marketplace administration. Pi Network does not establish or guarantee exchange rates.'
+  disclaimer: 'PiNova reference value: 1 π = $314,159 USD. This is a community-supported application reference, not an official Pi Network market rate. Native Pi settlement remains authoritative; other currencies are display conversions.'
 };
 
 export class PlatformConfigRepository {
