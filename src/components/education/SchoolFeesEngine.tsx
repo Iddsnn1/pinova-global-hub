@@ -3,7 +3,7 @@ import { EducationInvoice, DigitalEducationReceipt, InstitutionProfile, Educatio
 import { educationService } from '../../services/educationService';
 import { executePiPayment } from '../../lib/piSdk';
 import { DigitalReceiptModal } from './DigitalReceiptModal';
-import { calculatePiFromUsd, PI_ORACLE_DECIMAL_PLACES, PI_ORACLE_RATE_USD } from '../../config/piOracle';
+import { calculatePiFromUsd, PI_ORACLE_RATE_USD } from '../../config/piOracle';
 import {
   CreditCard,
   Building2,
