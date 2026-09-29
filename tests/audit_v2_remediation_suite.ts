@@ -211,7 +211,8 @@ async function runTestSuite() {
 
   // 5.3 Institution Accreditation
   const instAccreditation = await verificationService.verifyInstitution('NG-FED-001', 'NG');
-  assert(instAccreditation.accredited, 'Scenario 5.5: Accredited university confirmed via regulatory body');
+  assert(!instAccreditation.accredited, 'Scenario 5.5: Unconfigured authoritative provider does not claim accreditation');
+  assert(instAccreditation.status === 'UNAVAILABLE', 'Scenario 5.6: Institution accreditation remains UNAVAILABLE until an official provider is configured');
 
 
   // --- 6. EDUCATION REPOSITORY FINANCIAL CALCULATIONS & OVERPAYMENT ---
