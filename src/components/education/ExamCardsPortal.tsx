@@ -33,97 +33,7 @@ interface ExamBoard {
   }[];
 }
 
-const EXAM_BOARDS: ExamBoard[] = [
-  {
-    id: 'waec',
-    name: 'West African Examinations Council',
-    shortCode: 'WAEC',
-    country: 'Nigeria & West Africa',
-    countryCode: 'NG',
-    flag: '🇳🇬',
-    description: 'WASSCE May/June (School Candidates) & GCE Nov/Dec (Private Candidates) official result verification PIN.',
-    officialPortal: 'https://www.waecdirect.org',
-    packages: [
-      { id: 'waec-pin-1', name: '1x WAEC Result Checker PIN', priceUsd: 4.50, description: 'Single candidate 5-usage result checker PIN & Serial Number', pinCount: 1 },
-      { id: 'waec-pin-2', name: '2x WAEC PIN Bundle', priceUsd: 8.50, description: 'Two candidate checker PINs with distinct serial numbers', pinCount: 2 },
-      { id: 'waec-pin-5', name: '5x School / Tutorial Pack', priceUsd: 20.00, description: 'Bulk batch for schools, tutoring centers and educational consultants', pinCount: 5 },
-      { id: 'waec-reg-pin', name: 'WAEC GCE Registration e-PIN', priceUsd: 38.00, description: 'Official registration token for WASSCE Private Candidates', pinCount: 1 }
-    ]
-  },
-  {
-    id: 'neco',
-    name: 'National Examinations Council',
-    shortCode: 'NECO',
-    country: 'Nigeria',
-    countryCode: 'NG',
-    flag: '🇳🇬',
-    description: 'Official result token for SSCE Internal, SSCE External, BECE (Junior WAEC), and NCEE entrance examinations.',
-    officialPortal: 'https://result.neco.gov.ng',
-    packages: [
-      { id: 'neco-token-1', name: '1x NECO Result Token', priceUsd: 3.00, description: 'Official token for SSCE / BECE / NCEE result checking', pinCount: 1 },
-      { id: 'neco-token-3', name: '3x NECO Token Bundle', priceUsd: 8.00, description: 'Three official tokens for candidate checks', pinCount: 3 },
-      { id: 'neco-token-10', name: '10x Bulk Institution Pack', priceUsd: 25.00, description: 'For secondary school administrators and examination officers', pinCount: 10 }
-    ]
-  },
-  {
-    id: 'jamb',
-    name: 'Joint Admissions and Matriculation Board',
-    shortCode: 'JAMB',
-    country: 'Nigeria',
-    countryCode: 'NG',
-    flag: '🇳🇬',
-    description: 'UTME & Direct Entry registration e-PIN, original result slip printing, and admission letter verification tokens.',
-    officialPortal: 'https://www.jamb.gov.ng',
-    packages: [
-      { id: 'jamb-result-slip', name: 'JAMB Original Result Slip Token', priceUsd: 3.50, description: 'Official token for printing JAMB result slip with passport photograph', pinCount: 1 },
-      { id: 'jamb-utme-pin', name: 'JAMB UTME Registration e-PIN', priceUsd: 15.00, description: 'Official e-PIN for UTME registration with CBT profile code', pinCount: 1 },
-      { id: 'jamb-de-pin', name: 'JAMB Direct Entry e-PIN', priceUsd: 18.00, description: 'Official Direct Entry registration e-PIN for diploma/NCE holders', pinCount: 1 },
-      { id: 'jamb-adm-letter', name: 'Admission Letter Printing Token', priceUsd: 3.50, description: 'Official token to download and print verified institution admission letter', pinCount: 1 }
-    ]
-  },
-  {
-    id: 'nabteb',
-    name: 'National Business and Technical Examinations Board',
-    shortCode: 'NABTEB',
-    country: 'Nigeria',
-    countryCode: 'NG',
-    flag: '🇳🇬',
-    description: 'National Technical Certificate (NTC) & National Business Certificate (NBC) official result scratch card PIN.',
-    officialPortal: 'https://eworld.nabteb.gov.ng',
-    packages: [
-      { id: 'nabteb-card-1', name: '1x NABTEB Result Scratch Card', priceUsd: 3.50, description: 'Official online result checker pin for NTC / NBC examinations', pinCount: 1 },
-      { id: 'nabteb-card-5', name: '5x Technical College Pack', priceUsd: 15.00, description: 'For polytechnic applicants and technical college students', pinCount: 5 }
-    ]
-  },
-  {
-    id: 'waec-ghana',
-    name: 'WAEC Ghana Direct',
-    shortCode: 'WAEC GH',
-    country: 'Ghana',
-    countryCode: 'GH',
-    flag: '🇬🇭',
-    description: 'Official WASSCE and BECE result checker voucher for Ghanaian senior and junior high school candidates.',
-    officialPortal: 'https://ghana.waecdirect.org',
-    packages: [
-      { id: 'waec-gh-1', name: '1x WAEC Ghana Result Voucher', priceUsd: 4.50, description: 'Standard serial & pin for checking WASSCE / BECE results in Ghana', pinCount: 1 },
-      { id: 'waec-gh-3', name: '3x WAEC Ghana Voucher Pack', priceUsd: 12.00, description: 'Three result checker vouchers with distinct serial codes', pinCount: 3 }
-    ]
-  },
-  {
-    id: 'cambridge',
-    name: 'Cambridge International Assessment',
-    shortCode: 'CIE',
-    country: 'International / UK',
-    countryCode: 'GB',
-    flag: '🇬🇧',
-    description: 'Cambridge IGCSE & International AS / A Levels candidate verification tokens and electronic result service credits.',
-    officialPortal: 'https://www.cambridgeinternational.org',
-    packages: [
-      { id: 'cie-verify-1', name: '1x Cambridge Result Verification Credit', priceUsd: 25.00, description: 'Official institutional verification reference for IGCSE / A Levels', pinCount: 1 },
-      { id: 'cie-cert-statement', name: 'Certifying Statement of Results', priceUsd: 65.00, description: 'Official authenticated electronic statement sent to universities', pinCount: 1 }
-    ]
-  }
-];
+const EXAM_BOARDS: ExamBoard[] = [];
 
 interface GeneratedPinRecord {
   id: string;
@@ -147,8 +57,8 @@ interface ExamCardsPortalProps {
 
 export const ExamCardsPortal: React.FC<ExamCardsPortalProps> = ({
   utilityConfig,
-  userBalancePi = 1250,
-  buyerUsername = 'Pioneer_User',
+  userBalancePi = 0,
+  buyerUsername = '',
   onTransactionSuccess
 }) => {
   const [selectedCountry, setSelectedCountry] = useState<string>('ALL');
@@ -168,6 +78,22 @@ export const ExamCardsPortal: React.FC<ExamCardsPortalProps> = ({
     if (selectedCountry === 'ALL') return true;
     return b.countryCode === selectedCountry;
   });
+
+  if (filteredBoards.length === 0) {
+    return (
+      <div className="p-6 rounded-3xl bg-slate-900 border border-amber-500/30 space-y-3">
+        <div className="flex items-center gap-2 text-amber-300 font-black">
+          <AlertCircle className="w-5 h-5" />
+          Examination card service unavailable
+        </div>
+        <p className="text-sm text-slate-300 leading-relaxed">
+          No examination-board catalog is currently published. PiNova will not display synthetic prices,
+          generate PINs, or create simulated transactions. A verified examination-board provider and
+          server-side fulfillment integration must be connected before purchases can be enabled.
+        </p>
+      </div>
+    );
+  }
 
   const activeBoard = EXAM_BOARDS.find(b => b.id === selectedBoardId) || EXAM_BOARDS[0];
   const activePackage = activeBoard.packages.find(p => p.id === selectedPackageId) || activeBoard.packages[0];
