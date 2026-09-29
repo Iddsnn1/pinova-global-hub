@@ -3616,6 +3616,18 @@ app.post('/api/education/invoices/pay', paymentRateLimiter, authenticate, async 
         });
         return;
       }
+      const authoritativePiAmount = Number(verification.paymentData?.amount);
+      const authoritativeTxid = String(verification.paymentData?.transaction?.txid || '').trim();
+      if (!Number.isFinite(authoritativePiAmount) || authoritativePiAmount <= 0) {
+        res.status(400).json({
+          success: false,
+          error: 'PI_AMOUNT_UNAVAILABLE',
+          message: 'The verified Pi payment did not contain an authoritative Pi amount.'
+        });
+        return;
+      }
+      req.body.piAmount = authoritativePiAmount;
+      req.body.piTxid = authoritativeTxid || undefined;
     } else if (piPaymentId) {
       const verification = await verifyPiPaymentAuthoritative(piPaymentId);
       if (!verification.verified) {
@@ -3649,9 +3661,9 @@ app.post('/api/education/invoices/pay', paymentRateLimiter, authenticate, async 
       invoiceId,
       amountPaid: numericAmount,
       currency,
-      piAmount: Number(piAmount || (numericAmount * 0.00000318).toFixed(6)),
+      piAmount: Number(req.body.piAmount),
       piPaymentId,
-      piTxid,
+      piTxid: req.body.piTxid,
       paymentMethod,
       payerUsername,
       idempotencyKey: effectiveIdempotencyKey
@@ -3962,8 +3974,12 @@ app.post('/api/education/scholarships', authenticate, requireRole(['PLATFORM_ADM
       res.status(401).json({ success: false, error: 'AUTHENTICATION_REQUIRED', message: 'Authenticated actor is required.' });
       return;
     }
-    const scholarship = educationRepo.createScholarship(req.body, actorUsername);
-    res.json({ success: true, message: 'Scholarship created successfully', scholarship });
+    res.status(503).json({
+      success: false,
+      error: 'PROVIDER_INTEGRATION_REQUIRED',
+      availability: 'UNAVAILABLE',
+      message: 'Scholarship creation is unavailable until an authorized scholarship provider/catalog integration is connected.'
+    });
   } catch (err: any) {
     res.status(400).json({ success: false, error: 'SCHOLARSHIP_CREATION_FAILED', message: err.message });
   }
