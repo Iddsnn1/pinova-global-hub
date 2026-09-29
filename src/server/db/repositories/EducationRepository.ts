@@ -649,12 +649,16 @@ export class EducationRepository {
     const applicationNumber = `APP/${new Date().getFullYear()}/${app.institutionId.slice(-3).toUpperCase()}/${Math.floor(100 + Math.random() * 900)}`;
     const timestamp = new Date().toISOString();
 
+    if (!app.educationTier || !app.dateOfBirth || app.applicationFeeFiat == null || app.applicationFeePaid == null) {
+      throw new Error('Authoritative admission application fields are incomplete');
+    }
+
     const record: AdmissionApplication = {
-      educationTier: app.educationTier || 'tertiary',
+      educationTier: app.educationTier,
       applicantPhone: app.applicantPhone || '',
-      dateOfBirth: app.dateOfBirth || new Date().toISOString(),
-      applicationFeeFiat: app.applicationFeeFiat ?? 0,
-      applicationFeePaid: app.applicationFeePaid ?? false,
+      dateOfBirth: app.dateOfBirth,
+      applicationFeeFiat: app.applicationFeeFiat,
+      applicationFeePaid: app.applicationFeePaid,
       documents: app.documents || [],
       ...app,
       id,
@@ -769,7 +773,7 @@ export class EducationRepository {
     const updated: AdmissionApplication = {
       ...(res as AdmissionApplication),
       updatedAt: new Date().toISOString(),
-      offerDetails: res.offerDetails ? { ...res.offerDetails, acceptanceFeePaid: true } : undefined
+      offerDetails: res.offerDetails ? { ...res.offerDetails } : undefined
     };
     delete (updated as any).application;
     delete (updated as any).success;
@@ -842,6 +846,19 @@ export class EducationRepository {
     const scholarship = this.scholarshipsEngine.get(scholarshipId);
     if (!scholarship) return { success: false, error: 'Scholarship not found' };
 
+    if (!Number.isFinite(scholarship.coverageAmountUsd) || scholarship.coverageAmountUsd <= 0) {
+      return { success: false, error: 'INVALID_SCHOLARSHIP_AMOUNT' };
+    }
+    if (!Number.isFinite(invoice.outstandingBalance) || invoice.outstandingBalance <= 0) {
+      return { success: false, error: 'INVOICE_ALREADY_SETTLED' };
+    }
+    const applicableTiers = Array.isArray(scholarship.applicableTiers) ? scholarship.applicableTiers : [];
+    if (invoice.educationTier && applicableTiers.length > 0 && !applicableTiers.includes(invoice.educationTier as any)) {
+      return { success: false, error: 'SCHOLARSHIP_TIER_NOT_ELIGIBLE' };
+    }
+    if (scholarship.eligibleCountries?.length && invoice.countryCode && !scholarship.eligibleCountries.includes(invoice.countryCode)) {
+      return { success: false, error: 'SCHOLARSHIP_COUNTRY_NOT_ELIGIBLE' };
+    }
     const deduction = Math.min(scholarship.coverageAmountUsd, invoice.outstandingBalance);
     const newAmountPaid = invoice.amountPaid + deduction;
     const newOutstanding = Math.max(0, invoice.totalAmount - newAmountPaid);
