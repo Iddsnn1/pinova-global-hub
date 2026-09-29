@@ -5981,15 +5981,11 @@ process.on('uncaughtException', (err) => {
   console.error('[Uncaught Exception]:', err);
 });
 
-const productRepository = new ProductRepository();
-
-app.get('/api/products', (req, res) => {
+app.get('/api/products', async (req, res) => {
   try {
     const q = typeof req.query.q === 'string' ? req.query.q : '';
     const category = typeof req.query.category === 'string' ? req.query.category : undefined;
-    const products = q
-      ? productRepository.search(q, { activeOnly: true, category: category as any })
-      : productRepository.getAll({ activeOnly: true, category: category as any });
+    const products = await listDurableProducts({ q, activeOnly: true, category: category as any });
     res.json({ ok: true, products });
   } catch (error: any) {
     console.error('[products-api] GET failed', error);
@@ -6063,7 +6059,7 @@ app.post('/api/products', authenticate, async (req: AuthenticatedRequest, res) =
       moderationStatus: 'APPROVED'
     };
 
-    const saved = productRepository.save(product as any);
+    const saved = await saveDurableProduct(product as any);
     return res.status(201).json({ ok: true, product: saved });
   } catch (error: any) {
     console.error('[products-api] POST failed', error);
