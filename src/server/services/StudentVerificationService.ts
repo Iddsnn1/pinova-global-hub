@@ -56,7 +56,19 @@ export class StudentVerificationService {
 
     // Query Authoritative Accreditation Adapter
     const adapter = accreditationAdapterRegistry.getAdapter(countryCode);
-    const verificationResult = await adapter.verifyStudent(institutionId || 'inst-unilag-001', studentReference, academicSession);
+    if (!institutionId || !institutionId.trim()) {
+      return {
+        verified: false,
+        status: 'UNAVAILABLE',
+        verificationStatus: 'REJECTED',
+        authorityName: 'Authoritative Student Verification Provider',
+        referenceId: studentReference,
+        notes: 'Institution context is required. No default institution is assumed.',
+        checkedAt: new Date().toISOString()
+      };
+    }
+
+    const verificationResult = await adapter.verifyStudent(institutionId.trim(), studentReference, academicSession);
 
     // If verified and institution exists, enrich profile with institution branding
     if (verificationResult.verified && verificationResult.verifiedProfile && institutionId) {
