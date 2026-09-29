@@ -38,6 +38,7 @@ import { AuditService } from './src/server/services/AuditService';
 import { EducationClassificationEngine } from './src/server/services/EducationClassificationEngine';
 import { StudentVerificationService } from './src/server/services/StudentVerificationService';
 import { getNigeriaAuthoritativeProviderForCapability } from './src/server/services/AuthoritativeEducationProviderRegistry';
+import { verifyJambCapsAuthorization } from './src/server/services/JambCapsAuthorizationService';
 import { EducationRepository } from './src/server/db/repositories/EducationRepository';
 import { ProductRepository } from './src/server/db/repositories/ProductRepository';
 import { durableProductStorageEnabled, getDurableProduct, listDurableProducts, saveDurableProduct, updateDurableProductAvailability, reserveDurableProductStockBatch, softDeleteDurableProduct, deleteDurableProductBlob } from './src/server/services/DurableProductCatalog';
@@ -3874,27 +3875,22 @@ app.post('/api/education/admissions/apply', authenticate, (req: AuthenticatedReq
       return;
     }
 
-    const jambProviders = getNigeriaAuthoritativeProviderForCapability('ADMISSION_PROCESSING');
-    const configuredJamb = jambProviders.find((provider) => provider.integrationStatus === 'CONFIGURED');
-    if (!configuredJamb) {
+    const jambAuthorization = await verifyJambCapsAuthorization({
+      candidateReference: String(appData.jambCandidateReference || ''),
+      institutionId: String(appData.institutionId),
+      programmeId: String(appData.programmeId || ''),
+      operation: 'ADMISSION_PROCESSING'
+    });
+    if (!jambAuthorization.authorized) {
       res.status(503).json({
         success: false,
-        error: 'PROVIDER_INTEGRATION_REQUIRED',
-        availability: 'UNAVAILABLE',
+        error: 'JAMB_CAPS_AUTHORIZATION_REQUIRED',
+        availability: jambAuthorization.availability,
         provider: 'JAMB_CAPS',
-        message: 'Admission applications are unavailable until authorized JAMB CAPS admission processing and an authoritative programme catalog are connected.'
+        message: jambAuthorization.message
       });
       return;
     }
-
-    res.status(503).json({
-      success: false,
-      error: 'PROVIDER_INTEGRATION_REQUIRED',
-      availability: 'UNAVAILABLE',
-      provider: 'JAMB_CAPS',
-      message: 'JAMB CAPS is registered as the authoritative admission processor, but its authorized integration is not yet available in PiNova.'
-    });
-    return;
 
     res.json({ success: true, message: 'Admission application submitted successfully', application });
   } catch (err: any) {
@@ -3913,15 +3909,20 @@ app.post('/api/education/admissions/:id/status', authenticate, requireRole(['PLA
       return;
     }
 
-    const jambProviders = getNigeriaAuthoritativeProviderForCapability('ADMISSION_STATUS');
-    const configuredJamb = jambProviders.find((provider) => provider.integrationStatus === 'CONFIGURED');
-    if (!configuredJamb) {
+    const admissionForAuthorization = educationRepo.getAdmissionById(id);
+    const jambAuthorization = await verifyJambCapsAuthorization({
+      candidateReference: String(admissionForAuthorization?.jambCandidateReference || ''),
+      institutionId: admissionForAuthorization?.institutionId,
+      programmeId: admissionForAuthorization?.programmeId,
+      operation: 'ADMISSION_STATUS'
+    });
+    if (!jambAuthorization.authorized) {
       res.status(503).json({
         success: false,
-        error: 'PROVIDER_INTEGRATION_REQUIRED',
-        availability: 'UNAVAILABLE',
+        error: 'JAMB_CAPS_AUTHORIZATION_REQUIRED',
+        availability: jambAuthorization.availability,
         provider: 'JAMB_CAPS',
-        message: 'Admission status cannot be advanced until the authoritative JAMB CAPS integration is configured.'
+        message: jambAuthorization.message
       });
       return;
     }
@@ -3957,15 +3958,19 @@ app.post('/api/education/admissions/:id/offer/accept', authenticate, (req: Authe
       return;
     }
 
-    const jambProviders = getNigeriaAuthoritativeProviderForCapability('ADMISSION_STATUS');
-    const configuredJamb = jambProviders.find((provider) => provider.integrationStatus === 'CONFIGURED');
-    if (!configuredJamb) {
+    const jambAuthorization = await verifyJambCapsAuthorization({
+      candidateReference: String(admission.jambCandidateReference || ''),
+      institutionId: admission.institutionId,
+      programmeId: admission.programmeId,
+      operation: 'ADMISSION_STATUS'
+    });
+    if (!jambAuthorization.authorized) {
       res.status(503).json({
         success: false,
-        error: 'PROVIDER_INTEGRATION_REQUIRED',
-        availability: 'UNAVAILABLE',
+        error: 'JAMB_CAPS_AUTHORIZATION_REQUIRED',
+        availability: jambAuthorization.availability,
         provider: 'JAMB_CAPS',
-        message: 'Admission offer acceptance is unavailable until the authoritative JAMB CAPS admission status integration is configured and any required acceptance-fee settlement is verified.'
+        message: jambAuthorization.message
       });
       return;
     }
