@@ -16,7 +16,6 @@ import {
   EducationAuditLog
 } from '../../../types/education';
 import { normalizeCountryCode, matchesSubdivision } from '../../../data/countrySubdivisions';
-import { calculatePiFromUsd, PI_ORACLE_RATE_USD } from '../../../config/piOracle';
 export class EducationRepository {
   private institutionsEngine: StorageEngine<InstitutionProfile>;
   private studentsEngine: StorageEngine<StudentIdentity>;
@@ -439,11 +438,14 @@ export class EducationRepository {
       if (!params.piPaymentId) throw new Error('PI_PAYMENT_ID_REQUIRED');
       const invoiceCurrency = String(invoice.currency || '').trim().toUpperCase();
       const paymentCurrency = String(params.currency || '').trim().toUpperCase();
-      if (invoiceCurrency !== 'USD') throw new Error('PI_FIAT_REFERENCE_REQUIRED');
-      if (paymentCurrency !== invoiceCurrency) throw new Error('INVOICE_CURRENCY_MISMATCH');
+      if (invoiceCurrency !== 'PI') throw new Error('PI_NATIVE_INVOICE_REQUIRED');
+      if (paymentCurrency !== 'PI') throw new Error('PI_NATIVE_PAYMENT_REQUIRED');
       if (!Number.isFinite(params.piAmount) || Number(params.piAmount) <= 0) throw new Error('PI_AMOUNT_REQUIRED');
-      const expectedPiAmount = calculatePiFromUsd(Number(params.amountPaid));
-      if (Math.abs(Number(params.piAmount) - expectedPiAmount) > 0.000000000001) throw new Error('PI_ORACLE_AMOUNT_MISMATCH');
+      const paidPiAmount = Number(params.amountPaid);
+      const submittedPiAmount = Number(params.piAmount);
+      if (!Number.isFinite(paidPiAmount) || paidPiAmount <= 0) throw new Error('PI_AMOUNT_REQUIRED');
+      if (!Number.isFinite(submittedPiAmount) || submittedPiAmount <= 0) throw new Error('PI_AMOUNT_REQUIRED');
+      if (Math.abs(submittedPiAmount - paidPiAmount) > 0.000000000001) throw new Error('PI_AMOUNT_MISMATCH');
     }
 
     // Phase 10: Prevent overpayment beyond outstanding balance
@@ -540,7 +542,7 @@ export class EducationRepository {
         institutionName: invoice.institutionName,
         academicSession: invoice.academicSession,
         termOrSemester: invoice.termOrSemester,
-        amountPaidFormatted: `$${params.amountPaid.toFixed(2)} ${params.currency} (${(params.piAmount ?? 0).toFixed(6)} π)`,
+        amountPaidFormatted: `${(params.piAmount ?? params.amountPaid).toFixed(12)} π`,
         verifiedAt: timestamp,
         isAuthentic: true
       }
@@ -554,7 +556,7 @@ export class EducationRepository {
       entityId: paymentId,
       actorUsername: params.payerUsername,
       actorRole: 'PARENT',
-      details: `Paid ${params.amountPaid} USD (${params.piAmount} π at 1 π = ${PI_ORACLE_RATE_USD.toLocaleString('en-US')}) for Invoice ${invoice.invoiceNumber}. Receipt ${receiptNumber} generated.`
+      details: `Paid ${params.amountPaid} π for Invoice ${invoice.invoiceNumber}. Receipt ${receiptNumber} generated.`
     });
 
     return {
