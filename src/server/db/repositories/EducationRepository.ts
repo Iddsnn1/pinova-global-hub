@@ -394,7 +394,8 @@ export class EducationRepository {
     invoice: EducationInvoice;
     receipt: DigitalEducationReceipt;
   } {
-    // 1. Idempotency Check: if this payment or idempotency key was already recorded, return existing
+    // 1. Replay binding: an existing idempotency key / Pi payment may only
+    // return the original settlement when every financial binding is identical.
     const existingPayment = this.paymentsEngine.find(
       (p) =>
         (params.idempotencyKey && p.idempotencyKey && p.idempotencyKey === params.idempotencyKey) ||
@@ -402,8 +403,23 @@ export class EducationRepository {
     );
 
     if (existingPayment) {
-      const existingInvoice = this.invoicesEngine.get(existingPayment.invoiceId)!;
-      const existingReceipt = this.receiptsEngine.get(existingPayment.receiptNumber)!;
+      const existingInvoice = this.invoicesEngine.get(existingPayment.invoiceId);
+      if (!existingInvoice) throw new Error('PAYMENT_REPLAY_INVOICE_MISSING');
+
+      const sameInvoice = existingPayment.invoiceId === params.invoiceId;
+      const sameCurrency = existingPayment.currency.trim().toUpperCase() === String(params.currency || '').trim().toUpperCase();
+      const sameAmount = Math.abs(existingPayment.amountPaid - params.amountPaid) <= 0.00000001;
+      const samePiAmount = Math.abs(existingPayment.piAmount - Number(params.piAmount ?? 0)) <= 0.00000001;
+      const samePiPayment = (existingPayment.piPaymentId || '') === (params.piPaymentId || '');
+      const samePayer = existingPayment.payerUsername.trim().toLowerCase() === params.payerUsername.trim().toLowerCase();
+
+      if (!(sameInvoice && sameCurrency && sameAmount && samePiAmount && samePiPayment && samePayer)) {
+        throw new Error('PAYMENT_REPLAY_BINDING_MISMATCH');
+      }
+
+      const existingReceipt = this.receiptsEngine.get(existingPayment.receiptNumber);
+      if (!existingReceipt) throw new Error('PAYMENT_REPLAY_RECEIPT_MISSING');
+
       return {
         success: true,
         payment: existingPayment,
@@ -416,6 +432,22 @@ export class EducationRepository {
     const invoice = this.invoicesEngine.get(params.invoiceId);
     if (!invoice) {
       throw new Error(`Invoice with ID ${params.invoiceId} not found`);
+    }
+
+    if (params.paymentMethod === 'PI_NETWORK') {
+      if (!params.piPaymentId) throw new Error('PI_PAYMENT_ID_REQUIRED');
+      if (String(invoice.currency || '').trim().toUpperCase() !== 'PI') {
+        throw new Error('PI_FX_PROVIDER_REQUIRED');
+      }
+      if (!Number.isFinite(params.piAmount) || Number(params.piAmount) <= 0) {
+        throw new Error('PI_AMOUNT_REQUIRED');
+      }
+      if (Math.abs(Number(params.amountPaid) - Number(params.piAmount)) > 0.00000001) {
+        throw new Error('PI_AMOUNT_MISMATCH');
+      }
+      if (String(params.currency || '').trim().toUpperCase() !== 'PI') {
+        throw new Error('INVOICE_CURRENCY_MISMATCH');
+      }
     }
 
     // Phase 10: Prevent overpayment beyond outstanding balance
