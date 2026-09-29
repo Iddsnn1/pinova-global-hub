@@ -235,11 +235,12 @@ export const SchoolFeesEngine: React.FC<SchoolFeesEngineProps> = ({
       );
     } catch (sdkError: any) {
       console.warn('Direct Pi SDK call exception:', sdkError);
-      // Fallback for non-Pi Browser preview
-      setProcessingStatus('Processing verified settlement in preview environment...');
-      const fallbackPaymentId = `pi-pay-edu-${Date.now()}`;
-      const fallbackTxid = `pi-tx-${Math.floor(100000000000 + Math.random() * 900000000000)}`;
-      await processServerSettlement(fallbackPaymentId, fallbackTxid);
+      setIsProcessing(false);
+      setProcessingStatus('');
+      setErrorMessage(
+        sdkError?.message ||
+        'Pi payment could not be completed. No simulated transaction will be created.'
+      );
     }
   };
 
