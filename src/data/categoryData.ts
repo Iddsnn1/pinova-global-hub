@@ -39,8 +39,6 @@ export interface ServiceCategoryDef {
   name: string;
   description: string;
   iconName: string;
-  popularServices: string[];
-  averagePricePi: number;
 }
 
 export const MARKETPLACE_CATEGORIES: MarketplaceCategoryDef[] = [
@@ -740,40 +738,30 @@ export const SERVICE_CATEGORIES: ServiceCategoryDef[] = [
     id: 'consultation',
     name: 'Professional Consultation',
     description: '1-on-1 virtual consultations with verified Pi legal experts, crypto accountants, and tech advisors.',
-    iconName: 'UserCheck',
-    popularServices: ['Pi App Architecture Audit', 'Crypto Tax & Compliance', 'Legal Trademark Advice'],
-    averagePricePi: 25.00
+    iconName: 'UserCheck'
   },
   {
     id: 'freelance_tech',
     name: 'Tech & Design Freelancing',
     description: 'Hire skilled developer pioneers for UI/UX design, React code development, smart contract setup, and translation.',
-    iconName: 'Code',
-    popularServices: ['Full-stack App Development', 'UI/UX Mobile Design', 'Pi SDK Integration'],
-    averagePricePi: 50.00
+    iconName: 'Code'
   },
   {
     id: 'repairs_maintenance',
     name: 'Repairs & Tech Maintenance',
     description: 'Hardware repair bookings, smartphone screen replacement, laptop diagnostics, and solar installation.',
-    iconName: 'Wrench',
-    popularServices: ['Smartphone Screen Repair', 'Laptop Motherboard Service', 'Solar Inverter Setup'],
-    averagePricePi: 35.00
+    iconName: 'Wrench'
   },
   {
     id: 'home_cleaning',
     name: 'Home & Office Services',
     description: 'Book verified local cleaning crews, handyman assistance, plumbing, and HVAC maintenance.',
-    iconName: 'Sparkles',
-    popularServices: ['Residential Deep Clean', 'Handyman Plumbing Service', 'AC Chemical Service'],
-    averagePricePi: 30.00
+    iconName: 'Sparkles'
   },
   {
     id: 'events_photography',
     name: 'Event & Media Services',
     description: 'Book professional photographers, videographers, DJ audio setups, and event coordinators.',
-    iconName: 'Camera',
-    popularServices: ['Product Photography Package', 'Event Drone Videography', 'Brand Logo Animation'],
-    averagePricePi: 45.00
+    iconName: 'Camera'
   }
 ];
