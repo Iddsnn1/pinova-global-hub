@@ -23,7 +23,6 @@ import {
 import { vtuNgAdapter } from './src/server/integrations';
 import { getTaxonomyByCountry, GLOBAL_EDUCATION_TAXONOMIES } from './src/data/educationTaxonomyData';
 import { normalizeCountryCode } from './src/data/countrySubdivisions';
-import { SEED_MARKETPLACE_ITEMS } from './src/data/educationSeedData';
 import {
   authService,
   authenticate,
@@ -3804,20 +3803,16 @@ app.post('/api/education/scholarships', authenticate, requireRole(['PLATFORM_ADM
 });
 
 // 9. Education Marketplace Products
-app.get('/api/education/marketplace', (req, res) => {
-  try {
-    const { category, tier } = req.query;
-    let items = SEED_MARKETPLACE_ITEMS;
-    if (category && category !== 'all') {
-      items = items.filter((i) => i.category === category);
-    }
-    if (tier && tier !== 'all') {
-      items = items.filter((i) => i.tier === tier);
-    }
-    res.json({ success: true, count: items.length, items });
-  } catch (err: any) {
-    res.status(500).json({ success: false, error: 'MARKETPLACE_FETCH_FAILED', message: err.message });
-  }
+// Production safety: no static/seed catalog is exposed. Real listings must come from
+// an authenticated provider/catalog integration before they are displayed.
+app.get('/api/education/marketplace', (_req, res) => {
+  res.json({
+    success: true,
+    count: 0,
+    items: [],
+    availability: 'PROVIDER_INTEGRATION_REQUIRED',
+    message: 'Education marketplace listings are unavailable until a verified provider catalog is connected.'
+  });
 });
 
 // 10. School Administrator Portal Endpoints (Phase 10 Remediation)
