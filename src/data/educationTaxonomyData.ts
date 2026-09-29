@@ -19,7 +19,7 @@ export const GLOBAL_EDUCATION_TAXONOMIES: Record<string, CountryEducationTaxonom
       'West African Examinations Council (WAEC)',
       'Joint Admissions and Matriculation Board (JAMB)'
     ],
-    defaultCurrency: 'USD', // Normalized to USD settlement with live Pi conversion in hub
+    defaultCurrency: 'USD', // Reference/display currency only; settlement is native Pi
     supportedLevels: [
       {
         id: 'ng-early-years',
