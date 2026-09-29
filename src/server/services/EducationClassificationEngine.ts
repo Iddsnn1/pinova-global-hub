@@ -41,9 +41,9 @@ export class EducationClassificationEngine {
   /**
    * Retrieves taxonomy by country code with intelligent fallback
    */
-  public getTaxonomy(countryCode: string = 'GLOBAL'): CountryEducationTaxonomy {
+  public getTaxonomy(countryCode: string = 'GLOBAL'): CountryEducationTaxonomy | null {
     const code = (countryCode || 'GLOBAL').toUpperCase().trim();
-    return this.taxonomies[code] || this.taxonomies['GLOBAL'] || this.taxonomies['NG'];
+    return this.taxonomies[code] || null;
   }
 
   /**
@@ -51,6 +51,7 @@ export class EducationClassificationEngine {
    */
   public getLevelDefinition(countryCode: string, tier: EducationTier): EducationLevelDefinition | null {
     const tax = this.getTaxonomy(countryCode);
+    if (!tax) return null;
     return tax.supportedLevels.find((l) => l.tier === tier) || null;
   }
 
