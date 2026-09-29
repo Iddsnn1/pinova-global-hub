@@ -42,6 +42,7 @@ import { EducationRepository } from './src/server/db/repositories/EducationRepos
 import { ProductRepository } from './src/server/db/repositories/ProductRepository';
 import { durableProductStorageEnabled, getDurableProduct, listDurableProducts, saveDurableProduct, updateDurableProductAvailability, reserveDurableProductStockBatch, softDeleteDurableProduct, deleteDurableProductBlob } from './src/server/services/DurableProductCatalog';
 import { durableOrderStorageEnabled, getDurableOrder, listDurableOrders, saveDurableOrder, markDurableOrderPaymentVerified, softDeleteDurableOrder } from './src/server/services/DurableOrderStore';
+import { durableVendorStorageEnabled, getDurableVendorApplication, getDurableVendorApplicationByIdentity, listDurableVendorApplications, saveDurableVendorApplication } from './src/server/services/DurableVendorApplicationStore';
 import { get, list, put } from '@vercel/blob';
 
 dotenv.config();
@@ -55,91 +56,6 @@ process.on('warning', (warning) => {
 });
 
 const app = express();
-
-const DURABLE_VENDOR_PREFIX = 'vendor-applications/';
-
-function durableVendorEnabled(): boolean {
-  // Merchant/KYC persistence is isolated to the dedicated PRIVATE Blob store.
-  // This prevents the legacy public store from ever being used for sensitive
-  // vendor application records.
-  return Boolean(process.env.PRIVATE_BLOB_STORE_ID);
-}
-
-function privateVendorBlobOptions() {
-  const storeId = process.env.PRIVATE_BLOB_STORE_ID;
-  if (!storeId) throw new Error('PRIVATE_BLOB_STORE_ID_UNAVAILABLE');
-  return { storeId };
-}
-
-function durableVendorKey(username: string): string {
-  return `${DURABLE_VENDOR_PREFIX}${encodeURIComponent(username.trim().toLowerCase())}.json`;
-}
-
-async function readDurableVendorPath(pathname: string): Promise<any | null> {
-  if (!durableVendorEnabled()) return null;
-
-  // Check existence before GET. Some private Blob configurations surface
-  // a missing pathname as HTTP 400; list() lets us distinguish that from
-  // an authentication/store configuration failure.
-  const page = await list({ prefix: pathname, limit: 10, ...privateVendorBlobOptions() });
-  const exists = page.blobs.some((blob) => blob.pathname === pathname);
-  if (!exists) return null;
-
-  const result = await get(pathname, { access: 'private', useCache: false, ...privateVendorBlobOptions() });
-  if (!result || result.statusCode !== 200 || !result.stream) return null;
-
-  const reader = result.stream.getReader();
-  const chunks: Uint8Array[] = [];
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    if (value) chunks.push(value);
-  }
-
-  const bytes = new Uint8Array(chunks.reduce((n, chunk) => n + chunk.length, 0));
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.length;
-  }
-
-  return JSON.parse(new TextDecoder().decode(bytes));
-}
-
-export async function getDurableVendorApplication(username: string): Promise<any | null> {
-  if (!username?.trim()) return null;
-  return readDurableVendorPath(durableVendorKey(username));
-}
-
-export async function saveDurableVendorApplication(application: any): Promise<any> {
-  if (!durableVendorEnabled()) throw new Error('DURABLE_VENDOR_STORAGE_UNAVAILABLE');
-  await put(durableVendorKey(application.pioneerUsername), JSON.stringify(application), {
-    access: 'private',
-    contentType: 'application/json',
-    allowOverwrite: true,
-    ...privateVendorBlobOptions()
-  });
-  return application;
-}
-
-export async function listDurableVendorApplications(): Promise<any[]> {
-  if (!durableVendorEnabled()) return [];
-  const entries: any[] = [];
-  let cursor: string | undefined;
-  do {
-    const page = await list({ prefix: DURABLE_VENDOR_PREFIX, limit: 1000, cursor, ...privateVendorBlobOptions() });
-    for (const blob of page.blobs) {
-      const app = await readDurableVendorPath(blob.pathname);
-      if (app) entries.push(app);
-    }
-    cursor = page.hasMore ? page.cursor : undefined;
-  } while (cursor);
-  return entries;
-}
-
-export function durableVendorStorageEnabled(): boolean {
-  return durableVendorEnabled();
-}
 
 export async function authenticateVendorRequest(req: any): Promise<any | null> {
   const header = req.headers?.authorization || req.headers?.Authorization;
@@ -163,18 +79,16 @@ async function resolveDurableVendorForAuthenticatedUser(user: any): Promise<any 
     if (direct) return direct;
   }
 
-  const target = directUsername.replace(/^@/, '').toLowerCase();
   const uidCandidates = [user.piUid, user.uid, user.id]
     .map((value) => String(value || '').trim())
     .filter(Boolean);
 
-  const entries = await listDurableVendorApplications();
-  return entries.find((application: any) => {
-    const storedUsername = String(application?.pioneerUsername || '').trim().replace(/^@/, '').toLowerCase();
-    const storedUid = String(application?.pioneerUid || '').trim();
-    return (target && storedUsername === target) ||
-      (storedUid && uidCandidates.includes(storedUid));
-  }) || null;
+  for (const uid of uidCandidates) {
+    const match = await getDurableVendorApplicationByIdentity(directUsername, uid);
+    if (match) return match;
+  }
+
+  return null;
 }
 
 
