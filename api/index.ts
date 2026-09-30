@@ -316,7 +316,6 @@ async function handleDurableProducts(req: any, res: any): Promise<boolean> {
       sellerId: String(durableMerchant.pioneerUsername || user.username).trim().replace(/^@/, ''),
       sellerName: String(durableMerchant.storeName || user.username).trim(),
       sellerDisplayName: 'PiNova Global Hub',
-      sellerDisplayName: 'PiNova Global Hub',
       sellerVerified: true,
       features: Array.isArray(body.features) ? body.features.filter(Boolean) : [],
       specs: body.specs,
