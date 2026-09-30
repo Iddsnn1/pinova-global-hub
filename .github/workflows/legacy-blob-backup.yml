@@ -1,0 +1,59 @@
+name: Legacy Blob Backup
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout migration branch
+        uses: actions/checkout@v6
+        with:
+          ref: migration/neon-durable-storage
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22.x'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Export legacy Blob data (read-only)
+        env:
+          BLOB_READ_TOKEN: ${{ secrets.BLOB_READ_TOKEN }}
+          BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
+          PRIVATE_BLOB_STORE_ID: ${{ secrets.PRIVATE_BLOB_STORE_ID }}
+          LEGACY_BLOB_BACKUP_FILE: /tmp/pinova-legacy-blob-backup.json
+        run: npm run export:legacy-blob
+
+      - name: Validate backup manifest
+        run: |
+          node -e '
+          const fs=require("fs");
+          const p="/tmp/pinova-legacy-blob-backup.json";
+          const b=JSON.parse(fs.readFileSync(p,"utf8"));
+          if (b.source?.mode !== "read-only") throw new Error("Backup is not marked read-only");
+          if (!Array.isArray(b.manifest)) throw new Error("Missing manifest");
+          const bad=b.manifest.filter(x=>x.status!=="exported");
+          if (bad.length) throw new Error("Unreadable objects remain: "+bad.length);
+          console.log(JSON.stringify({
+            products:b.products.length,
+            orders:b.orders.length,
+            vendorApplications:b.vendorApplications.length,
+            manifest:b.manifest.length
+          },null,2));
+          '
+
+      - name: Upload backup artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: pinova-legacy-blob-backup
+          path: /tmp/pinova-legacy-blob-backup.json
+          if-no-files-found: error
+          retention-days: 7
