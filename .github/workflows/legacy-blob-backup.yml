@@ -30,6 +30,7 @@ jobs:
       - name: Export legacy Blob data (read-only)
         env:
           LEGACY_BLOB_BACKUP_FILE: /tmp/pinova-legacy-blob-backup.json
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
           set -euo pipefail
           npm install -g vercel@latest
@@ -41,8 +42,6 @@ jobs:
           test -n "${VERCEL_OIDC_TOKEN:-}" || { echo "VERCEL_OIDC_TOKEN missing from vercel env pull"; exit 1; }
           test -n "${BLOB_STORE_ID:-${PRIVATE_BLOB_STORE_ID:-}}" || { echo "Blob store ID missing from Vercel environment"; exit 1; }
           npm run export:legacy-blob
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
 
       - name: Validate backup manifest
         run: |
