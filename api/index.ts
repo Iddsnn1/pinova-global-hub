@@ -1,3 +1,4 @@
+import { list as listPrivateBlobs, get as getPrivateBlob } from '@vercel/blob';
 import type { IncomingMessage, ServerResponse } from 'http';
 import { createRequire } from 'module';
 import path from 'path';
