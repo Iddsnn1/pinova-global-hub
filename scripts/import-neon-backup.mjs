@@ -66,6 +66,34 @@ const requiredString = (value, field, index, collection) => {
 };
 const json = (value) => JSON.stringify(value ?? {});
 
+// Validate the entire payload before the first write.
+for (let i = 0; i < products.length; i += 1) {
+  const p = products[i];
+  requiredString(p.id, 'id', i, 'products');
+  requiredString(p.sellerId, 'sellerId', i, 'products');
+  requiredString(p.title, 'title', i, 'products');
+  const pricePi = Number(p.pricePi);
+  const stock = Number(p.stock);
+  if (!Number.isFinite(pricePi) || pricePi < 0) throw new Error(`products[${i}].pricePi invalid`);
+  if (!Number.isInteger(stock) || stock < 0) throw new Error(`products[${i}].stock invalid`);
+}
+for (let i = 0; i < orders.length; i += 1) {
+  const o = orders[i];
+  requiredString(o.id, 'id', i, 'orders');
+  requiredString(o.buyerUsername, 'buyerUsername', i, 'orders');
+  const totalPi = Number(o.totalPi);
+  if (!Number.isFinite(totalPi) || totalPi < 0) throw new Error(`orders[${i}].totalPi invalid`);
+  if (!Array.isArray(o.items) || o.items.length === 0) throw new Error(`orders[${i}].items required`);
+}
+for (let i = 0; i < vendorApplications.length; i += 1) {
+  const a = vendorApplications[i];
+  requiredString(a.id, 'id', i, 'vendorApplications');
+  requiredString(a.pioneerUsername, 'pioneerUsername', i, 'vendorApplications');
+}
+for (let i = 0; i < orderFulfillment.length; i += 1) {
+  requiredString(orderFulfillment[i].orderId ?? orderFulfillment[i].order_id, 'orderId', i, 'orderFulfillment');
+}
+
 let counts = {
   products: 0,
   orders: 0,
@@ -161,9 +189,17 @@ for (let i = 0; i < orderFulfillment.length; i += 1) {
   counts.orderFulfillment += 1;
 }
 
+const actualCounts = {
+  products: Number((await sql`SELECT COUNT(*)::int AS count FROM products`)[0].count),
+  orders: Number((await sql`SELECT COUNT(*)::int AS count FROM orders`)[0].count),
+  vendorApplications: Number((await sql`SELECT COUNT(*)::int AS count FROM vendor_applications`)[0].count),
+  orderFulfillment: Number((await sql`SELECT COUNT(*)::int AS count FROM order_fulfillment`)[0].count)
+};
+
 console.log(JSON.stringify({
   ok: true,
   source: resolved,
   imported: counts,
+  actualNeonCounts: actualCounts,
   destructiveOperations: false
 }, null, 2));
