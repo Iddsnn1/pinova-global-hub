@@ -19,7 +19,8 @@
     "test:flight": "tsx tests/duffel_flight_audit_suite.ts",
     "test:kyc": "tsx tests/vendor_kyc_document_upload_suite.ts",
     "test:branding": "tsx tests/vendor_branding_upload_suite.ts",
-    "test:governance": "tsx tests/vendor_governance_lifecycle_suite.ts"
+    "test:governance": "tsx tests/vendor_governance_lifecycle_suite.ts",
+    "export:legacy-blob": "tsx scripts/export-legacy-blob.mts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
@@ -45,6 +46,7 @@
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",
-    "vite": "^6.4.3"
+    "vite": "^6.4.3",
+    "@vercel/blob": "^2.6.1"
   }
 }
