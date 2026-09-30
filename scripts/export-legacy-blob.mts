@@ -11,11 +11,11 @@ const prefixes: Record<Bucket, string> = {
   vendorApplications: 'vendor-applications/',
 };
 
-const token = process.env.VERCEL_OIDC_TOKEN?.trim();
+const token = (process.env.PRIVATE_BLOB_READ_WRITE_TOKEN || process.env.VERCEL_OIDC_TOKEN)?.trim();
 
 if (!token) {
   throw new Error(
-    'LEGACY_BLOB_OIDC_TOKEN_MISSING: VERCEL_OIDC_TOKEN was not supplied by vercel env pull',
+    'LEGACY_BLOB_TOKEN_MISSING: PRIVATE_BLOB_READ_WRITE_TOKEN was not supplied',
   );
 }
 
