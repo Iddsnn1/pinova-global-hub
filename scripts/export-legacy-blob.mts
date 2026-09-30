@@ -11,19 +11,30 @@ const prefixes: Record<Bucket, string> = {
   vendorApplications: 'vendor-applications/',
 };
 
-const token = (process.env.PRIVATE_BLOB_READ_WRITE_TOKEN || process.env.VERCEL_OIDC_TOKEN)?.trim();
+const token = (
+  process.env.PRIVATE_BLOB_READ_WRITE_TOKEN ||
+  process.env.BLOB_READ_WRITE_TOKEN ||
+  process.env.BLOB_READ_TOKEN ||
+  process.env.BLOB_WRITE_TOKEN ||
+  process.env.VERCEL_OIDC_TOKEN
+)?.trim();
 
 if (!token) {
   throw new Error(
-    'LEGACY_BLOB_TOKEN_MISSING: PRIVATE_BLOB_READ_WRITE_TOKEN was not supplied',
+    'LEGACY_BLOB_TOKEN_MISSING: provide a read-capable Blob token in PRIVATE_BLOB_READ_WRITE_TOKEN, BLOB_READ_WRITE_TOKEN, BLOB_READ_TOKEN, or VERCEL_OIDC_TOKEN',
   );
 }
 
-const storeId = process.env.BLOB_STORE_ID?.trim() || process.env.PRIVATE_BLOB_STORE_ID?.trim() || undefined;
+const storeId = (
+  process.env.PRIVATE_BLOB_STORE_ID ||
+  process.env.BLOB_STORE_ID
+)?.trim() || undefined;
+
 const output = resolve(
   process.env.LEGACY_BLOB_BACKUP_FILE?.trim() ||
     '/tmp/pinova-legacy-blob-backup.json',
 );
+
 const blobOptions = storeId ? { token, storeId } : { token };
 
 async function readJson(pathname: string): Promise<unknown | null> {
@@ -39,7 +50,7 @@ async function readJson(pathname: string): Promise<unknown | null> {
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
-    chunks.push(value);
+    if (value) chunks.push(value);
   }
 
   const bytes = new Uint8Array(chunks.reduce((n, c) => n + c.length, 0));
