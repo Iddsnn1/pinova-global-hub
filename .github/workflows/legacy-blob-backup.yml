@@ -27,15 +27,25 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Export legacy Blob data (read-only)
+      - name: Export legacy Blob data (read-only operations)
         env:
           LEGACY_BLOB_BACKUP_FILE: /tmp/pinova-legacy-blob-backup.json
           PRIVATE_BLOB_READ_WRITE_TOKEN: ${{ secrets.PRIVATE_BLOB_READ_WRITE_TOKEN }}
           PRIVATE_BLOB_STORE_ID: ${{ secrets.PRIVATE_BLOB_STORE_ID }}
+          BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
+          BLOB_READ_TOKEN: ${{ secrets.BLOB_READ_TOKEN }}
+          BLOB_WRITE_TOKEN: ${{ secrets.BLOB_WRITE_TOKEN }}
+          BLOB_STORE_ID: ${{ secrets.BLOB_STORE_ID }}
         run: |
           set -euo pipefail
-          test -n "${PRIVATE_BLOB_READ_WRITE_TOKEN:-}" || { echo "PRIVATE_BLOB_READ_WRITE_TOKEN secret is missing"; exit 1; }
-          test -n "${PRIVATE_BLOB_STORE_ID:-}" || { echo "PRIVATE_BLOB_STORE_ID secret is missing"; exit 1; }
+          test -n "${PRIVATE_BLOB_READ_WRITE_TOKEN:-${BLOB_READ_WRITE_TOKEN:-${BLOB_READ_TOKEN:-${VERCEL_OIDC_TOKEN:-}}}}" || {
+            echo "No read-capable Blob token secret is configured"
+            exit 1
+          }
+          test -n "${PRIVATE_BLOB_STORE_ID:-${BLOB_STORE_ID:-}}" || {
+            echo "No Blob store ID secret is configured"
+            exit 1
+          }
           npm run export:legacy-blob
 
       - name: Validate backup manifest
