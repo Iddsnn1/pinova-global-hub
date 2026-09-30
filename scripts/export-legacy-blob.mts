@@ -11,14 +11,21 @@ const prefixes: Record<Bucket, string> = {
   vendorApplications: 'vendor-applications/',
 };
 
-const token = process.env.BLOB_READ_WRITE_TOKEN?.trim();
+const token =
+  process.env.BLOB_READ_TOKEN?.trim() ||
+  process.env.BLOB_READ_WRITE_TOKEN?.trim();
+
+if (!token) {
+  throw new Error(
+    'LEGACY_BLOB_READ_TOKEN_MISSING: set BLOB_READ_TOKEN (preferred) or BLOB_READ_WRITE_TOKEN',
+  );
+}
+
 const storeId = process.env.PRIVATE_BLOB_STORE_ID?.trim() || undefined;
-if (!token) throw new Error('BLOB_READ_WRITE_TOKEN is required for read-only export');
-
 const output = resolve(
-  process.env.LEGACY_BLOB_BACKUP_FILE?.trim() || '/tmp/pinova-legacy-blob-backup.json',
+  process.env.LEGACY_BLOB_BACKUP_FILE?.trim() ||
+    '/tmp/pinova-legacy-blob-backup.json',
 );
-
 const blobOptions = storeId ? { token, storeId } : { token };
 
 async function readJson(pathname: string): Promise<unknown | null> {
