@@ -19,12 +19,12 @@
     "test:flight": "tsx tests/duffel_flight_audit_suite.ts",
     "test:kyc": "tsx tests/vendor_kyc_document_upload_suite.ts",
     "test:branding": "tsx tests/vendor_branding_upload_suite.ts",
-    "test:governance": "tsx tests/vendor_governance_lifecycle_suite.ts"
+    "test:governance": "tsx tests/vendor_governance_lifecycle_suite.ts",
+    "export:legacy-blob": "tsx scripts/export-legacy-blob.mts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
     "@tailwindcss/vite": "^4.1.14",
-    "@vercel/blob": "^2.6.1",
     "@vitejs/plugin-react": "^5.0.4",
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
@@ -32,7 +32,9 @@
     "motion": "^12.23.24",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
-    "recharts": "^3.10.1"
+    "recharts": "^3.10.1",
+    "@neondatabase/serverless": "^1.0.0",
+    "@aws-sdk/client-s3": "^3.901.0"
   },
   "devDependencies": {
     "@types/express": "^4.17.21",
@@ -44,6 +46,7 @@
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",
-    "vite": "^6.4.3"
+    "vite": "^6.4.3",
+    "@vercel/blob": "^2.6.1"
   }
 }

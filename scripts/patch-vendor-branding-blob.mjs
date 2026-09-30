@@ -3,7 +3,7 @@
  * scripts/patch-vendor-branding-blob.mjs
  * 
  * Verifies and ensures the production server source contains the native
- * Vercel Blob storage integration, MIME validation, file signature enforcement,
+ * durable object storage integration, MIME validation, file signature enforcement,
  * and robust error codes before esbuild bundles dist/server.cjs.
  */
 
@@ -24,40 +24,36 @@ if (!fs.existsSync(serverPath)) {
 const serverContent = fs.readFileSync(serverPath, 'utf8');
 
 // Verification checks - format-tolerant but strictly enforcing security architecture
-const hasBlobImport = serverContent.includes('@vercel/blob');
+const hasObjectStorageImport = serverContent.includes('src/server/services/ObjectStorage');
 const hasBrandingRoute =
   serverContent.includes('/api/vendor/branding-upload') ||
   serverContent.includes('/api/v1/vendor/branding-upload');
 const hasMagicByteCheck = serverContent.includes('validateBrandingImageSignature');
 const hasStructuredErrors =
-  serverContent.includes('BLOB_CONFIGURATION_ERROR') &&
-  serverContent.includes('BLOB_UPLOAD_FAILED');
-const hasBlobToken = serverContent.includes('BLOB_READ_WRITE_TOKEN');
-const hasBlobPut =
-  serverContent.includes('vendor-branding/${assetId}') ||
-  serverContent.includes("vendor-branding/' + assetId") ||
-  serverContent.includes('vendor-branding/" + assetId') ||
-  /vendor-branding\/[`'"]?\s*(\+|\$)\s*\{?\s*assetId\s*\}?/i.test(serverContent) ||
-  (/put\s*\(\s*[`'"]vendor-branding/i.test(serverContent) && serverContent.includes('assetId'));
-const hasSellerAccess = serverContent.includes('/api/vendor/seller/access');
-const hasSellerAuthorize = serverContent.includes('/api/vendor/seller/authorize');
+  serverContent.includes('OBJECT_STORAGE_NOT_CONFIGURED') &&
+  serverContent.includes('PRODUCT_IMAGE_READ_ERROR') &&
+  serverContent.includes('BRANDING_ASSET_READ_ERROR');
+const hasObjectStorageConfig = serverContent.includes('objectStorageEnabled');
+const hasObjectStoragePut = serverContent.includes('putObject') && serverContent.includes('vendor-branding/');
+const hasNoBlobImport = !serverContent.includes('@vercel/blob');
+const hasNoBlobToken = !serverContent.includes('BLOB_READ_WRITE_TOKEN');
 
 const checks = {
-  hasBlobImport,
+  hasObjectStorageImport,
   hasBrandingRoute,
   hasMagicByteCheck,
   hasStructuredErrors,
-  hasBlobToken,
-  hasBlobPut,
-  hasSellerAccess,
-  hasSellerAuthorize
+  hasObjectStorageConfig,
+  hasObjectStoragePut,
+  hasNoBlobImport,
+  hasNoBlobToken
 };
 
 const allPassed = Object.values(checks).every(Boolean);
 
 if (allPassed) {
   if (process.env.DEBUG || process.argv.includes('--verbose')) {
-    console.log('[patch-vendor-branding-blob] server.ts verified: native Vercel Blob storage, magic-byte checks, structured errors, and seller authorization routes are fully present.');
+    console.log('[patch-vendor-branding-blob] server.ts verified: durable object storage, magic-byte checks, structured errors, and legacy Blob dependencies are absent.');
   }
   process.exit(0);
 } else {
