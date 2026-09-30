@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   export:
-    environment: BLOB_READ_WRITE_TOKEN
+    environment: LEGACY_BLOB_BACKUP
     permissions:
       contents: read
     runs-on: ubuntu-24.04
@@ -38,18 +38,14 @@ jobs:
           LEGACY_BLOB_BACKUP_FILE: /tmp/pinova-legacy-blob-backup.json
           PRIVATE_BLOB_READ_WRITE_TOKEN: ${{ secrets.PRIVATE_BLOB_READ_WRITE_TOKEN }}
           PRIVATE_BLOB_STORE_ID: ${{ secrets.PRIVATE_BLOB_STORE_ID }}
-          BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
-          BLOB_READ_TOKEN: ${{ secrets.BLOB_READ_TOKEN }}
-          BLOB_WRITE_TOKEN: ${{ secrets.BLOB_WRITE_TOKEN }}
-          BLOB_STORE_ID: ${{ secrets.BLOB_STORE_ID }}
         run: |
           set -euo pipefail
-          test -n "${PRIVATE_BLOB_READ_WRITE_TOKEN:-${BLOB_READ_WRITE_TOKEN:-${BLOB_READ_TOKEN:-${VERCEL_OIDC_TOKEN:-}}}}" || {
-            echo "No read-capable Blob token secret is configured"
+          test -n "${PRIVATE_BLOB_READ_WRITE_TOKEN:-}" || {
+            echo "PRIVATE_BLOB_READ_WRITE_TOKEN is unavailable from the LEGACY_BLOB_BACKUP environment"
             exit 1
           }
-          test -n "${PRIVATE_BLOB_STORE_ID:-${BLOB_STORE_ID:-}}" || {
-            echo "No Blob store ID secret is configured"
+          test -n "${PRIVATE_BLOB_STORE_ID:-}" || {
+            echo "PRIVATE_BLOB_STORE_ID is unavailable from the LEGACY_BLOB_BACKUP environment"
             exit 1
           }
           npm run export:legacy-blob
@@ -79,7 +75,7 @@ jobs:
         run: |
           set -euo pipefail
           test -n "${DATABASE_URL:-}" || {
-            echo "DATABASE_URL is not configured in the BLOB_READ_WRITE_TOKEN GitHub Environment"
+            echo "DATABASE_URL is not configured in the LEGACY_BLOB_BACKUP GitHub Environment"
             exit 1
           }
           node scripts/import-neon-backup.mjs /tmp/pinova-legacy-blob-backup.json | tee /tmp/neon-import-result.json
