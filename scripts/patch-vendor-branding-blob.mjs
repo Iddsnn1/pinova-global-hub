@@ -47,7 +47,6 @@ const checks = {
   hasObjectStoragePut,
   hasNoBlobImport,
   hasNoBlobToken,
-  hasSellerAccess,
   hasSellerAuthorize
 };
 
