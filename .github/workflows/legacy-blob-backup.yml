@@ -9,7 +9,7 @@ permissions:
 jobs:
   export:
     environment: BLOB_READ_WRITE_TOKEN
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - name: Checkout migration branch
@@ -27,12 +27,24 @@ jobs:
 
       - name: Export legacy Blob data (read-only operations)
         env:
-          BLOB_READ_TOKEN: ${{ secrets.BLOB_READ_TOKEN }}
-          BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
-          BLOB_WRITE_TOKEN: ${{ secrets.BLOB_WRITE_TOKEN }}
-          PRIVATE_BLOB_STORE_ID: ${{ secrets.PRIVATE_BLOB_STORE_ID }}
           LEGACY_BLOB_BACKUP_FILE: /tmp/pinova-legacy-blob-backup.json
-        run: npm run export:legacy-blob
+          PRIVATE_BLOB_READ_WRITE_TOKEN: ${{ secrets.PRIVATE_BLOB_READ_WRITE_TOKEN }}
+          PRIVATE_BLOB_STORE_ID: ${{ secrets.PRIVATE_BLOB_STORE_ID }}
+          BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
+          BLOB_READ_TOKEN: ${{ secrets.BLOB_READ_TOKEN }}
+          BLOB_WRITE_TOKEN: ${{ secrets.BLOB_WRITE_TOKEN }}
+          BLOB_STORE_ID: ${{ secrets.BLOB_STORE_ID }}
+        run: |
+          set -euo pipefail
+          test -n "${PRIVATE_BLOB_READ_WRITE_TOKEN:-${BLOB_READ_WRITE_TOKEN:-${BLOB_READ_TOKEN:-${VERCEL_OIDC_TOKEN:-}}}}" || {
+            echo "No read-capable Blob token secret is configured"
+            exit 1
+          }
+          test -n "${PRIVATE_BLOB_STORE_ID:-${BLOB_STORE_ID:-}}" || {
+            echo "No Blob store ID secret is configured"
+            exit 1
+          }
+          npm run export:legacy-blob
 
       - name: Validate backup manifest
         run: |
