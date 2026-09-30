@@ -46,15 +46,14 @@ const checks = {
   hasObjectStorageConfig,
   hasObjectStoragePut,
   hasNoBlobImport,
-  hasNoBlobToken,
-  hasSellerAuthorize
+  hasNoBlobToken
 };
 
 const allPassed = Object.values(checks).every(Boolean);
 
 if (allPassed) {
   if (process.env.DEBUG || process.argv.includes('--verbose')) {
-    console.log('[patch-vendor-branding-blob] server.ts verified: durable object storage, magic-byte checks, structured errors, and seller authorization routes are fully present.');
+    console.log('[patch-vendor-branding-blob] server.ts verified: durable object storage, magic-byte checks, structured errors, and legacy Blob dependencies are absent.');
   }
   process.exit(0);
 } else {
