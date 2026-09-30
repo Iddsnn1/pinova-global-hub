@@ -12,13 +12,11 @@ const prefixes: Record<Bucket, string> = {
 };
 
 const token =
-  process.env.BLOB_READ_TOKEN?.trim() ||
-  process.env.BLOB_READ_WRITE_TOKEN?.trim() ||
-  process.env.BLOB_WRITE_TOKEN?.trim();
+  process.env.PRIVATE_BLOB_READ_WRITE_TOKEN?.trim();
 
 if (!token) {
   throw new Error(
-    'LEGACY_BLOB_READ_TOKEN_MISSING: set a GitHub Actions secret named BLOB_READ_TOKEN, BLOB_READ_WRITE_TOKEN, or BLOB_WRITE_TOKEN',
+    'LEGACY_BLOB_READ_TOKEN_MISSING: set PRIVATE_BLOB_READ_WRITE_TOKEN in the GitHub Actions environment',
   );
 }
 
