@@ -11,16 +11,15 @@ const prefixes: Record<Bucket, string> = {
   vendorApplications: 'vendor-applications/',
 };
 
-const token =
-  process.env.PRIVATE_BLOB_READ_WRITE_TOKEN?.trim();
+const token = process.env.VERCEL_OIDC_TOKEN?.trim();
 
 if (!token) {
   throw new Error(
-    'LEGACY_BLOB_READ_TOKEN_MISSING: set PRIVATE_BLOB_READ_WRITE_TOKEN in the GitHub Actions environment',
+    'LEGACY_BLOB_OIDC_TOKEN_MISSING: VERCEL_OIDC_TOKEN was not supplied by vercel env pull',
   );
 }
 
-const storeId = process.env.PRIVATE_BLOB_STORE_ID?.trim() || undefined;
+const storeId = process.env.BLOB_STORE_ID?.trim() || process.env.PRIVATE_BLOB_STORE_ID?.trim() || undefined;
 const output = resolve(
   process.env.LEGACY_BLOB_BACKUP_FILE?.trim() ||
     '/tmp/pinova-legacy-blob-backup.json',
