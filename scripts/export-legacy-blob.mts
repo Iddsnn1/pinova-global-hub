@@ -14,16 +14,18 @@ const prefixes: Record<Bucket, string> = {
 // The durable migration source is the private pinova-global-hub-blob store.
 // Never fall back to the branding store's BLOB_READ_WRITE_TOKEN.
 const privateBlobReadWriteToken = process.env.PRIVATE_BLOB_READ_WRITE_TOKEN?.trim();
-const oidcToken = process.env.VERCEL_OIDC_TOKEN?.trim();
 const storeId = process.env.PRIVATE_BLOB_STORE_ID?.trim();
 
-if (!privateBlobReadWriteToken && !oidcToken) {
+if (!privateBlobReadWriteToken) {
   throw new Error(
-    'LEGACY_BLOB_CREDENTIAL_MISSING: provide PRIVATE_BLOB_READ_WRITE_TOKEN or VERCEL_OIDC_TOKEN',
+    'LEGACY_BLOB_CREDENTIAL_MISSING: PRIVATE_BLOB_READ_WRITE_TOKEN is required for the detached legacy store',
   );
 }
 if (!storeId) {
   throw new Error('LEGACY_BLOB_STORE_ID_MISSING: PRIVATE_BLOB_STORE_ID is required');
+}
+if (storeId !== 'store_zypKOROZmcB8ihIX') {
+  throw new Error(`LEGACY_BLOB_STORE_MISMATCH: expected store_zypKOROZmcB8ihIX, got ${storeId}`);
 }
 
 const output = resolve(
@@ -31,11 +33,11 @@ const output = resolve(
     '/tmp/pinova-legacy-blob-backup.json',
 );
 
-// Prefer Vercel OIDC for the connected project/store. The static private token
-// remains an explicit emergency fallback, but is not selected ahead of OIDC.
-const blobOptions = oidcToken
-  ? { oidcToken, storeId }
-  : { token: privateBlobReadWriteToken! };
+// This migration source is a detached legacy store. Use its explicit
+// store-specific read/write token; never inherit project OIDC credentials.
+const blobOptions = {
+  token: privateBlobReadWriteToken,
+};
 
 async function readJson(pathname: string): Promise<unknown | null> {
   const result = await get(pathname, {
