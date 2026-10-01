@@ -69,6 +69,7 @@ jobs:
             echo "$VERCEL_OIDC_TOKEN"
             echo "EOF"
             echo "PRIVATE_BLOB_STORE_ID=$PRIVATE_BLOB_STORE_ID"
+            echo "BLOB_STORE_ID=$PRIVATE_BLOB_STORE_ID"
           } >> "$GITHUB_ENV"
 
           echo "Legacy Blob OIDC target verified: $PRIVATE_BLOB_STORE_ID"
