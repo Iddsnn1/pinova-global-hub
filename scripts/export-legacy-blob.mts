@@ -52,25 +52,52 @@ async function readJson(pathname: string): Promise<unknown | null> {
   );
 
   try {
-    // The SDK's list() control-plane call accepts project OIDC, but its direct
-    // private-object GET path currently returns 403 from the Blob data plane
-    // in this external GitHub runner. Use the Vercel CLI for the actual
-    // private download; Vercel documents the CLI as OIDC-capable for Blob.
-    await execFileAsync(
+    const vercelToken = process.env.VERCEL_TOKEN?.trim();
+    if (!vercelToken) {
+      throw new Error('LEGACY_BLOB_VERCEL_TOKEN_MISSING: VERCEL_TOKEN is required for signed Blob reads');
+    }
+
+    // Use a short-lived, pathname-scoped signed GET URL. This separates
+    // control-plane authorization from the actual Blob data-plane download.
+    const { stdout } = await execFileAsync(
       'npx',
       [
         '--yes',
         'vercel@latest',
         'blob',
-        'get',
+        'presign',
         pathname,
         '--access',
         'private',
+        '--operation',
+        'get',
+        '--valid-for',
+        '10m',
+        '--json',
+        '--token',
+        vercelToken,
+      ],
+      {
+        env: process.env,
+        maxBuffer: 1024 * 1024,
+      },
+    );
+
+    const presignResult = JSON.parse(stdout) as { presignedUrl?: string };
+    if (!presignResult.presignedUrl) {
+      throw new Error('LEGACY_BLOB_PRESIGN_FAILED: Vercel did not return a signed URL');
+    }
+
+    await execFileAsync(
+      'curl',
+      [
+        '--fail',
+        '--silent',
+        '--show-error',
+        '--location',
         '--output',
         tempPath,
-        '--no-color',
-        '--token',
-        process.env.VERCEL_TOKEN ?? '',
+        presignResult.presignedUrl,
       ],
       {
         env: process.env,
