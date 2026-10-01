@@ -69,6 +69,8 @@ async function readJson(pathname: string): Promise<unknown | null> {
         '--output',
         tempPath,
         '--no-color',
+        '--token',
+        process.env.VERCEL_TOKEN ?? '',
       ],
       {
         env: process.env,
