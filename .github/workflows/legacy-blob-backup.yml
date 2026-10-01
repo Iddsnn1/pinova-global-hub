@@ -78,6 +78,7 @@ jobs:
 
       - name: Export legacy Blob data (read-only operations)
         env:
+          VERCEL_TOKEN: ${{ secrets.Vercel_Token }}
           VERCEL_OIDC_TOKEN: ${{ env.VERCEL_OIDC_TOKEN }}
           PRIVATE_BLOB_STORE_ID: ${{ env.PRIVATE_BLOB_STORE_ID }}
           LEGACY_BLOB_BACKUP_FILE: /tmp/pinova-legacy-blob-backup.json
