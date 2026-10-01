@@ -33,7 +33,7 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Pull Vercel OIDC token
+      - name: Link Vercel project and obtain OIDC token
         env:
           VERCEL_TOKEN: ${{ secrets.Vercel_Token }}
         run: |
@@ -47,25 +47,34 @@ jobs:
           cd /tmp/pinova-vercel
 
           npx --yes vercel@latest link --yes --project pinova-global-hub --scope iddsnn1s-projects --token "$VERCEL_TOKEN"
-          npx --yes vercel@latest env pull /tmp/pinova-vercel.env --yes --environment=preview --scope iddsnn1s-projects --token "$VERCEL_TOKEN"
+
+          OIDC_ENV_FILE="/tmp/pinova-vercel/.env.local"
+          test -f "$OIDC_ENV_FILE" || {
+            echo "Vercel CLI did not create .env.local while linking pinova-global-hub"
+            exit 1
+          }
 
           node -e '
           const fs=require("fs");
-          const p="/tmp/pinova-vercel.env";
-          const lines=fs.readFileSync(p,"utf8").split(/\\r?\\n/);
+          const p="/tmp/pinova-vercel/.env.local";
+          const lines=fs.readFileSync(p,"utf8").split(/\r?\n/);
           const line=lines.find(x=>x.startsWith("VERCEL_OIDC_TOKEN="));
-          if (!line) throw new Error("VERCEL_OIDC_TOKEN was not returned by Vercel env pull; enable OIDC for pinova-global-hub first");
+          if (!line) throw new Error("VERCEL_OIDC_TOKEN was not returned by Vercel project link");
           const value=line.slice("VERCEL_OIDC_TOKEN=".length).trim();
-          if (!value) throw new Error("VERCEL_OIDC_TOKEN returned empty");
-          fs.writeFileSync("/tmp/vercel-oidc-token", value, { mode: 0o600 });
+          if (!value || value === "[SENSITIVE]") throw new Error("VERCEL_OIDC_TOKEN returned empty or redacted");
+          fs.writeFileSync("/tmp/vercel-oidc-token", value, { mode:0o600 });
           fs.rmSync(p, { force:true });
           '
+
+          test -s /tmp/vercel-oidc-token || {
+            echo "Vercel OIDC token file is empty"
+            exit 1
+          }
 
       - name: Export legacy Blob data (read-only operations)
         env:
           LEGACY_BLOB_BACKUP_FILE: /tmp/pinova-legacy-blob-backup.json
           PRIVATE_BLOB_STORE_ID: ${{ secrets.PRIVATE_BLOB_STORE_ID }}
-          LEGACY_BLOB_EXPECTED_STORE_ID: store_zypKOROZmcB8ihIX
         run: |
           set -euo pipefail
           test -n "${PRIVATE_BLOB_STORE_ID:-}" || {
@@ -77,11 +86,7 @@ jobs:
             echo "VERCEL_OIDC_TOKEN could not be initialized"
             exit 1
           }
-          test -n "${PRIVATE_BLOB_STORE_ID:-}" || {
-            echo "PRIVATE_BLOB_STORE_ID is unavailable from the LEGACY_BLOB_BACKUP environment"
-            exit 1
-          }
-          test "${PRIVATE_BLOB_STORE_ID}" = "${LEGACY_BLOB_EXPECTED_STORE_ID}" || {
+          test "${PRIVATE_BLOB_STORE_ID}" = "store_zypKOROZmcB8ihIX" || {
             echo "Legacy Blob store ID does not match pinova-global-hub-blob"
             exit 1
           }
@@ -122,6 +127,7 @@ jobs:
           if (!r.ok || r.destructiveOperations !== false) throw new Error("Neon import safety check failed");
           console.log(JSON.stringify(r,null,2));
           '
+
       - name: Upload backup artifact
         uses: actions/upload-artifact@v6
         with:
