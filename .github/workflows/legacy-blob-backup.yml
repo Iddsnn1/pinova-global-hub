@@ -33,7 +33,7 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Mint short-lived Vercel OIDC token
+      - name: Pull Vercel OIDC token
         env:
           VERCEL_TOKEN: ${{ secrets.Vercel_Token }}
         run: |
@@ -42,12 +42,23 @@ jobs:
             echo "Vercel_Token is unavailable from the LEGACY_BLOB_BACKUP environment"
             exit 1
           }
-          npx --yes vercel@latest project token pinova-global-hub --scope iddsnn1s-projects --token "$VERCEL_TOKEN" --format=json > /tmp/vercel-project-token.json
+
+          mkdir -p /tmp/pinova-vercel
+          cd /tmp/pinova-vercel
+
+          npx --yes vercel@latest link --yes --project pinova-global-hub --scope iddsnn1s-projects --token "$VERCEL_TOKEN"
+          npx --yes vercel@latest env pull /tmp/pinova-vercel.env --yes --environment=preview --scope iddsnn1s-projects --token "$VERCEL_TOKEN"
+
           node -e '
           const fs=require("fs");
-          const r=JSON.parse(fs.readFileSync("/tmp/vercel-project-token.json","utf8"));
-          if (!r.token) throw new Error("Vercel project OIDC token was not returned");
-          fs.writeFileSync("/tmp/vercel-oidc-token", r.token, { mode: 0o600 });
+          const p="/tmp/pinova-vercel.env";
+          const lines=fs.readFileSync(p,"utf8").split(/\\r?\\n/);
+          const line=lines.find(x=>x.startsWith("VERCEL_OIDC_TOKEN="));
+          if (!line) throw new Error("VERCEL_OIDC_TOKEN was not returned by Vercel env pull; enable OIDC for pinova-global-hub first");
+          const value=line.slice("VERCEL_OIDC_TOKEN=".length).trim();
+          if (!value) throw new Error("VERCEL_OIDC_TOKEN returned empty");
+          fs.writeFileSync("/tmp/vercel-oidc-token", value, { mode: 0o600 });
+          fs.rmSync(p, { force:true });
           '
 
       - name: Export legacy Blob data (read-only operations)
