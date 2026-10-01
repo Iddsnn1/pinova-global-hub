@@ -38,6 +38,7 @@ const output = resolve(
 // No long-lived read/write token is accepted by this migration path.
 const blobOptions = {
   oidcToken,
+  storeId,
 };
 
 async function readJson(pathname: string): Promise<unknown | null> {
