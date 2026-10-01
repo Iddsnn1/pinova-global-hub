@@ -75,6 +75,7 @@ jobs:
       - name: Export legacy Blob data (read-only operations)
         env:
           PRIVATE_BLOB_STORE_ID: ${{ secrets.PRIVATE_BLOB_STORE_ID }}
+          BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
           LEGACY_BLOB_BACKUP_FILE: /tmp/pinova-legacy-blob-backup.json
         run: |
           set -euo pipefail
@@ -86,11 +87,16 @@ jobs:
             echo "Legacy Blob store ID does not match pinova-global-hub-blob"
             exit 1
           }
-          export VERCEL_OIDC_TOKEN="$(cat /tmp/vercel-oidc-token)"
-          test -n "${VERCEL_OIDC_TOKEN:-}" || {
-            echo "VERCEL_OIDC_TOKEN could not be initialized"
-            exit 1
-          }
+          if [ -n "${BLOB_READ_WRITE_TOKEN:-}" ]; then
+            echo "Using private Blob read-write token for external CI"
+          else
+            export VERCEL_OIDC_TOKEN="$(cat /tmp/vercel-oidc-token)"
+            test -n "${VERCEL_OIDC_TOKEN:-}" || {
+              echo "Neither BLOB_READ_WRITE_TOKEN nor VERCEL_OIDC_TOKEN is available"
+              exit 1
+            }
+            echo "Falling back to Vercel OIDC token"
+          fi
           npm run export:legacy-blob
 
       - name: Validate backup manifest
