@@ -75,7 +75,7 @@ jobs:
       - name: Export legacy Blob data (read-only operations)
         env:
           PRIVATE_BLOB_STORE_ID: ${{ secrets.PRIVATE_BLOB_STORE_ID }}
-          BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
+          PRIVATE_BLOB_READ_WRITE_TOKEN: ${{ secrets.PRIVATE_BLOB_READ_WRITE_TOKEN }}
           LEGACY_BLOB_BACKUP_FILE: /tmp/pinova-legacy-blob-backup.json
         run: |
           set -euo pipefail
@@ -87,16 +87,18 @@ jobs:
             echo "Legacy Blob store ID does not match pinova-global-hub-blob"
             exit 1
           }
-          if [ -n "${BLOB_READ_WRITE_TOKEN:-}" ]; then
-            echo "Using private Blob read-write token for external CI"
+
+          if [ -n "${PRIVATE_BLOB_READ_WRITE_TOKEN:-}" ]; then
+            echo "Using PRIVATE_BLOB_READ_WRITE_TOKEN for pinova-global-hub-blob"
           else
             export VERCEL_OIDC_TOKEN="$(cat /tmp/vercel-oidc-token)"
             test -n "${VERCEL_OIDC_TOKEN:-}" || {
-              echo "Neither BLOB_READ_WRITE_TOKEN nor VERCEL_OIDC_TOKEN is available"
+              echo "Neither PRIVATE_BLOB_READ_WRITE_TOKEN nor VERCEL_OIDC_TOKEN is available"
               exit 1
             }
-            echo "Falling back to Vercel OIDC token"
+            echo "Falling back to Vercel OIDC token for pinova-global-hub-blob"
           fi
+
           npm run export:legacy-blob
 
       - name: Validate backup manifest
@@ -106,6 +108,7 @@ jobs:
           const p="/tmp/pinova-legacy-blob-backup.json";
           const b=JSON.parse(fs.readFileSync(p,"utf8"));
           if (b.source?.mode !== "read-only") throw new Error("Backup is not marked read-only");
+          if (b.source?.storeId !== "store_zypKOROZmcB8ihIX") throw new Error("Backup source store mismatch");
           if (!Array.isArray(b.manifest)) throw new Error("Missing manifest");
           const bad=b.manifest.filter(x=>x.status!=="exported");
           if (bad.length) throw new Error("Unreadable objects remain: "+bad.length);
