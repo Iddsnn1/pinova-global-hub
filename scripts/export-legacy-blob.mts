@@ -11,22 +11,28 @@ const prefixes: Record<Bucket, string> = {
   vendorApplications: 'vendor-applications/',
 };
 
-const readWriteToken = process.env.BLOB_READ_WRITE_TOKEN?.trim();
+// The durable migration source is the private pinova-global-hub-blob store.
+// Never fall back to the branding store's BLOB_READ_WRITE_TOKEN.
+const privateBlobReadWriteToken = process.env.PRIVATE_BLOB_READ_WRITE_TOKEN?.trim();
 const oidcToken = process.env.VERCEL_OIDC_TOKEN?.trim();
 const storeId = process.env.PRIVATE_BLOB_STORE_ID?.trim();
 
-if (!readWriteToken && !oidcToken) {
-  throw new Error('LEGACY_BLOB_CREDENTIAL_MISSING: provide BLOB_READ_WRITE_TOKEN or VERCEL_OIDC_TOKEN');
+if (!privateBlobReadWriteToken && !oidcToken) {
+  throw new Error(
+    'LEGACY_BLOB_CREDENTIAL_MISSING: provide PRIVATE_BLOB_READ_WRITE_TOKEN or VERCEL_OIDC_TOKEN',
+  );
 }
-if (!storeId) throw new Error('LEGACY_BLOB_STORE_ID_MISSING: PRIVATE_BLOB_STORE_ID is required');
+if (!storeId) {
+  throw new Error('LEGACY_BLOB_STORE_ID_MISSING: PRIVATE_BLOB_STORE_ID is required');
+}
 
 const output = resolve(
   process.env.LEGACY_BLOB_BACKUP_FILE?.trim() ||
     '/tmp/pinova-legacy-blob-backup.json',
 );
 
-const blobOptions = readWriteToken
-  ? { token: readWriteToken }
+const blobOptions = privateBlobReadWriteToken
+  ? { token: privateBlobReadWriteToken }
   : { oidcToken: oidcToken!, storeId };
 
 async function readJson(pathname: string): Promise<unknown | null> {
@@ -126,6 +132,7 @@ const backup = {
   source: {
     provider: 'vercel-blob',
     mode: 'read-only',
+    storeId,
     prefixes,
   },
   products: exported.products,
