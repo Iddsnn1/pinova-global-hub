@@ -11,24 +11,11 @@ const prefixes: Record<Bucket, string> = {
   vendorApplications: 'vendor-applications/',
 };
 
-const token = (
-  process.env.PRIVATE_BLOB_READ_WRITE_TOKEN ||
-  process.env.BLOB_READ_WRITE_TOKEN ||
-  process.env.BLOB_READ_TOKEN ||
-  process.env.BLOB_WRITE_TOKEN ||
-  process.env.VERCEL_OIDC_TOKEN
-)?.trim();
+const token = process.env.PRIVATE_BLOB_READ_WRITE_TOKEN?.trim();
+const storeId = process.env.PRIVATE_BLOB_STORE_ID?.trim();
 
-if (!token) {
-  throw new Error(
-    'LEGACY_BLOB_TOKEN_MISSING: provide a read-capable Blob token in PRIVATE_BLOB_READ_WRITE_TOKEN, BLOB_READ_WRITE_TOKEN, BLOB_READ_TOKEN, or VERCEL_OIDC_TOKEN',
-  );
-}
-
-const storeId = (
-  process.env.PRIVATE_BLOB_STORE_ID ||
-  process.env.BLOB_STORE_ID
-)?.trim() || undefined;
+if (!token) throw new Error('LEGACY_BLOB_TOKEN_MISSING: PRIVATE_BLOB_READ_WRITE_TOKEN is required');
+if (!storeId) throw new Error('LEGACY_BLOB_STORE_ID_MISSING: PRIVATE_BLOB_STORE_ID is required');
 
 const output = resolve(
   process.env.LEGACY_BLOB_BACKUP_FILE?.trim() ||
