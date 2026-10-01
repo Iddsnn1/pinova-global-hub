@@ -1,6 +1,8 @@
 import { list, get } from '@vercel/blob';
 import { createHash } from 'node:crypto';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { dirname, resolve } from 'node:path';
 
 type Bucket = 'products' | 'orders' | 'vendorApplications';
@@ -14,6 +16,8 @@ const prefixes: Record<Bucket, string> = {
 // The durable migration source is the private pinova-global-hub-blob store.
 // It is connected to the pinova-global-hub project and authenticates through
 // Vercel's short-lived project OIDC token. Never use the branding store token.
+const execFileAsync = promisify(execFile);
+
 const oidcToken = process.env.VERCEL_OIDC_TOKEN?.trim();
 const storeId = process.env.PRIVATE_BLOB_STORE_ID?.trim();
 
@@ -42,29 +46,46 @@ const blobOptions = {
 };
 
 async function readJson(pathname: string): Promise<unknown | null> {
-  const result = await get(pathname, {
-    access: 'private',
-    useCache: false,
-    ...blobOptions,
-  });
-  if (!result || result.statusCode !== 200 || !result.stream) return null;
+  const tempPath = resolve(
+    '/tmp',
+    `pinova-legacy-blob-${createHash('sha256').update(pathname).digest('hex').slice(0, 16)}.json`,
+  );
 
-  const chunks: Uint8Array[] = [];
-  const reader = result.stream.getReader();
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    if (value) chunks.push(value);
+  try {
+    // The SDK's list() control-plane call accepts project OIDC, but its direct
+    // private-object GET path currently returns 403 from the Blob data plane
+    // in this external GitHub runner. Use the Vercel CLI for the actual
+    // private download; Vercel documents the CLI as OIDC-capable for Blob.
+    await execFileAsync(
+      'npx',
+      [
+        '--yes',
+        'vercel@latest',
+        'blob',
+        'get',
+        pathname,
+        '--access',
+        'private',
+        '--output',
+        tempPath,
+        '--no-color',
+      ],
+      {
+        env: process.env,
+        maxBuffer: 1024 * 1024,
+      },
+    );
+
+    const raw = await readFile(tempPath, 'utf8');
+    return JSON.parse(raw);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `LEGACY_BLOB_READ_FAILED: unable to download ${pathname} through Vercel CLI: ${message}`,
+    );
+  } finally {
+    await rm(tempPath, { force: true }).catch(() => undefined);
   }
-
-  const bytes = new Uint8Array(chunks.reduce((n, c) => n + c.length, 0));
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.length;
-  }
-
-  return JSON.parse(new TextDecoder().decode(bytes));
 }
 
 async function listPrefix(prefix: string) {
