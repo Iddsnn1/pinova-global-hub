@@ -76,6 +76,25 @@ jobs:
             echo "Production Vercel OIDC token file is empty"
             exit 1
           }
+          test -s /tmp/vercel-blob-store-id || {
+            echo "Production BLOB_STORE_ID file is empty"
+            exit 1
+          }
+
+      - name: Verify Vercel OIDC Blob access
+        env:
+          VERCEL_TOKEN: ${{ secrets.Vercel_Token }}
+        run: |
+          set -euo pipefail
+          cd /tmp/pinova-vercel
+          echo "Production connected Blob store: $(cat /tmp/vercel-blob-store-id)"
+          export VERCEL_OIDC_TOKEN="$(cat /tmp/vercel-oidc-token)"
+          export BLOB_STORE_ID="$(cat /tmp/vercel-blob-store-id)"
+          test "${BLOB_STORE_ID}" = "store_zypKOROZmcB8ihIX" || {
+            echo "CONNECTED_BLOB_STORE_MISMATCH: production project is connected to a different Blob store"
+            exit 1
+          }
+          npx --yes vercel@latest blob list --prefix product-catalog/ --limit 1 --scope iddsnn1s-projects --token "$VERCEL_TOKEN"
 
       - name: Export legacy Blob data (read-only operations)
         env:
@@ -93,8 +112,13 @@ jobs:
           }
 
           export VERCEL_OIDC_TOKEN="$(cat /tmp/vercel-oidc-token)"
+          export BLOB_STORE_ID="$(cat /tmp/vercel-blob-store-id)"
           test -n "${VERCEL_OIDC_TOKEN:-}" || {
             echo "Production Vercel OIDC token is unavailable"
+            exit 1
+          }
+          test "${BLOB_STORE_ID}" = "store_zypKOROZmcB8ihIX" || {
+            echo "CONNECTED_BLOB_STORE_MISMATCH: production project is connected to a different Blob store"
             exit 1
           }
           echo "Using Vercel OIDC for connected pinova-global-hub-blob"
