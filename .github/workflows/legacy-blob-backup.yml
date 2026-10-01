@@ -33,16 +33,37 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Mint short-lived Vercel OIDC token
+        env:
+          VERCEL_TOKEN: ${{ secrets.Vercel_Token }}
+        run: |
+          set -euo pipefail
+          test -n "${VERCEL_TOKEN:-}" || {
+            echo "Vercel_Token is unavailable from the LEGACY_BLOB_BACKUP environment"
+            exit 1
+          }
+          npx --yes vercel@latest project token pinova-global-hub --scope iddsnn1s-projects --token "$VERCEL_TOKEN" --format=json > /tmp/vercel-project-token.json
+          node -e '
+          const fs=require("fs");
+          const r=JSON.parse(fs.readFileSync("/tmp/vercel-project-token.json","utf8"));
+          if (!r.token) throw new Error("Vercel project OIDC token was not returned");
+          fs.writeFileSync("/tmp/vercel-oidc-token", r.token, { mode: 0o600 });
+          '
+
       - name: Export legacy Blob data (read-only operations)
         env:
           LEGACY_BLOB_BACKUP_FILE: /tmp/pinova-legacy-blob-backup.json
-          PRIVATE_BLOB_READ_WRITE_TOKEN: ${{ secrets.PRIVATE_BLOB_READ_WRITE_TOKEN }}
           PRIVATE_BLOB_STORE_ID: ${{ secrets.PRIVATE_BLOB_STORE_ID }}
           LEGACY_BLOB_EXPECTED_STORE_ID: store_zypKOROZmcB8ihIX
         run: |
           set -euo pipefail
-          test -n "${PRIVATE_BLOB_READ_WRITE_TOKEN:-}" || {
-            echo "PRIVATE_BLOB_READ_WRITE_TOKEN is unavailable from the LEGACY_BLOB_BACKUP environment"
+          test -n "${PRIVATE_BLOB_STORE_ID:-}" || {
+            echo "PRIVATE_BLOB_STORE_ID is unavailable from the LEGACY_BLOB_BACKUP environment"
+            exit 1
+          }
+          export VERCEL_OIDC_TOKEN="$(cat /tmp/vercel-oidc-token)"
+          test -n "${VERCEL_OIDC_TOKEN:-}" || {
+            echo "VERCEL_OIDC_TOKEN could not be initialized"
             exit 1
           }
           test -n "${PRIVATE_BLOB_STORE_ID:-}" || {
