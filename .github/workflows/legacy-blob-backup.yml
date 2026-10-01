@@ -33,7 +33,7 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Link Vercel project and obtain OIDC token
+      - name: Link Vercel project
         env:
           VERCEL_TOKEN: ${{ secrets.Vercel_Token }}
         run: |
@@ -42,38 +42,13 @@ jobs:
             echo "Vercel_Token is unavailable from the LEGACY_BLOB_BACKUP environment"
             exit 1
           }
-
           mkdir -p /tmp/pinova-vercel
           cd /tmp/pinova-vercel
-
           npx --yes vercel@latest link --yes --project pinova-global-hub --scope iddsnn1s-projects --token "$VERCEL_TOKEN"
 
-          OIDC_ENV_FILE="/tmp/pinova-vercel/.env.local"
-          test -f "$OIDC_ENV_FILE" || {
-            echo "Vercel CLI did not create .env.local while linking pinova-global-hub"
-            exit 1
-          }
-
-          node -e '
-          const fs=require("fs");
-          const p="/tmp/pinova-vercel/.env.local";
-          const lines=fs.readFileSync(p,"utf8").split(/\r?\n/);
-          const line=lines.find(x=>x.startsWith("VERCEL_OIDC_TOKEN="));
-          if (!line) throw new Error("VERCEL_OIDC_TOKEN was not returned by Vercel project link");
-          const value=line.slice("VERCEL_OIDC_TOKEN=".length).trim();
-          if (!value || value === "[SENSITIVE]") throw new Error("VERCEL_OIDC_TOKEN returned empty or redacted");
-          fs.writeFileSync("/tmp/vercel-oidc-token", value, { mode:0o600 });
-          fs.rmSync(p, { force:true });
-          '
-
-          test -s /tmp/vercel-oidc-token || {
-            echo "Vercel OIDC token file is empty"
-            exit 1
-          }
-
-      - name: Export legacy Blob data (read-only operations)
+      - name: Verify Vercel OIDC + Blob connection
         env:
-          LEGACY_BLOB_BACKUP_FILE: /tmp/pinova-legacy-blob-backup.json
+          VERCEL_TOKEN: ${{ secrets.Vercel_Token }}
           PRIVATE_BLOB_STORE_ID: ${{ secrets.PRIVATE_BLOB_STORE_ID }}
         run: |
           set -euo pipefail
@@ -81,16 +56,43 @@ jobs:
             echo "PRIVATE_BLOB_STORE_ID is unavailable from the LEGACY_BLOB_BACKUP environment"
             exit 1
           }
-          export VERCEL_OIDC_TOKEN="$(cat /tmp/vercel-oidc-token)"
-          test -n "${VERCEL_OIDC_TOKEN:-}" || {
-            echo "VERCEL_OIDC_TOKEN could not be initialized"
+          test "${PRIVATE_BLOB_STORE_ID}" = "store_zypKOROZmcB8ihIX" || {
+            echo "Legacy Blob store ID does not match pinova-global-hub-blob"
+            exit 1
+          }
+
+          cd /tmp/pinova-vercel
+
+          # Vercel documents env run as the supported way to inject project
+          # environment variables directly into a command. Use production
+          # because the connected Blob store is a project resource; do not
+          # persist the short-lived OIDC token to disk.
+          env PRIVATE_BLOB_STORE_ID="$PRIVATE_BLOB_STORE_ID"             npx --yes vercel@latest env run -e production --             node -e '
+              const token = process.env.VERCEL_OIDC_TOKEN;
+              if (!token) throw new Error("VERCEL_OIDC_TOKEN was not injected by Vercel env run");
+              if (token.length < 100) throw new Error("VERCEL_OIDC_TOKEN appears invalid");
+              console.log("Vercel OIDC token injected successfully");
+            '
+
+      - name: Export legacy Blob data (read-only operations)
+        env:
+          VERCEL_TOKEN: ${{ secrets.Vercel_Token }}
+          PRIVATE_BLOB_STORE_ID: ${{ secrets.PRIVATE_BLOB_STORE_ID }}
+          LEGACY_BLOB_BACKUP_FILE: /tmp/pinova-legacy-blob-backup.json
+        run: |
+          set -euo pipefail
+          test -n "${PRIVATE_BLOB_STORE_ID:-}" || {
+            echo "PRIVATE_BLOB_STORE_ID is unavailable from the LEGACY_BLOB_BACKUP environment"
             exit 1
           }
           test "${PRIVATE_BLOB_STORE_ID}" = "store_zypKOROZmcB8ihIX" || {
             echo "Legacy Blob store ID does not match pinova-global-hub-blob"
             exit 1
           }
-          npm run export:legacy-blob
+
+          cd /tmp/pinova-vercel
+
+          env PRIVATE_BLOB_STORE_ID="$PRIVATE_BLOB_STORE_ID"               LEGACY_BLOB_BACKUP_FILE="$LEGACY_BLOB_BACKUP_FILE"             npx --yes vercel@latest env run -e production --             bash -lc 'cd "$GITHUB_WORKSPACE" && npm run export:legacy-blob'
 
       - name: Validate backup manifest
         run: |
