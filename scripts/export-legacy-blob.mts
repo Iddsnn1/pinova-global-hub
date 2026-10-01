@@ -11,10 +11,13 @@ const prefixes: Record<Bucket, string> = {
   vendorApplications: 'vendor-applications/',
 };
 
+const readWriteToken = process.env.BLOB_READ_WRITE_TOKEN?.trim();
 const oidcToken = process.env.VERCEL_OIDC_TOKEN?.trim();
 const storeId = process.env.PRIVATE_BLOB_STORE_ID?.trim();
 
-if (!oidcToken) throw new Error('LEGACY_BLOB_OIDC_TOKEN_MISSING: VERCEL_OIDC_TOKEN is required');
+if (!readWriteToken && !oidcToken) {
+  throw new Error('LEGACY_BLOB_CREDENTIAL_MISSING: provide BLOB_READ_WRITE_TOKEN or VERCEL_OIDC_TOKEN');
+}
 if (!storeId) throw new Error('LEGACY_BLOB_STORE_ID_MISSING: PRIVATE_BLOB_STORE_ID is required');
 
 const output = resolve(
@@ -22,7 +25,9 @@ const output = resolve(
     '/tmp/pinova-legacy-blob-backup.json',
 );
 
-const blobOptions = { oidcToken, storeId };
+const blobOptions = readWriteToken
+  ? { token: readWriteToken }
+  : { oidcToken: oidcToken!, storeId };
 
 async function readJson(pathname: string): Promise<unknown | null> {
   const result = await get(pathname, {
