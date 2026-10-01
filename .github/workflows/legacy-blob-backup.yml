@@ -58,13 +58,18 @@ jobs:
           const fs=require("fs");
           const p="/tmp/pinova-production.env";
           const lines=fs.readFileSync(p,"utf8").split(/\r?\n/);
-          const line=lines.find(x=>x.startsWith("VERCEL_OIDC_TOKEN="));
-          if (!line) throw new Error("VERCEL_OIDC_TOKEN was not returned for the production environment");
-          const value=line.slice("VERCEL_OIDC_TOKEN=".length).trim();
-          if (!value || value === "[SENSITIVE]") throw new Error("Production VERCEL_OIDC_TOKEN is empty or redacted");
-          fs.writeFileSync("/tmp/vercel-oidc-token", value, { mode:0o600 });
+          const oidc=lines.find(x=>x.startsWith("VERCEL_OIDC_TOKEN="));
+          if (!oidc) throw new Error("VERCEL_OIDC_TOKEN was not returned for the production environment");
+          const oidcValue=oidc.slice("VERCEL_OIDC_TOKEN=".length).trim();
+          if (!oidcValue || oidcValue === "[SENSITIVE]") throw new Error("Production VERCEL_OIDC_TOKEN is empty or redacted");
+          const store=lines.find(x=>x.startsWith("BLOB_STORE_ID="));
+          if (!store) throw new Error("BLOB_STORE_ID was not returned for the production environment");
+          const storeValue=store.slice("BLOB_STORE_ID=".length).trim();
+          if (!storeValue || storeValue === "[SENSITIVE]") throw new Error("Production BLOB_STORE_ID is empty or redacted");
+          fs.writeFileSync("/tmp/vercel-oidc-token", oidcValue, { mode:0o600 });
+          fs.writeFileSync("/tmp/vercel-blob-store-id", storeValue, { mode:0o600 });
           fs.rmSync(p, { force:true });
-          console.log("Production Vercel OIDC token acquired");
+          console.log("Production Vercel OIDC token and connected Blob store ID acquired");
           '
 
           test -s /tmp/vercel-oidc-token || {
