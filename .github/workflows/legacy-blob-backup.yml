@@ -75,7 +75,7 @@ jobs:
       - name: Export legacy Blob data (read-only operations)
         env:
           PRIVATE_BLOB_STORE_ID: ${{ secrets.PRIVATE_BLOB_STORE_ID }}
-          PRIVATE_BLOB_READ_WRITE_TOKEN: ${{ secrets.PRIVATE_BLOB_READ_WRITE_TOKEN }}
+          VERCEL_OIDC_TOKEN: ${{ env.VERCEL_OIDC_TOKEN }}
           LEGACY_BLOB_BACKUP_FILE: /tmp/pinova-legacy-blob-backup.json
         run: |
           set -euo pipefail
@@ -88,16 +88,12 @@ jobs:
             exit 1
           }
 
-          if [ -n "${PRIVATE_BLOB_READ_WRITE_TOKEN:-}" ]; then
-            echo "Using PRIVATE_BLOB_READ_WRITE_TOKEN for pinova-global-hub-blob"
-          else
-            export VERCEL_OIDC_TOKEN="$(cat /tmp/vercel-oidc-token)"
-            test -n "${VERCEL_OIDC_TOKEN:-}" || {
-              echo "Neither PRIVATE_BLOB_READ_WRITE_TOKEN nor VERCEL_OIDC_TOKEN is available"
-              exit 1
-            }
-            echo "Falling back to Vercel OIDC token for pinova-global-hub-blob"
-          fi
+          export VERCEL_OIDC_TOKEN="$(cat /tmp/vercel-oidc-token)"
+          test -n "${VERCEL_OIDC_TOKEN:-}" || {
+            echo "Production Vercel OIDC token is unavailable"
+            exit 1
+          }
+          echo "Using Vercel OIDC for connected pinova-global-hub-blob"
 
           npm run export:legacy-blob
 
