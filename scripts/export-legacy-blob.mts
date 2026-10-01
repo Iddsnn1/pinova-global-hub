@@ -31,9 +31,11 @@ const output = resolve(
     '/tmp/pinova-legacy-blob-backup.json',
 );
 
-const blobOptions = privateBlobReadWriteToken
-  ? { token: privateBlobReadWriteToken }
-  : { oidcToken: oidcToken!, storeId };
+// Prefer Vercel OIDC for the connected project/store. The static private token
+// remains an explicit emergency fallback, but is not selected ahead of OIDC.
+const blobOptions = oidcToken
+  ? { oidcToken, storeId }
+  : { token: privateBlobReadWriteToken! };
 
 async function readJson(pathname: string): Promise<unknown | null> {
   const result = await get(pathname, {
