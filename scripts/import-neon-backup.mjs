@@ -137,8 +137,6 @@ for (let i = 0; i < products.length; i += 1) {
   `);
   queuedCounts.products += 1;
 }
-if (productQueries.length) await sql.transaction(productQueries);
-
 for (let i = 0; i < orders.length; i += 1) {
   const o = orders[i];
   const id = requiredString(o.id, 'id', i, 'orders');
@@ -159,8 +157,6 @@ for (let i = 0; i < orders.length; i += 1) {
   `);
   queuedCounts.orders += 1;
 }
-if (orderQueries.length) await sql.transaction(orderQueries);
-
 for (let i = 0; i < vendorApplications.length; i += 1) {
   const a = vendorApplications[i];
   const id = requiredString(a.id, 'id', i, 'vendorApplications');
@@ -175,8 +171,6 @@ for (let i = 0; i < vendorApplications.length; i += 1) {
   `);
   queuedCounts.vendorApplications += 1;
 }
-if (vendorApplicationQueries.length) await sql.transaction(vendorApplicationQueries);
-
 for (let i = 0; i < orderFulfillment.length; i += 1) {
   const f = orderFulfillment[i];
   const orderId = requiredString(f.orderId ?? f.order_id, 'orderId', i, 'orderFulfillment');
@@ -190,8 +184,6 @@ for (let i = 0; i < orderFulfillment.length; i += 1) {
   `);
   queuedCounts.orderFulfillment += 1;
 }
-if (fulfillmentQueries.length) await sql.transaction(fulfillmentQueries);
-
 const countExistingByIds = async (table, ids) => {
   if (!ids.length) return 0;
   const payload = JSON.stringify(ids);
