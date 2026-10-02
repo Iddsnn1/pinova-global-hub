@@ -171,15 +171,18 @@ for (const bucket of Object.keys(prefixes) as Bucket[]) {
       continue;
     }
 
-    const raw = JSON.stringify(value);
+    const raw = value.raw;
+    const sourceSha256 = createHash('sha256').update(raw, 'utf8').digest('hex');
+    const normalized = JSON.stringify(value.value);
     manifest.push({
       bucket,
       pathname: blob.pathname,
       size: blob.size,
-      sha256: createHash('sha256').update(raw).digest('hex'),
+      sha256: createHash('sha256').update(normalized, 'utf8').digest('hex'),
+      sourceSha256,
       status: 'exported',
     });
-    exported[bucket].push(value);
+    exported[bucket].push(value.value);
   }
 }
 
