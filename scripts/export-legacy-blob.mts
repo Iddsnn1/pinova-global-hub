@@ -45,7 +45,7 @@ const blobOptions = {
   storeId,
 };
 
-async function readJson(pathname: string): Promise<unknown | null> {
+async function readJson(pathname: string): Promise<{ value: unknown; raw: string } | null> {
   const tempPath = resolve(
     '/tmp',
     `pinova-legacy-blob-${createHash('sha256').update(pathname).digest('hex').slice(0, 16)}.json`,
@@ -106,7 +106,7 @@ async function readJson(pathname: string): Promise<unknown | null> {
     );
 
     const raw = await readFile(tempPath, 'utf8');
-    return JSON.parse(raw);
+    return { value: JSON.parse(raw), raw };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(
@@ -152,6 +152,7 @@ const manifest: Array<{
   pathname: string;
   size?: number;
   sha256?: string;
+  sourceSha256?: string;
   status: 'exported' | 'unreadable';
 }> = [];
 
@@ -195,6 +196,8 @@ const backup = {
   products: exported.products,
   orders: exported.orders,
   vendorApplications: exported.vendorApplications,
+  // Fulfillment history is preserved inside each order's timeline in the legacy JSON.
+  // Do not synthesize normalized fulfillment rows during export.
   orderFulfillment: [],
   manifest,
 };
