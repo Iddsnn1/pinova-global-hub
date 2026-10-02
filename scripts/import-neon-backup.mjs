@@ -108,7 +108,7 @@ const orderQueries = [];
 const vendorApplicationQueries = [];
 const fulfillmentQueries = [];
 
-let counts = {
+let queuedCounts = {
   products: 0,
   orders: 0,
   vendorApplications: 0,
@@ -135,7 +135,7 @@ for (let i = 0; i < products.length; i += 1) {
        ${p.createdAt ?? new Date().toISOString()},${p.updatedAt ?? new Date().toISOString()})
     ON CONFLICT (id) DO NOTHING
   `);
-  counts.products += 1;
+  queuedCounts.products += 1;
 }
 if (productQueries.length) await sql.transaction(productQueries);
 
@@ -157,7 +157,7 @@ for (let i = 0; i < orders.length; i += 1) {
        ${o.createdAt ?? new Date().toISOString()},${o.updatedAt ?? new Date().toISOString()})
     ON CONFLICT (id) DO NOTHING
   `);
-  counts.orders += 1;
+  queuedCounts.orders += 1;
 }
 if (orderQueries.length) await sql.transaction(orderQueries);
 
@@ -173,7 +173,7 @@ for (let i = 0; i < vendorApplications.length; i += 1) {
        ${a.createdAt ?? new Date().toISOString()},${a.updatedAt ?? new Date().toISOString()})
     ON CONFLICT (id) DO NOTHING
   `);
-  counts.vendorApplications += 1;
+  queuedCounts.vendorApplications += 1;
 }
 if (vendorApplicationQueries.length) await sql.transaction(vendorApplicationQueries);
 
@@ -188,9 +188,35 @@ for (let i = 0; i < orderFulfillment.length; i += 1) {
        ${json(f)}::jsonb,${f.updatedAt ?? f.updated_at ?? new Date().toISOString()})
     ON CONFLICT (order_id) DO NOTHING
   `);
-  counts.orderFulfillment += 1;
+  queuedCounts.orderFulfillment += 1;
 }
 if (fulfillmentQueries.length) await sql.transaction(fulfillmentQueries);
+
+const countExistingByIds = async (table, ids) => {
+  if (!ids.length) return 0;
+  const payload = JSON.stringify(ids);
+  if (table === 'products') {
+    return Number((await sql`SELECT COUNT(*)::int AS count FROM products p JOIN jsonb_array_elements_text(${payload}::jsonb) x(id) ON x.id=p.id`)[0].count);
+  }
+  if (table === 'orders') {
+    return Number((await sql`SELECT COUNT(*)::int AS count FROM orders o JOIN jsonb_array_elements_text(${payload}::jsonb) x(id) ON x.id=o.id`)[0].count);
+  }
+  if (table === 'vendor_applications') {
+    return Number((await sql`SELECT COUNT(*)::int AS count FROM vendor_applications a JOIN jsonb_array_elements_text(${payload}::jsonb) x(id) ON x.id=a.id`)[0].count);
+  }
+  return 0;
+};
+
+const sourceIds = {
+  products: products.map((p) => String(p.id)),
+  orders: orders.map((o) => String(o.id)),
+  vendorApplications: vendorApplications.map((a) => String(a.id)),
+};
+const existingSourceIds = {
+  products: await countExistingByIds('products', sourceIds.products),
+  orders: await countExistingByIds('orders', sourceIds.orders),
+  vendorApplications: await countExistingByIds('vendor_applications', sourceIds.vendorApplications),
+};
 
 const actualCounts = {
   products: Number((await sql`SELECT COUNT(*)::int AS count FROM products`)[0].count),
@@ -202,7 +228,8 @@ const actualCounts = {
 console.log(JSON.stringify({
   ok: true,
   source: resolved,
-  imported: counts,
+  queuedForInsert: queuedCounts,
+  sourceIdsPresentInNeon: existingSourceIds,
   actualNeonCounts: actualCounts,
   destructiveOperations: false
 }, null, 2));
