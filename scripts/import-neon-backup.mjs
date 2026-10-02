@@ -184,6 +184,16 @@ for (let i = 0; i < orderFulfillment.length; i += 1) {
   `);
   queuedCounts.orderFulfillment += 1;
 }
+const allMigrationQueries = [
+  ...productQueries,
+  ...orderQueries,
+  ...vendorApplicationQueries,
+  ...fulfillmentQueries,
+];
+if (allMigrationQueries.length) {
+  await sql.transaction(allMigrationQueries);
+}
+
 const countExistingByIds = async (table, ids) => {
   if (!ids.length) return 0;
   const payload = JSON.stringify(ids);
