@@ -30,9 +30,6 @@ jobs:
         with:
           node-version: '22.x'
 
-      - name: Install dependencies
-        run: npm install
-
       - name: Link Vercel project and pull production OIDC environment
         env:
           VERCEL_TOKEN: ${{ secrets.Vercel_Token }}
@@ -118,9 +115,11 @@ jobs:
       - name: Import validated backup into Neon
         if: ${{ inputs.import_to_neon == true }}
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
           LEGACY_BLOB_BACKUP_FILE: /tmp/pinova-legacy-blob-backup.json
         run: |
           set -euo pipefail
-          test -n "${DATABASE_URL:-}" || { echo "NEON_DATABASE_URL_MISSING"; exit 1; }
+          set -a
+          . /tmp/pinova-vercel/.env.legacy
+          set +a
+          test -n "${DATABASE_URL:-}" || { echo "NEON_DATABASE_URL_MISSING: DATABASE_URL was not provided by Vercel production environment"; exit 1; }
           node scripts/import-neon-backup.mjs "$LEGACY_BLOB_BACKUP_FILE"
