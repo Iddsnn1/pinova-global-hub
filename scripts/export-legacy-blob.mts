@@ -174,7 +174,18 @@ for (const bucket of Object.keys(prefixes) as Bucket[]) {
 
     const raw = value.raw;
     const sourceSha256 = createHash('sha256').update(raw, 'utf8').digest('hex');
-    const normalized = JSON.stringify(value.value);
+    const canonicalize = (input: unknown): unknown => {
+      if (Array.isArray(input)) return input.map(canonicalize);
+      if (input && typeof input === 'object') {
+        return Object.fromEntries(
+          Object.entries(input as Record<string, unknown>)
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([key, child]) => [key, canonicalize(child)]),
+        );
+      }
+      return input;
+    };
+    const normalized = JSON.stringify(canonicalize(value.value));
     const recordId =
       value.value && typeof value.value === 'object' && value.value !== null && 'id' in value.value
         ? String((value.value as { id?: unknown }).id ?? '').trim()
