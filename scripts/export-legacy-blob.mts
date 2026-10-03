@@ -1,8 +1,6 @@
 import { list, get } from '@vercel/blob';
 import { createHash } from 'node:crypto';
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 
 type Bucket = 'products' | 'orders' | 'vendorApplications';
@@ -14,17 +12,12 @@ const prefixes: Record<Bucket, string> = {
 };
 
 // The durable migration source is the private pinova-global-hub-blob store.
-// It is connected to the pinova-global-hub project and authenticates through
-// Vercel's short-lived project OIDC token. Never use the branding store token.
-const execFileAsync = promisify(execFile);
+ // CI uses the dedicated read/write token for this store only. Never use the branding store token.
+ const readWriteToken = process.env.PRIVATE_BLOB_READ_WRITE_TOKEN?.trim();
+ const storeId = process.env.PRIVATE_BLOB_STORE_ID?.trim();
 
-const oidcToken = process.env.VERCEL_OIDC_TOKEN?.trim();
-const storeId = process.env.PRIVATE_BLOB_STORE_ID?.trim();
-
-if (!oidcToken) {
-  throw new Error(
-    'LEGACY_BLOB_OIDC_MISSING: VERCEL_OIDC_TOKEN is required for the connected private legacy store',
-  );
+if (!readWriteToken) {
+  throw new Error('LEGACY_BLOB_TOKEN_MISSING: PRIVATE_BLOB_READ_WRITE_TOKEN is required');
 }
 if (!storeId) {
   throw new Error('LEGACY_BLOB_STORE_ID_MISSING: PRIVATE_BLOB_STORE_ID is required');
@@ -38,82 +31,20 @@ const output = resolve(
     '/tmp/pinova-legacy-blob-backup.json',
 );
 
-// Explicitly bind the SDK to the connected project's OIDC credential.
-// No long-lived read/write token is accepted by this migration path.
-const blobOptions = {
-  oidcToken,
-  storeId,
-};
+// Explicitly bind every Blob SDK call to the dedicated legacy store token.
+const blobOptions = { token: readWriteToken };
 
 async function readJson(pathname: string): Promise<{ value: unknown; raw: string } | null> {
-  const tempPath = resolve(
-    '/tmp',
-    `pinova-legacy-blob-${createHash('sha256').update(pathname).digest('hex').slice(0, 16)}.json`,
-  );
-
   try {
-    const vercelToken = process.env.VERCEL_TOKEN?.trim();
-    if (!vercelToken) {
-      throw new Error('LEGACY_BLOB_VERCEL_TOKEN_MISSING: VERCEL_TOKEN is required for signed Blob reads');
-    }
-
-    // Use a short-lived, pathname-scoped signed GET URL. This separates
-    // control-plane authorization from the actual Blob data-plane download.
-    const { stdout } = await execFileAsync(
-      'npx',
-      [
-        '--yes',
-        'vercel@latest',
-        'blob',
-        'presign',
-        pathname,
-        '--access',
-        'private',
-        '--operation',
-        'get',
-        '--valid-for',
-        '10m',
-        '--json',
-        '--token',
-        vercelToken,
-      ],
-      {
-        env: process.env,
-        maxBuffer: 1024 * 1024,
-      },
-    );
-
-    const presignResult = JSON.parse(stdout) as { presignedUrl?: string };
-    if (!presignResult.presignedUrl) {
-      throw new Error('LEGACY_BLOB_PRESIGN_FAILED: Vercel did not return a signed URL');
-    }
-
-    await execFileAsync(
-      'curl',
-      [
-        '--fail',
-        '--silent',
-        '--show-error',
-        '--location',
-        '--output',
-        tempPath,
-        presignResult.presignedUrl,
-      ],
-      {
-        env: process.env,
-        maxBuffer: 1024 * 1024,
-      },
-    );
-
-    const raw = await readFile(tempPath, 'utf8');
+    const result = await get(pathname, { access: 'private', ...blobOptions });
+    if (!result || result.statusCode !== 200 || !result.stream) return null;
+    const chunks: Uint8Array[] = [];
+    for await (const chunk of result.stream) chunks.push(chunk);
+    const raw = Buffer.concat(chunks.map((chunk) => Buffer.from(chunk))).toString('utf8');
     return { value: JSON.parse(raw), raw };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    throw new Error(
-      `LEGACY_BLOB_READ_FAILED: unable to download ${pathname} through Vercel CLI: ${message}`,
-    );
-  } finally {
-    await rm(tempPath, { force: true }).catch(() => undefined);
+    throw new Error(`LEGACY_BLOB_READ_FAILED: unable to download ${pathname}: ${message}`);
   }
 }
 
@@ -212,7 +143,7 @@ const backup = {
   source: {
     provider: 'vercel-blob',
     mode: 'read-only',
-    authentication: 'vercel-project-oidc',
+    authentication: 'private-read-write-token',
     storeId,
     prefixes,
   },
