@@ -91,11 +91,17 @@ jobs:
       - name: Import validated backup into Neon
         if: ${{ inputs.import_to_neon == true }}
         env:
+          VERCEL_TOKEN: ${{ secrets.Vercel_Token }}
           LEGACY_BLOB_BACKUP_FILE: /tmp/pinova-legacy-blob-backup.json
         run: |
           set -euo pipefail
+          test -n "${VERCEL_TOKEN:-}" || { echo "VERCEL_TOKEN_MISSING: Vercel_Token is required only for the optional Neon import environment pull"; exit 1; }
+          mkdir -p /tmp/pinova-vercel
+          cd /tmp/pinova-vercel
+          npx --yes vercel@latest link --yes --project pinova-global-hub --scope iddsnn1s-projects --token "$VERCEL_TOKEN"
+          npx --yes vercel@latest env pull .env.legacy --environment production --token "$VERCEL_TOKEN"
           set -a
           . /tmp/pinova-vercel/.env.legacy
           set +a
           test -n "${DATABASE_URL:-}" || { echo "NEON_DATABASE_URL_MISSING: DATABASE_URL was not provided by Vercel production environment"; exit 1; }
-          node scripts/import-neon-backup.mjs "$LEGACY_BLOB_BACKUP_FILE"
+          node "$GITHUB_WORKSPACE/scripts/import-neon-backup.mjs" "$LEGACY_BLOB_BACKUP_FILE"
