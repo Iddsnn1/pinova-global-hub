@@ -93,3 +93,34 @@ jobs:
             exit 1
           }
           npm run export:legacy-blob
+
+      - name: Validate export backup before any Neon write
+        env:
+          LEGACY_BLOB_BACKUP_FILE: /tmp/pinova-legacy-blob-backup.json
+        run: |
+          set -euo pipefail
+          test -s "$LEGACY_BLOB_BACKUP_FILE" || { echo "LEGACY_BLOB_BACKUP_MISSING"; exit 1; }
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const file = process.env.LEGACY_BLOB_BACKUP_FILE;
+          const backup = JSON.parse(fs.readFileSync(file, 'utf8'));
+          if (backup.schemaVersion !== 2) throw new Error('BACKUP_SCHEMA_INVALID');
+          if (!Array.isArray(backup.manifest)) throw new Error('BACKUP_MANIFEST_REQUIRED');
+          const collections = ['products','orders','vendorApplications','orderFulfillment'];
+          const total = collections.reduce((n,k) => n + (Array.isArray(backup[k]) ? backup[k].length : 0), 0);
+          if (backup.manifest.length !== total) throw new Error('BACKUP_MANIFEST_COUNT_MISMATCH');
+          for (const entry of backup.manifest) {
+            if (!entry || entry.status !== 'exported' || !entry.recordId || !entry.sha256 || !entry.sourceSha256) throw new Error('BACKUP_MANIFEST_INVALID_ENTRY');
+          }
+          console.log(JSON.stringify({validated:true, schemaVersion:backup.schemaVersion, manifest:backup.manifest.length}, null, 2));
+          NODE
+
+      - name: Import validated backup into Neon
+        if: ${{ inputs.import_to_neon == true }}
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          LEGACY_BLOB_BACKUP_FILE: /tmp/pinova-legacy-blob-backup.json
+        run: |
+          set -euo pipefail
+          test -n "${DATABASE_URL:-}" || { echo "NEON_DATABASE_URL_MISSING"; exit 1; }
+          node scripts/import-neon-backup.mjs "$LEGACY_BLOB_BACKUP_FILE"
