@@ -2,14 +2,22 @@ name: Legacy Blob Backup
 
 on:
   workflow_dispatch:
+    inputs:
+      import_to_neon:
+        description: 'After export validation, idempotently import the backup into Neon'
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: read
 
 jobs:
   export:
-    environment: BLOB_READ_WRITE_TOKEN
-    runs-on: ubuntu-latest
+    environment: LEGACY_BLOB_BACKUP
+    permissions:
+      contents: read
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - name: Checkout migration branch
@@ -25,37 +33,75 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Verify private legacy Blob credential
+        env:
+          PRIVATE_BLOB_READ_WRITE_TOKEN: ${{ secrets.PRIVATE_BLOB_READ_WRITE_TOKEN }}
+          PRIVATE_BLOB_STORE_ID: ${{ secrets.PRIVATE_BLOB_STORE_ID }}
+        run: |
+          set -euo pipefail
+          test -n "${PRIVATE_BLOB_READ_WRITE_TOKEN:-}" || {
+            echo "LEGACY_BLOB_TOKEN_MISSING: PRIVATE_BLOB_READ_WRITE_TOKEN is unavailable from LEGACY_BLOB_BACKUP"
+            exit 1
+          }
+          test "${PRIVATE_BLOB_STORE_ID:-}" = "store_zypKOROZmcB8ihIX" || {
+            echo "LEGACY_BLOB_STORE_MISMATCH: expected store_zypKOROZmcB8ihIX"
+            exit 1
+          }
+          echo "Legacy Blob credential target verified: ${PRIVATE_BLOB_STORE_ID}"
+          echo "Credential mode: dedicated private Blob read-write token"
+
       - name: Export legacy Blob data (read-only operations)
         env:
-          BLOB_READ_TOKEN: ${{ secrets.BLOB_READ_TOKEN }}
-          BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
-          BLOB_WRITE_TOKEN: ${{ secrets.BLOB_WRITE_TOKEN }}
+          PRIVATE_BLOB_READ_WRITE_TOKEN: ${{ secrets.PRIVATE_BLOB_READ_WRITE_TOKEN }}
           PRIVATE_BLOB_STORE_ID: ${{ secrets.PRIVATE_BLOB_STORE_ID }}
           LEGACY_BLOB_BACKUP_FILE: /tmp/pinova-legacy-blob-backup.json
-        run: npm run export:legacy-blob
-
-      - name: Validate backup manifest
         run: |
-          node -e '
-          const fs=require("fs");
-          const p="/tmp/pinova-legacy-blob-backup.json";
-          const b=JSON.parse(fs.readFileSync(p,"utf8"));
-          if (b.source?.mode !== "read-only") throw new Error("Backup is not marked read-only");
-          if (!Array.isArray(b.manifest)) throw new Error("Missing manifest");
-          const bad=b.manifest.filter(x=>x.status!=="exported");
-          if (bad.length) throw new Error("Unreadable objects remain: "+bad.length);
-          console.log(JSON.stringify({
-            products:b.products.length,
-            orders:b.orders.length,
-            vendorApplications:b.vendorApplications.length,
-            manifest:b.manifest.length
-          },null,2));
-          '
+          set -euo pipefail
+          test "${PRIVATE_BLOB_STORE_ID:-}" = "store_zypKOROZmcB8ihIX" || {
+            echo "LEGACY_BLOB_STORE_MISMATCH: expected store_zypKOROZmcB8ihIX"
+            exit 1
+          }
+          test -n "${PRIVATE_BLOB_READ_WRITE_TOKEN:-}" || {
+            echo "LEGACY_BLOB_TOKEN_MISSING: PRIVATE_BLOB_READ_WRITE_TOKEN is required"
+            exit 1
+          }
+          npm run export:legacy-blob
 
-      - name: Upload backup artifact
-        uses: actions/upload-artifact@v6
-        with:
-          name: pinova-legacy-blob-backup
-          path: /tmp/pinova-legacy-blob-backup.json
-          if-no-files-found: error
-          retention-days: 7
+      - name: Validate export backup before any Neon write
+        env:
+          LEGACY_BLOB_BACKUP_FILE: /tmp/pinova-legacy-blob-backup.json
+        run: |
+          set -euo pipefail
+          test -s "$LEGACY_BLOB_BACKUP_FILE" || { echo "LEGACY_BLOB_BACKUP_MISSING"; exit 1; }
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const file = process.env.LEGACY_BLOB_BACKUP_FILE;
+          const backup = JSON.parse(fs.readFileSync(file, 'utf8'));
+          if (backup.schemaVersion !== 2) throw new Error('BACKUP_SCHEMA_INVALID');
+          if (!Array.isArray(backup.manifest)) throw new Error('BACKUP_MANIFEST_REQUIRED');
+          const collections = ['products','orders','vendorApplications','orderFulfillment'];
+          const total = collections.reduce((n,k) => n + (Array.isArray(backup[k]) ? backup[k].length : 0), 0);
+          if (backup.manifest.length !== total) throw new Error('BACKUP_MANIFEST_COUNT_MISMATCH');
+          for (const entry of backup.manifest) {
+            if (!entry || entry.status !== 'exported' || !entry.recordId || !entry.sha256 || !entry.sourceSha256) throw new Error('BACKUP_MANIFEST_INVALID_ENTRY');
+          }
+          console.log(JSON.stringify({validated:true, schemaVersion:backup.schemaVersion, manifest:backup.manifest.length}, null, 2));
+          NODE
+
+      - name: Import validated backup into Neon
+        if: ${{ inputs.import_to_neon == true }}
+        env:
+          VERCEL_TOKEN: ${{ secrets.Vercel_Token }}
+          LEGACY_BLOB_BACKUP_FILE: /tmp/pinova-legacy-blob-backup.json
+        run: |
+          set -euo pipefail
+          test -n "${VERCEL_TOKEN:-}" || { echo "VERCEL_TOKEN_MISSING: Vercel_Token is required only for the optional Neon import environment pull"; exit 1; }
+          mkdir -p /tmp/pinova-vercel
+          cd /tmp/pinova-vercel
+          npx --yes vercel@latest link --yes --project pinova-global-hub --scope iddsnn1s-projects --token "$VERCEL_TOKEN"
+          npx --yes vercel@latest env pull .env.legacy --environment production --token "$VERCEL_TOKEN"
+          set -a
+          . /tmp/pinova-vercel/.env.legacy
+          set +a
+          test -n "${DATABASE_URL:-}" || { echo "NEON_DATABASE_URL_MISSING: DATABASE_URL was not provided by Vercel production environment"; exit 1; }
+          node "$GITHUB_WORKSPACE/scripts/import-neon-backup.mjs" "$LEGACY_BLOB_BACKUP_FILE"

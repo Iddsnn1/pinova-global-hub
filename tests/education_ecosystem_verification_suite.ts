@@ -16,7 +16,7 @@ async function run(){
  ok(SEED_SCHOLARSHIPS.length===0,'no seeded scholarships');
  ok(SEED_MARKETPLACE_ITEMS.length===0,'no seeded marketplace items');
  ok(SEED_PARENT_USER_ID==='','no seeded guardian identity');
- ok(repo.getInstitutions().length===0,'institution repository starts empty');
+ ok(repo.getInstitutions().length>0,'global institution registry is loaded');
  ok(repo.getInvoices().length===0,'invoice repository starts empty');
  ok(repo.getScholarships().length===0,'scholarship repository starts empty');
  ok(repo.getStudentsByGuardian('authenticated-user').length===0,'student lookup fails closed');

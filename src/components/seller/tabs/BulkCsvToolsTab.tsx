@@ -15,6 +15,7 @@ import { Product } from '../../../types';
 interface BulkCsvToolsTabProps {
   products: Product[];
   onAddProduct?: (product: Omit<Product, 'id' | 'createdAt' | 'rating' | 'reviewsCount'>) => void;
+  onProductCreated?: (product: Product) => void;
 }
 
 export const BulkCsvToolsTab: React.FC<BulkCsvToolsTabProps> = ({
