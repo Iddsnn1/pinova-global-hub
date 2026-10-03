@@ -77,6 +77,29 @@ const orderFulfillment = asArray(
 );
 
 const sql = neon(databaseUrl);
+
+const assertNoExistingConflicts = async (table, records, idField) => {
+  if (!records.length) return;
+  const ids = records.map((record) => String(record[idField]));
+  const payload = JSON.stringify(ids);
+  let rows = [];
+  if (table === 'products') {
+    rows = await sql`SELECT p.id, p.data FROM products p JOIN jsonb_array_elements_text(${payload}::jsonb) x(id) ON x.id=p.id`;
+  } else if (table === 'orders') {
+    rows = await sql`SELECT o.id, o.data FROM orders o JOIN jsonb_array_elements_text(${payload}::jsonb) x(id) ON x.id=o.id`;
+  } else if (table === 'vendor_applications') {
+    rows = await sql`SELECT a.id, a.data FROM vendor_applications a JOIN jsonb_array_elements_text(${payload}::jsonb) x(id) ON x.id=a.id`;
+  }
+  const sourceById = new Map(records.map((record) => [String(record[idField]), record]));
+  for (const row of rows) {
+    const source = sourceById.get(String(row.id));
+    if (!source) continue;
+    if (normalizedSha256(source) !== normalizedSha256(row.data)) {
+      throw new Error(`NEON_EXISTING_CONFLICT: ${table} id=${row.id} already exists with different data`);
+    }
+  }
+};
+
 const requiredString = (value, field, index, collection) => {
   const v = String(value ?? '').trim();
   if (!v) throw new Error(`${collection}[${index}].${field} is required`);
@@ -101,7 +124,19 @@ const decimalString = (value, field) => {
   throw new Error(`${field} must be a non-negative decimal string`);
 };
 
-// Validate the entire payload before the first write.
+// Validate the entire payload and existing-ID conflicts before the first write.
+if (manifest.length !== products.length + orders.length + vendorApplications.length + orderFulfillment.length) {
+  throw new Error(`BACKUP_MANIFEST_COUNT_MISMATCH: manifest=${manifest.length}, records=${products.length + orders.length + vendorApplications.length + orderFulfillment.length}`);
+}
+for (const entry of manifest) {
+  if (!['products', 'orders', 'vendorApplications'].includes(entry.bucket)) {
+    throw new Error(`BACKUP_MANIFEST_UNEXPECTED_BUCKET: ${entry.bucket}`);
+  }
+}
+await assertNoExistingConflicts('products', products, 'id');
+await assertNoExistingConflicts('orders', orders, 'id');
+await assertNoExistingConflicts('vendor_applications', vendorApplications, 'id');
+
 for (let i = 0; i < products.length; i += 1) {
   const p = products[i];
   requireManifestRecord('products', p, i);
