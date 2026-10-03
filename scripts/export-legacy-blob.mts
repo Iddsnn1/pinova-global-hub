@@ -153,6 +153,7 @@ const manifest: Array<{
   size?: number;
   sha256?: string;
   sourceSha256?: string;
+  recordId?: string;
   status: 'exported' | 'unreadable';
 }> = [];
 
@@ -174,12 +175,20 @@ for (const bucket of Object.keys(prefixes) as Bucket[]) {
     const raw = value.raw;
     const sourceSha256 = createHash('sha256').update(raw, 'utf8').digest('hex');
     const normalized = JSON.stringify(value.value);
+    const recordId =
+      value.value && typeof value.value === 'object' && value.value !== null && 'id' in value.value
+        ? String((value.value as { id?: unknown }).id ?? '').trim()
+        : '';
+    if (!recordId) {
+      throw new Error(`LEGACY_BLOB_RECORD_ID_MISSING: ${blob.pathname} does not contain a top-level id`);
+    }
     manifest.push({
       bucket,
       pathname: blob.pathname,
       size: blob.size,
       sha256: createHash('sha256').update(normalized, 'utf8').digest('hex'),
       sourceSha256,
+      recordId,
       status: 'exported',
     });
     exported[bucket].push(value.value);
@@ -187,7 +196,7 @@ for (const bucket of Object.keys(prefixes) as Bucket[]) {
 }
 
 const backup = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   exportedAt: new Date().toISOString(),
   source: {
     provider: 'vercel-blob',
