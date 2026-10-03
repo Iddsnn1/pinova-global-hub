@@ -33,54 +33,27 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Link Vercel project and pull production OIDC environment
+      - name: Verify private legacy Blob credential
         env:
-          VERCEL_TOKEN: ${{ secrets.Vercel_Token }}
+          PRIVATE_BLOB_READ_WRITE_TOKEN: ${{ secrets.PRIVATE_BLOB_READ_WRITE_TOKEN }}
+          PRIVATE_BLOB_STORE_ID: ${{ secrets.PRIVATE_BLOB_STORE_ID }}
         run: |
           set -euo pipefail
-          test -n "${VERCEL_TOKEN:-}" || {
-            echo "Vercel_Token is unavailable from the LEGACY_BLOB_BACKUP environment"
-            exit 1
-          }
-          mkdir -p /tmp/pinova-vercel
-          cd /tmp/pinova-vercel
-          npx --yes vercel@latest link --yes --project pinova-global-hub --scope iddsnn1s-projects --token "$VERCEL_TOKEN"
-          npx --yes vercel@latest env pull .env.legacy --environment production --token "$VERCEL_TOKEN"
-          chmod 600 .env.legacy
-
-      - name: Load and verify legacy Blob OIDC credentials
-        run: |
-          set -euo pipefail
-          set -a
-          . /tmp/pinova-vercel/.env.legacy
-          set +a
-
-          test -n "${VERCEL_OIDC_TOKEN:-}" || {
-            echo "LEGACY_BLOB_OIDC_MISSING: VERCEL_OIDC_TOKEN was not provided by the connected Vercel project"
+          test -n "${PRIVATE_BLOB_READ_WRITE_TOKEN:-}" || {
+            echo "LEGACY_BLOB_TOKEN_MISSING: PRIVATE_BLOB_READ_WRITE_TOKEN is unavailable from LEGACY_BLOB_BACKUP"
             exit 1
           }
           test "${PRIVATE_BLOB_STORE_ID:-}" = "store_zypKOROZmcB8ihIX" || {
             echo "LEGACY_BLOB_STORE_MISMATCH: expected store_zypKOROZmcB8ihIX"
             exit 1
           }
-
-          {
-            echo "VERCEL_OIDC_TOKEN<<EOF"
-            echo "$VERCEL_OIDC_TOKEN"
-            echo "EOF"
-            echo "PRIVATE_BLOB_STORE_ID=$PRIVATE_BLOB_STORE_ID"
-            echo "BLOB_STORE_ID=$PRIVATE_BLOB_STORE_ID"
-          } >> "$GITHUB_ENV"
-
-          echo "Legacy Blob OIDC target verified: $PRIVATE_BLOB_STORE_ID"
-          echo "Credential mode: Vercel project OIDC"
-          echo "Static PRIVATE_BLOB_READ_WRITE_TOKEN is not used"
+          echo "Legacy Blob credential target verified: ${PRIVATE_BLOB_STORE_ID}"
+          echo "Credential mode: dedicated private Blob read-write token"
 
       - name: Export legacy Blob data (read-only operations)
         env:
-          VERCEL_TOKEN: ${{ secrets.Vercel_Token }}
-          VERCEL_OIDC_TOKEN: ${{ env.VERCEL_OIDC_TOKEN }}
-          PRIVATE_BLOB_STORE_ID: ${{ env.PRIVATE_BLOB_STORE_ID }}
+          PRIVATE_BLOB_READ_WRITE_TOKEN: ${{ secrets.PRIVATE_BLOB_READ_WRITE_TOKEN }}
+          PRIVATE_BLOB_STORE_ID: ${{ secrets.PRIVATE_BLOB_STORE_ID }}
           LEGACY_BLOB_BACKUP_FILE: /tmp/pinova-legacy-blob-backup.json
         run: |
           set -euo pipefail
@@ -88,8 +61,8 @@ jobs:
             echo "LEGACY_BLOB_STORE_MISMATCH: expected store_zypKOROZmcB8ihIX"
             exit 1
           }
-          test -n "${VERCEL_OIDC_TOKEN:-}" || {
-            echo "LEGACY_BLOB_OIDC_MISSING: VERCEL_OIDC_TOKEN is required"
+          test -n "${PRIVATE_BLOB_READ_WRITE_TOKEN:-}" || {
+            echo "LEGACY_BLOB_TOKEN_MISSING: PRIVATE_BLOB_READ_WRITE_TOKEN is required"
             exit 1
           }
           npm run export:legacy-blob
