@@ -57,8 +57,19 @@ for (const entry of manifest) {
   if (manifestByKey.has(key)) throw new Error(`BACKUP_MANIFEST_DUPLICATE: ${key}`);
   manifestByKey.set(key, entry);
 }
+const canonicalize = (value) => {
+  if (Array.isArray(value)) return value.map(canonicalize);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([key, child]) => [key, canonicalize(child)]),
+    );
+  }
+  return value;
+};
 const normalizedSha256 = (value) =>
-  createHash('sha256').update(JSON.stringify(value), 'utf8').digest('hex');
+  createHash('sha256').update(JSON.stringify(canonicalize(value)), 'utf8').digest('hex');
 const asArray = (value, name) => {
   if (value == null) return [];
   if (!Array.isArray(value)) throw new Error(`${name} must be an array`);
