@@ -20,6 +20,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
+import { createHash } from 'node:crypto';
 import { neon } from '@neondatabase/serverless';
 
 const inputPath = process.argv[2];
@@ -41,6 +42,23 @@ if (!fs.existsSync(resolved)) {
 }
 
 const parsed = JSON.parse(fs.readFileSync(resolved, 'utf8'));
+if (parsed.schemaVersion !== 2) {
+  throw new Error(`UNSUPPORTED_BACKUP_SCHEMA: expected schemaVersion 2, got ${parsed.schemaVersion ?? 'missing'}`);
+}
+if (!Array.isArray(parsed.manifest)) throw new Error('BACKUP_MANIFEST_REQUIRED: manifest must be an array');
+const manifest = parsed.manifest;
+const manifestByKey = new Map();
+const manifestKey = (bucket, recordId) => `${bucket}:${recordId}`;
+for (const entry of manifest) {
+  if (!entry || typeof entry !== 'object' || !entry.bucket || !entry.pathname || !entry.recordId || !entry.sha256 || !entry.sourceSha256 || entry.status !== 'exported') {
+    throw new Error(`BACKUP_MANIFEST_INVALID_ENTRY: ${JSON.stringify(entry)}`);
+  }
+  const key = manifestKey(entry.bucket, String(entry.recordId));
+  if (manifestByKey.has(key)) throw new Error(`BACKUP_MANIFEST_DUPLICATE: ${key}`);
+  manifestByKey.set(key, entry);
+}
+const normalizedSha256 = (value) =>
+  createHash('sha256').update(JSON.stringify(value), 'utf8').digest('hex');
 const asArray = (value, name) => {
   if (value == null) return [];
   if (!Array.isArray(value)) throw new Error(`${name} must be an array`);
@@ -65,19 +83,28 @@ const requiredString = (value, field, index, collection) => {
   return v;
 };
 const json = (value) => JSON.stringify(value ?? {});
+const requireManifestRecord = (bucket, record, index) => {
+  const id = requiredString(record.id, 'id', index, bucket);
+  const entry = manifestByKey.get(manifestKey(bucket, id));
+  if (!entry) throw new Error(`MANIFEST_RECORD_MISSING: ${bucket}[${index}] id=${id}`);
+  if (normalizedSha256(record) !== entry.sha256) {
+    throw new Error(`MANIFEST_HASH_MISMATCH: ${bucket}[${index}] id=${id}`);
+  }
+  return entry;
+};
 const decimalString = (value, field) => {
   if (typeof value === 'string') {
     const v = value.trim();
     if (!/^\d+(?:\.\d+)?$/.test(v)) throw new Error(`${field} must be a non-negative decimal string`);
     return v;
   }
-  if (typeof value === 'number' && Number.isFinite(value) && value >= 0) return String(value);
-  throw new Error(`${field} must be a non-negative decimal value`);
+  throw new Error(`${field} must be a non-negative decimal string`);
 };
 
 // Validate the entire payload before the first write.
 for (let i = 0; i < products.length; i += 1) {
   const p = products[i];
+  requireManifestRecord('products', p, i);
   requiredString(p.id, 'id', i, 'products');
   requiredString(p.sellerId, 'sellerId', i, 'products');
   requiredString(p.title, 'title', i, 'products');
@@ -88,6 +115,7 @@ for (let i = 0; i < products.length; i += 1) {
 }
 for (let i = 0; i < orders.length; i += 1) {
   const o = orders[i];
+  requireManifestRecord('orders', o, i);
   requiredString(o.id, 'id', i, 'orders');
   requiredString(o.buyerUsername, 'buyerUsername', i, 'orders');
   const totalPi = decimalString(o.totalPi, `orders[${i}].totalPi`);
@@ -96,6 +124,7 @@ for (let i = 0; i < orders.length; i += 1) {
 }
 for (let i = 0; i < vendorApplications.length; i += 1) {
   const a = vendorApplications[i];
+  requireManifestRecord('vendorApplications', a, i);
   requiredString(a.id, 'id', i, 'vendorApplications');
   requiredString(a.pioneerUsername, 'pioneerUsername', i, 'vendorApplications');
 }
@@ -132,7 +161,7 @@ for (let i = 0; i < products.length; i += 1) {
       (${id},${sellerId},${title},${p.marketplaceCategory ?? null},${p.category ?? null},
        ${pricePi},${stock},${p.availabilityStatus ?? null},${p.isActive === true},
        ${p.isDeleted === true},${p.moderationStatus ?? 'PENDING_REVIEW'},${json(p)}::jsonb,
-       ${p.createdAt ?? new Date().toISOString()},${p.updatedAt ?? new Date().toISOString()})
+       ${requiredString(p.createdAt, 'createdAt', i, 'products')},${requiredString(p.updatedAt, 'updatedAt', i, 'products')})
     ON CONFLICT (id) DO NOTHING
   `);
   queuedCounts.products += 1;
@@ -152,7 +181,7 @@ for (let i = 0; i < orders.length; i += 1) {
       (${id},${buyerUsername},${totalPi},${o.escrowStatus ?? 'pending'},${o.pstpStatus ?? 'Pending'},
        ${o.piPaymentId ?? null},${o.piTxid ?? null},${o.serverVerified === true},
        ${o.trackingNumber ?? null},${o.carrier ?? null},${o.isDeleted === true},${json(o)}::jsonb,
-       ${o.createdAt ?? new Date().toISOString()},${o.updatedAt ?? new Date().toISOString()})
+       ${requiredString(o.createdAt, 'createdAt', i, 'orders')},${requiredString(o.updatedAt, 'updatedAt', i, 'orders')})
     ON CONFLICT (id) DO NOTHING
   `);
   queuedCounts.orders += 1;
@@ -166,7 +195,7 @@ for (let i = 0; i < vendorApplications.length; i += 1) {
       (id,pioneer_username,pioneer_uid,status,data,created_at,updated_at)
     VALUES
       (${id},${username},${a.pioneerUid ?? null},${a.status ?? null},${json(a)}::jsonb,
-       ${a.createdAt ?? new Date().toISOString()},${a.updatedAt ?? new Date().toISOString()})
+       ${requiredString(a.createdAt, 'createdAt', i, 'vendorApplications')},${requiredString(a.updatedAt, 'updatedAt', i, 'vendorApplications')})
     ON CONFLICT (id) DO NOTHING
   `);
   queuedCounts.vendorApplications += 1;
@@ -179,7 +208,7 @@ for (let i = 0; i < orderFulfillment.length; i += 1) {
       (order_id,status,carrier,tracking_number,data,updated_at)
     VALUES
       (${orderId},${f.status ?? null},${f.carrier ?? null},${f.trackingNumber ?? f.tracking_number ?? null},
-       ${json(f)}::jsonb,${f.updatedAt ?? f.updated_at ?? new Date().toISOString()})
+       ${json(f)}::jsonb,${requiredString(f.updatedAt ?? f.updated_at, 'updatedAt', i, 'orderFulfillment')})
     ON CONFLICT (order_id) DO NOTHING
   `);
   queuedCounts.orderFulfillment += 1;
