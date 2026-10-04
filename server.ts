@@ -1434,6 +1434,23 @@ app.delete(
       }
 
       if (!objectStorageEnabled()) return res.status(503).json({ success: false, error: 'OBJECT_STORAGE_NOT_CONFIGURED' });
+
+      // Authorize against durable metadata BEFORE deleting either object.
+      const metadataObject = await getObject(`vendor-branding-meta/${assetId}.json`);
+      if (metadataObject) {
+        try {
+          const meta = JSON.parse(Buffer.from(metadataObject.body).toString('utf8'));
+          const isOwner = authUser?.username && meta.owner && authUser.username.toLowerCase() === meta.owner.toLowerCase();
+          if (!isOwner && !isAdmin) {
+            return res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'You are not authorized to remove another vendor\\'s storefront branding asset.' });
+          }
+        } catch {
+          return res.status(500).json({ success: false, error: 'BRANDING_METADATA_ERROR', message: 'Branding metadata could not be validated.' });
+        }
+      } else if (!isAdmin) {
+        return res.status(404).json({ success: false, error: 'ASSET_NOT_FOUND' });
+      }
+
       await deleteObject(`vendor-branding/${assetId}`);
       await deleteObject(`vendor-branding-meta/${assetId}.json`);
       const brandingDir = getVendorBrandingDir();
@@ -1445,21 +1462,7 @@ app.delete(
         return;
       }
 
-      // Check ownership from metadata if present
-      if (fs.existsSync(metaPath)) {
-        try {
-          const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
-          const isOwner = authUser?.username && meta.owner && authUser.username.toLowerCase() === meta.owner.toLowerCase();
-          if (!isOwner && !isAdmin) {
-            res.status(403).json({
-              success: false,
-              error: 'FORBIDDEN',
-              message: 'You are not authorized to remove another vendor\'s storefront branding asset.'
-            });
-            return;
-          }
-        } catch {}
-      }
+      // Local filesystem cleanup is best-effort after durable authorization/deletion.
 
       if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
       if (fs.existsSync(metaPath)) fs.unlinkSync(metaPath);
