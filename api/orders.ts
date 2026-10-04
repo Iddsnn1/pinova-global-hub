@@ -4,6 +4,7 @@ import { authService, paymentLedgerRepo, pstpAuditRepo, idempotencyRepo, verifyP
 import { listDurableVendorApplications } from '../dist/server.cjs';
 import { durableProductStorageEnabled, getDurableProduct, reserveDurableProductStockBatch } from '../dist/server.cjs';
 import type { Order, OrderItem, PstpOrderStatus } from '../src/types';
+import { isAllowedSellerTransition, expectedCarrierTransition } from '../src/modules/orders/lifecycle';
 
 function json(res: ServerResponse, status: number, body: unknown) {
   res.statusCode = status;
@@ -56,7 +57,6 @@ function normalizeUsername(value: unknown): string {
   return String(value || '').trim().replace(/^@/, '').toLowerCase();
 }
 
-import { isAllowedSellerTransition, expectedCarrierTransition } from '../src/modules/orders/lifecycle';
 
 function sellerOwnsOrder(order: Order, username: string): boolean {
   const seller = normalizeUsername(username);
@@ -302,7 +302,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       if (duplicate) return json(res, 200, { ok: true, duplicate: true, order });
 
       const expected = expectedCarrierTransition(order.pstpStatus);
-      if (allowedTransitions[order.pstpStatus] !== nextStatus) {
+      if (expected !== nextStatus) {
         return json(res, 409, {
           ok: false,
           error: 'INVALID_CARRIER_LIFECYCLE_TRANSITION',
