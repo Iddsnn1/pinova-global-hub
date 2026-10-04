@@ -12,9 +12,9 @@ const prefixes: Record<Bucket, string> = {
 };
 
 // The durable migration source is the private pinova-global-hub-blob store.
- // CI uses the dedicated read/write token for this store only. Never use the branding store token.
- const readWriteToken = process.env.PRIVATE_BLOB_READ_WRITE_TOKEN?.trim();
- const storeId = process.env.PRIVATE_BLOB_STORE_ID?.trim();
+// CI uses the dedicated read/write token for this store only. Never use the branding store token.
+const readWriteToken = process.env.PRIVATE_BLOB_READ_WRITE_TOKEN?.trim();
+const storeId = process.env.PRIVATE_BLOB_STORE_ID?.trim();
 
 if (!readWriteToken) {
   throw new Error('LEGACY_BLOB_TOKEN_MISSING: PRIVATE_BLOB_READ_WRITE_TOKEN is required');
@@ -31,15 +31,26 @@ const output = resolve(
     '/tmp/pinova-legacy-blob-backup.json',
 );
 
-// Explicitly bind every Blob SDK call to the dedicated legacy store token.
 const blobOptions = { token: readWriteToken };
 
 async function readJson(pathname: string): Promise<{ value: unknown; raw: string } | null> {
   try {
     const result = await get(pathname, { access: 'private', ...blobOptions });
     if (!result || result.statusCode !== 200 || !result.stream) return null;
+
+    // ReadableStream is not typed as AsyncIterable in the CI TypeScript lib set.
+    const reader = result.stream.getReader();
     const chunks: Uint8Array[] = [];
-    for await (const chunk of result.stream) chunks.push(chunk);
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value) chunks.push(value);
+      }
+    } finally {
+      reader.releaseLock();
+    }
+
     const raw = Buffer.concat(chunks.map((chunk) => Buffer.from(chunk))).toString('utf8');
     return { value: JSON.parse(raw), raw };
   } catch (error) {
@@ -157,7 +168,7 @@ const backup = {
 };
 
 await mkdir(dirname(output), { recursive: true });
-await writeFile(output, JSON.stringify(backup, null, 2) + '\\n', 'utf8');
+await writeFile(output, JSON.stringify(backup, null, 2) + '\n', 'utf8');
 
 const counts = {
   products: exported.products.length,
