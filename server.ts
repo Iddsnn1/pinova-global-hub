@@ -1442,7 +1442,7 @@ app.delete(
           const meta = JSON.parse(Buffer.from(metadataObject.body).toString('utf8'));
           const isOwner = authUser?.username && meta.owner && authUser.username.toLowerCase() === meta.owner.toLowerCase();
           if (!isOwner && !isAdmin) {
-            return res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'You are not authorized to remove another vendor\\'s storefront branding asset.' });
+            return res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'You are not authorized to remove another vendor's storefront branding asset.' });
           }
         } catch {
           return res.status(500).json({ success: false, error: 'BRANDING_METADATA_ERROR', message: 'Branding metadata could not be validated.' });
