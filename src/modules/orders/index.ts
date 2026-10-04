@@ -11,40 +11,12 @@ import {
 } from '../../types';
 import { NotificationModule } from '../notification';
 
-// Allowable transitions mapping for strict order lifecycle enforcement
-const ALLOWED_TRANSITIONS: Partial<Record<PstpOrderStatus, PstpOrderStatus[]>> = {
-  'Draft': ['Pending Payment', 'Cancelled'],
-  'Pending Payment': ['Payment Authorized', 'Cancelled'],
-  'Payment Authorized': ['Payment Verified', 'Cancelled'],
-  'Payment Verified': ['Transaction Recorded', 'Refunded', 'Cancelled'],
-  'Transaction Recorded': ['Order Confirmed', 'Refunded', 'Cancelled'],
-  'Order Confirmed': ['Seller Accepted', 'Processing', 'Preparing Shipment', 'Refunded', 'Cancelled'],
-  'Seller Accepted': ['Preparing Order', 'Processing', 'Preparing Shipment'],
-  'Processing': ['Preparing Order', 'Preparing Shipment', 'Packed', 'Ready for Pickup', 'Shipped', 'Refunded', 'Cancelled'],
-  'Preparing Order': ['Packed', 'Preparing Shipment', 'Shipped'],
-  'Preparing Shipment': ['Packed', 'Ready for Pickup', 'Shipped', 'Refunded', 'Cancelled'],
-  'Packed': ['Ready for Pickup', 'Shipped', 'Out for Delivery'],
-  'Ready for Pickup': ['Delivered', 'Cancelled'],
-  'Shipped': ['In Transit', 'Out for Delivery', 'Delivered', 'Disputed'],
-  'Out for Delivery': ['Delivered', 'Disputed'],
-  'In Transit': ['Delivered', 'Disputed'],
-  'Delivered': ['Buyer Confirmation', 'Completed', 'Refund Requested', 'Refunded', 'Disputed'],
-  'Buyer Confirmation': ['Completed', 'Disputed', 'Refunded'],
-  'Completed': ['Closed', 'Refunded', 'Disputed'],
-  'Cancelled': ['Closed'],
-  'Refund Requested': ['Refund Completed', 'Refunded', 'Disputed'],
-  'Refund Completed': ['Closed'],
-  'Refunded': ['Closed'],
-  'Disputed': ['Resolved', 'Completed', 'Refunded', 'Closed'],
-  'Resolved': ['Closed'],
-  'Closed': []
-};
-
+import { ORDER_LIFECYCLE_TRANSITIONS } from './lifecycle';
 export class OrderLifecycleManager {
   private notificationModule = new NotificationModule();
 
   isValidTransition(currentStatus: PstpOrderStatus, nextStatus: PstpOrderStatus): boolean {
-    const allowed = ALLOWED_TRANSITIONS[currentStatus] || [];
+    const allowed = ORDER_LIFECYCLE_TRANSITIONS[currentStatus] || [];
     return allowed.includes(nextStatus);
   }
 
