@@ -56,19 +56,7 @@ function normalizeUsername(value: unknown): string {
   return String(value || '').trim().replace(/^@/, '').toLowerCase();
 }
 
-const SELLER_LIFECYCLE_TRANSITIONS: Partial<Record<PstpOrderStatus, PstpOrderStatus[]>> = {
-  'Payment Verified': ['Seller Accepted'],
-  'Seller Accepted': ['Preparing Order'],
-  'Preparing Order': ['Packed'],
-  'Packed': ['Shipped'],
-  // Carrier-controlled milestones are intentionally not seller-editable.
-  // They must come from a future carrier/webhook evidence path.
-  'Shipped': [],
-};
-
-function isSellerTransitionAllowed(current: PstpOrderStatus, next: PstpOrderStatus): boolean {
-  return (SELLER_LIFECYCLE_TRANSITIONS[current] || []).includes(next);
-}
+import { isAllowedSellerTransition, expectedCarrierTransition } from '../src/modules/orders/lifecycle';
 
 function sellerOwnsOrder(order: Order, username: string): boolean {
   const seller = normalizeUsername(username);
@@ -202,13 +190,9 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         }
 
         const order = matchingOrders[0];
-        const allowedTransitions: Record<string, PstpOrderStatus> = {
-          'Shipped': 'In Transit',
-          'In Transit': 'Out for Delivery',
-          'Out for Delivery': 'Delivered'
-        };
+        const expected = expectedCarrierTransition(order.pstpStatus);
 
-        if (allowedTransitions[order.pstpStatus] !== nextStatus) {
+        if (expected !== nextStatus) {
           results.push({
             orderId: order.id,
             trackingNumber,
@@ -317,11 +301,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       );
       if (duplicate) return json(res, 200, { ok: true, duplicate: true, order });
 
-      const allowedTransitions: Record<string, PstpOrderStatus> = {
-        'Shipped': 'In Transit',
-        'In Transit': 'Out for Delivery',
-        'Out for Delivery': 'Delivered'
-      };
+      const expected = expectedCarrierTransition(order.pstpStatus);
       if (allowedTransitions[order.pstpStatus] !== nextStatus) {
         return json(res, 409, {
           ok: false,
