@@ -112,7 +112,14 @@ export const BuyerOrderHub: React.FC<BuyerOrderHubProps> = ({
     }
   }, [initialOrderId, orders]);
 
-  const formatTimelineDate = (timestamp: unknown) => {\n    if (typeof timestamp !== 'string' || !timestamp.trim()) return 'Time unavailable';\n    const date = new Date(timestamp);\n    return Number.isNaN(date.getTime()) ? 'Time unavailable' : date.toLocaleDateString();\n  };\n\n  // Copy helper\n  const handleCopy = (text: string, fieldId: string) => {
+  const formatTimelineDate = (timestamp: unknown) => {
+    if (typeof timestamp !== 'string' || !timestamp.trim()) return 'Time unavailable';
+    const date = new Date(timestamp);
+    return Number.isNaN(date.getTime()) ? 'Time unavailable' : date.toLocaleDateString();
+  };
+
+  // Copy helper
+  const handleCopy = (text: string, fieldId: string) => {
     if (!text) return;
     navigator.clipboard.writeText(text);
     setCopiedField(fieldId);
