@@ -220,11 +220,12 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
           continue;
         }
 
-        const timestamp = String(shipment?.status?.timestamp || '').trim() || new Date().toISOString();
+        const carrierEventTimestamp = String(shipment?.status?.timestamp || '').trim() || undefined;
+        const timestamp = new Date().toISOString();
         const updated = await saveDurableOrder({
           ...order,
           pstpStatus: nextStatus,
-          updatedAt: new Date().toISOString(),
+          updatedAt: timestamp,
           escrowStatus: nextStatus === 'Delivered' ? 'delivered' : 'shipped',
           timeline: [
             ...(Array.isArray(order.timeline) ? order.timeline : []),
@@ -235,6 +236,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
               actorRole: 'system',
               note: 'DHL Unified Push evidence accepted; dhl-event:' + eventId,
               carrier: 'DHL',
+              ...(carrierEventTimestamp ? { carrierEventTimestamp } : {}),
               trackingNumber,
               location: shipment?.status?.location?.address || undefined
             }
