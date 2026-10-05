@@ -629,29 +629,46 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       }
 
       const timestamp = new Date().toISOString();
-      const updated = await saveDurableOrder({
-        ...order,
-        pstpStatus: 'Completed',
-        escrowStatus: 'released',
-        updatedAt: timestamp,
-        timeline: [
-          ...(Array.isArray(order.timeline) ? order.timeline : []),
-          {
-            status: 'Buyer Confirmation',
-            timestamp,
-            actor: user.username,
-            actorRole: 'buyer',
-            note: 'Buyer confirmed receipt after server-recorded delivery; PSTP escrow release authorized.'
-          },
-          {
-            status: 'Completed',
-            timestamp,
-            actor: 'system',
-            actorRole: 'system',
-            note: 'Order completed and PSTP escrow released after buyer confirmation.'
+      let updated;
+      try {
+        updated = await saveDurableOrder({
+          ...order,
+          pstpStatus: 'Completed',
+          escrowStatus: 'released',
+          updatedAt: timestamp,
+          timeline: [
+            ...(Array.isArray(order.timeline) ? order.timeline : []),
+            {
+              status: 'Buyer Confirmation',
+              timestamp,
+              actor: user.username,
+              actorRole: 'buyer',
+              note: 'Buyer confirmed receipt after server-recorded delivery; PSTP escrow release authorized.'
+            },
+            {
+              status: 'Completed',
+              timestamp,
+              actor: 'system',
+              actorRole: 'system',
+              note: 'Order completed and PSTP escrow released after buyer confirmation.'
+            }
+          ],
+        });
+      } catch (error) {
+        if (error instanceof Error && error.message === 'ORDER_WRITE_CONFLICT') {
+          const latest = await getDurableOrder(order.id);
+          if (latest?.pstpStatus === 'Completed' && latest?.escrowStatus === 'released') {
+            return json(res, 200, { ok: true, duplicate: true, order: latest, serverAuthoritative: true, escrowStatus: latest.escrowStatus, pstpStatus: latest.pstpStatus });
           }
-        ],
-      });
+          return json(res, 409, {
+            ok: false,
+            error: 'ORDER_WRITE_CONFLICT',
+            currentStatus: latest?.pstpStatus || null,
+            message: 'Order changed while receipt confirmation was being processed. Refresh and retry from the current lifecycle state.'
+          });
+        }
+        throw error;
+      }
 
       pstpAuditRepo.appendLog({
         orderId: order.id,
