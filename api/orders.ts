@@ -503,14 +503,35 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         if (existingTx?.paymentId && existingTx.paymentId !== paymentId) return json(res, 409, { ok: false, verified: false, error: 'PI_TRANSACTION_ALREADY_USED' });
       }
 
-      const ledger = txid
-        ? paymentLedgerRepo.recordCompletion(paymentId, txid, { orderId: order.id, buyerUsername: order.buyerUsername, amountPi: order.totalPi, piUserUid })
-        : paymentLedgerRepo.recordApproval(paymentId, { orderId: order.id, buyerUsername: order.buyerUsername, amountPi: order.totalPi, piUserUid });
-
       let updated;
       try {
         updated = await markDurableOrderPaymentVerified(order.id, paymentId, txid || undefined);
       } catch (error) {
+        if (error instanceof Error && error.message === 'PI_TXID_REPLAY_CONFLICT') {
+          return json(res, 409, { ok: false, verified: false, error: 'PI_TRANSACTION_ALREADY_USED', message: 'This Pi transaction ID is already bound to another order.' });
+        }
+        if (error instanceof Error && error.message === 'PI_PAYMENT_ID_REPLAY_CONFLICT') {
+          const latest = (await listDurableOrders()).find((candidate) =>
+            String(candidate.piPaymentId || '').trim() === paymentId
+          );
+          if (
+            latest?.id === order.id &&
+            latest.serverVerified === true &&
+            (!txid || !latest.piTxid || String(latest.piTxid).trim() === txid)
+          ) {
+            return json(res, 200, {
+              ok: true,
+              verified: true,
+              duplicate: true,
+              order: latest,
+              serverAuthoritative: true,
+              escrowStatus: latest.escrowStatus,
+              pstpStatus: latest.pstpStatus,
+              paymentLedger: paymentLedgerRepo.findByPaymentId(paymentId)
+            });
+          }
+          return json(res, 409, { ok: false, verified: false, error: 'PI_PAYMENT_ALREADY_USED' });
+        }
         if (error instanceof Error && error.message === 'ORDER_WRITE_CONFLICT') {
           const latest = await getDurableOrder(order.id);
           if (
@@ -526,7 +547,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
               serverAuthoritative: true,
               escrowStatus: latest.escrowStatus,
               pstpStatus: latest.pstpStatus,
-              paymentLedger: paymentLedgerRepo.findByPaymentId(paymentId) || ledger
+              paymentLedger: paymentLedgerRepo.findByPaymentId(paymentId)
             });
           }
           return json(res, 409, {
@@ -540,6 +561,9 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         throw error;
       }
       if (!updated) return json(res, 404, { ok: false, verified: false, error: 'ORDER_NOT_FOUND' });
+      const ledger = txid
+        ? paymentLedgerRepo.recordCompletion(paymentId, txid, { orderId: order.id, buyerUsername: order.buyerUsername, amountPi: order.totalPi, piUserUid })
+        : paymentLedgerRepo.recordApproval(paymentId, { orderId: order.id, buyerUsername: order.buyerUsername, amountPi: order.totalPi, piUserUid });
       pstpAuditRepo.appendLog({ orderId: order.id, paymentId, actor: 'system', actorRole: 'system', action: 'PAYMENT_SERVER_VERIFIED', details: `Pi payment server-verified (${verification.source}); PSTP escrow protection activated.`, ipAddress: 'server', deviceInfo: 'PiNova PSTP Payment Verification Service' });
       return json(res, 200, { ok: true, verified: true, escrowStatus: updated?.escrowStatus, pstpStatus: updated?.pstpStatus, order: updated, paymentLedger: ledger });
     }
