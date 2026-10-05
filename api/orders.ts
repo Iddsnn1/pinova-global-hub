@@ -500,13 +500,13 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
 
       const body = await readJson(req);
       const nextStatus = String(body.pstpStatus || '').trim() as PstpOrderStatus;
-      if (!isSellerTransitionAllowed(order.pstpStatus, nextStatus)) {
+      if (!isAllowedSellerTransition(order.pstpStatus, nextStatus)) {
         return json(res, 409, {
           ok: false,
           error: 'INVALID_SELLER_LIFECYCLE_TRANSITION',
           from: order.pstpStatus,
           to: nextStatus,
-          allowedNext: SELLER_LIFECYCLE_TRANSITIONS[order.pstpStatus] || []
+          allowedNext: []
         });
       }
 
