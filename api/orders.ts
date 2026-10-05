@@ -1,8 +1,8 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import { createHash, randomBytes, createHmac, timingSafeEqual } from 'crypto';
-import { authService, paymentLedgerRepo, pstpAuditRepo, idempotencyRepo, verifyPiPaymentAuthoritative, durableOrderStorageEnabled, getDurableOrder, listDurableOrders, saveDurableOrder, softDeleteDurableOrder, markDurableOrderPaymentVerified } from '../dist/server.cjs';
+import { authService, paymentLedgerRepo, pstpAuditRepo, idempotencyRepo, verifyPiPaymentAuthoritative, durableOrderStorageEnabled, getDurableOrder, listDurableOrders, saveDurableOrder, createDurableOrderWithStockReservation, softDeleteDurableOrder, markDurableOrderPaymentVerified } from '../dist/server.cjs';
 import { listDurableVendorApplications } from '../dist/server.cjs';
-import { durableProductStorageEnabled, getDurableProduct, reserveDurableProductStockBatch } from '../dist/server.cjs';
+import { durableProductStorageEnabled, getDurableProduct } from '../dist/server.cjs';
 import type { Order, OrderItem, PstpOrderStatus } from '../src/types';
 import { isAllowedOrderTransition, isAllowedSellerTransition, expectedCarrierTransition } from '../src/modules/orders/lifecycle';
 
@@ -851,10 +851,10 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
           securityFlag: false,
         };
 
-        const reserved = await reserveDurableProductStockBatch([...physicalReservations.entries()].map(([id, quantity]) => ({ id, quantity })));
-        if (!reserved && physicalReservations.size) throw new Error('INSUFFICIENT_STOCK');
-
-        const saved = await saveDurableOrder(order);
+        const saved = await createDurableOrderWithStockReservation(
+          order,
+          [...physicalReservations.entries()].map(([id, quantity]) => ({ id, quantity }))
+        );
         const response = { ok: true, order: saved };
         await idempotencyRepo.resolveIdempotencyKey(scopedKey, response);
         return json(res, 201, response);
