@@ -222,26 +222,43 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
 
         const carrierEventTimestamp = String(shipment?.status?.timestamp || '').trim() || undefined;
         const timestamp = new Date().toISOString();
-        const updated = await saveDurableOrder({
-          ...order,
-          pstpStatus: nextStatus,
-          updatedAt: timestamp,
-          escrowStatus: nextStatus === 'Delivered' ? 'delivered' : 'shipped',
-          timeline: [
-            ...(Array.isArray(order.timeline) ? order.timeline : []),
-            {
-              status: nextStatus,
-              timestamp,
-              actor: 'DHL',
-              actorRole: 'system',
-              note: 'DHL Unified Push evidence accepted; dhl-event:' + eventId,
-              carrier: 'DHL',
-              ...(carrierEventTimestamp ? { carrierEventTimestamp } : {}),
-              trackingNumber,
-              location: shipment?.status?.location?.address || undefined
+        let updated;
+        try {
+          updated = await saveDurableOrder({
+            ...order,
+            pstpStatus: nextStatus,
+            updatedAt: timestamp,
+            escrowStatus: nextStatus === 'Delivered' ? 'delivered' : 'shipped',
+            timeline: [
+              ...(Array.isArray(order.timeline) ? order.timeline : []),
+              {
+                status: nextStatus,
+                timestamp,
+                actor: 'DHL',
+                actorRole: 'system',
+                note: 'DHL Unified Push evidence accepted; dhl-event:' + eventId,
+                carrier: 'DHL',
+                ...(carrierEventTimestamp ? { carrierEventTimestamp } : {}),
+                trackingNumber,
+                location: shipment?.status?.location?.address || undefined
+              }
+            ]
+          });
+        } catch (error) {
+          if (error instanceof Error && error.message === 'ORDER_WRITE_CONFLICT') {
+            const latest = await getDurableOrder(order.id);
+            const alreadyAccepted = (Array.isArray(latest?.timeline) ? latest.timeline : []).some((entry: any) =>
+              String(entry?.note || '').includes('dhl-event:' + eventId)
+            );
+            if (alreadyAccepted) {
+              results.push({ orderId: order.id, trackingNumber, status: 'duplicate' });
+              continue;
             }
-          ]
-        });
+            results.push({ orderId: order.id, trackingNumber, status: 'conflict', reason: 'ORDER_WRITE_CONFLICT' });
+            continue;
+          }
+          throw error;
+        }
 
         pstpAuditRepo.appendLog({
           orderId: order.id,
@@ -314,22 +331,35 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       }
 
       const timestamp = new Date().toISOString();
-      const updated = await saveDurableOrder({
-        ...order,
-        pstpStatus: nextStatus,
-        updatedAt: timestamp,
-        escrowStatus: nextStatus === 'Delivered' ? 'delivered' : 'shipped',
-        timeline: [
-          ...(Array.isArray(order.timeline) ? order.timeline : []),
-          {
-            status: nextStatus,
-            timestamp,
-            actor: carrier,
-            actorRole: 'system',
-            note: `Carrier evidence accepted; carrier-event:${eventId}`
-          }
-        ]
-      });
+      let updated;
+      try {
+        updated = await saveDurableOrder({
+          ...order,
+          pstpStatus: nextStatus,
+          updatedAt: timestamp,
+          escrowStatus: nextStatus === 'Delivered' ? 'delivered' : 'shipped',
+          timeline: [
+            ...(Array.isArray(order.timeline) ? order.timeline : []),
+            {
+              status: nextStatus,
+              timestamp,
+              actor: carrier,
+              actorRole: 'system',
+              note: `Carrier evidence accepted; carrier-event:${eventId}`
+            }
+          ]
+        });
+      } catch (error) {
+        if (error instanceof Error && error.message === 'ORDER_WRITE_CONFLICT') {
+          const latest = await getDurableOrder(order.id);
+          const alreadyAccepted = (Array.isArray(latest?.timeline) ? latest.timeline : []).some((entry: any) =>
+            String(entry?.note || '').includes(`carrier-event:${eventId}`)
+          );
+          if (alreadyAccepted) return json(res, 200, { ok: true, duplicate: true, order: latest });
+          return json(res, 409, { ok: false, error: 'ORDER_WRITE_CONFLICT' });
+        }
+        throw error;
+      }
 
       pstpAuditRepo.appendLog({
         orderId: order.id,
