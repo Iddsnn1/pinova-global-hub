@@ -506,7 +506,39 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       const ledger = txid
         ? paymentLedgerRepo.recordCompletion(paymentId, txid, { orderId: order.id, buyerUsername: order.buyerUsername, amountPi: order.totalPi, piUserUid })
         : paymentLedgerRepo.recordApproval(paymentId, { orderId: order.id, buyerUsername: order.buyerUsername, amountPi: order.totalPi, piUserUid });
-      const updated = await markDurableOrderPaymentVerified(order.id, paymentId, txid || undefined);
+
+      let updated;
+      try {
+        updated = await markDurableOrderPaymentVerified(order.id, paymentId, txid || undefined);
+      } catch (error) {
+        if (error instanceof Error && error.message === 'ORDER_WRITE_CONFLICT') {
+          const latest = await getDurableOrder(order.id);
+          if (
+            latest?.serverVerified === true &&
+            String(latest.piPaymentId || '').trim() === paymentId &&
+            (!txid || !latest.piTxid || String(latest.piTxid).trim() === txid)
+          ) {
+            return json(res, 200, {
+              ok: true,
+              verified: true,
+              duplicate: true,
+              order: latest,
+              serverAuthoritative: true,
+              escrowStatus: latest.escrowStatus,
+              pstpStatus: latest.pstpStatus,
+              paymentLedger: paymentLedgerRepo.findByPaymentId(paymentId) || ledger
+            });
+          }
+          return json(res, 409, {
+            ok: false,
+            verified: false,
+            error: 'ORDER_WRITE_CONFLICT',
+            currentStatus: latest?.pstpStatus || null,
+            message: 'Order changed while payment verification was being committed. Refresh and retry only if the payment is not already verified.'
+          });
+        }
+        throw error;
+      }
       if (!updated) return json(res, 404, { ok: false, verified: false, error: 'ORDER_NOT_FOUND' });
       pstpAuditRepo.appendLog({ orderId: order.id, paymentId, actor: 'system', actorRole: 'system', action: 'PAYMENT_SERVER_VERIFIED', details: `Pi payment server-verified (${verification.source}); PSTP escrow protection activated.`, ipAddress: 'server', deviceInfo: 'PiNova PSTP Payment Verification Service' });
       return json(res, 200, { ok: true, verified: true, escrowStatus: updated?.escrowStatus, pstpStatus: updated?.pstpStatus, order: updated, paymentLedger: ledger });
