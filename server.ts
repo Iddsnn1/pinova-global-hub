@@ -5907,4 +5907,5 @@ export default app;
 
 
 export { durableProductStorageEnabled, getDurableProduct, listDurableProducts, saveDurableProduct, updateDurableProductAvailability, reserveDurableProductStockBatch, softDeleteDurableProduct, deleteDurableProductBlob };
-export { durableOrderStorageEnabled, getDurableOrder, listDurableOrders, saveDurableOrder, markDurableOrderPaymentVerified, softDeleteDurableOrder };\nexport { durableVendorStorageEnabled, getDurableVendorApplication, getDurableVendorApplicationByIdentity, listDurableVendorApplications, saveDurableVendorApplication };
+export { durableOrderStorageEnabled, getDurableOrder, listDurableOrders, saveDurableOrder, markDurableOrderPaymentVerified, softDeleteDurableOrder };
+export { durableVendorStorageEnabled, getDurableVendorApplication, getDurableVendorApplicationByIdentity, listDurableVendorApplications, saveDurableVendorApplication };
