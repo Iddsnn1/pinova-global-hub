@@ -72,6 +72,7 @@ export async function createDurableOrderWithIdempotency(
 
   const reservationPayload = JSON.stringify(Array.from(merged, ([id, quantity]) => ({ id, quantity })));
   const data = JSON.stringify(storageSnapshot(p));
+  const responseData = JSON.stringify({ ok: true, order: p });
   const totalPiDb = piDecimalForStorage(p.totalPi);
   const reservationToken = randomUUID();
   const sql = getNeonSql();
@@ -143,7 +144,7 @@ export async function createDurableOrderWithIdempotency(
     finalized AS (
       UPDATE order_idempotency oi
       SET status = 'RESOLVED',
-          result = jsonb_build_object('ok', true, 'order', ${data}::jsonb)
+          result = ${responseData}::jsonb
       WHERE oi.idempotency_key = ${cleanKey}
         AND oi.reservation_token = ${reservationToken}
         AND (SELECT COUNT(*) FROM inserted) = 1
