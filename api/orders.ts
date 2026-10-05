@@ -479,7 +479,20 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       const order = await getDurableOrder(orderId);
       if (!order) return json(res, 404, { ok: false, error: 'ORDER_NOT_FOUND' });
       if (order.buyerUsername !== user.username && !(user.roles || []).includes('PLATFORM_ADMIN')) return json(res, 403, { ok: false, error: 'ORDER_ACCESS_DENIED' });
-      if (order.serverVerified === true) return json(res, 200, { ok: true, verified: true, order });
+      if (order.serverVerified === true) {
+        const body = await readJson(req);
+        const requestedPaymentId = String(body.paymentId || '').trim();
+        if (requestedPaymentId && requestedPaymentId !== String(order.piPaymentId || '').trim()) {
+          return json(res, 409, {
+            ok: false,
+            verified: false,
+            error: 'PI_PAYMENT_ALREADY_VERIFIED_WITH_DIFFERENT_PAYMENT',
+            currentPaymentIdBound: true,
+            message: 'This order is already server-verified with a different Pi payment. A new payment cannot be rebound to the order.'
+          });
+        }
+        return json(res, 200, { ok: true, verified: true, duplicate: true, order, serverAuthoritative: true });
+      }
 
       const body = await readJson(req);
       const paymentId = String(body.paymentId || '').trim();
