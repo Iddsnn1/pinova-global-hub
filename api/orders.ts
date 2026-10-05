@@ -557,24 +557,38 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
             ? 'shipped'
             : 'in_escrow';
 
-      const updated = await saveDurableOrder({
-        ...order,
-        pstpStatus: nextStatus,
-        escrowStatus,
-        ...(carrier ? { carrier } : {}),
-        ...(trackingNumber ? { trackingNumber } : {}),
-        updatedAt: timestamp,
-        timeline: [
-          ...(Array.isArray(order.timeline) ? order.timeline : []),
-          {
-            status: nextStatus,
-            timestamp,
-            actor: user.username,
-            actorRole: 'seller',
-            note: String(body.note || 'Seller advanced fulfillment to ' + nextStatus + '.'),
-          },
-        ],
-      });
+      let updated;
+      try {
+        updated = await saveDurableOrder({
+          ...order,
+          pstpStatus: nextStatus,
+          escrowStatus,
+          ...(carrier ? { carrier } : {}),
+          ...(trackingNumber ? { trackingNumber } : {}),
+          updatedAt: timestamp,
+          timeline: [
+            ...(Array.isArray(order.timeline) ? order.timeline : []),
+            {
+              status: nextStatus,
+              timestamp,
+              actor: user.username,
+              actorRole: 'seller',
+              note: String(body.note || 'Seller advanced fulfillment to ' + nextStatus + '.'),
+            },
+          ],
+        });
+      } catch (error) {
+        if (error instanceof Error && error.message === 'ORDER_WRITE_CONFLICT') {
+          const latest = await getDurableOrder(order.id);
+          return json(res, 409, {
+            ok: false,
+            error: 'ORDER_WRITE_CONFLICT',
+            currentStatus: latest?.pstpStatus || null,
+            message: 'Order changed while this seller transition was being processed. Refresh and retry from the current lifecycle state.'
+          });
+        }
+        throw error;
+      }
 
       pstpAuditRepo.appendLog({
         orderId: order.id,
