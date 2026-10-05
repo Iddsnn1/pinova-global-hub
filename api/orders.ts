@@ -4,7 +4,7 @@ import { authService, paymentLedgerRepo, pstpAuditRepo, idempotencyRepo, verifyP
 import { listDurableVendorApplications } from '../dist/server.cjs';
 import { durableProductStorageEnabled, getDurableProduct, reserveDurableProductStockBatch } from '../dist/server.cjs';
 import type { Order, OrderItem, PstpOrderStatus } from '../src/types';
-import { isAllowedSellerTransition, expectedCarrierTransition } from '../src/modules/orders/lifecycle';
+import { isAllowedOrderTransition, isAllowedSellerTransition, expectedCarrierTransition } from '../src/modules/orders/lifecycle';
 
 function json(res: ServerResponse, status: number, body: unknown) {
   res.statusCode = status;
@@ -749,8 +749,11 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         return json(res, 403, { ok: false, error: 'SELLER_LIFECYCLE_REQUIRES_FULFILLMENT_OR_CARRIER_EVIDENCE' });
       }
       const allowedBuyerStatuses: PstpOrderStatus[] = ['Cancelled', 'Refund Requested', 'Disputed'];
-      if (!allowedBuyerStatuses.includes(nextStatus) && !roles.includes('PLATFORM_ADMIN') && !roles.includes('COMPLIANCE_OFFICER')) {
+      if (!allowedBuyerStatuses.includes(nextStatus)) {
         return json(res, 403, { ok: false, error: 'ORDER_STATUS_CHANGE_NOT_ALLOWED' });
+      }
+      if (!isAllowedOrderTransition(order.pstpStatus, nextStatus)) {
+        return json(res, 409, { ok: false, error: 'INVALID_ORDER_LIFECYCLE_TRANSITION', from: order.pstpStatus, to: nextStatus });
       }
 
       // Buyer Confirmation and Completed are authoritative lifecycle outcomes.
@@ -796,7 +799,8 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         });
       }
 
-      const escrowStatus = body.escrowStatus || order.escrowStatus;
+      // Escrow state is server-controlled; never trust a client-supplied escrowStatus.
+      const escrowStatus = order.escrowStatus;
       const timestamp = new Date().toISOString();
       const updated = await saveDurableOrder({
         ...order,
