@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import { createHash, randomBytes, createHmac, timingSafeEqual } from 'crypto';
-import { authService, paymentLedgerRepo, pstpAuditRepo, idempotencyRepo, verifyPiPaymentAuthoritative, durableOrderStorageEnabled, getDurableOrder, listDurableOrders, saveDurableOrder, createDurableOrderWithStockReservation, softDeleteDurableOrder, markDurableOrderPaymentVerified } from '../dist/server.cjs';
+import { authService, paymentLedgerRepo, pstpAuditRepo, verifyPiPaymentAuthoritative, durableOrderStorageEnabled, getDurableOrder, listDurableOrders, saveDurableOrder, createDurableOrderWithIdempotency, softDeleteDurableOrder, markDurableOrderPaymentVerified } from '../dist/server.cjs';
 import { listDurableVendorApplications } from '../dist/server.cjs';
 import { durableProductStorageEnabled, getDurableProduct } from '../dist/server.cjs';
 import type { Order, OrderItem, PstpOrderStatus } from '../src/types';
@@ -766,12 +766,6 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       if (!key) return json(res, 400, { ok: false, error: 'IDEMPOTENCY_KEY_REQUIRED' });
       if (key.length > 200) return json(res, 400, { ok: false, error: 'INVALID_IDEMPOTENCY_KEY' });
 
-      const scopedKey = `${user.username}:orders:${key}`;
-      const reservation = await idempotencyRepo.reserveIdempotencyKey(scopedKey, 'order-create:v1', requestHash(body));
-      if (reservation.status === 'RESOLVED') return json(res, 200, reservation.cachedResult);
-      if (reservation.status === 'IN_PROGRESS') return json(res, 409, { ok: false, error: 'ORDER_REQUEST_IN_PROGRESS' });
-      if (reservation.status === 'CONFLICT') return json(res, 409, { ok: false, error: 'IDEMPOTENCY_KEY_PAYLOAD_CONFLICT' });
-
       try {
         const items: OrderItem[] = [];
         let subtotalPi = 0;
@@ -851,15 +845,18 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
           securityFlag: false,
         };
 
-        const saved = await createDurableOrderWithStockReservation(
+        const result = await createDurableOrderWithIdempotency(
           order,
-          [...physicalReservations.entries()].map(([id, quantity]) => ({ id, quantity }))
+          [...physicalReservations.entries()].map(([id, quantity]) => ({ id, quantity })),
+          `${user.username}:orders:${key}`,
+          'order-create:v1',
+          requestHash(body)
         );
-        const response = { ok: true, order: saved };
-        await idempotencyRepo.resolveIdempotencyKey(scopedKey, response);
+        if (result.status === 'RESOLVED') return json(res, 200, result.cachedResult);
+        if (result.status === 'CONFLICT') return json(res, 409, { ok: false, error: 'IDEMPOTENCY_KEY_PAYLOAD_CONFLICT' });
+        const response = { ok: true, order: result.order };
         return json(res, 201, response);
       } catch (error) {
-        await idempotencyRepo.releaseIdempotencyKey(scopedKey);
         return json(res, 409, { ok: false, error: error instanceof Error ? error.message : 'ORDER_CREATE_FAILED' });
       }
     }
