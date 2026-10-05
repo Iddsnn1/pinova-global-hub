@@ -57,5 +57,12 @@ assert(!isAllowedOrderTransition('Shipped', 'Delivered'), 'Global lifecycle reje
 assert(!isAllowedOrderTransition('In Transit', 'Delivered'), 'Global lifecycle rejects direct In Transit -> Delivered');
 assert(!isAllowedOrderTransition('Packed', 'Out for Delivery'), 'Global lifecycle rejects direct Packed -> Out for Delivery');
 
+
+assert(isAllowedOrderTransition('Delivered', 'Refund Requested'), 'Delivered -> Refund Requested is allowed');
+assert(isAllowedOrderTransition('Delivered', 'Disputed'), 'Delivered -> Disputed is allowed');
+assert(!isAllowedOrderTransition('Shipped', 'Refund Requested'), 'Shipped -> Refund Requested is rejected');
+assert(!isAllowedOrderTransition('Payment Verified', 'Refund Requested'), 'Payment Verified -> Refund Requested is rejected');
+assert(!isAllowedOrderTransition('Seller Accepted', 'Disputed'), 'Seller Accepted -> Disputed is rejected');
+
 console.log(`Lifecycle contract result: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);
