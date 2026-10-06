@@ -48,11 +48,18 @@ jobs:
           npx --yes vercel@latest env pull .env.production --environment production --token "$VERCEL_TOKEN"
           node --input-type=module <<'NODE'
           import fs from 'node:fs';
-          import dotenv from 'dotenv';
-          const env = dotenv.parse(fs.readFileSync('/tmp/pinova-vercel/.env.production', 'utf8'));
+          const text = fs.readFileSync('/tmp/pinova-vercel/.env.production', 'utf8');
+          const env = Object.fromEntries(text.split(/\r?\n/).filter(Boolean).map(line => {
+            const i = line.indexOf('=');
+            if (i < 0) return [line, ''];
+            const key = line.slice(0, i).trim();
+            let value = line.slice(i + 1).trim();
+            if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) value = value.slice(1, -1);
+            return [key, value];
+          }));
           const required = ['PRIVATE_BLOB_READ_WRITE_TOKEN', 'PRIVATE_BLOB_STORE_ID'];
           for (const key of required) {
-            if (!String(env[key] ?? '').trim()) throw new Error(`VERCEL_PRODUCTION_ENV_MISSING: ${key}`);
+            if (!String(env[key] ?? '').trim() || env[key] === '[SENSITIVE]') throw new Error(`VERCEL_PRODUCTION_ENV_MISSING: ${key}`);
           }
           if (env.PRIVATE_BLOB_STORE_ID !== 'store_zypKOROZmcB8ihIX') {
             throw new Error(`LEGACY_BLOB_STORE_MISMATCH: expected store_zypKOROZmcB8ihIX, got ${env.PRIVATE_BLOB_STORE_ID}`);
