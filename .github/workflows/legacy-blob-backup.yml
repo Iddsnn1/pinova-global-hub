@@ -33,14 +33,39 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Verify private legacy Blob credential
+      - name: Pull production Blob credentials from Vercel
         env:
-          PRIVATE_BLOB_READ_WRITE_TOKEN: ${{ secrets.PRIVATE_BLOB_READ_WRITE_TOKEN }}
-          PRIVATE_BLOB_STORE_ID: ${{ secrets.PRIVATE_BLOB_STORE_ID }}
+          VERCEL_TOKEN: ${{ secrets.Vercel_Token }}
+        run: |
+          set -euo pipefail
+          test -n "${VERCEL_TOKEN:-}" || {
+            echo "VERCEL_TOKEN_MISSING: Vercel_Token is required to read the production Blob credential"
+            exit 1
+          }
+          mkdir -p /tmp/pinova-vercel
+          cd /tmp/pinova-vercel
+          npx --yes vercel@latest link --yes --project pinova-global-hub --scope iddsnn1s-projects --token "$VERCEL_TOKEN"
+          npx --yes vercel@latest env pull .env.production --environment production --token "$VERCEL_TOKEN"
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import dotenv from 'dotenv';
+          const env = dotenv.parse(fs.readFileSync('/tmp/pinova-vercel/.env.production', 'utf8'));
+          const required = ['PRIVATE_BLOB_READ_WRITE_TOKEN', 'PRIVATE_BLOB_STORE_ID'];
+          for (const key of required) {
+            if (!String(env[key] ?? '').trim()) throw new Error(`VERCEL_PRODUCTION_ENV_MISSING: ${key}`);
+          }
+          if (env.PRIVATE_BLOB_STORE_ID !== 'store_zypKOROZmcB8ihIX') {
+            throw new Error(`LEGACY_BLOB_STORE_MISMATCH: expected store_zypKOROZmcB8ihIX, got ${env.PRIVATE_BLOB_STORE_ID}`);
+          }
+          fs.appendFileSync(process.env.GITHUB_ENV, `PRIVATE_BLOB_READ_WRITE_TOKEN=${env.PRIVATE_BLOB_READ_WRITE_TOKEN}\n`);
+          fs.appendFileSync(process.env.GITHUB_ENV, `PRIVATE_BLOB_STORE_ID=${env.PRIVATE_BLOB_STORE_ID}\n`);
+          NODE
+
+      - name: Verify private legacy Blob credential
         run: |
           set -euo pipefail
           test -n "${PRIVATE_BLOB_READ_WRITE_TOKEN:-}" || {
-            echo "LEGACY_BLOB_TOKEN_MISSING: PRIVATE_BLOB_READ_WRITE_TOKEN is unavailable from LEGACY_BLOB_BACKUP"
+            echo "LEGACY_BLOB_TOKEN_MISSING: production PRIVATE_BLOB_READ_WRITE_TOKEN is unavailable"
             exit 1
           }
           test "${PRIVATE_BLOB_STORE_ID:-}" = "store_zypKOROZmcB8ihIX" || {
@@ -48,12 +73,10 @@ jobs:
             exit 1
           }
           echo "Legacy Blob credential target verified: ${PRIVATE_BLOB_STORE_ID}"
-          echo "Credential mode: dedicated private Blob read-write token"
+          echo "Credential source: Vercel Production environment"
 
       - name: Export legacy Blob data (read-only operations)
         env:
-          PRIVATE_BLOB_READ_WRITE_TOKEN: ${{ secrets.PRIVATE_BLOB_READ_WRITE_TOKEN }}
-          PRIVATE_BLOB_STORE_ID: ${{ secrets.PRIVATE_BLOB_STORE_ID }}
           LEGACY_BLOB_BACKUP_FILE: /tmp/pinova-legacy-blob-backup.json
         run: |
           set -euo pipefail
@@ -62,7 +85,7 @@ jobs:
             exit 1
           }
           test -n "${PRIVATE_BLOB_READ_WRITE_TOKEN:-}" || {
-            echo "LEGACY_BLOB_TOKEN_MISSING: PRIVATE_BLOB_READ_WRITE_TOKEN is required"
+            echo "LEGACY_BLOB_TOKEN_MISSING: production PRIVATE_BLOB_READ_WRITE_TOKEN is required"
             exit 1
           }
           npm run export:legacy-blob
