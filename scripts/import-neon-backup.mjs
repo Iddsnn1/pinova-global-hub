@@ -111,6 +111,54 @@ const assertNoExistingConflicts = async (table, records, idField) => {
   }
 };
 
+const assertNoUniqueKeyConflicts = async () => {
+  const paymentIds = orders.map((o) => String(o.piPaymentId ?? '').trim()).filter(Boolean);
+  if (paymentIds.length) {
+    const payload = JSON.stringify(paymentIds);
+    const rows = await sql`SELECT o.id, o.pi_payment_id FROM orders o JOIN jsonb_array_elements_text(${payload}::jsonb) x(value) ON x.value=o.pi_payment_id`;
+    for (const row of rows) {
+      const source = orders.find((o) => String(o.piPaymentId ?? '').trim() === String(row.pi_payment_id));
+      if (source && String(source.id) !== String(row.id)) {
+        throw new Error(`NEON_UNIQUE_CONFLICT: orders pi_payment_id=${row.pi_payment_id} already belongs to id=${row.id}`);
+      }
+    }
+  }
+
+  const usernames = vendorApplications.map((a) => String(a.pioneerUsername ?? '').trim()).filter(Boolean);
+  if (usernames.length) {
+    const payload = JSON.stringify(usernames);
+    const rows = await sql`SELECT a.id, a.pioneer_username FROM vendor_applications a JOIN jsonb_array_elements_text(${payload}::jsonb) x(value) ON lower(x.value)=lower(a.pioneer_username)`;
+    for (const row of rows) {
+      const source = vendorApplications.find((a) => String(a.pioneerUsername ?? '').trim().toLowerCase() === String(row.pioneer_username).trim().toLowerCase());
+      if (source && String(source.id) !== String(row.id)) {
+        throw new Error(`NEON_UNIQUE_CONFLICT: vendor_applications pioneer_username=${row.pioneer_username} already belongs to id=${row.id}`);
+      }
+    }
+  }
+
+  const seenPayments = new Map();
+  for (const o of orders) {
+    const key = String(o.piPaymentId ?? '').trim();
+    if (!key) continue;
+    const previous = seenPayments.get(key);
+    if (previous && String(previous.id) !== String(o.id)) {
+      throw new Error(`BACKUP_UNIQUE_CONFLICT: orders piPaymentId=${key} appears for multiple record IDs`);
+    }
+    seenPayments.set(key, o);
+  }
+
+  const seenUsernames = new Map();
+  for (const a of vendorApplications) {
+    const key = String(a.pioneerUsername ?? '').trim().toLowerCase();
+    if (!key) continue;
+    const previous = seenUsernames.get(key);
+    if (previous && String(previous.id) !== String(a.id)) {
+      throw new Error(`BACKUP_UNIQUE_CONFLICT: vendorApplications pioneerUsername=${a.pioneerUsername} appears for multiple record IDs`);
+    }
+    seenUsernames.set(key, a);
+  }
+};
+
 const requiredString = (value, field, index, collection) => {
   const v = String(value ?? '').trim();
   if (!v) throw new Error(`${collection}[${index}].${field} is required`);
@@ -147,6 +195,7 @@ for (const entry of manifest) {
 await assertNoExistingConflicts('products', products, 'id');
 await assertNoExistingConflicts('orders', orders, 'id');
 await assertNoExistingConflicts('vendor_applications', vendorApplications, 'id');
+await assertNoUniqueKeyConflicts();
 
 for (let i = 0; i < products.length; i += 1) {
   const p = products[i];
