@@ -122,7 +122,7 @@ export const DigitalReceiptVerifier: React.FC = () => {
                     Valid Institutional Fee Clearance
                   </h4>
                   <p className="text-xs text-slate-300 mt-0.5">
-                    This document matches an authentic, settled fee transaction stored in the immutable PiNova audit register.
+                    This document matches an authentic, settled fee transaction verified against the server-side PiNova receipt registry.
                   </p>
                 </div>
               </div>
