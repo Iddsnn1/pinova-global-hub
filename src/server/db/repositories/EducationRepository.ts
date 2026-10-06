@@ -939,9 +939,9 @@ export class EducationRepository {
       totalStudentsEnrolled: students.length,
       totalAdmissionsApplications: admissions.length,
       financials: {
-        totalBilledUsd: totalBilled,
-        totalCollectedUsd: totalCollected,
-        outstandingBalanceUsd: outstanding,
+        totalBilledPi: totalBilled,
+        totalCollectedPi: totalCollected,
+        outstandingBalancePi: outstanding,
         collectionRatePercent: totalBilled > 0 ? Math.round((totalCollected / totalBilled) * 100) : 100,
         paidInvoicesCount,
         pendingInvoicesCount
