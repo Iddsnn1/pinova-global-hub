@@ -33,15 +33,17 @@ export const EducationMarketplace: React.FC = () => {
         categoryFilter === 'all' ? undefined : categoryFilter,
         tierFilter === 'all' ? undefined : tierFilter
       );
-      const supportedDiscountTiers = new Set([
-        'secondary',
-        'tertiary',
-        'technical_vocational'
-      ]);
+      // All Levels means all Education Marketplace materials, not a school tier.
+      // A specific level is matched against the item's primary tier or any declared
+      // cross-level applicability so one material can legitimately serve multiple levels.
       setItems(
         tierFilter === 'all'
-          ? data.filter((item) => supportedDiscountTiers.has(item.tier))
-          : data
+          ? data
+          : data.filter(
+              (item) =>
+                item.tier === tierFilter ||
+                item.applicableTiers?.includes(tierFilter as EducationMarketplaceItem['tier'])
+            )
       );
     } catch (e) {
       console.error(e);
@@ -96,9 +98,12 @@ export const EducationMarketplace: React.FC = () => {
             className="bg-slate-900 border border-slate-700 rounded-lg p-1.5 text-slate-200 focus:outline-none focus:border-amber-500"
           >
             <option value="all">All Levels</option>
+            <option value="early_childhood">Early Childhood / Nursery</option>
+            <option value="primary">Primary</option>
             <option value="secondary">Secondary</option>
-            <option value="tertiary">University</option>
+            <option value="tertiary">Higher Education / University</option>
             <option value="technical_vocational">Technical and Vocational</option>
+            <option value="professional_continuing">Professional & Continuing</option>
           </select>
         </div>
       </div>
