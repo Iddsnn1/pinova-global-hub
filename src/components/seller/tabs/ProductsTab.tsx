@@ -16,8 +16,8 @@ interface ProductsTabProps {
   onDeleteProduct: (productId: string) => void;
 }
 
-type ProductDraft = { title: string; description: string; category: ProductCategory; marketplaceCategory: string; subcategory: string; pricePi: string; stock: string; imageUrl: string };
-const EMPTY_DRAFT: ProductDraft = { title: '', description: '', category: 'physical', marketplaceCategory: MARKETPLACE_CATEGORIES[0]?.id || 'other_general', subcategory: '', pricePi: '', stock: '0', imageUrl: '' };
+type ProductDraft = { title: string; description: string; category: ProductCategory; marketplaceCategory: string; subcategory: string; pricePi: string; stock: string; imageUrl: string; educationTier: string; educationLevelId: string; educationGradeLevel: string; educationCountryCode: string; educationCurriculumId: string; educationSubjects: string };
+const EMPTY_DRAFT: ProductDraft = { title: '', description: '', category: 'physical', marketplaceCategory: MARKETPLACE_CATEGORIES[0]?.id || 'other_general', subcategory: '', pricePi: '', stock: '0', imageUrl: '', educationTier: '', educationLevelId: '', educationGradeLevel: '', educationCountryCode: '', educationCurriculumId: '', educationSubjects: '' };
 
 export const ProductsTab: React.FC<ProductsTabProps> = ({ products, openCreateOnMount = false, onCreateFormOpened, onProductCreated, onEditProduct, onDeleteProduct }) => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -116,7 +116,13 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({ products, openCreateOn
       subcategory: product.subcategory || '',
       pricePi: String(product.pricePi ?? ''),
       stock: String(product.stock ?? 0),
-      imageUrl: product.images?.[0] || ''
+      imageUrl: product.images?.[0] || '',
+      educationTier: product.educationTier || '',
+      educationLevelId: product.educationLevelId || '',
+      educationGradeLevel: product.educationGradeLevel || '',
+      educationCountryCode: product.educationCountryCode || '',
+      educationCurriculumId: product.educationCurriculumId || '',
+      educationSubjects: Array.isArray(product.educationSubjects) ? product.educationSubjects.join(', ') : ''
     } : EMPTY_DRAFT);
     setImageFile(null);
     setImagePreview(product?.images?.[0] || null);
@@ -200,6 +206,8 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({ products, openCreateOn
     if (!description) return setSubmitError('Product description is required.');
     if (!Number.isFinite(pricePi) || pricePi <= 0) return setSubmitError('Enter a valid Pi price greater than 0.');
     if (!Number.isInteger(stock) || stock < 0) return setSubmitError('Inventory must be a whole number of 0 or more.');
+    const isEducationListing = draft.marketplaceCategory === 'education';
+    if (isEducationListing && !draft.educationTier) return setSubmitError('Select the education level this learning material serves.');
     setIsSubmitting(true);
     try {
       let uploadedImageUrl = draft.imageUrl.trim();
@@ -226,8 +234,22 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({ products, openCreateOn
       const durableEditId = String(editingProductId || '').trim();
       if (isEditMode && !durableEditId) throw new Error('PRODUCT_ID_MISSING');
       const result = isEditMode
-        ? await updateSellerProduct(durableEditId, { title, description, pricePi, category: draft.category, marketplaceCategory: draft.marketplaceCategory, subcategory: draft.subcategory.trim(), images: uploadedImageUrl ? [uploadedImageUrl] : (editingProduct?.images || []), stock, productType: draft.category === 'physical' ? 'physical' : draft.category === 'digital' ? 'digital' : 'service' })
-        : await createSellerProduct({ title, description, pricePi, category: draft.category, marketplaceCategory: draft.marketplaceCategory, subcategory: draft.subcategory.trim(), images: uploadedImageUrl ? [uploadedImageUrl] : [], stock, features: [], tags: [], productType: draft.category === 'physical' ? 'physical' : draft.category === 'digital' ? 'digital' : 'service' });
+        ? await updateSellerProduct(durableEditId, { title, description, pricePi, category: draft.category, marketplaceCategory: draft.marketplaceCategory, subcategory: draft.subcategory.trim(), images: uploadedImageUrl ? [uploadedImageUrl] : (editingProduct?.images || []), stock,
+          educationTier: isEducationListing ? draft.educationTier : undefined,
+          educationLevelId: isEducationListing ? draft.educationLevelId.trim() || undefined : undefined,
+          educationGradeLevel: isEducationListing ? draft.educationGradeLevel.trim() || undefined : undefined,
+          educationCountryCode: isEducationListing ? draft.educationCountryCode.trim().toUpperCase() || undefined : undefined,
+          educationCurriculumId: isEducationListing ? draft.educationCurriculumId.trim() || undefined : undefined,
+          educationSubjects: isEducationListing ? draft.educationSubjects.split(',').map(s => s.trim()).filter(Boolean) : undefined,
+          productType: draft.category === 'physical' ? 'physical' : draft.category === 'digital' ? 'digital' : 'service' })
+        : await createSellerProduct({ title, description, pricePi, category: draft.category, marketplaceCategory: draft.marketplaceCategory, subcategory: draft.subcategory.trim(), images: uploadedImageUrl ? [uploadedImageUrl] : [], stock,
+          educationTier: isEducationListing ? draft.educationTier : undefined,
+          educationLevelId: isEducationListing ? draft.educationLevelId.trim() || undefined : undefined,
+          educationGradeLevel: isEducationListing ? draft.educationGradeLevel.trim() || undefined : undefined,
+          educationCountryCode: isEducationListing ? draft.educationCountryCode.trim().toUpperCase() || undefined : undefined,
+          educationCurriculumId: isEducationListing ? draft.educationCurriculumId.trim() || undefined : undefined,
+          educationSubjects: isEducationListing ? draft.educationSubjects.split(',').map(s => s.trim()).filter(Boolean) : undefined,
+          features: [], tags: [], productType: draft.category === 'physical' ? 'physical' : draft.category === 'digital' ? 'digital' : 'service' });
       if (!result.ok || !result.product) {
         if (result.status === 403 && result.error === 'MERCHANT_SELLER_ACCESS_REQUIRED') setSubmitError('Seller access denied. Complete merchant verification and activate your store before publishing products.');
         else if (result.status === 401) setSubmitError('Authentication is required. Reconnect your Pi account and try again.');
@@ -345,6 +367,16 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({ products, openCreateOn
           <label className="text-xs font-semibold">Product Type *<select value={draft.category} onChange={e => setDraft(d => ({...d, category: e.target.value as ProductCategory}))} className="mt-1.5 w-full rounded-xl border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 px-3 py-2.5 text-sm"><option value="physical">Physical</option><option value="digital">Digital</option><option value="service">Service</option><option value="airtime">Airtime</option><option value="utility">Utility</option><option value="giftcard">Gift Card</option></select></label>
           <label className="text-xs font-semibold">Marketplace Category *<select required value={draft.marketplaceCategory} onChange={e => setDraft(d => ({...d, marketplaceCategory: e.target.value}))} className="mt-1.5 w-full rounded-xl border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 px-3 py-2.5 text-sm">{MARKETPLACE_CATEGORIES.map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}</select></label>
           <label className="text-xs font-semibold">Subcategory<input value={draft.subcategory} onChange={e => setDraft(d => ({...d, subcategory: e.target.value}))} className="mt-1.5 w-full rounded-xl border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 px-3 py-2.5 text-sm" placeholder="Optional" /></label>
+          {draft.marketplaceCategory === 'education' && <div className="sm:col-span-2 rounded-2xl border border-purple-200 dark:border-purple-900/50 bg-purple-50/50 dark:bg-purple-950/20 p-4 space-y-3">
+            <div><p className="text-xs font-bold text-purple-800 dark:text-purple-200">Education Marketplace classification</p><p className="text-[11px] text-neutral-500 mt-0.5">Map this material to a global education level. Country-specific grade and curriculum labels remain optional.</p></div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label className="text-xs font-semibold">Education Level *<select required value={draft.educationTier} onChange={e => setDraft(d => ({...d, educationTier: e.target.value}))} className="mt-1.5 w-full rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-3 py-2.5 text-sm"><option value="">Select level</option><option value="early_childhood">Early Childhood / Nursery</option><option value="primary">Primary</option><option value="secondary">Secondary</option><option value="tertiary">Higher Education / University</option><option value="technical_vocational">Technical & Vocational</option><option value="professional_continuing">Professional & Continuing</option></select></label>
+              <label className="text-xs font-semibold">Country Code<input value={draft.educationCountryCode} onChange={e => setDraft(d => ({...d, educationCountryCode: e.target.value}))} maxLength={2} className="mt-1.5 w-full rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-3 py-2.5 text-sm uppercase" placeholder="e.g. NG, US, GB" /></label>
+              <label className="text-xs font-semibold">Grade / Year / Class<input value={draft.educationGradeLevel} onChange={e => setDraft(d => ({...d, educationGradeLevel: e.target.value}))} className="mt-1.5 w-full rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-3 py-2.5 text-sm" placeholder="e.g. Primary 4, Grade 4, Year 6" /></label>
+              <label className="text-xs font-semibold">Curriculum / System ID<input value={draft.educationCurriculumId} onChange={e => setDraft(d => ({...d, educationCurriculumId: e.target.value}))} className="mt-1.5 w-full rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-3 py-2.5 text-sm" placeholder="e.g. national, Cambridge, IB" /></label>
+              <label className="sm:col-span-2 text-xs font-semibold">Subjects / Fields<input value={draft.educationSubjects} onChange={e => setDraft(d => ({...d, educationSubjects: e.target.value}))} className="mt-1.5 w-full rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-3 py-2.5 text-sm" placeholder="e.g. Mathematics, Science" /></label>
+            </div>
+          </div>}
           <label className="text-xs font-semibold">Price (π) *<input required type="number" min="0.000001" step="0.000001" value={draft.pricePi} onChange={e => setDraft(d => ({...d, pricePi: e.target.value}))} className="mt-1.5 w-full rounded-xl border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 px-3 py-2.5 text-sm" placeholder="10" /></label>
           <label className="text-xs font-semibold">Inventory *<input required type="number" min="0" step="1" value={draft.stock} onChange={e => setDraft(d => ({...d, stock: e.target.value}))} className="mt-1.5 w-full rounded-xl border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 px-3 py-2.5 text-sm" placeholder="5" /></label>
           <div className="sm:col-span-2 rounded-2xl border border-dashed border-neutral-300 dark:border-neutral-700 bg-neutral-50/70 dark:bg-neutral-800/50 p-4">
