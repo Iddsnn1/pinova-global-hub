@@ -426,15 +426,37 @@ export interface ScholarshipOpportunity {
 }
 
 // Education Marketplace
+export type EducationMarketplaceCategory =
+  | 'textbook'
+  | 'uniform'
+  | 'supplies'
+  | 'software'
+  | 'course'
+  | 'exam_prep'
+  | 'digital_course'
+  | 'hardware';
+
 export interface EducationMarketplaceItem {
   id: string;
   title: string;
-  category: 'textbook' | 'uniform' | 'supplies' | 'software' | 'course' | 'exam_prep';
+  category: EducationMarketplaceCategory;
   publisherOrProvider: string;
   fiatPrice: number;
   currency: string;
   piPrice: number;
   tier: EducationTier;
+  /** Canonical country-neutral education level ID, mapped from the seller's country system. */
+  educationLevelId?: string;
+  /** Local grade/year/class label, e.g. Primary 4, Grade 4, Year 6, JSS 2. */
+  gradeLevel?: string;
+  /** ISO 3166-1 alpha-2 country code for the product's education-system mapping. */
+  countryCode?: string;
+  /** Curriculum/system identifier, e.g. national, Cambridge, IB, American. */
+  curriculumId?: string;
+  /** Subjects/fields this material supports. */
+  subjects?: string[];
+  /** Multiple canonical tiers when a material intentionally spans levels. */
+  applicableTiers?: EducationTier[];
   rating: number;
   reviewsCount: number;
   imageUrl: string;
