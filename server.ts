@@ -3929,6 +3929,29 @@ app.post('/api/education/admissions/:id/status', authenticate, requireRole(['PLA
     }
 
     const admissionForAuthorization = educationRepo.getAdmissionById(id);
+    if (!admissionForAuthorization) {
+      res.status(404).json({ success: false, error: 'APPLICATION_NOT_FOUND' });
+      return;
+    }
+
+    const statusRoles = req.user?.roles || [];
+    const isGlobalAdmissionsAdmin = statusRoles.some((role) =>
+      ['PLATFORM_ADMIN', 'COMPLIANCE_OFFICER', 'COMPLIANCE_ADMIN'].includes(role)
+    );
+    const isInstitutionAdmissionsAdmin = statusRoles.includes('INSTITUTION_ADMIN');
+    if (
+      isInstitutionAdmissionsAdmin &&
+      !isGlobalAdmissionsAdmin &&
+      (!req.user?.institutionId || req.user.institutionId !== admissionForAuthorization.institutionId)
+    ) {
+      res.status(403).json({
+        success: false,
+        error: 'FORBIDDEN',
+        message: 'Institution administrator access is limited to the authenticated institution.'
+      });
+      return;
+    }
+
     const jambAuthorization = await verifyJambCapsAuthorization({
       candidateReference: String(admissionForAuthorization?.jambCandidateReference || ''),
       institutionId: admissionForAuthorization?.institutionId,
@@ -3970,9 +3993,17 @@ app.post('/api/education/admissions/:id/offer/accept', authenticate, async (req:
     const currentUser = String(req.user?.username || '').trim().toLowerCase();
     const applicantEmail = String(admission.applicantEmail || '').trim().toLowerCase();
     const isOwner = Boolean(currentUser && applicantEmail && applicantEmail === currentUser);
-    const isAdmin = (req.user?.roles || []).some((r) => r === 'PLATFORM_ADMIN' || r === 'INSTITUTION_ADMIN');
+    const offerRoles = req.user?.roles || [];
+    const isGlobalAdmin = offerRoles.includes('PLATFORM_ADMIN');
+    const isInstitutionAdmin = offerRoles.includes('INSTITUTION_ADMIN');
+    const institutionScopedAdmin = Boolean(
+      isInstitutionAdmin &&
+      req.user?.institutionId &&
+      req.user.institutionId === admission.institutionId
+    );
+    const isAdmin = isGlobalAdmin || institutionScopedAdmin;
 
-    if (isProduction && !isAdmin && !isOwner) {
+    if (!isAdmin && !isOwner) {
       res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Access denied: You are not authorized to accept this offer.' });
       return;
     }
