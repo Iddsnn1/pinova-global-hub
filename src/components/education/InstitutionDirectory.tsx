@@ -54,6 +54,11 @@ export const InstitutionDirectory: React.FC<InstitutionDirectoryProps> = ({
   const [selectedFaculty, setSelectedFaculty] = useState<string>('');
   const [selectedDepartment, setSelectedDepartment] = useState<string>('');
   const [selectedProgramme, setSelectedProgramme] = useState<string>('');
+  const [availableFaculties, setAvailableFaculties] = useState<UniversityFaculty[]>([]);
+  const [availableDepartments, setAvailableDepartments] = useState<AcademicDepartment[]>([]);
+  const [availableProgrammes, setAvailableProgrammes] = useState<EducationProgramme[]>([]);
+  const [hierarchyLoading, setHierarchyLoading] = useState({ faculties: false, departments: false, programmes: false });
+  const [hierarchyError, setHierarchyError] = useState<string | null>(null);
 
   // Modal internal filter state
   const [modalSearchTerm, setModalSearchTerm] = useState('');
@@ -82,9 +87,6 @@ export const InstitutionDirectory: React.FC<InstitutionDirectoryProps> = ({
     return institutions.find((i) => i.id === selectedHierarchyInstitution) || null;
   }, [institutions, selectedHierarchyInstitution]);
 
-  const availableFaculties = useMemo(() => {
-    return hierarchyInst?.faculties || [];
-  }, [hierarchyInst]);
 
   // Determine institution-appropriate terminology (Faculty vs School vs College vs Division)
   const unitTerm = useMemo(() => {
@@ -107,24 +109,12 @@ export const InstitutionDirectory: React.FC<InstitutionDirectoryProps> = ({
     return availableFaculties.find((f) => f.id === selectedFaculty) || null;
   }, [availableFaculties, selectedFaculty]);
 
-  const availableDepartments = useMemo(() => {
-    return currentFaculty?.departments || [];
-  }, [currentFaculty]);
 
   const currentDepartment = useMemo(() => {
     if (!selectedDepartment) return null;
     return availableDepartments.find((d) => d.id === selectedDepartment) || null;
   }, [availableDepartments, selectedDepartment]);
 
-  const availableProgrammes = useMemo(() => {
-    if (currentDepartment) {
-      return currentDepartment.programmes || [];
-    }
-    if (hierarchyInst?.programmes && (!hierarchyInst.faculties || hierarchyInst.faculties.length === 0)) {
-      return hierarchyInst.programmes;
-    }
-    return [];
-  }, [currentDepartment, hierarchyInst]);
 
   const currentProgramme = useMemo(() => {
     if (!selectedProgramme) return null;
@@ -137,12 +127,19 @@ export const InstitutionDirectory: React.FC<InstitutionDirectoryProps> = ({
     setSelectedFaculty('');
     setSelectedDepartment('');
     setSelectedProgramme('');
+    setAvailableFaculties([]);
+    setAvailableDepartments([]);
+    setAvailableProgrammes([]);
+    setHierarchyError(null);
   };
 
   const handleFacultyChange = (facId: string) => {
     setSelectedFaculty(facId);
     setSelectedDepartment('');
     setSelectedProgramme('');
+    setAvailableDepartments([]);
+    setAvailableProgrammes([]);
+    setHierarchyError(null);
   };
 
   const handleDepartmentChange = (deptId: string) => {
@@ -159,7 +156,77 @@ export const InstitutionDirectory: React.FC<InstitutionDirectoryProps> = ({
     setSelectedFaculty('');
     setSelectedDepartment('');
     setSelectedProgramme('');
+    setAvailableFaculties([]);
+    setAvailableDepartments([]);
+    setAvailableProgrammes([]);
+    setHierarchyError(null);
   };
+
+  useEffect(() => {
+    let active = true;
+    if (!selectedHierarchyInstitution) return;
+    setHierarchyLoading((s) => ({ ...s, faculties: true }));
+    setHierarchyError(null);
+    educationService.getFaculties(selectedHierarchyInstitution).then((data) => {
+      if (!active) return;
+      setAvailableFaculties(data);
+      setHierarchyLoading((s) => ({ ...s, faculties: false }));
+      if (data.length === 0) {
+        setHierarchyLoading((s) => ({ ...s, programmes: true }));
+        educationService.getProgrammes(selectedHierarchyInstitution).then((programmes) => {
+          if (!active) return;
+          setAvailableProgrammes(programmes);
+          setHierarchyLoading((s) => ({ ...s, programmes: false }));
+        }).catch(() => {
+          if (!active) return;
+          setHierarchyLoading((s) => ({ ...s, programmes: false }));
+          setHierarchyError('Authoritative academic hierarchy is currently unavailable for this institution.');
+        });
+      }
+    }).catch(() => {
+      if (!active) return;
+      setAvailableFaculties([]);
+      setHierarchyLoading((s) => ({ ...s, faculties: false }));
+      setHierarchyError('Authoritative academic units are currently unavailable for this institution.');
+    });
+    return () => { active = false; };
+  }, [selectedHierarchyInstitution]);
+
+  useEffect(() => {
+    let active = true;
+    if (!selectedHierarchyInstitution || !selectedFaculty) return;
+    setHierarchyLoading((s) => ({ ...s, departments: true }));
+    setHierarchyError(null);
+    educationService.getDepartments(selectedHierarchyInstitution, selectedFaculty).then((data) => {
+      if (!active) return;
+      setAvailableDepartments(data);
+      setHierarchyLoading((s) => ({ ...s, departments: false }));
+    }).catch(() => {
+      if (!active) return;
+      setAvailableDepartments([]);
+      setHierarchyLoading((s) => ({ ...s, departments: false }));
+      setHierarchyError('Authoritative departments are currently unavailable for this academic unit.');
+    });
+    return () => { active = false; };
+  }, [selectedHierarchyInstitution, selectedFaculty]);
+
+  useEffect(() => {
+    let active = true;
+    if (!selectedHierarchyInstitution || !selectedFaculty || !selectedDepartment) return;
+    setHierarchyLoading((s) => ({ ...s, programmes: true }));
+    setHierarchyError(null);
+    educationService.getProgrammes(selectedHierarchyInstitution, selectedFaculty, selectedDepartment).then((data) => {
+      if (!active) return;
+      setAvailableProgrammes(data);
+      setHierarchyLoading((s) => ({ ...s, programmes: false }));
+    }).catch(() => {
+      if (!active) return;
+      setAvailableProgrammes([]);
+      setHierarchyLoading((s) => ({ ...s, programmes: false }));
+      setHierarchyError('Authoritative programmes are currently unavailable for this department.');
+    });
+    return () => { active = false; };
+  }, [selectedHierarchyInstitution, selectedFaculty, selectedDepartment]);
 
   useEffect(() => {
     loadInstitutions();
@@ -385,8 +452,9 @@ export const InstitutionDirectory: React.FC<InstitutionDirectoryProps> = ({
                 </span>
               </h4>
               <p className="text-xs text-slate-400">
-                Explore verified faculties, schools, departments, and degree curricula with itemized institutional fee schedules.
+                Navigate institution → academic unit → department → programme using authoritative hierarchy data.
               </p>
+              {hierarchyError && <p className="text-[11px] text-amber-300 mt-1">{hierarchyError}</p>}
             </div>
           </div>
 
@@ -449,8 +517,10 @@ export const InstitutionDirectory: React.FC<InstitutionDirectoryProps> = ({
             >
               {!selectedHierarchyInstitution ? (
                 <option value="">Select institution first...</option>
+              ) : hierarchyLoading.faculties ? (
+                <option value="">Loading {unitTerm.plural.toLowerCase()}...</option>
               ) : availableFaculties.length === 0 ? (
-                <option value="">Direct Curricular Tracks (No Faculties)</option>
+                <option value="">No published {unitTerm.plural.toLowerCase()}</option>
               ) : (
                 <>
                   <option value="">Select {unitTerm.singular} ({availableFaculties.length} available)...</option>
@@ -484,6 +554,8 @@ export const InstitutionDirectory: React.FC<InstitutionDirectoryProps> = ({
             >
               {!selectedFaculty ? (
                 <option value="">Select {unitTerm.singular.toLowerCase()} first...</option>
+              ) : hierarchyLoading.departments ? (
+                <option value="">Loading departments...</option>
               ) : availableDepartments.length === 0 ? (
                 <option value="">No departments published</option>
               ) : (
