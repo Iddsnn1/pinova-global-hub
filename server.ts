@@ -3403,7 +3403,7 @@ app.post('/api/education/invoices/pay', paymentRateLimiter, authenticate, async 
     const {
       invoiceId,
       amountPaid,
-      currency = 'USD',
+      currency = 'PI',
       piAmount,
       piPaymentId,
       piTxid,
@@ -3437,7 +3437,7 @@ app.post('/api/education/invoices/pay', paymentRateLimiter, authenticate, async 
       res.status(400).json({
         success: false,
         error: 'AMOUNT_EXCEEDS_BALANCE',
-        message: `Amount $${numericAmount} exceeds current outstanding balance of $${invoice.outstandingBalance.toFixed(2)}`
+        message: `Amount ${numericAmount.toFixed(12)} π exceeds current outstanding balance of ${invoice.outstandingBalance.toFixed(12)} π`
       });
       return;
     }
