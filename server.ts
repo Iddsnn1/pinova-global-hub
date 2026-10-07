@@ -3321,7 +3321,12 @@ app.get('/api/education/invoices', authenticate, (req: AuthenticatedRequest, res
     const currentUserId = req.user?.id;
     const roles = req.user?.roles || [];
     const isGlobalAdmin = roles.some((r: string) => ['PLATFORM_ADMIN', 'BURSAR', 'FINANCE_ADMIN'].includes(r));
-    const isInstitutionStaff = Boolean(roles.includes('INSTITUTION_ADMIN') && req.user?.institutionId && institutionId && req.user.institutionId === String(institutionId));
+    const requestedInstitution = institutionId ? String(institutionId) : undefined;
+    const isInstitutionStaff = Boolean(
+      roles.includes('INSTITUTION_ADMIN') &&
+      req.user?.institutionId &&
+      (!requestedInstitution || req.user.institutionId === requestedInstitution)
+    );
     const requestedGuardian = guardianId ? String(guardianId) : undefined;
     const ownsGuardianFilter = Boolean(
       requestedGuardian &&
@@ -3338,6 +3343,11 @@ app.get('/api/education/invoices', authenticate, (req: AuthenticatedRequest, res
 
     if (!isGlobalAdmin && !isInstitutionStaff && !ownsGuardianFilter && !ownsStudentFilter) {
       res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Invoice access requires an authorized student, guardian, or institution context.' });
+      return;
+    }
+
+    if (isInstitutionStaff && requestedInstitution && req.user?.institutionId !== requestedInstitution) {
+      res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Institution administrator access is limited to the authenticated institution.' });
       return;
     }
 
