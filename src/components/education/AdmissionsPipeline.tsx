@@ -396,9 +396,13 @@ export const AdmissionsPipeline: React.FC<AdmissionsPipelineProps> = ({
                     </div>
                     <div>
                       <span className="text-slate-500 text-[10px] block">Application Fee</span>
-                      <span className="text-emerald-400 font-semibold font-mono">
-                        ${app.applicationFeeFiat} USD (Paid via Pi)
-                      </span>
+                      {app.applicationFeePaid ? (
+                        <span className="text-emerald-400 font-semibold font-mono">
+                          {app.applicationFeePi != null ? app.applicationFeePi.toFixed(12) : 'Verified'} π — Paid
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 font-medium">Provider-controlled / not verified</span>
+                      )}
                     </div>
                     <div>
                       <span className="text-slate-500 text-[10px] block">Documents</span>
@@ -407,7 +411,7 @@ export const AdmissionsPipeline: React.FC<AdmissionsPipelineProps> = ({
                     <div>
                       <span className="text-slate-500 text-[10px] block">Decision Timeline</span>
                       <span className="text-slate-300 font-medium">
-                        {hasOffer ? 'Offer Available' : isAccepted ? 'Enrolment Final' : 'Estimated 5-7 Days'}
+                        {hasOffer ? 'Offer Available' : isAccepted ? 'Enrolment Final' : 'Awaiting institution decision'}
                       </span>
                     </div>
                   </div>
