@@ -3810,8 +3810,22 @@ app.get('/api/education/admissions/documents', authenticate, async (req: Authent
       const admission = educationRepo.getAdmissionById(applicationId);
       const owner = String(admission?.applicantEmail || '').trim().toLowerCase();
       const current = username.toLowerCase();
-      const isAdmin = (req.user?.roles || []).some((r) => ['PLATFORM_ADMIN', 'INSTITUTION_ADMIN', 'COMPLIANCE_OFFICER'].includes(r));
-      if (!admission || (!isAdmin && owner !== current)) {
+      const roles = req.user?.roles || [];
+      const isGlobalAdmin = roles.some((r) => ['PLATFORM_ADMIN', 'COMPLIANCE_OFFICER'].includes(r));
+      const isInstitutionAdmin = roles.includes('INSTITUTION_ADMIN');
+      if (!admission) {
+        res.status(404).json({ success: false, error: 'ADMISSION_NOT_FOUND' });
+        return;
+      }
+      if (isInstitutionAdmin) {
+        if (!req.user?.institutionId || req.user.institutionId !== admission.institutionId) {
+          res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Institution administrator document access is limited to the authenticated institution.' });
+          return;
+        }
+        res.status(403).json({ success: false, error: 'DOCUMENT_SCOPE_UNAVAILABLE', message: 'Institution-scoped academic document listing is not enabled yet.' });
+        return;
+      }
+      if (!isGlobalAdmin && owner !== current) {
         res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Document access is limited to the authenticated applicant.' });
         return;
       }
@@ -3858,8 +3872,18 @@ app.post(
         const admission = educationRepo.getAdmissionById(applicationId);
         const owner = String(admission?.applicantEmail || '').trim().toLowerCase();
         const current = username.toLowerCase();
-        const isAdmin = (req.user?.roles || []).some((r) => ['PLATFORM_ADMIN', 'INSTITUTION_ADMIN', 'COMPLIANCE_OFFICER'].includes(r));
-        if (!admission || (!isAdmin && owner !== current)) {
+        const roles = req.user?.roles || [];
+        const isGlobalAdmin = roles.some((r) => ['PLATFORM_ADMIN', 'COMPLIANCE_OFFICER'].includes(r));
+        const isInstitutionAdmin = roles.includes('INSTITUTION_ADMIN');
+        if (!admission) {
+          res.status(404).json({ success: false, error: 'ADMISSION_NOT_FOUND' });
+          return;
+        }
+        if (isInstitutionAdmin) {
+          res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Institution administrators cannot upload academic documents on behalf of applicants.' });
+          return;
+        }
+        if (!isGlobalAdmin && owner !== current) {
           res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Document upload is limited to the authenticated applicant.' });
           return;
         }
