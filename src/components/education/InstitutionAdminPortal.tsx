@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 
 export const InstitutionAdminPortal: React.FC = () => {
-  const [selectedInstId, setSelectedInstId] = useState('inst-ng-buk-001');
+  const [selectedInstId, setSelectedInstId] = useState('');
   const [institutions, setInstitutions] = useState<InstitutionProfile[]>([]);
   const [analytics, setAnalytics] = useState<any | null>(null);
   const [invoices, setInvoices] = useState<EducationInvoice[]>([]);
@@ -149,7 +149,7 @@ export const InstitutionAdminPortal: React.FC = () => {
                 <span>Enrolled Learners</span>
               </span>
               <div className="text-2xl font-black text-white">
-                {analytics?.totalStudentsEnrolled || 2450}
+                {analytics?.totalStudentsEnrolled ?? '—'}
               </div>
               <span className="text-[11px] text-emerald-400 font-medium">+14% vs previous academic term</span>
             </div>
@@ -160,7 +160,7 @@ export const InstitutionAdminPortal: React.FC = () => {
                 <span>Total Fees Collected</span>
               </span>
               <div className="text-2xl font-black text-emerald-400">
-                ${analytics?.totalRevenueCollectedFiat?.toLocaleString() || '1,850,000'}
+                ${analytics?.totalRevenueCollectedFiat != null ? analytics.totalRevenueCollectedFiat.toLocaleString() : '—'}
               </div>
               <span className="text-[11px] text-slate-400">USD Equivalent</span>
             </div>
@@ -171,9 +171,9 @@ export const InstitutionAdminPortal: React.FC = () => {
                 <span>Collection Efficiency</span>
               </span>
               <div className="text-2xl font-black text-white">
-                {analytics?.collectionRatePercentage?.toFixed(1) || '84.2'}%
+                {analytics?.collectionRatePercentage != null ? analytics.collectionRatePercentage.toFixed(1) : '—'}%
               </div>
-              <span className="text-[11px] text-emerald-400 font-medium">Above regional benchmark</span>
+              <span className="text-[11px] text-emerald-400 font-medium">Provider-backed benchmark unavailable</span>
             </div>
 
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-2">
@@ -182,9 +182,9 @@ export const InstitutionAdminPortal: React.FC = () => {
                 <span>Pi Settlement Reserve</span>
               </span>
               <div className="text-2xl font-black text-amber-300 font-mono">
-                {analytics?.totalRevenueCollectedPi?.toFixed(4) || '5.8741'} π
+                {analytics?.totalRevenueCollectedPi != null ? analytics.totalRevenueCollectedPi.toFixed(12) : '—'} π
               </div>
-              <span className="text-[11px] text-slate-400">Verified on Pi Ledger</span>
+              <span className="text-[11px] text-slate-400">Provider-backed Pi settlement data only</span>
             </div>
           </div>
 
