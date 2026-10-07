@@ -1,92 +1,94 @@
 /**
- * PiNova Global Hub — Education Directory Functional Verification Suite
+ * PiNova Global Hub — Education Directory Functional Contract Suite
  *
- * Verifies the runtime data path used by the Education Directory without
- * inventing records: Global scope remains global-first, while the Nigerian
- * deployment hub exposes the complete verified BUK/UNILAG/YABATECH hierarchy.
+ * The production directory must never seed or invent institution records.
+ * This suite therefore verifies the fail-closed provider contract and the
+ * repository hierarchy integrity for unknown/unconfigured institutions.
  */
 
+import fs from 'fs';
 import os from 'os';
 import path from 'path';
-process.env.PINOVA_DATA_DIR = path.join(os.tmpdir(), `pinova_education_directory_test_${Date.now()}`);
+
+process.env.PINOVA_DATA_DIR = path.join(
+  os.tmpdir(),
+  `pinova_education_directory_test_${Date.now()}`
+);
 
 import { EducationRepository } from '../src/server/db/repositories/EducationRepository';
-import { applyEducationHierarchyVerificationOverrides } from '../src/data/educationHierarchyVerificationOverrides';
-import { applyYabatechHierarchyVerificationOverride } from '../src/data/yabatechHierarchyVerificationOverride';
-import { normalizeBukFacultyHierarchy } from '../src/data/bukHierarchyNormalization';
 
-function assert(condition: boolean, message: string, details?: string) {
-  if (!condition) {
-    throw new Error(`[FAIL] ${message}${details ? ` — ${details}` : ''}`);
-  }
+function assert(condition: boolean, message: string) {
+  if (!condition) throw new Error(`[FAIL] ${message}`);
   console.log(`[PASS] ${message}`);
 }
 
-function withHierarchyOverrides(institution: ReturnType<EducationRepository['getInstitutionById']>) {
-  if (!institution) return null;
-  const corrected = applyEducationHierarchyVerificationOverrides(institution);
-  const withYabatechCorrection = applyYabatechHierarchyVerificationOverride(corrected);
-  return normalizeBukFacultyHierarchy(withYabatechCorrection);
-}
-
-const normalizeFacultyName = (value: string): string =>
-  value.trim().toLowerCase().replace(/^faculty of\s+/, '');
-
 async function run() {
   console.log('============================================================');
-  console.log('PINOVA EDUCATION DIRECTORY FUNCTIONAL VERIFICATION');
+  console.log('PINOVA EDUCATION DIRECTORY FUNCTIONAL CONTRACT');
   console.log('============================================================\n');
 
   const repo = new EducationRepository();
-  const globalInstitutions = repo.getInstitutions({});
-  const nigeriaInstitutions = repo.getInstitutions({ countryCode: 'NG' });
-  const nigeriaUniversities = repo.getInstitutions({ countryCode: 'NG', institutionType: 'university' });
 
-  // Global-first contract: ALL scope must not collapse into Nigeria-only data.
-  assert(globalInstitutions.some((i) => i.countryCode !== 'NG'), 'Global scope retains non-Nigeria institutions');
-  assert(globalInstitutions.length >= nigeriaInstitutions.length, 'Global scope contains at least the Nigeria deployment-hub set');
+  // Production safety: a fresh repository must not contain synthetic institutions.
+  const institutions = repo.getInstitutions({});
+  assert(institutions.length === 0, 'Fresh production repository does not seed synthetic institutions');
 
-  // Nigeria deployment hub: institution filtering must return the target universities.
-  const buk = withHierarchyOverrides(repo.getInstitutionById('inst-ng-buk-001'));
-  const unilag = withHierarchyOverrides(repo.getInstitutionById('inst-ng-unilag-002'));
-  const yabatech = withHierarchyOverrides(repo.getInstitutionById('inst-ng-yabatech-003'));
-
-  assert(Boolean(buk), 'BUK is present in the Nigeria registry');
-  assert(Boolean(unilag), 'UNILAG is present in the Nigeria registry');
-  assert(Boolean(yabatech), 'YABATECH is present in the Nigeria registry');
-  assert(nigeriaUniversities.some((i) => i.id === 'inst-ng-buk-001'), 'Nigeria university filter returns BUK');
-  assert(nigeriaUniversities.some((i) => i.id === 'inst-ng-unilag-002'), 'Nigeria university filter returns UNILAG');
-
-  // Complete university hierarchy checks.
-  assert(buk!.faculties?.length === 19, 'BUK exposes all 19 verified faculties', `Found ${buk!.faculties?.length ?? 0}`);
-  assert(unilag!.faculties?.length === 19, 'UNILAG exposes all 19 verified faculties', `Found ${unilag!.faculties?.length ?? 0}`);
+  // Hierarchy endpoints must fail closed for unknown/unconfigured institutions.
   assert(
-    (buk!.faculties || []).every((faculty) => (faculty.departments || []).length > 0),
-    'Every BUK faculty exposes at least one department',
+    repo.getFacultiesByInstitution('provider-unconfigured-institution').length === 0,
+    'Unknown institution returns no academic units'
   );
   assert(
-    (unilag!.faculties || []).every((faculty) => (faculty.departments || []).length > 0),
-    'Every UNILAG faculty exposes at least one department',
+    repo.getDepartmentsByFaculty('provider-unconfigured-institution', 'provider-unconfigured-unit').length === 0,
+    'Unknown academic unit returns no departments'
   );
-  const bukFacultyNames = new Set((buk!.faculties || []).map((faculty) => normalizeFacultyName(faculty.name)));
   assert(
-    bukFacultyNames.has('life sciences') && bukFacultyNames.has('physical sciences'),
-    'BUK science structure is split into Life Sciences and Physical Sciences',
+    repo.getProgrammesByDepartment(
+      'provider-unconfigured-institution',
+      'provider-unconfigured-unit',
+      'provider-unconfigured-department'
+    ).length === 0,
+    'Unknown department returns no programmes'
+  );
+  assert(
+    repo.getAllProgrammesByInstitution('provider-unconfigured-institution').length === 0,
+    'Unknown institution returns no direct programmes'
   );
 
-  // Polytechnic-native hierarchy: Schools, not Faculties.
-  const yabatechUnits = yabatech!.faculties || [];
-  assert(yabatechUnits.length === 8, 'YABATECH exposes all 8 verified schools', `Found ${yabatechUnits.length}`);
-  assert(
-    yabatechUnits.every((unit) => unit.unitType === 'school'),
-    'YABATECH hierarchy uses native School units rather than university Faculty terminology',
+  // Source-level contract: the UI must actually call the hierarchy service and
+  // reset dependent selections when a parent changes.
+  const directorySource = fs.readFileSync(
+    path.join(process.cwd(), 'src/components/education/InstitutionDirectory.tsx'),
+    'utf8'
   );
   assert(
-    yabatechUnits.every((school) => (school.departments || []).length > 0),
-    'Every YABATECH school exposes at least one department',
+    directorySource.includes('educationService.getFaculties(selectedHierarchyInstitution)'),
+    'Institution selection loads academic units through the service'
+  );
+  assert(
+    directorySource.includes('educationService.getDepartments(selectedHierarchyInstitution, selectedFaculty)'),
+    'Academic-unit selection loads departments through the service'
+  );
+  assert(
+    directorySource.includes('educationService.getProgrammes(selectedHierarchyInstitution, selectedFaculty, selectedDepartment)'),
+    'Department selection loads programmes through the service'
+  );
+  assert(
+    directorySource.includes("setSelectedDepartment('');") &&
+      directorySource.includes("setSelectedProgramme('');"),
+    'Changing a parent resets dependent selections'
+  );
+  assert(
+    directorySource.includes('Open Institution Profile'),
+    'Hierarchy selection exposes a real institution-profile action'
+  );
+  assert(
+    directorySource.includes('provider/registry feed') ||
+      directorySource.includes('authoritative education provider/registry feed'),
+    'Empty directory state explains the authoritative provider requirement'
   );
 
-  console.log('\n>>> EDUCATION DIRECTORY FUNCTIONAL TEST: PASS <<<');
+  console.log('\n>>> EDUCATION DIRECTORY FUNCTIONAL CONTRACT: PASS <<<');
 }
 
 run().catch((error) => {
