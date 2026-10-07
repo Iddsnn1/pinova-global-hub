@@ -197,8 +197,8 @@ async function runTestSuite() {
     institutionId: 'inst-unilag-001',
     countryCode: 'NG'
   });
-  assert(validVerification.verified, 'Scenario 5.1: Known student matches institution registry');
-  assert(validVerification.verificationStatus === 'VERIFIED', 'Scenario 5.2: Verification status is VERIFIED');
+  assert(!validVerification.verified, 'Scenario 5.1: Student verification fails closed without an authoritative provider');
+  assert(validVerification.verificationStatus === 'REJECTED' && validVerification.status === 'UNAVAILABLE', 'Scenario 5.2: Verification status remains unavailable/rejected');
 
   // 5.2 Invalid Student Rejection
   const invalidVerification = await verificationService.verifyStudent({
@@ -228,6 +228,43 @@ async function runTestSuite() {
   assert(calculated.discount === 100, 'Scenario 6.2: Discount subtracted');
   assert(calculated.tax === 50, 'Scenario 6.3: Tax added');
   assert(calculated.totalAmount === 950, 'Scenario 6.4: Authoritative total = 1000 - 100 + 50 = 950');
+
+  const precisionCalculated = EducationRepository.calculateInvoiceTotals({
+    subtotal: 0.000000031831,
+    discount: 0,
+    tax: 0
+  });
+  assert(precisionCalculated.totalAmount === 0.000000031831, 'Scenario 6.4b: Pi fee calculation preserves 12-decimal precision');
+
+  const precisionRepo = new EducationRepository();
+  const precisionInvoice = precisionRepo.createInvoice({
+    id: `inv-precision-${Date.now()}`,
+    invoiceNumber: 'INV-PRECISION-001',
+    institutionId: 'inst-unilag-01',
+    institutionName: 'University of Lagos',
+    studentId: 'std-ng-precision',
+    studentName: 'Precision Test',
+    studentMatricOrReg: 'MAT-PRECISION',
+    educationTier: 'tertiary',
+    programmeOrClass: 'Computer Science',
+    academicSession: '2025/2026',
+    termOrSemester: '1st Semester',
+    items: [{ id: 'li-p', category: 'tuition', description: 'Pi precision test', amount: 0.000000031831, isCompulsory: true }],
+    subtotal: 0.000000031831,
+    discountAmount: 0,
+    taxAmount: 0,
+    totalAmount: 0,
+    amountPaid: 0,
+    outstandingBalance: 0,
+    currency: 'PI',
+    dueDate: '2026-12-31',
+    status: 'UNPAID',
+    allowedInstallments: 1,
+    installmentsPaidCount: 0,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  });
+  assert(precisionInvoice.totalAmount === 0.000000031831, 'Scenario 6.4c: Created Pi-native invoice preserves 12-decimal amount');
 
   // 6.2 Excessive Discount Protection
   const excessiveDiscount = EducationRepository.calculateInvoiceTotals({
@@ -266,7 +303,7 @@ async function runTestSuite() {
     totalAmount: 400,
     amountPaid: 0,
     outstandingBalance: 400,
-    currency: 'USD',
+    currency: 'PI',
     dueDate: '2025-12-31',
     status: 'UNPAID',
     issuedDate: new Date().toISOString(),
@@ -282,7 +319,9 @@ async function runTestSuite() {
   const partialPaymentResult = eduRepo.recordPayment({
     invoiceId: invoice.id,
     amountPaid: 250,
-    currency: 'USD',
+    currency: 'PI',
+    piAmount: 250,
+    piPaymentId: 'pi-test-payment-250',
     paymentMethod: 'PI_NETWORK',
     payerUsername: 'pioneer_parent'
   });
@@ -296,7 +335,9 @@ async function runTestSuite() {
     eduRepo.recordPayment({
       invoiceId: invoice.id,
       amountPaid: 200, // Balance is 150, paying 200 is an overpayment!
-      currency: 'USD',
+      currency: 'PI',
+      piAmount: 200,
+      piPaymentId: 'pi-test-payment-200',
       paymentMethod: 'PI_NETWORK',
       payerUsername: 'pioneer_parent'
     });
@@ -351,6 +392,11 @@ async function runTestSuite() {
     programmeName: 'B.Sc. Computer Science',
     applicantFullName: 'Emeka Okonkwo',
     applicantEmail: 'emeka@example.com',
+    educationTier: 'tertiary',
+    dateOfBirth: '2005-01-15',
+    applicantPhone: '+2348000000000',
+    applicationFeeFiat: 50,
+    applicationFeePaid: false,
     academicSession: '2025/2026',
     documents: []
   });

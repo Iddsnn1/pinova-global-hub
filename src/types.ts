@@ -26,6 +26,13 @@ export interface Product {
   /** Canonical marketplace taxonomy category (separate from fulfillment/product type). */
   marketplaceCategory?: string;
   subcategory: string;
+  /** Education Marketplace metadata; populated for education listings. */
+  educationLevelId?: string;
+  educationTier?: import('./types/education').EducationTier;
+  educationGradeLevel?: string;
+  educationCountryCode?: string;
+  educationCurriculumId?: string;
+  educationSubjects?: string[];
   images: string[];
   stock: number;
   rating: number;

@@ -16,6 +16,8 @@ import {
   EducationAuditLog
 } from '../../../types/education';
 import { normalizeCountryCode, matchesSubdivision } from '../../../data/countrySubdivisions';
+import { piDecimalForStorage } from '../../services/piDecimal';
+import { GLOBAL_EDUCATION_INSTITUTIONS } from '../../../data/educationInstitutionsData';
 export class EducationRepository {
   private institutionsEngine: StorageEngine<InstitutionProfile>;
   private studentsEngine: StorageEngine<StudentIdentity>;
@@ -31,7 +33,7 @@ export class EducationRepository {
     this.institutionsEngine = new StorageEngine<InstitutionProfile>(
       'education_institutions',
       'id',
-      []
+      GLOBAL_EDUCATION_INSTITUTIONS
     );
     this.studentsEngine = new StorageEngine<StudentIdentity>(
       'education_students',
@@ -293,19 +295,19 @@ export class EducationRepository {
     tax: number;
     totalAmount: number;
   } {
-    const round2 = (num: number) => Math.round((num + Number.EPSILON) * 100) / 100;
-    const subtotal = Math.max(0, round2(params.subtotal || 0));
-    const compulsoryFees = Math.max(0, round2(params.compulsoryFees || 0));
-    const optionalFees = Math.max(0, round2(params.optionalFees || 0));
-    const discount = Math.max(0, round2(params.discount || 0));
-    const scholarship = Math.max(0, round2(params.scholarship || 0));
-    const tax = Math.max(0, round2(params.tax || 0));
+    const roundPi = (num: number) => Number(piDecimalForStorage(num));
+    const subtotal = roundPi(Math.max(0, params.subtotal || 0));
+    const compulsoryFees = roundPi(Math.max(0, params.compulsoryFees || 0));
+    const optionalFees = roundPi(Math.max(0, params.optionalFees || 0));
+    const discount = roundPi(Math.max(0, params.discount || 0));
+    const scholarship = roundPi(Math.max(0, params.scholarship || 0));
+    const tax = roundPi(Math.max(0, params.tax || 0));
 
-    const totalBeforeDeductions = round2(subtotal + compulsoryFees + optionalFees);
+    const totalBeforeDeductions = roundPi(subtotal + compulsoryFees + optionalFees);
     const cappedDiscount = Math.min(discount, totalBeforeDeductions);
     const cappedScholarship = Math.min(scholarship, Math.max(0, totalBeforeDeductions - cappedDiscount));
-    const totalDeductions = round2(cappedDiscount + cappedScholarship);
-    const totalAmount = Math.max(0, round2(totalBeforeDeductions - totalDeductions + tax));
+    const totalDeductions = roundPi(cappedDiscount + cappedScholarship);
+    const totalAmount = roundPi(Math.max(0, totalBeforeDeductions - totalDeductions + tax));
 
     return {
       subtotal,
@@ -374,7 +376,7 @@ export class EducationRepository {
       (params.paymentId || '').trim(),
       (params.studentId || '').trim(),
       (params.institutionId || '').trim(),
-      Number(params.amount).toFixed(2),
+      piDecimalForStorage(params.amount),
       (params.currency || 'PI').trim().toUpperCase(),
       (params.paymentTimestamp || '').trim(),
       (params.settlementStatus || 'SETTLED').trim().toUpperCase()
@@ -414,8 +416,8 @@ export class EducationRepository {
 
       const sameInvoice = existingPayment.invoiceId === params.invoiceId;
       const sameCurrency = existingPayment.currency.trim().toUpperCase() === String(params.currency || '').trim().toUpperCase();
-      const sameAmount = Math.abs(existingPayment.amountPaid - params.amountPaid) <= 0.00000001;
-      const samePiAmount = Math.abs(existingPayment.piAmount - Number(params.piAmount ?? 0)) <= 0.00000001;
+      const sameAmount = Math.abs(existingPayment.amountPaid - params.amountPaid) <= 0.000000000001;
+      const samePiAmount = Math.abs(existingPayment.piAmount - Number(params.piAmount ?? 0)) <= 0.000000000001;
       const samePiPayment = (existingPayment.piPaymentId || '') === (params.piPaymentId || '');
       const samePayer = existingPayment.payerUsername.trim().toLowerCase() === params.payerUsername.trim().toLowerCase();
 
@@ -434,7 +436,12 @@ export class EducationRepository {
       };
     }
 
-    // 2. Fetch target invoice
+    // 2. Validate financial amount before any balance mutation.
+    if (!Number.isFinite(params.amountPaid) || params.amountPaid <= 0) {
+      throw new Error('PAYMENT_AMOUNT_REQUIRED');
+    }
+
+    // 3. Fetch target invoice
     const invoice = this.invoicesEngine.get(params.invoiceId);
     if (!invoice) {
       throw new Error(`Invoice with ID ${params.invoiceId} not found`);
@@ -455,7 +462,7 @@ export class EducationRepository {
     }
 
     // Phase 10: Prevent overpayment beyond outstanding balance
-    if (params.amountPaid > invoice.outstandingBalance + 0.001) {
+    if (params.amountPaid > invoice.outstandingBalance + 0.000000000001) {
       throw new Error(`Payment amount (${params.amountPaid} π) exceeds outstanding balance (${invoice.outstandingBalance} π). Overpayment rejected.`);
     }
 
@@ -481,7 +488,7 @@ export class EducationRepository {
     // 4. Update Invoice Balances
     const newAmountPaid = invoice.amountPaid + params.amountPaid;
     const newOutstandingBalance = Math.max(0, invoice.totalAmount - newAmountPaid);
-    const newStatus = newOutstandingBalance <= 0.001 ? 'PAID' : 'PARTIALLY_PAID';
+    const newStatus = newOutstandingBalance <= 0.000000000001 ? 'PAID' : 'PARTIALLY_PAID';
 
     const updatedInvoice: EducationInvoice = {
       ...invoice,

@@ -1,3 +1,4 @@
+import { list as listPrivateBlobs, get as getPrivateBlob } from '@vercel/blob';
 import type { IncomingMessage, ServerResponse } from 'http';
 import { createRequire } from 'module';
 import path from 'path';
@@ -230,20 +231,11 @@ async function handleDurableProducts(req: any, res: any): Promise<boolean> {
       : '';
 
   if (req.method === 'GET') {
-    // Run the one-time visibility repair before serving the durable catalog.
-    // The migration is idempotent and strictly excludes archived/zero-stock
-    // products and merchants who are not currently Verified + Active.
-    try {
-      const migration = await migrateEligibleCatalogVisibility();
-      if (migration.migrated.length) {
-        console.log('[catalog-migration] repaired durable product visibility', {
-          migrated: migration.migrated
-        });
-      }
-    } catch (migrationError: any) {
-      // Never make the catalog unavailable because the repair could not run.
-      console.warn('[catalog-migration] visibility repair skipped', migrationError?.message || migrationError);
-    }
+    // Catalog reads are read-only. Data repairs/imports must be executed by an
+    // explicit migration task, never as a side effect of a public GET request.
+    // This keeps catalog latency predictable and prevents concurrent requests
+    // from scanning or mutating the durable catalog.
+
 
     if (id) {
       const product = (await listDurableProducts({ includeDeleted: false })).find((item) => item.id === id);
@@ -323,7 +315,6 @@ async function handleDurableProducts(req: any, res: any): Promise<boolean> {
       // an alternate Pioneer username (for example @pi_pioneer_01).
       sellerId: String(durableMerchant.pioneerUsername || user.username).trim().replace(/^@/, ''),
       sellerName: String(durableMerchant.storeName || user.username).trim(),
-      sellerDisplayName: 'PiNova Global Hub',
       sellerDisplayName: 'PiNova Global Hub',
       sellerVerified: true,
       features: Array.isArray(body.features) ? body.features.filter(Boolean) : [],

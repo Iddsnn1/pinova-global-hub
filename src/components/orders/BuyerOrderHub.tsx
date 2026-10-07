@@ -112,6 +112,12 @@ export const BuyerOrderHub: React.FC<BuyerOrderHubProps> = ({
     }
   }, [initialOrderId, orders]);
 
+  const formatTimelineDate = (timestamp: unknown) => {
+    if (typeof timestamp !== 'string' || !timestamp.trim()) return 'Time unavailable';
+    const date = new Date(timestamp);
+    return Number.isNaN(date.getTime()) ? 'Time unavailable' : date.toLocaleDateString();
+  };
+
   // Copy helper
   const handleCopy = (text: string, fieldId: string) => {
     if (!text) return;
@@ -665,10 +671,10 @@ export const BuyerOrderHub: React.FC<BuyerOrderHubProps> = ({
                       <div className="flex items-center gap-2 text-xs">
                         <span className="text-slate-400">Tracking Code:</span>
                         <span className="font-mono font-bold text-purple-600 dark:text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20">
-                          {activeOrder.trackingNumber || 'PNV-SAF-993821'}
+                          {activeOrder.trackingNumber || 'Not recorded'}
                         </span>
                         <button
-                          onClick={() => handleCopy(activeOrder.trackingNumber || 'PNV-SAF-993821', 'tracking')}
+                          onClick={() => handleCopy(activeOrder.trackingNumber, 'tracking')}
                           className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
                           title="Copy tracking code"
                         >
@@ -772,7 +778,7 @@ export const BuyerOrderHub: React.FC<BuyerOrderHubProps> = ({
                             {tl.note && <p className="text-slate-400 text-[10px] mt-0.5 italic">{tl.note}</p>}
                           </div>
                           <span className="text-slate-400 text-[10px] shrink-0">
-                            {new Date(tl.timestamp).toLocaleDateString()}
+                            {formatTimelineDate(tl.timestamp)}
                           </span>
                         </div>
                       ))}

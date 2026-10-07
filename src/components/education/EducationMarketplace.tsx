@@ -18,22 +18,44 @@ import {
 export const EducationMarketplace: React.FC = () => {
   const [items, setItems] = useState<EducationMarketplaceItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [categoryFilter, setCategoryFilter] = useState('all');
   const [tierFilter, setTierFilter] = useState('all');
+  const [countryCodeFilter, setCountryCodeFilter] = useState('');
+  const [educationLevelIdFilter, setEducationLevelIdFilter] = useState('');
+  const [gradeLevelFilter, setGradeLevelFilter] = useState('');
+  const [curriculumIdFilter, setCurriculumIdFilter] = useState('');
+  const [subjectFilter, setSubjectFilter] = useState('');
   const [orderedNotice, setOrderedNotice] = useState<string | null>(null);
 
   useEffect(() => {
     loadItems();
-  }, [categoryFilter, tierFilter]);
+  }, [tierFilter, countryCodeFilter, educationLevelIdFilter, gradeLevelFilter, curriculumIdFilter, subjectFilter]);
 
   const loadItems = async () => {
     setLoading(true);
     try {
       const data = await educationService.getMarketplaceItems(
-        categoryFilter === 'all' ? undefined : categoryFilter,
-        tierFilter === 'all' ? undefined : tierFilter
+        undefined,
+        tierFilter === 'all' ? undefined : tierFilter,
+        {
+          countryCode: countryCodeFilter || undefined,
+          educationLevelId: educationLevelIdFilter || undefined,
+          gradeLevel: gradeLevelFilter || undefined,
+          curriculumId: curriculumIdFilter || undefined,
+          subject: subjectFilter || undefined
+        }
       );
-      setItems(data);
+      // All Levels means all Education Marketplace materials, not a school tier.
+      // A specific level is matched against the item's primary tier or any declared
+      // cross-level applicability so one material can legitimately serve multiple levels.
+      setItems(
+        tierFilter === 'all'
+          ? data
+          : data.filter(
+              (item) =>
+                item.tier === tierFilter ||
+                item.applicableTiers?.includes(tierFilter as EducationMarketplaceItem['tier'])
+            )
+      );
     } catch (e) {
       console.error(e);
     } finally {
@@ -60,37 +82,72 @@ export const EducationMarketplace: React.FC = () => {
               <span>Verified Student Discounts</span>
             </span>
           </div>
-          <h3 className="text-xl font-black text-white mt-1.5">Learning Materials & Exam Prep</h3>
+          <h3 className="text-xl font-black text-white mt-1.5">Learning Materials & Exam Preparation</h3>
           <p className="text-xs text-slate-400 mt-0.5">
-            Curated curriculum textbooks, JAMB/WAEC prep portals, scientific calculators, STEM kits, and institutional courseware.
+            Learning resources matched to education levels, grades, curricula, subjects, and local education systems.
           </p>
         </div>
 
         {/* Filters */}
-        <div className="flex gap-2 text-xs bg-slate-950 p-2 rounded-xl border border-slate-800">
-          <select
-            value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value)}
-            className="bg-slate-900 border border-slate-700 rounded-lg p-1.5 text-slate-200 focus:outline-none focus:border-amber-500"
-          >
-            <option value="all">All Categories</option>
-            <option value="exam_prep">Exam Prep (JAMB/WAEC/SAT)</option>
-            <option value="textbook">Textbooks & Books</option>
-            <option value="digital_course">Digital Courses & AI</option>
-            <option value="hardware">Hardware & Lab Kits</option>
-            <option value="supplies">School Supplies</option>
-          </select>
-
+        <div className="flex flex-wrap gap-2 text-xs bg-slate-950 p-2 rounded-xl border border-slate-800">
           <select
             value={tierFilter}
-            onChange={(e) => setTierFilter(e.target.value)}
+            onChange={(e) => {
+              setTierFilter(e.target.value);
+              setEducationLevelIdFilter('');
+              setGradeLevelFilter('');
+            }}
             className="bg-slate-900 border border-slate-700 rounded-lg p-1.5 text-slate-200 focus:outline-none focus:border-amber-500"
           >
-            <option value="all">All Levels</option>
-            <option value="secondary">Secondary Level</option>
-            <option value="tertiary">University Level</option>
-            <option value="technical_vocational">Vocational & Tech</option>
+            <option value="all">All Education Levels</option>
+            <option value="early_childhood">Early Childhood / Nursery</option>
+            <option value="primary">Primary</option>
+            <option value="secondary">Secondary</option>
+            <option value="tertiary">Higher Education / University</option>
+            <option value="technical_vocational">Technical & Vocational</option>
+            <option value="professional_continuing">Professional & Continuing</option>
           </select>
+
+          <input
+            value={countryCodeFilter}
+            onChange={(e) => setCountryCodeFilter(e.target.value.toUpperCase().slice(0, 2))}
+            placeholder="Country (e.g. NG)"
+            aria-label="Education country code"
+            maxLength={2}
+            className="w-28 bg-slate-900 border border-slate-700 rounded-lg p-1.5 text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-amber-500"
+          />
+
+          <input
+            value={educationLevelIdFilter}
+            onChange={(e) => setEducationLevelIdFilter(e.target.value)}
+            placeholder="Education level"
+            aria-label="Education level ID"
+            className="w-36 bg-slate-900 border border-slate-700 rounded-lg p-1.5 text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-amber-500"
+          />
+
+          <input
+            value={gradeLevelFilter}
+            onChange={(e) => setGradeLevelFilter(e.target.value)}
+            placeholder="Grade / Year / Class"
+            aria-label="Grade, year, or class"
+            className="w-40 bg-slate-900 border border-slate-700 rounded-lg p-1.5 text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-amber-500"
+          />
+
+          <input
+            value={curriculumIdFilter}
+            onChange={(e) => setCurriculumIdFilter(e.target.value)}
+            placeholder="Curriculum / System"
+            aria-label="Curriculum or education system"
+            className="w-40 bg-slate-900 border border-slate-700 rounded-lg p-1.5 text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-amber-500"
+          />
+
+          <input
+            value={subjectFilter}
+            onChange={(e) => setSubjectFilter(e.target.value)}
+            placeholder="Subject / Field"
+            aria-label="Subject or field"
+            className="w-36 bg-slate-900 border border-slate-700 rounded-lg p-1.5 text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-amber-500"
+          />
         </div>
       </div>
 

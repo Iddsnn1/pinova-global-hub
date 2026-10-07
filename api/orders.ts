@@ -1,9 +1,10 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import { createHash, randomBytes, createHmac, timingSafeEqual } from 'crypto';
-import { authService, paymentLedgerRepo, pstpAuditRepo, idempotencyRepo, verifyPiPaymentAuthoritative, durableOrderStorageEnabled, getDurableOrder, listDurableOrders, saveDurableOrder, softDeleteDurableOrder, markDurableOrderPaymentVerified } from '../dist/server.cjs';
+import { authService, paymentLedgerRepo, pstpAuditRepo, verifyPiPaymentAuthoritative, durableOrderStorageEnabled, getDurableOrder, listDurableOrders, saveDurableOrder, createDurableOrderWithIdempotency, softDeleteDurableOrder, markDurableOrderPaymentVerified } from '../dist/server.cjs';
 import { listDurableVendorApplications } from '../dist/server.cjs';
-import { durableProductStorageEnabled, getDurableProduct, reserveDurableProductStockBatch } from '../dist/server.cjs';
+import { durableProductStorageEnabled, getDurableProduct } from '../dist/server.cjs';
 import type { Order, OrderItem, PstpOrderStatus } from '../src/types';
+import { isAllowedOrderTransition, isAllowedSellerTransition, expectedCarrierTransition } from '../src/modules/orders/lifecycle';
 
 function json(res: ServerResponse, status: number, body: unknown) {
   res.statusCode = status;
@@ -56,19 +57,6 @@ function normalizeUsername(value: unknown): string {
   return String(value || '').trim().replace(/^@/, '').toLowerCase();
 }
 
-const SELLER_LIFECYCLE_TRANSITIONS: Partial<Record<PstpOrderStatus, PstpOrderStatus[]>> = {
-  'Payment Verified': ['Seller Accepted'],
-  'Seller Accepted': ['Preparing Order'],
-  'Preparing Order': ['Packed'],
-  'Packed': ['Shipped'],
-  // Carrier-controlled milestones are intentionally not seller-editable.
-  // They must come from a future carrier/webhook evidence path.
-  'Shipped': [],
-};
-
-function isSellerTransitionAllowed(current: PstpOrderStatus, next: PstpOrderStatus): boolean {
-  return (SELLER_LIFECYCLE_TRANSITIONS[current] || []).includes(next);
-}
 
 function sellerOwnsOrder(order: Order, username: string): boolean {
   const seller = normalizeUsername(username);
@@ -202,13 +190,9 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         }
 
         const order = matchingOrders[0];
-        const allowedTransitions: Record<string, PstpOrderStatus> = {
-          'Shipped': 'In Transit',
-          'In Transit': 'Out for Delivery',
-          'Out for Delivery': 'Delivered'
-        };
+        const expected = expectedCarrierTransition(order.pstpStatus);
 
-        if (allowedTransitions[order.pstpStatus] !== nextStatus) {
+        if (expected !== nextStatus) {
           results.push({
             orderId: order.id,
             trackingNumber,
@@ -236,26 +220,45 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
           continue;
         }
 
-        const timestamp = String(shipment?.status?.timestamp || '').trim() || new Date().toISOString();
-        const updated = await saveDurableOrder({
-          ...order,
-          pstpStatus: nextStatus,
-          updatedAt: new Date().toISOString(),
-          escrowStatus: nextStatus === 'Delivered' ? 'delivered' : 'shipped',
-          timeline: [
-            ...(Array.isArray(order.timeline) ? order.timeline : []),
-            {
-              status: nextStatus,
-              timestamp,
-              actor: 'DHL',
-              actorRole: 'system',
-              note: 'DHL Unified Push evidence accepted; dhl-event:' + eventId,
-              carrier: 'DHL',
-              trackingNumber,
-              location: shipment?.status?.location?.address || undefined
+        const carrierEventTimestamp = String(shipment?.status?.timestamp || '').trim() || undefined;
+        const timestamp = new Date().toISOString();
+        let updated;
+        try {
+          updated = await saveDurableOrder({
+            ...order,
+            pstpStatus: nextStatus,
+            updatedAt: timestamp,
+            escrowStatus: nextStatus === 'Delivered' ? 'delivered' : 'shipped',
+            timeline: [
+              ...(Array.isArray(order.timeline) ? order.timeline : []),
+              {
+                status: nextStatus,
+                timestamp,
+                actor: 'DHL',
+                actorRole: 'system',
+                note: 'DHL Unified Push evidence accepted; dhl-event:' + eventId,
+                carrier: 'DHL',
+                ...(carrierEventTimestamp ? { carrierEventTimestamp } : {}),
+                trackingNumber,
+                location: shipment?.status?.location?.address || undefined
+              }
+            ]
+          });
+        } catch (error) {
+          if (error instanceof Error && error.message === 'ORDER_WRITE_CONFLICT') {
+            const latest = await getDurableOrder(order.id);
+            const alreadyAccepted = (Array.isArray(latest?.timeline) ? latest.timeline : []).some((entry: any) =>
+              String(entry?.note || '').includes('dhl-event:' + eventId)
+            );
+            if (alreadyAccepted) {
+              results.push({ orderId: order.id, trackingNumber, status: 'duplicate' });
+              continue;
             }
-          ]
-        });
+            results.push({ orderId: order.id, trackingNumber, status: 'conflict', reason: 'ORDER_WRITE_CONFLICT' });
+            continue;
+          }
+          throw error;
+        }
 
         pstpAuditRepo.appendLog({
           orderId: order.id,
@@ -317,12 +320,8 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       );
       if (duplicate) return json(res, 200, { ok: true, duplicate: true, order });
 
-      const allowedTransitions: Record<string, PstpOrderStatus> = {
-        'Shipped': 'In Transit',
-        'In Transit': 'Out for Delivery',
-        'Out for Delivery': 'Delivered'
-      };
-      if (allowedTransitions[order.pstpStatus] !== nextStatus) {
+      const expected = expectedCarrierTransition(order.pstpStatus);
+      if (expected !== nextStatus) {
         return json(res, 409, {
           ok: false,
           error: 'INVALID_CARRIER_LIFECYCLE_TRANSITION',
@@ -332,22 +331,35 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       }
 
       const timestamp = new Date().toISOString();
-      const updated = await saveDurableOrder({
-        ...order,
-        pstpStatus: nextStatus,
-        updatedAt: timestamp,
-        escrowStatus: nextStatus === 'Delivered' ? 'delivered' : 'shipped',
-        timeline: [
-          ...(Array.isArray(order.timeline) ? order.timeline : []),
-          {
-            status: nextStatus,
-            timestamp,
-            actor: carrier,
-            actorRole: 'system',
-            note: `Carrier evidence accepted; carrier-event:${eventId}`
-          }
-        ]
-      });
+      let updated;
+      try {
+        updated = await saveDurableOrder({
+          ...order,
+          pstpStatus: nextStatus,
+          updatedAt: timestamp,
+          escrowStatus: nextStatus === 'Delivered' ? 'delivered' : 'shipped',
+          timeline: [
+            ...(Array.isArray(order.timeline) ? order.timeline : []),
+            {
+              status: nextStatus,
+              timestamp,
+              actor: carrier,
+              actorRole: 'system',
+              note: `Carrier evidence accepted; carrier-event:${eventId}`
+            }
+          ]
+        });
+      } catch (error) {
+        if (error instanceof Error && error.message === 'ORDER_WRITE_CONFLICT') {
+          const latest = await getDurableOrder(order.id);
+          const alreadyAccepted = (Array.isArray(latest?.timeline) ? latest.timeline : []).some((entry: any) =>
+            String(entry?.note || '').includes(`carrier-event:${eventId}`)
+          );
+          if (alreadyAccepted) return json(res, 200, { ok: true, duplicate: true, order: latest });
+          return json(res, 409, { ok: false, error: 'ORDER_WRITE_CONFLICT' });
+        }
+        throw error;
+      }
 
       pstpAuditRepo.appendLog({
         orderId: order.id,
@@ -467,7 +479,20 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       const order = await getDurableOrder(orderId);
       if (!order) return json(res, 404, { ok: false, error: 'ORDER_NOT_FOUND' });
       if (order.buyerUsername !== user.username && !(user.roles || []).includes('PLATFORM_ADMIN')) return json(res, 403, { ok: false, error: 'ORDER_ACCESS_DENIED' });
-      if (order.serverVerified === true) return json(res, 200, { ok: true, verified: true, order });
+      if (order.serverVerified === true) {
+        const body = await readJson(req);
+        const requestedPaymentId = String(body.paymentId || '').trim();
+        if (requestedPaymentId && requestedPaymentId !== String(order.piPaymentId || '').trim()) {
+          return json(res, 409, {
+            ok: false,
+            verified: false,
+            error: 'PI_PAYMENT_ALREADY_VERIFIED_WITH_DIFFERENT_PAYMENT',
+            currentPaymentIdBound: true,
+            message: 'This order is already server-verified with a different Pi payment. A new payment cannot be rebound to the order.'
+          });
+        }
+        return json(res, 200, { ok: true, verified: true, duplicate: true, order, serverAuthoritative: true });
+      }
 
       const body = await readJson(req);
       const paymentId = String(body.paymentId || '').trim();
@@ -491,11 +516,67 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         if (existingTx?.paymentId && existingTx.paymentId !== paymentId) return json(res, 409, { ok: false, verified: false, error: 'PI_TRANSACTION_ALREADY_USED' });
       }
 
+      let updated;
+      try {
+        updated = await markDurableOrderPaymentVerified(order.id, paymentId, txid || undefined);
+      } catch (error) {
+        if (error instanceof Error && error.message === 'PI_TXID_REPLAY_CONFLICT') {
+          return json(res, 409, { ok: false, verified: false, error: 'PI_TRANSACTION_ALREADY_USED', message: 'This Pi transaction ID is already bound to another order.' });
+        }
+        if (error instanceof Error && error.message === 'PI_PAYMENT_ID_REPLAY_CONFLICT') {
+          const latest = (await listDurableOrders()).find((candidate) =>
+            String(candidate.piPaymentId || '').trim() === paymentId
+          );
+          if (
+            latest?.id === order.id &&
+            latest.serverVerified === true &&
+            (!txid || !latest.piTxid || String(latest.piTxid).trim() === txid)
+          ) {
+            return json(res, 200, {
+              ok: true,
+              verified: true,
+              duplicate: true,
+              order: latest,
+              serverAuthoritative: true,
+              escrowStatus: latest.escrowStatus,
+              pstpStatus: latest.pstpStatus,
+              paymentLedger: paymentLedgerRepo.findByPaymentId(paymentId)
+            });
+          }
+          return json(res, 409, { ok: false, verified: false, error: 'PI_PAYMENT_ALREADY_USED' });
+        }
+        if (error instanceof Error && error.message === 'ORDER_WRITE_CONFLICT') {
+          const latest = await getDurableOrder(order.id);
+          if (
+            latest?.serverVerified === true &&
+            String(latest.piPaymentId || '').trim() === paymentId &&
+            (!txid || !latest.piTxid || String(latest.piTxid).trim() === txid)
+          ) {
+            return json(res, 200, {
+              ok: true,
+              verified: true,
+              duplicate: true,
+              order: latest,
+              serverAuthoritative: true,
+              escrowStatus: latest.escrowStatus,
+              pstpStatus: latest.pstpStatus,
+              paymentLedger: paymentLedgerRepo.findByPaymentId(paymentId)
+            });
+          }
+          return json(res, 409, {
+            ok: false,
+            verified: false,
+            error: 'ORDER_WRITE_CONFLICT',
+            currentStatus: latest?.pstpStatus || null,
+            message: 'Order changed while payment verification was being committed. Refresh and retry only if the payment is not already verified.'
+          });
+        }
+        throw error;
+      }
+      if (!updated) return json(res, 404, { ok: false, verified: false, error: 'ORDER_NOT_FOUND' });
       const ledger = txid
         ? paymentLedgerRepo.recordCompletion(paymentId, txid, { orderId: order.id, buyerUsername: order.buyerUsername, amountPi: order.totalPi, piUserUid })
         : paymentLedgerRepo.recordApproval(paymentId, { orderId: order.id, buyerUsername: order.buyerUsername, amountPi: order.totalPi, piUserUid });
-      const updated = await markDurableOrderPaymentVerified(order.id, paymentId, txid || undefined);
-      if (!updated) return json(res, 404, { ok: false, verified: false, error: 'ORDER_NOT_FOUND' });
       pstpAuditRepo.appendLog({ orderId: order.id, paymentId, actor: 'system', actorRole: 'system', action: 'PAYMENT_SERVER_VERIFIED', details: `Pi payment server-verified (${verification.source}); PSTP escrow protection activated.`, ipAddress: 'server', deviceInfo: 'PiNova PSTP Payment Verification Service' });
       return json(res, 200, { ok: true, verified: true, escrowStatus: updated?.escrowStatus, pstpStatus: updated?.pstpStatus, order: updated, paymentLedger: ledger });
     }
@@ -520,13 +601,13 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
 
       const body = await readJson(req);
       const nextStatus = String(body.pstpStatus || '').trim() as PstpOrderStatus;
-      if (!isSellerTransitionAllowed(order.pstpStatus, nextStatus)) {
+      if (!isAllowedSellerTransition(order.pstpStatus, nextStatus)) {
         return json(res, 409, {
           ok: false,
           error: 'INVALID_SELLER_LIFECYCLE_TRANSITION',
           from: order.pstpStatus,
           to: nextStatus,
-          allowedNext: SELLER_LIFECYCLE_TRANSITIONS[order.pstpStatus] || []
+          allowedNext: []
         });
       }
 
@@ -545,24 +626,38 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
             ? 'shipped'
             : 'in_escrow';
 
-      const updated = await saveDurableOrder({
-        ...order,
-        pstpStatus: nextStatus,
-        escrowStatus,
-        ...(carrier ? { carrier } : {}),
-        ...(trackingNumber ? { trackingNumber } : {}),
-        updatedAt: timestamp,
-        timeline: [
-          ...(Array.isArray(order.timeline) ? order.timeline : []),
-          {
-            status: nextStatus,
-            timestamp,
-            actor: user.username,
-            actorRole: 'seller',
-            note: String(body.note || 'Seller advanced fulfillment to ' + nextStatus + '.'),
-          },
-        ],
-      });
+      let updated;
+      try {
+        updated = await saveDurableOrder({
+          ...order,
+          pstpStatus: nextStatus,
+          escrowStatus,
+          ...(carrier ? { carrier } : {}),
+          ...(trackingNumber ? { trackingNumber } : {}),
+          updatedAt: timestamp,
+          timeline: [
+            ...(Array.isArray(order.timeline) ? order.timeline : []),
+            {
+              status: nextStatus,
+              timestamp,
+              actor: user.username,
+              actorRole: 'seller',
+              note: String(body.note || 'Seller advanced fulfillment to ' + nextStatus + '.'),
+            },
+          ],
+        });
+      } catch (error) {
+        if (error instanceof Error && error.message === 'ORDER_WRITE_CONFLICT') {
+          const latest = await getDurableOrder(order.id);
+          return json(res, 409, {
+            ok: false,
+            error: 'ORDER_WRITE_CONFLICT',
+            currentStatus: latest?.pstpStatus || null,
+            message: 'Order changed while this seller transition was being processed. Refresh and retry from the current lifecycle state.'
+          });
+        }
+        throw error;
+      }
 
       pstpAuditRepo.appendLog({
         orderId: order.id,
@@ -603,29 +698,46 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       }
 
       const timestamp = new Date().toISOString();
-      const updated = await saveDurableOrder({
-        ...order,
-        pstpStatus: 'Completed',
-        escrowStatus: 'released',
-        updatedAt: timestamp,
-        timeline: [
-          ...(Array.isArray(order.timeline) ? order.timeline : []),
-          {
-            status: 'Buyer Confirmation',
-            timestamp,
-            actor: user.username,
-            actorRole: 'buyer',
-            note: 'Buyer confirmed receipt after server-recorded delivery; PSTP escrow release authorized.'
-          },
-          {
-            status: 'Completed',
-            timestamp,
-            actor: 'system',
-            actorRole: 'system',
-            note: 'Order completed and PSTP escrow released after buyer confirmation.'
+      let updated;
+      try {
+        updated = await saveDurableOrder({
+          ...order,
+          pstpStatus: 'Completed',
+          escrowStatus: 'released',
+          updatedAt: timestamp,
+          timeline: [
+            ...(Array.isArray(order.timeline) ? order.timeline : []),
+            {
+              status: 'Buyer Confirmation',
+              timestamp,
+              actor: user.username,
+              actorRole: 'buyer',
+              note: 'Buyer confirmed receipt after server-recorded delivery; PSTP escrow release authorized.'
+            },
+            {
+              status: 'Completed',
+              timestamp,
+              actor: 'system',
+              actorRole: 'system',
+              note: 'Order completed and PSTP escrow released after buyer confirmation.'
+            }
+          ],
+        });
+      } catch (error) {
+        if (error instanceof Error && error.message === 'ORDER_WRITE_CONFLICT') {
+          const latest = await getDurableOrder(order.id);
+          if (latest?.pstpStatus === 'Completed' && latest?.escrowStatus === 'released') {
+            return json(res, 200, { ok: true, duplicate: true, order: latest, serverAuthoritative: true, escrowStatus: latest.escrowStatus, pstpStatus: latest.pstpStatus });
           }
-        ],
-      });
+          return json(res, 409, {
+            ok: false,
+            error: 'ORDER_WRITE_CONFLICT',
+            currentStatus: latest?.pstpStatus || null,
+            message: 'Order changed while receipt confirmation was being processed. Refresh and retry from the current lifecycle state.'
+          });
+        }
+        throw error;
+      }
 
       pstpAuditRepo.appendLog({
         orderId: order.id,
@@ -653,12 +765,6 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       const key = idempotencyKey(req);
       if (!key) return json(res, 400, { ok: false, error: 'IDEMPOTENCY_KEY_REQUIRED' });
       if (key.length > 200) return json(res, 400, { ok: false, error: 'INVALID_IDEMPOTENCY_KEY' });
-
-      const scopedKey = `${user.username}:orders:${key}`;
-      const reservation = await idempotencyRepo.reserveIdempotencyKey(scopedKey, 'order-create:v1', requestHash(body));
-      if (reservation.status === 'RESOLVED') return json(res, 200, reservation.cachedResult);
-      if (reservation.status === 'IN_PROGRESS') return json(res, 409, { ok: false, error: 'ORDER_REQUEST_IN_PROGRESS' });
-      if (reservation.status === 'CONFLICT') return json(res, 409, { ok: false, error: 'IDEMPOTENCY_KEY_PAYLOAD_CONFLICT' });
 
       try {
         const items: OrderItem[] = [];
@@ -739,15 +845,18 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
           securityFlag: false,
         };
 
-        const reserved = await reserveDurableProductStockBatch([...physicalReservations.entries()].map(([id, quantity]) => ({ id, quantity })));
-        if (!reserved && physicalReservations.size) throw new Error('INSUFFICIENT_STOCK');
-
-        const saved = await saveDurableOrder(order);
-        const response = { ok: true, order: saved };
-        await idempotencyRepo.resolveIdempotencyKey(scopedKey, response);
+        const result = await createDurableOrderWithIdempotency(
+          order,
+          [...physicalReservations.entries()].map(([id, quantity]) => ({ id, quantity })),
+          `${user.username}:orders:${key}`,
+          'order-create:v1',
+          requestHash(body)
+        );
+        if (result.status === 'RESOLVED') return json(res, 200, result.cachedResult);
+        if (result.status === 'CONFLICT') return json(res, 409, { ok: false, error: 'IDEMPOTENCY_KEY_PAYLOAD_CONFLICT' });
+        const response = { ok: true, order: result.order };
         return json(res, 201, response);
       } catch (error) {
-        await idempotencyRepo.releaseIdempotencyKey(scopedKey);
         return json(res, 409, { ok: false, error: error instanceof Error ? error.message : 'ORDER_CREATE_FAILED' });
       }
     }
@@ -767,8 +876,11 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         return json(res, 403, { ok: false, error: 'SELLER_LIFECYCLE_REQUIRES_FULFILLMENT_OR_CARRIER_EVIDENCE' });
       }
       const allowedBuyerStatuses: PstpOrderStatus[] = ['Cancelled', 'Refund Requested', 'Disputed'];
-      if (!allowedBuyerStatuses.includes(nextStatus) && !roles.includes('PLATFORM_ADMIN') && !roles.includes('COMPLIANCE_OFFICER')) {
+      if (!allowedBuyerStatuses.includes(nextStatus)) {
         return json(res, 403, { ok: false, error: 'ORDER_STATUS_CHANGE_NOT_ALLOWED' });
+      }
+      if (!isAllowedOrderTransition(order.pstpStatus, nextStatus)) {
+        return json(res, 409, { ok: false, error: 'INVALID_ORDER_LIFECYCLE_TRANSITION', from: order.pstpStatus, to: nextStatus });
       }
 
       // Buyer Confirmation and Completed are authoritative lifecycle outcomes.
@@ -814,7 +926,8 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         });
       }
 
-      const escrowStatus = body.escrowStatus || order.escrowStatus;
+      // Escrow state is server-controlled; never trust a client-supplied escrowStatus.
+      const escrowStatus = order.escrowStatus;
       const timestamp = new Date().toISOString();
       const updated = await saveDurableOrder({
         ...order,

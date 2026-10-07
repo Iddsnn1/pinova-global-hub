@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 
 export const DigitalReceiptVerifier: React.FC = () => {
-  const [receiptNumber, setReceiptNumber] = useState('RCP-EDU-NG-2025-001');
+  const [receiptNumber, setReceiptNumber] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any | null>(null);
 
@@ -40,11 +40,7 @@ export const DigitalReceiptVerifier: React.FC = () => {
     }
   };
 
-  const sampleReceipts = [
-    'RCP-EDU-NG-2025-001',
-    'RCP-EDU-NG-2025-002',
-    'RCP-EDU-NG-2025-004'
-  ];
+
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
@@ -83,20 +79,7 @@ export const DigitalReceiptVerifier: React.FC = () => {
           </button>
         </form>
 
-        {/* Quick sample chips */}
-        <div className="flex items-center gap-2 text-xs pt-1">
-          <span className="text-slate-400">Quick Samples:</span>
-          {sampleReceipts.map((ref) => (
-            <button
-              key={ref}
-              type="button"
-              onClick={() => setReceiptNumber(ref)}
-              className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-mono text-[11px] px-2.5 py-1 rounded-lg transition"
-            >
-              {ref}
-            </button>
-          ))}
-        </div>
+
       </div>
 
       {/* Verification Result Output */}
