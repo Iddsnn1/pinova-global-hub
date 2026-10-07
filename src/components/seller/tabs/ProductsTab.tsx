@@ -235,7 +235,7 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({ products, openCreateOn
       if (isEditMode && !durableEditId) throw new Error('PRODUCT_ID_MISSING');
       const result = isEditMode
         ? await updateSellerProduct(durableEditId, { title, description, pricePi, category: draft.category, marketplaceCategory: draft.marketplaceCategory, subcategory: draft.subcategory.trim(), images: uploadedImageUrl ? [uploadedImageUrl] : (editingProduct?.images || []), stock,
-          educationTier: isEducationListing ? draft.educationTier : undefined,
+          educationTier: isEducationListing && draft.educationTier ? (draft.educationTier as Product['educationTier']) : undefined,
           educationLevelId: isEducationListing ? draft.educationLevelId.trim() || undefined : undefined,
           educationGradeLevel: isEducationListing ? draft.educationGradeLevel.trim() || undefined : undefined,
           educationCountryCode: isEducationListing ? draft.educationCountryCode.trim().toUpperCase() || undefined : undefined,
