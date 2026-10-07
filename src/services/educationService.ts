@@ -133,9 +133,10 @@ export const educationService = {
     return getTaxonomyByCountry(countryCode);
   },
 
-  async getGuardianChildren(guardianId: string = 'user-pioneer-parent-001'): Promise<GuardianChildSummary[]> {
+  async getGuardianChildren(guardianId?: string): Promise<GuardianChildSummary[]> {
     try {
-      const res = await fetch(`/api/education/guardians/${encodeURIComponent(guardianId)}/children`);
+      const endpoint = guardianId ? `/api/education/guardians/${encodeURIComponent(guardianId)}/children` : '/api/education/guardians/me/children';
+      const res = await fetch(endpoint);
       if (res.ok) {
         const data = await res.json();
         return data.children || [];
