@@ -170,12 +170,12 @@ export const InstitutionAdminPortal: React.FC = () => {
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-2">
               <span className="text-xs text-slate-400 flex items-center gap-1.5">
                 <DollarSign className="w-4 h-4 text-emerald-400" />
-                <span>Total Fees Collected</span>
+                <span>Total Fees Collected (Pi)</span>
               </span>
               <div className="text-2xl font-black text-emerald-400">
-                ${analytics?.totalRevenueCollectedFiat != null ? analytics.totalRevenueCollectedFiat.toLocaleString() : '—'}
+                {analytics?.totalCollectedPi != null ? Number(analytics.totalCollectedPi).toFixed(12) : '—'} π
               </div>
-              <span className="text-[11px] text-slate-400">USD Equivalent</span>
+              <span className="text-[11px] text-slate-400">Provider-backed Pi settlement data only</span>
             </div>
 
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-2">
@@ -256,9 +256,9 @@ export const InstitutionAdminPortal: React.FC = () => {
                     <td className="p-3 font-mono text-amber-400">{inv.invoiceNumber}</td>
                     <td className="p-3 font-semibold text-white">{inv.studentName}</td>
                     <td className="p-3 font-mono text-slate-400">{inv.studentMatricOrReg}</td>
-                    <td className="p-3 font-bold text-white">${inv.totalAmount.toFixed(2)}</td>
-                    <td className="p-3 text-emerald-400 font-bold">${inv.amountPaid.toFixed(2)}</td>
-                    <td className="p-3 text-amber-400 font-mono">${inv.outstandingBalance.toFixed(2)}</td>
+                    <td className="p-3 font-bold text-white">{inv.totalAmount.toFixed(12)} π</td>
+                    <td className="p-3 text-emerald-400 font-bold">{inv.amountPaid.toFixed(12)} π</td>
+                    <td className="p-3 text-amber-400 font-mono">{inv.outstandingBalance.toFixed(12)} π</td>
                     <td className="p-3">
                       <span
                         className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
