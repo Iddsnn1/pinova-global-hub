@@ -369,6 +369,8 @@ export interface AdmissionDocument {
   fileSizeKb: number;
   uploadedAt: string;
   verificationStatus: 'verified' | 'pending' | 'rejected';
+  applicationId?: string | null;
+  sha256?: string;
 }
 
 export interface AdmissionApplication {
