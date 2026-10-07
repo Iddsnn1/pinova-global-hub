@@ -320,11 +320,26 @@ export const educationService = {
     return [];
   },
 
-  async getMarketplaceItems(category?: string, tier?: string): Promise<EducationMarketplaceItem[]> {
+  async getMarketplaceItems(
+    category?: string,
+    tier?: string,
+    filter?: {
+      countryCode?: string;
+      educationLevelId?: string;
+      gradeLevel?: string;
+      curriculumId?: string;
+      subject?: string;
+    }
+  ): Promise<EducationMarketplaceItem[]> {
     try {
       const params = new URLSearchParams();
       if (category) params.append('category', category);
       if (tier) params.append('tier', tier);
+      if (filter?.countryCode) params.append('countryCode', filter.countryCode);
+      if (filter?.educationLevelId) params.append('educationLevelId', filter.educationLevelId);
+      if (filter?.gradeLevel) params.append('gradeLevel', filter.gradeLevel);
+      if (filter?.curriculumId) params.append('curriculumId', filter.curriculumId);
+      if (filter?.subject) params.append('subject', filter.subject);
 
       const res = await fetch(`/api/education/marketplace?${params.toString()}`);
       if (res.ok) {
