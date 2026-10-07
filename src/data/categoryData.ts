@@ -569,7 +569,7 @@ export const UTILITY_CATEGORIES: UtilityCategoryDef[] = [
   {
     id: 'institution_registry',
     name: 'Institution Registry & Directory',
-    description: 'Search verified universities, polytechnics, basic colleges, and schools across global jurisdictions.',
+    description: 'Search the education registry when authoritative institution data is available.',
     iconName: 'Building2',
     popularProviders: [],
     fieldLabel: 'Search Institution / State',
@@ -613,7 +613,7 @@ export const UTILITY_CATEGORIES: UtilityCategoryDef[] = [
   {
     id: 'education_marketplace',
     name: 'Academic Marketplace & Supplies',
-    description: 'Official curriculum textbooks, JAMB/WAEC prep past questions, scientific calculators, and STEM kits.',
+    description: 'Education resources organized by curriculum, level, grade, subject, and local education system.',
     iconName: 'ShoppingBag',
     popularProviders: [],
     fieldLabel: 'Student Delivery Address',
