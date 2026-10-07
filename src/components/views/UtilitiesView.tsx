@@ -288,13 +288,13 @@ export const UtilitiesView: React.FC<UtilitiesViewProps> = ({
       case 'water_bills': return 'Settle municipal water utility balances with verified ledger receipts.';
       case 'cable_tv': return 'Renew digital satellite & decoder subscriptions directly in Pi Coin.';
       case 'internet_services': return 'Pay fiber optic broadband, Starlink, and ISP monthly subscription invoices.';
-      case 'exam_cards': return 'Purchase WAEC, NECO, JAMB, NABTEB, and NBAIS result checker scratch card PINs.';
+      case 'exam_cards': return 'Access examination-card services when an authorized examination-board provider is connected.';
       case 'education_payments': return 'Pay school fees, university tuition deposits, and academic charges across 6 tiers in Pi Coin.';
       case 'institution_registry': return 'Search verified universities, polytechnics, basic colleges, and schools across global jurisdictions.';
       case 'admissions_portal': return 'Submit and track multi-institution academic admission applications and acceptance clearances.';
       case 'receipt_verifier': return 'Cryptographically verify student tuition clearance certificates, digital bursary stamps, and audit hashes.';
-      case 'scholarships_aid': return 'Explore merit scholarships, Pioneer endowment grants, and need-based academic subsidies.';
-      case 'education_marketplace': return 'Official curriculum textbooks, JAMB/WAEC past questions, scientific calculators, and STEM kits.';
+      case 'scholarships_aid': return 'Explore scholarship listings only when an authorized scholarship provider or catalog is connected.';
+      case 'education_marketplace': return 'Browse education resources matched to curriculum, level, grade, subject, and local education system.';
       case 'gift_cards': return 'Purchase international eGift cards for Apple, Amazon, Steam & Google Play.';
       case 'gaming': return 'Top up in-game currencies, battle passes, PUBG UC, Free Fire & Robux.';
       case 'streaming': return 'Manage subscriptions for Netflix, Spotify, YouTube Premium & Disney+.';
