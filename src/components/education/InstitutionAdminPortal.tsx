@@ -36,10 +36,7 @@ export const InstitutionAdminPortal: React.FC = () => {
     try {
       const instList = await educationService.getInstitutions();
 
-        educationService.getInstitutionAnalytics(selectedInstId),
-        educationService.getInvoices({ institutionId: selectedInstId }),
-        educationService.getAdmissions({ institutionId: selectedInstId })
-      ]);
+
       setInstitutions(instList);
       const effectiveId = selectedInstId || instList[0]?.id;
       if (!effectiveId) {
