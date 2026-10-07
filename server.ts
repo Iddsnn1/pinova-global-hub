@@ -44,6 +44,7 @@ import { durableProductStorageEnabled, getDurableProduct, listDurableProducts, s
 import { durableOrderStorageEnabled, getDurableOrder, listDurableOrders, saveDurableOrder, createDurableOrderWithStockReservation, createDurableOrderWithIdempotency, markDurableOrderPaymentVerified, softDeleteDurableOrder } from './src/server/services/DurableOrderStore';
 import { durableVendorStorageEnabled, getDurableVendorApplication, getDurableVendorApplicationByIdentity, listDurableVendorApplications, saveDurableVendorApplication } from './src/server/services/DurableVendorApplicationStore';
 import { objectStorageEnabled, putObject, getObject, deleteObject, publicObjectUrl } from './src/server/services/ObjectStorage';
+import { saveEducationAdmissionDocument, listEducationAdmissionDocuments, educationDocumentStorageEnabled, EDUCATION_DOCUMENT_MAX_BYTES, EDUCATION_DOCUMENT_TYPES } from './src/server/services/EducationDocumentStorage';
 
 dotenv.config();
 
@@ -3756,6 +3757,90 @@ app.get('/api/education/admissions', authenticate, (req: AuthenticatedRequest, r
     res.status(500).json({ success: false, error: 'ADMISSIONS_FETCH_FAILED', message: err.message });
   }
 });
+
+app.get('/api/education/admissions/documents', authenticate, async (req: AuthenticatedRequest, res) => {
+  try {
+    const username = String(req.user?.username || '').trim();
+    if (!username) {
+      res.status(401).json({ success: false, error: 'AUTHENTICATION_CONTEXT_REQUIRED' });
+      return;
+    }
+    const applicationId = typeof req.query.applicationId === 'string' ? req.query.applicationId.trim() : undefined;
+    if (applicationId) {
+      const admission = educationRepo.getAdmissionById(applicationId);
+      const owner = String(admission?.applicantEmail || '').trim().toLowerCase();
+      const current = username.toLowerCase();
+      const isAdmin = (req.user?.roles || []).some((r) => ['PLATFORM_ADMIN', 'INSTITUTION_ADMIN', 'COMPLIANCE_OFFICER'].includes(r));
+      if (!admission || (!isAdmin && owner !== current)) {
+        res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Document access is limited to the authenticated applicant.' });
+        return;
+      }
+    }
+    const documents = await listEducationAdmissionDocuments(username, applicationId);
+    res.json({ success: true, count: documents.length, documents, availability: educationDocumentStorageEnabled() ? 'AVAILABLE' : 'UNAVAILABLE' });
+  } catch (err: any) {
+    res.status(503).json({ success: false, error: 'EDUCATION_DOCUMENTS_UNAVAILABLE', message: err?.message || 'Academic document storage is unavailable.' });
+  }
+});
+
+app.post(
+  '/api/education/admissions/documents/upload',
+  authenticate,
+  express.raw({ type: ['application/pdf', 'image/jpeg', 'image/png'], limit: EDUCATION_DOCUMENT_MAX_BYTES }),
+  async (req: AuthenticatedRequest, res) => {
+    try {
+      const username = String(req.user?.username || '').trim();
+      if (!username) {
+        res.status(401).json({ success: false, error: 'AUTHENTICATION_CONTEXT_REQUIRED' });
+        return;
+      }
+      if (!educationDocumentStorageEnabled()) {
+        res.status(503).json({ success: false, error: 'EDUCATION_DOCUMENT_STORAGE_UNAVAILABLE', availability: 'UNAVAILABLE' });
+        return;
+      }
+
+      const documentType = String(req.header('x-document-type') || '').trim() as any;
+      const fileName = String(req.header('x-file-name') || 'academic-document').trim();
+      const applicationId = String(req.header('x-application-id') || '').trim() || undefined;
+      const contentType = String(req.header('content-type') || '').split(';')[0].trim().toLowerCase();
+      const bytes = req.body instanceof Buffer ? new Uint8Array(req.body) : new Uint8Array();
+
+      if (!EDUCATION_DOCUMENT_TYPES.includes(documentType)) {
+        res.status(400).json({ success: false, error: 'EDUCATION_DOCUMENT_TYPE_INVALID' });
+        return;
+      }
+      if (!bytes.length) {
+        res.status(400).json({ success: false, error: 'EDUCATION_DOCUMENT_EMPTY' });
+        return;
+      }
+
+      if (applicationId) {
+        const admission = educationRepo.getAdmissionById(applicationId);
+        const owner = String(admission?.applicantEmail || '').trim().toLowerCase();
+        const current = username.toLowerCase();
+        const isAdmin = (req.user?.roles || []).some((r) => ['PLATFORM_ADMIN', 'INSTITUTION_ADMIN', 'COMPLIANCE_OFFICER'].includes(r));
+        if (!admission || (!isAdmin && owner !== current)) {
+          res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Document upload is limited to the authenticated applicant.' });
+          return;
+        }
+      }
+
+      const document = await saveEducationAdmissionDocument({
+        ownerUsername: username,
+        applicationId,
+        documentType,
+        fileName,
+        contentType,
+        bytes
+      });
+      res.status(201).json({ success: true, document });
+    } catch (err: any) {
+      const message = String(err?.message || 'Academic document upload failed.');
+      const status = message.includes('INVALID') || message.includes('EMPTY') ? 400 : 503;
+      res.status(status).json({ success: false, error: 'EDUCATION_DOCUMENT_UPLOAD_FAILED', message });
+    }
+  }
+);
 
 app.post('/api/education/admissions/apply', authenticate, async (req: AuthenticatedRequest, res) => {
   try {
