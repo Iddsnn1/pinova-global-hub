@@ -3928,7 +3928,20 @@ app.post('/api/education/scholarships', authenticate, requireRole(['PLATFORM_ADM
 // 9. Education Marketplace Products
 // Production safety: no static/seed catalog is exposed. Real listings must come from
 // an authenticated provider/catalog integration before they are displayed.
-app.get('/api/education/marketplace', (_req, res) => {
+app.get('/api/education/marketplace', (req, res) => {
+  // Provider contract is intentionally explicit so the future catalog can filter by
+  // global level and country-specific education-system metadata without coupling the
+  // marketplace to Nigeria-only grade names.
+  const marketplaceFilter = {
+    category: typeof req.query.category === 'string' ? req.query.category : undefined,
+    tier: typeof req.query.tier === 'string' ? req.query.tier : undefined,
+    countryCode: typeof req.query.countryCode === 'string' ? req.query.countryCode : undefined,
+    educationLevelId: typeof req.query.educationLevelId === 'string' ? req.query.educationLevelId : undefined,
+    gradeLevel: typeof req.query.gradeLevel === 'string' ? req.query.gradeLevel : undefined,
+    curriculumId: typeof req.query.curriculumId === 'string' ? req.query.curriculumId : undefined,
+    subject: typeof req.query.subject === 'string' ? req.query.subject : undefined
+  };
+  void marketplaceFilter;
   res.json({
     success: true,
     count: 0,
