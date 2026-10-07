@@ -4155,8 +4155,32 @@ app.get('/api/education/admin/institutions/:id/analytics', async (req, res) => {
     return;
   }
 
+  if (!auth.authorized) {
+    res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Admin privileges required.' });
+    return;
+  }
+
+  const requestedInstitutionId = String(req.params.id || '').trim();
+  const authRoles = auth.user?.roles || [];
+  const isGlobalAdmin = authRoles.some((role) =>
+    ['PLATFORM_ADMIN', 'COMPLIANCE_OFFICER', 'COMPLIANCE_ADMIN', 'BURSAR', 'FINANCE_ADMIN'].includes(role)
+  );
+  const isInstitutionAdmin = authRoles.includes('INSTITUTION_ADMIN');
+  if (
+    isInstitutionAdmin &&
+    !isGlobalAdmin &&
+    (!auth.user?.institutionId || auth.user.institutionId !== requestedInstitutionId)
+  ) {
+    res.status(403).json({
+      success: false,
+      error: 'FORBIDDEN',
+      message: 'Institution administrator access is limited to the authenticated institution.'
+    });
+    return;
+  }
+
   try {
-    const analytics = educationRepo.getInstitutionAnalytics(req.params.id);
+    const analytics = educationRepo.getInstitutionAnalytics(requestedInstitutionId);
     res.json({ success: true, analytics });
   } catch (err: any) {
     res.status(500).json({ success: false, error: 'ANALYTICS_FAILED', message: err.message });
