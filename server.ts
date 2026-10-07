@@ -3733,14 +3733,22 @@ app.get('/api/education/admissions', authenticate, (req: AuthenticatedRequest, r
     const roles = req.user?.roles || [];
     const isAdmin = roles.some((r: string) => ['PLATFORM_ADMIN', 'INSTITUTION_ADMIN', 'COMPLIANCE_OFFICER'].includes(r));
     const currentUsername = String(req.user?.username || '').trim().toLowerCase();
-    if (!isAdmin && (!applicantEmail || String(applicantEmail).trim().toLowerCase() !== currentUsername)) {
+    if (!isAdmin && !currentUsername) {
+      res.status(401).json({ success: false, error: 'AUTHENTICATION_CONTEXT_REQUIRED', message: 'Authenticated applicant context is required.' });
+      return;
+    }
+    if (!isAdmin && applicantEmail && String(applicantEmail).trim().toLowerCase() !== currentUsername) {
       res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Admission access is limited to the authenticated applicant.' });
       return;
     }
     const filter: any = {};
     if (institutionId) filter.institutionId = String(institutionId);
     if (status) filter.status = String(status);
-    if (applicantEmail) filter.applicantEmail = String(applicantEmail);
+    if (applicantEmail) {
+      filter.applicantEmail = String(applicantEmail);
+    } else if (!isAdmin) {
+      filter.applicantEmail = currentUsername;
+    }
 
     const list = educationRepo.getAdmissions(filter);
     res.json({ success: true, count: list.length, applications: list });
