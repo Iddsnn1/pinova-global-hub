@@ -34,13 +34,29 @@ export const InstitutionAdminPortal: React.FC = () => {
   const loadAll = async () => {
     setLoading(true);
     try {
-      const [instList, analyticsData, invList, appList] = await Promise.all([
-        educationService.getInstitutions(),
+      const instList = await educationService.getInstitutions();
+
         educationService.getInstitutionAnalytics(selectedInstId),
         educationService.getInvoices({ institutionId: selectedInstId }),
         educationService.getAdmissions({ institutionId: selectedInstId })
       ]);
       setInstitutions(instList);
+      const effectiveId = selectedInstId || instList[0]?.id;
+      if (!effectiveId) {
+        setAnalytics(null);
+        setInvoices([]);
+        setApplications([]);
+        return;
+      }
+      if (!selectedInstId) {
+        setSelectedInstId(effectiveId);
+        return;
+      }
+      const [analyticsData, invList, appList] = await Promise.all([
+        educationService.getInstitutionAnalytics(effectiveId),
+        educationService.getInvoices({ institutionId: effectiveId }),
+        educationService.getAdmissions({ institutionId: effectiveId })
+      ]);
       setAnalytics(analyticsData);
       setInvoices(invList);
       setApplications(appList);
