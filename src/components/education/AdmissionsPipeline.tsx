@@ -175,7 +175,7 @@ export const AdmissionsPipeline: React.FC<AdmissionsPipelineProps> = ({
           </div>
           <h3 className="text-xl font-black text-white mt-1.5">Institution Admissions</h3>
           <p className="text-xs text-slate-400 mt-0.5">
-            Discover programmes, apply to verified institutions, submit credentials, and track your admission offer.
+            Discover provider-listed programmes, apply when an authoritative admissions provider is connected, submit credentials, and track verified admission decisions.
           </p>
         </div>
 
@@ -197,7 +197,7 @@ export const AdmissionsPipeline: React.FC<AdmissionsPipelineProps> = ({
               <span>Submit Admission Application</span>
             </h4>
             <p className="text-xs text-slate-400 mt-1">
-              Apply directly to an accredited institution with automated credential verification and Pi application fee payment.
+              Apply to a verified institution when the authoritative admissions provider is available. Credential verification and any application fee are provider-controlled.
             </p>
           </div>
 
@@ -426,7 +426,7 @@ export const AdmissionsPipeline: React.FC<AdmissionsPipelineProps> = ({
                             <span>Provisional Admission Offer Issued</span>
                           </div>
                           <p className="text-xs text-slate-300 mt-1">
-                            Congratulations! {app.institutionName} has offered you admission into {app.programmeName}.
+                            {app.institutionName} has reported an admission offer for {app.programmeName}.
                           </p>
                         </div>
 
