@@ -686,7 +686,7 @@ export const InstitutionDirectory: React.FC<InstitutionDirectoryProps> = ({
 
                   <div className="text-left sm:text-right">
                     <span className="text-amber-400 font-mono font-bold text-lg block">
-                      ${currentProgramme.tuitionPerPeriod} {currentProgramme.currency}
+                      {currentProgramme.currency} {currentProgramme.tuitionPerPeriod}
                     </span>
                     <span className="text-[11px] text-slate-400 capitalize">
                       {currentProgramme.feePeriod || 'per semester'}
@@ -927,7 +927,7 @@ export const InstitutionDirectory: React.FC<InstitutionDirectoryProps> = ({
                         <span className="font-bold text-white text-xs group-hover:text-amber-400 transition">
                           {p.name}
                         </span>
-                        <span className="text-amber-400 font-mono font-bold text-xs">${p.tuitionPerPeriod}</span>
+                        <span className="text-amber-400 font-mono font-bold text-xs">{p.currency} {p.tuitionPerPeriod}</span>
                       </div>
                       <p className="text-[11px] text-slate-400">
                         {p.credentialAwarded} • {p.durationYears} {p.durationYears === 1 ? 'Year' : 'Years'}
@@ -1387,7 +1387,7 @@ export const InstitutionDirectory: React.FC<InstitutionDirectoryProps> = ({
                           </div>
                           <div className="text-right">
                             <span className="text-amber-400 font-bold font-mono text-sm block">
-                              ${p.tuitionPerPeriod} {p.currency}
+                              {p.currency} {p.tuitionPerPeriod}
                             </span>
                             <span className="text-[10px] text-slate-400 capitalize">
                               {p.feePeriod || (p.tier === 'technical_vocational' ? 'per programme' : 'per term')}
@@ -1403,36 +1403,36 @@ export const InstitutionDirectory: React.FC<InstitutionDirectoryProps> = ({
                             <div className="grid grid-cols-3 gap-1.5 pt-0.5">
                               <div>
                                 <span className="text-slate-400 block text-[10px]">Tuition:</span>
-                                <span className="font-semibold text-slate-200">${p.feeSchedule.tuition}</span>
+                                <span className="font-semibold text-slate-200">{p.currency} {p.feeSchedule.tuition}</span>
                               </div>
                               {p.feeSchedule.registration !== undefined && (
                                 <div>
                                   <span className="text-slate-400 block text-[10px]">Registration:</span>
-                                  <span className="font-semibold text-slate-200">${p.feeSchedule.registration}</span>
+                                  <span className="font-semibold text-slate-200">{p.currency} {p.feeSchedule.registration}</span>
                                 </div>
                               )}
                               {p.feeSchedule.examination !== undefined && (
                                 <div>
                                   <span className="text-slate-400 block text-[10px]">Exam/Assessment:</span>
-                                  <span className="font-semibold text-slate-200">${p.feeSchedule.examination}</span>
+                                  <span className="font-semibold text-slate-200">{p.currency} {p.feeSchedule.examination}</span>
                                 </div>
                               )}
                               {p.feeSchedule.laboratory !== undefined && (
                                 <div>
                                   <span className="text-slate-400 block text-[10px]">Lab/Practical:</span>
-                                  <span className="font-semibold text-slate-200">${p.feeSchedule.laboratory}</span>
+                                  <span className="font-semibold text-slate-200">{p.currency} {p.feeSchedule.laboratory}</span>
                                 </div>
                               )}
                               {p.feeSchedule.library !== undefined && (
                                 <div>
                                   <span className="text-slate-400 block text-[10px]">Library:</span>
-                                  <span className="font-semibold text-slate-200">${p.feeSchedule.library}</span>
+                                  <span className="font-semibold text-slate-200">{p.currency} {p.feeSchedule.library}</span>
                                 </div>
                               )}
                               {p.feeSchedule.technology !== undefined && (
                                 <div>
                                   <span className="text-slate-400 block text-[10px]">Tech Portal:</span>
-                                  <span className="font-semibold text-slate-200">${p.feeSchedule.technology}</span>
+                                  <span className="font-semibold text-slate-200">{p.currency} {p.feeSchedule.technology}</span>
                                 </div>
                               )}
                             </div>
