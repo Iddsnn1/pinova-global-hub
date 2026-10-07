@@ -353,7 +353,7 @@ export const educationService = {
         return data.scholarships || [];
       }
     } catch (e) {
-      console.warn('[educationService] Using seed scholarships:', e);
+      console.warn('[educationService] Authoritative scholarship provider unavailable:', e);
     }
     return [];
   },
@@ -385,7 +385,7 @@ export const educationService = {
         return data.items || [];
       }
     } catch (e) {
-      console.warn('[educationService] Using seed marketplace items:', e);
+      console.warn('[educationService] Authoritative education marketplace API unavailable:', e);
     }
     return [];
   },
