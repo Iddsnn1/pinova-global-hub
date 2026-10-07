@@ -45,6 +45,10 @@ export const AdmissionsPipeline: React.FC<AdmissionsPipelineProps> = ({
   const [dateOfBirth, setDateOfBirth] = useState('');
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [documentFile, setDocumentFile] = useState<File | null>(null);
+  const [documentType, setDocumentType] = useState<import('../../types/education').AdmissionDocument['type']>('other');
+  const [documentUploading, setDocumentUploading] = useState(false);
+  const [uploadedDocuments, setUploadedDocuments] = useState<import('../../types/education').AdmissionDocument[]>([]);
 
   useEffect(() => {
     loadApplications();
@@ -128,11 +132,30 @@ export const AdmissionsPipeline: React.FC<AdmissionsPipelineProps> = ({
         documents: []
       });
 
-      setStatusMessage(`Application ${newApp.applicationNumber} submitted successfully!`);
+      let documentNotice = '';
+      if (documentFile) {
+        setDocumentUploading(true);
+        try {
+          const uploaded = await educationService.uploadAcademicDocument({
+            file: documentFile,
+            documentType,
+            applicationId: newApp.id
+          });
+          setUploadedDocuments((current) => [uploaded, ...current]);
+          documentNotice = ` Academic document uploaded and marked pending verification.`;
+        } catch (documentError: any) {
+          documentNotice = ` Application submitted, but document upload failed: ${documentError.message || 'unknown error'}`;
+        } finally {
+          setDocumentUploading(false);
+        }
+      }
+
+      setStatusMessage(`Application ${newApp.applicationNumber} submitted successfully.${documentNotice}`);
       setIsApplying(false);
       setFullName('');
       setEmail('');
       setPhone('');
+      setDocumentFile(null);
       await loadApplications();
     } catch (err: any) {
       setStatusMessage(err.message || 'Failed to submit admission application.');
@@ -291,13 +314,52 @@ export const AdmissionsPipeline: React.FC<AdmissionsPipelineProps> = ({
               </div>
             </div>
 
-            {/* Academic Documents — provider/storage integration is not yet available */}
-            <div className="bg-slate-950 p-4 rounded-xl border border-dashed border-slate-700 text-xs text-center space-y-2">
-              <Upload className="w-6 h-6 text-slate-500 mx-auto" />
-              <p className="text-slate-300 font-semibold">Academic Document Upload Unavailable</p>
-              <p className="text-[11px] text-slate-500">
-                No document is attached or marked verified here. Secure private document storage and an authoritative admissions provider must be connected before documents can be uploaded or verified.
-              </p>
+            {/* Academic Documents — uploaded only after an authoritative application is created */}
+            <div className="bg-slate-950 p-4 rounded-xl border border-slate-700 text-xs space-y-3">
+              <div className="flex items-center gap-2">
+                <Upload className="w-5 h-5 text-amber-400" />
+                <div>
+                  <p className="text-slate-200 font-semibold">Academic Documents</p>
+                  <p className="text-[11px] text-slate-500">
+                    PDF, JPEG, or PNG up to 10 MB. Files are stored privately and remain pending until an authoritative verification process confirms them.
+                  </p>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <select
+                  value={documentType}
+                  onChange={(e) => setDocumentType(e.target.value as import('../../types/education').AdmissionDocument['type'])}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 text-slate-200"
+                >
+                  <option value="other">Other academic document</option>
+                  <option value="birth_certificate">Birth certificate</option>
+                  <option value="passport_photo">Passport photo</option>
+                  <option value="previous_transcript">Previous transcript</option>
+                  <option value="ssce_result">SSCE result</option>
+                  <option value="recommendation_letter">Recommendation letter</option>
+                </select>
+                <input
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+                  onChange={(e) => setDocumentFile(e.target.files?.[0] || null)}
+                  className="w-full text-slate-300 text-xs"
+                />
+              </div>
+              {documentFile && (
+                <p className="text-[11px] text-slate-400">
+                  Selected: {documentFile.name} ({Math.ceil(documentFile.size / 1024)} KB). It will upload only after the authoritative application is created.
+                </p>
+              )}
+              {uploadedDocuments.length > 0 && (
+                <div className="space-y-1">
+                  {uploadedDocuments.map((doc) => (
+                    <div key={doc.id} className="flex items-center gap-2 text-[11px] text-slate-400">
+                      <FileCheck className="w-3.5 h-3.5 text-amber-400" />
+                      <span>{doc.fileName} — pending verification</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="bg-slate-950 border border-slate-800 p-3 rounded-xl text-xs text-slate-400">
@@ -324,7 +386,7 @@ export const AdmissionsPipeline: React.FC<AdmissionsPipelineProps> = ({
                 className="px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black transition shadow-md shadow-amber-500/20 flex items-center gap-1.5"
               >
                 <Send className="w-3.5 h-3.5" />
-                <span>{submitting ? 'Submitting Application...' : providerUnavailable ? 'Admissions Provider Unavailable' : 'Submit Application'}</span>
+                <span>{submitting ? (documentUploading ? 'Uploading Document...' : 'Submitting Application...') : providerUnavailable ? 'Admissions Provider Unavailable' : 'Submit Application'}</span>
               </button>
             </div>
           </form>
