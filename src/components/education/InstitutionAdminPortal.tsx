@@ -84,9 +84,9 @@ export const InstitutionAdminPortal: React.FC = () => {
             <span className="text-xs font-bold text-amber-400 uppercase tracking-wider bg-amber-950/60 border border-amber-800/60 px-2.5 py-0.5 rounded-full">
               Institutional Administration Portal
             </span>
-            <span className="text-xs text-emerald-400 flex items-center gap-1">
+            <span className="text-xs text-slate-400 flex items-center gap-1">
               <ShieldCheck className="w-3.5 h-3.5" />
-              <span>Accredited Bursar & Registrar Controls</span>
+              <span>Institution-scoped administration</span>
             </span>
           </div>
           <h3 className="text-xl font-black text-white mt-1.5">{activeInst?.name || 'Institution Admin'}</h3>
@@ -164,7 +164,7 @@ export const InstitutionAdminPortal: React.FC = () => {
               <div className="text-2xl font-black text-white">
                 {analytics?.totalStudentsEnrolled ?? '—'}
               </div>
-              <span className="text-[11px] text-emerald-400 font-medium">+14% vs previous academic term</span>
+              <span className="text-[11px] text-slate-400 font-medium">Provider-backed comparison unavailable</span>
             </div>
 
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-2">
@@ -219,9 +219,9 @@ export const InstitutionAdminPortal: React.FC = () => {
               </div>
               <div>
                 <span className="text-slate-400 block mb-1">Audit Clearance Status</span>
-                <span className="text-emerald-300 font-bold flex items-center gap-1">
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                  <span>Verified & Active</span>
+                <span className="text-slate-400 font-semibold flex items-center gap-1">
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  <span>{activeInst?.accreditation?.authority ? 'Provider status required' : 'Not verified'}</span>
                 </span>
               </div>
             </div>
