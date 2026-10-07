@@ -291,6 +291,43 @@ export const educationService = {
     return data.application;
   },
 
+  async getAdmissionDocuments(applicationId?: string): Promise<import('../types/education').AdmissionDocument[]> {
+    try {
+      const params = applicationId ? `?applicationId=${encodeURIComponent(applicationId)}` : '';
+      const res = await fetch(`/api/education/admissions/documents${params}`);
+      if (!res.ok) return [];
+      const data = await res.json();
+      return Array.isArray(data.documents) ? data.documents : [];
+    } catch (e) {
+      console.warn('[educationService] Academic document listing unavailable:', e);
+      return [];
+    }
+  },
+
+  async uploadAcademicDocument(input: {
+    file: File;
+    documentType: import('../types/education').AdmissionDocument['type'];
+    applicationId?: string;
+  }): Promise<import('../types/education').AdmissionDocument> {
+    const headers: Record<string, string> = {
+      'Content-Type': input.file.type,
+      'X-Document-Type': input.documentType,
+      'X-Filename': input.file.name
+    };
+    if (input.applicationId) headers['X-Application-Id'] = input.applicationId;
+
+    const res = await fetch('/api/education/admissions/documents/upload', {
+      method: 'POST',
+      headers,
+      body: input.file
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.document) {
+      throw new Error(data.message || data.error || 'Academic document upload failed');
+    }
+    return data.document;
+  },
+
   async acceptOffer(applicationId: string): Promise<AdmissionApplication> {
     const res = await fetch(`/api/education/admissions/${encodeURIComponent(applicationId)}/offer/accept`, {
       method: 'POST'
