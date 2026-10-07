@@ -19,7 +19,7 @@ export const EducationMarketplace: React.FC = () => {
   const [items, setItems] = useState<EducationMarketplaceItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [categoryFilter, setCategoryFilter] = useState('all');
-  const [tierFilter, setTierFilter] = useState('all');
+  const [tierFilter, setTierFilter] = useState('secondary');
   const [orderedNotice, setOrderedNotice] = useState<string | null>(null);
 
   useEffect(() => {
@@ -31,7 +31,7 @@ export const EducationMarketplace: React.FC = () => {
     try {
       const data = await educationService.getMarketplaceItems(
         categoryFilter === 'all' ? undefined : categoryFilter,
-        tierFilter === 'all' ? undefined : tierFilter
+        tierFilter
       );
       setItems(data);
     } catch (e) {
@@ -86,10 +86,9 @@ export const EducationMarketplace: React.FC = () => {
             onChange={(e) => setTierFilter(e.target.value)}
             className="bg-slate-900 border border-slate-700 rounded-lg p-1.5 text-slate-200 focus:outline-none focus:border-amber-500"
           >
-            <option value="all">All Levels</option>
-            <option value="secondary">Secondary Level</option>
-            <option value="tertiary">University Level</option>
-            <option value="technical_vocational">Vocational & Tech</option>
+            <option value="secondary">Secondary</option>
+            <option value="tertiary">University</option>
+            <option value="technical_vocational">Technical and Vocational</option>
           </select>
         </div>
       </div>
