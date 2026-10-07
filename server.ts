@@ -3362,7 +3362,7 @@ app.get('/api/education/invoices/:id', authenticate, (req: AuthenticatedRequest,
       return;
     }
     const roles = req.user?.roles || [];
-    const isAdmin = roles.some((r: string) => ['PLATFORM_ADMIN', 'BURSAR', 'FINANCE_ADMIN', 'INSTITUTION_ADMIN'].includes(r));
+    const isGlobalAdmin = roles.some((r: string) => ['PLATFORM_ADMIN', 'BURSAR', 'FINANCE_ADMIN'].includes(r));
     const currentUser = req.user?.username;
     const currentUserId = req.user?.id;
     const authorized = isGlobalAdmin ||
@@ -3777,7 +3777,7 @@ app.get('/api/education/admissions', authenticate, (req: AuthenticatedRequest, r
     if (status) filter.status = String(status);
     if (applicantEmail) {
       filter.applicantEmail = String(applicantEmail);
-    } else if (!isAdmin) {
+    } else if (!isGlobalAdmin && !isInstitutionAdmin) {
       filter.applicantEmail = currentUsername;
     }
 
