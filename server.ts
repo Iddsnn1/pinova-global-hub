@@ -1448,7 +1448,7 @@ app.delete(
         } catch {
           return res.status(500).json({ success: false, error: 'BRANDING_METADATA_ERROR', message: 'Branding metadata could not be validated.' });
         }
-      } else if (!isAdmin) {
+      } else if (!isGlobalAdmin && !isInstitutionAdmin) {
         return res.status(404).json({ success: false, error: 'ASSET_NOT_FOUND' });
       }
 
@@ -3264,15 +3264,30 @@ app.get('/api/education/students/:id', authenticate, (req: AuthenticatedRequest,
   }
 });
 
+app.get('/api/education/guardians/me/children', authenticate, (req: AuthenticatedRequest, res) => {
+  try {
+    const guardianId = String(req.user?.guardianId || req.user?.username || req.user?.id || '').trim();
+    if (!guardianId) {
+      res.status(401).json({ success: false, error: 'AUTHENTICATION_CONTEXT_REQUIRED', message: 'Authenticated guardian context is required.' });
+      return;
+    }
+    const children = educationRepo.getGuardianChildrenSummaries(guardianId);
+    res.json({ success: true, count: children.length, children });
+  } catch {
+    res.status(500).json({ success: false, error: 'GUARDIAN_CHILDREN_FETCH_FAILED', message: 'Unable to load guardian children.' });
+  }
+});
+
 app.get('/api/education/guardians/:id/children', authenticate, (req: AuthenticatedRequest, res) => {
   try {
     const requestedGuardianId = String(req.params.id || '').trim();
     const currentUser = String(req.user?.username || '').trim();
     const currentUserId = String(req.user?.id || '').trim();
     const roles = req.user?.roles || [];
-    const isAdmin = roles.some((r: string) => ['PLATFORM_ADMIN', 'BURSAR', 'FINANCE_ADMIN', 'INSTITUTION_ADMIN'].includes(r));
+    const isGlobalAdmin = roles.some((r: string) => ['PLATFORM_ADMIN', 'BURSAR', 'FINANCE_ADMIN'].includes(r));
+    const isInstitutionAdmin = roles.includes('INSTITUTION_ADMIN');
     const ownsGuardian = Boolean(
-      isAdmin ||
+      isGlobalAdmin ||
       (currentUser && requestedGuardianId.toLowerCase() === currentUser.toLowerCase()) ||
       (currentUserId && requestedGuardianId === currentUserId) ||
       (req.user?.guardianId && requestedGuardianId.toLowerCase() === String(req.user.guardianId).toLowerCase())
@@ -3282,6 +3297,16 @@ app.get('/api/education/guardians/:id/children', authenticate, (req: Authenticat
       return;
     }
     const children = educationRepo.getGuardianChildrenSummaries(requestedGuardianId);
+    if (isInstitutionAdmin) {
+      const institutionId = String(req.user?.institutionId || '').trim();
+      if (!institutionId) {
+        res.status(403).json({ success: false, error: 'INSTITUTION_SCOPE_REQUIRED', message: 'Institution administrator scope is required.' });
+        return;
+      }
+      const scopedChildren = children.filter((child) => child.institutionId === institutionId);
+      res.json({ success: true, count: scopedChildren.length, children: scopedChildren });
+      return;
+    }
     res.json({ success: true, count: children.length, children });
   } catch (err: any) {
     res.status(500).json({ success: false, error: 'GUARDIAN_CHILDREN_FETCH_FAILED', message: 'Unable to load guardian children.' });
@@ -3295,8 +3320,8 @@ app.get('/api/education/invoices', authenticate, (req: AuthenticatedRequest, res
     const currentUser = req.user?.username;
     const currentUserId = req.user?.id;
     const roles = req.user?.roles || [];
-    const isAdmin = roles.some((r: string) => ['PLATFORM_ADMIN', 'BURSAR', 'FINANCE_ADMIN', 'INSTITUTION_ADMIN'].includes(r));
-    const isInstitutionStaff = Boolean(req.user?.institutionId && institutionId && req.user.institutionId === String(institutionId));
+    const isGlobalAdmin = roles.some((r: string) => ['PLATFORM_ADMIN', 'BURSAR', 'FINANCE_ADMIN'].includes(r));
+    const isInstitutionStaff = Boolean(roles.includes('INSTITUTION_ADMIN') && req.user?.institutionId && institutionId && req.user.institutionId === String(institutionId));
     const requestedGuardian = guardianId ? String(guardianId) : undefined;
     const ownsGuardianFilter = Boolean(
       requestedGuardian &&
@@ -3311,7 +3336,7 @@ app.get('/api/education/invoices', authenticate, (req: AuthenticatedRequest, res
        false)
     );
 
-    if (!isAdmin && !isInstitutionStaff && !ownsGuardianFilter && !ownsStudentFilter) {
+    if (!isGlobalAdmin && !isInstitutionStaff && !ownsGuardianFilter && !ownsStudentFilter) {
       res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Invoice access requires an authorized student, guardian, or institution context.' });
       return;
     }
@@ -3340,8 +3365,8 @@ app.get('/api/education/invoices/:id', authenticate, (req: AuthenticatedRequest,
     const isAdmin = roles.some((r: string) => ['PLATFORM_ADMIN', 'BURSAR', 'FINANCE_ADMIN', 'INSTITUTION_ADMIN'].includes(r));
     const currentUser = req.user?.username;
     const currentUserId = req.user?.id;
-    const authorized = isAdmin ||
-      Boolean(req.user?.institutionId && req.user.institutionId === invoice.institutionId) ||
+    const authorized = isGlobalAdmin ||
+      Boolean(roles.includes('INSTITUTION_ADMIN') && req.user?.institutionId && req.user.institutionId === invoice.institutionId) ||
       Boolean(currentUser && invoice.guardianId && invoice.guardianId.toLowerCase() === currentUser.toLowerCase()) ||
       Boolean(currentUserId && invoice.guardianId === currentUserId) ||
       Boolean(req.user?.guardianId && invoice.guardianId && req.user.guardianId.toLowerCase() === invoice.guardianId.toLowerCase()) ||
@@ -3732,17 +3757,22 @@ app.get('/api/education/admissions', authenticate, (req: AuthenticatedRequest, r
   try {
     const { institutionId, status, applicantEmail } = req.query;
     const roles = req.user?.roles || [];
-    const isAdmin = roles.some((r: string) => ['PLATFORM_ADMIN', 'INSTITUTION_ADMIN', 'COMPLIANCE_OFFICER'].includes(r));
+    const isGlobalAdmin = roles.some((r: string) => ['PLATFORM_ADMIN', 'COMPLIANCE_OFFICER'].includes(r));
+    const isInstitutionAdmin = roles.includes('INSTITUTION_ADMIN');
     const currentUsername = String(req.user?.username || '').trim().toLowerCase();
-    if (!isAdmin && !currentUsername) {
+    if (!isGlobalAdmin && !isInstitutionAdmin && !currentUsername) {
       res.status(401).json({ success: false, error: 'AUTHENTICATION_CONTEXT_REQUIRED', message: 'Authenticated applicant context is required.' });
       return;
     }
-    if (!isAdmin && applicantEmail && String(applicantEmail).trim().toLowerCase() !== currentUsername) {
+    if (!isGlobalAdmin && !isInstitutionAdmin && applicantEmail && String(applicantEmail).trim().toLowerCase() !== currentUsername) {
       res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Admission access is limited to the authenticated applicant.' });
       return;
     }
     const filter: any = {};
+    if (isInstitutionAdmin && (!req.user?.institutionId || !institutionId || req.user.institutionId !== String(institutionId))) {
+      res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Institution administrator access is limited to the authenticated institution.' });
+      return;
+    }
     if (institutionId) filter.institutionId = String(institutionId);
     if (status) filter.status = String(status);
     if (applicantEmail) {
