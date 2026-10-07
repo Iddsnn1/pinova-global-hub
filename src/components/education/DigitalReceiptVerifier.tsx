@@ -65,7 +65,7 @@ export const DigitalReceiptVerifier: React.FC = () => {
               type="text"
               value={receiptNumber}
               onChange={(e) => setReceiptNumber(e.target.value)}
-              placeholder="Enter Receipt Reference (e.g., RCP-EDU-NG-2025-001)..."
+              placeholder="Enter an official receipt reference..."
               className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-11 pr-4 py-3 text-sm font-mono text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 transition"
             />
           </div>
@@ -105,7 +105,7 @@ export const DigitalReceiptVerifier: React.FC = () => {
                     Valid Institutional Fee Clearance
                   </h4>
                   <p className="text-xs text-slate-300 mt-0.5">
-                    This document matches an authentic, settled fee transaction stored in the immutable PiNova audit register.
+                    This document matches an authentic, settled fee transaction recorded in the PiNova server-side receipt registry.
                   </p>
                 </div>
               </div>
