@@ -586,16 +586,15 @@ export const InstitutionDirectory: React.FC<InstitutionDirectoryProps> = ({
               id="education-hierarchy-programme-select"
               value={selectedProgramme}
               onChange={(e) => handleProgrammeChange(e.target.value)}
-              disabled={
-                (!currentDepartment && (!hierarchyInst?.programmes || hierarchyInst.programmes.length === 0)) ||
-                availableProgrammes.length === 0
-              }
+              disabled={availableProgrammes.length === 0}
               className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-slate-200 focus:outline-none focus:border-amber-500 disabled:opacity-40 disabled:cursor-not-allowed font-medium transition"
             >
-              {!currentDepartment && (!hierarchyInst?.programmes || hierarchyInst.programmes.length === 0) ? (
-                <option value="">Select department first...</option>
+              {!selectedHierarchyInstitution ? (
+                <option value="">Select institution first...</option>
+              ) : hierarchyLoading.programmes ? (
+                <option value="">Loading programmes...</option>
               ) : availableProgrammes.length === 0 ? (
-                <option value="">No programmes published</option>
+                <option value="">{selectedDepartment ? 'No programmes published' : 'No direct programmes published'}</option>
               ) : (
                 <>
                   <option value="">Select Programme ({availableProgrammes.length} available)...</option>
