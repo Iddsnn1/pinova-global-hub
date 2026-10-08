@@ -575,7 +575,7 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
           fiatAmount: activeFiat,
           fiatCurrency: selectedProvider.currency,
           fxQuote,
-          piRateApplied: fxQuote.piReferenceRateUsd,
+          piRateApplied: conversion?.piReferenceRateUsd ?? piConversionConfig.piRateUsd,
           packageName: selectedPackage?.name || 'Custom Purchase'
         }
       });
