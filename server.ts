@@ -39,6 +39,7 @@ import { StudentVerificationService } from './src/server/services/StudentVerific
 import { getNigeriaAuthoritativeProviderForCapability } from './src/server/services/AuthoritativeEducationProviderRegistry';
 import { verifyJambCapsAuthorization } from './src/server/services/JambCapsAuthorizationService';
 import { EducationRepository } from './src/server/db/repositories/EducationRepository';
+import { NeonEducationLedgerRepository } from './src/server/db/repositories/NeonEducationLedgerRepository';
 import { ProductRepository } from './src/server/db/repositories/ProductRepository';
 import { durableProductStorageEnabled, getDurableProduct, listDurableProducts, saveDurableProduct, updateDurableProductAvailability, reserveDurableProductStockBatch, softDeleteDurableProduct, deleteDurableProductBlob } from './src/server/services/DurableProductCatalog';
 import { durableOrderStorageEnabled, getDurableOrder, listDurableOrders, saveDurableOrder, markDurableOrderPaymentVerified, softDeleteDurableOrder } from './src/server/services/DurableOrderStore';
@@ -245,6 +246,8 @@ app.use((req, res, next) => {
 });
 
 const isProduction = process.env.NODE_ENV === 'production';
+const neonEducationLedger = new NeonEducationLedgerRepository();
+const useNeonEducationLedger = () => process.env.EDUCATION_NEON_LEDGER_ENABLED === 'true';
 
 // Phase 16 & 17: Production CORS & Restricted Frame Ancestors
 const ALLOWED_CORS_ORIGINS = [
@@ -3855,17 +3858,27 @@ app.post('/api/education/invoices/pay', paymentRateLimiter, authenticate, async 
     const effectiveIdempotencyKey = idempotencyKey || piPaymentId;
 
     // Execute atomic settlement in repository with canonical SHA-256 digest creation
-    const result = educationRepo.recordPayment({
-      invoiceId,
-      amountPaid: numericAmount,
-      currency,
-      piAmount: Number(req.body.piAmount),
-      piPaymentId,
-      piTxid: req.body.piTxid,
-      paymentMethod,
-      payerUsername,
-      idempotencyKey: effectiveIdempotencyKey
-    });
+    const result = useNeonEducationLedger()
+      ? await neonEducationLedger.recordPayment({
+          invoiceId,
+          amountPaid: numericAmount,
+          piAmount: Number(req.body.piAmount),
+          piPaymentId,
+          piTxid: req.body.piTxid,
+          payerUsername,
+          idempotencyKey: effectiveIdempotencyKey
+        })
+      : educationRepo.recordPayment({
+          invoiceId,
+          amountPaid: numericAmount,
+          currency,
+          piAmount: Number(req.body.piAmount),
+          piPaymentId,
+          piTxid: req.body.piTxid,
+          paymentMethod,
+          payerUsername,
+          idempotencyKey: effectiveIdempotencyKey
+        });
 
     // Record immutable audit log
     auditService.recordPstpAudit({
