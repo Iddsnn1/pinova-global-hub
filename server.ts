@@ -3007,7 +3007,7 @@ app.get(['/api/v2/payments/config', '/api/pi-payment/config', '/api/v2/pi/config
 
 // Server-side Utility Fulfillment & Verification Endpoint
 app.post('/api/v2/utility/fulfill', paymentRateLimiter, async (req, res) => {
-  const { paymentId, txid, category, country, countryCode, providerId, accountNumber, fiatAmount, piAmount, packageName, idempotencyKey } = req.body;
+  const { paymentId, txid, category, country, countryCode, providerId, accountNumber, fiatAmount, fiatCurrency, piAmount, packageName, idempotencyKey } = req.body;
 
   if (!paymentId) {
     res.status(400).json({ success: false, error: 'Missing paymentId parameter' });
@@ -3104,6 +3104,19 @@ app.post('/api/v2/utility/fulfill', paymentRateLimiter, async (req, res) => {
     recordedPayment?.txid ||
     txid ||
     '';
+
+  // VTU.ng settles Nigerian airtime/data in NGN. Never reinterpret a client-supplied
+  // USD/EUR/etc. amount as NGN without an authoritative FX quote.
+  if ((normalizedCategory === 'airtime' || normalizedCategory === 'mobile_data' || normalizedCategory === 'data') &&
+      isNigerianProvider &&
+      String(fiatCurrency || '').toUpperCase() !== 'NGN') {
+    res.status(422).json({
+      success: false,
+      status: 'AUTHORITATIVE_LOCAL_CURRENCY_REQUIRED',
+      message: 'Nigerian VTU fulfillment requires an authoritative NGN amount. No client-supplied FX conversion is accepted.'
+    });
+    return;
+  }
 
   // Execute VTU.ng v2 Adapter or Global Escrow Fallback
   // Re-verify the intended Nigerian airtime/data account on the server immediately
@@ -3240,7 +3253,8 @@ app.post('/api/v2/utility/fulfill', paymentRateLimiter, async (req, res) => {
     providerId: providerId || 'unknown',
     accountNumber: accountNumber || '',
     fiatAmount: Number(numericFiatAmount.toFixed(2)),
-    piAmount: Number(Number(piAmount || 0).toFixed(4)),
+    fiatCurrency: String(fiatCurrency || 'USD').toUpperCase(),
+    piAmount: Number(Number(piAmount || 0).toFixed(12)),
     packageName: packageName || 'Utility Payment',
     timestamp: new Date().toISOString(),
     providerReference: providerRef,
