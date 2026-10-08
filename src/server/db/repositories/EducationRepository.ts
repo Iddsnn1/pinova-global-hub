@@ -293,7 +293,7 @@ export class EducationRepository {
     tax: number;
     totalAmount: number;
   } {
-    const round2 = (num: number) => Math.round((num + Number.EPSILON) * 100) / 100;
+    const round2 = (num: number) => Math.round((num + Number.EPSILON) * 1_000_000_000_000) / 1_000_000_000_000;
     const subtotal = Math.max(0, round2(params.subtotal || 0));
     const compulsoryFees = Math.max(0, round2(params.compulsoryFees || 0));
     const optionalFees = Math.max(0, round2(params.optionalFees || 0));
