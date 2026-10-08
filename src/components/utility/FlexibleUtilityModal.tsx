@@ -507,8 +507,8 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
       setErrorMessage(`Calculated Pi amount (${formatPiAmount(finalPiAmount)} π) is outside allowable limits.`);
       return;
     }
-    if (!accountValidationResult?.valid) {
-      setErrorMessage('Live provider/account verification is required before payment. No unverified utility payment will be submitted.');
+    if (!accountValidationResult?.valid || accountValidationResult.verificationMethod !== 'DIRECT_API' || accountValidationResult.requiresManualVerification) {
+      setErrorMessage('Authoritative live provider verification is required before payment. Manual or unavailable verification cannot be used for settlement.');
       return;
     }
 
