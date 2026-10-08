@@ -355,7 +355,7 @@ async function runTestSuite() {
     programmeName: 'B.Sc. Computer Science',
     applicantFullName: 'Emeka Okonkwo',
     applicantEmail: 'emeka@example.com',
-    educationTier: 'UNDERGRADUATE',
+    educationTier: 'tertiary',
     dateOfBirth: '2005-04-12',
     applicationFeeFiat: 0,
     applicationFeePaid: 0,
