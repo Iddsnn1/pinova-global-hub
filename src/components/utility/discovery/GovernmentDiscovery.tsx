@@ -147,6 +147,8 @@ export const GovernmentDiscovery: React.FC<GovernmentDiscoveryProps> = ({
   const effectivePiAmount = effectiveFiatAmount > 0 ? calculateAuthoritativePiAmount(effectiveFiatAmount, activeRate) : 0;
 
   const handleProcessPayment = async () => {
+    setErrorMessage('Server-verified government billing and official reference settlement are not configured. Payment is paused; no receipt or reference has been issued.');
+    return;
     if (!selectedAgency || !selectedCivicService) {
       setErrorMessage('Please select a government agency and civic service.');
       return;
