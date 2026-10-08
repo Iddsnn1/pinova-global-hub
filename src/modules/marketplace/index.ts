@@ -406,7 +406,8 @@ export class MultiCurrencyReferenceCalculator {
   // Administrator controlled reference rates for user estimation convenience (1 Pi = X Currency)
   private referenceRates: Record<string, { symbol: string; rate: number }> = {
     // PiNova fixed reference: 1 π = $314,159 USD. Display/reference only.
-    USD: { symbol: '    NGN: { symbol: '₦', rate: 450000.0 },
+    USD: { symbol: '$', rate: 314159.0 },
+    NGN: { symbol: '₦', rate: 450000.0 },
     KES: { symbol: 'KSh', rate: 40500.0 },
     VND: { symbol: '₫', rate: 7800000.0 },
     PHP: { symbol: '₱', rate: 17800.0 },
