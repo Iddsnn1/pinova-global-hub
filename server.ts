@@ -43,6 +43,7 @@ import { ProductRepository } from './src/server/db/repositories/ProductRepositor
 import { durableProductStorageEnabled, getDurableProduct, listDurableProducts, saveDurableProduct, updateDurableProductAvailability, reserveDurableProductStockBatch, softDeleteDurableProduct, deleteDurableProductBlob } from './src/server/services/DurableProductCatalog';
 import { durableOrderStorageEnabled, getDurableOrder, listDurableOrders, saveDurableOrder, markDurableOrderPaymentVerified, softDeleteDurableOrder } from './src/server/services/DurableOrderStore';
 import { get, list, put } from '@vercel/blob';
+import { issueAuthoritativeFxQuote, validateAuthoritativeFxQuote, expectedPiMatchesPaidAmount } from './src/server/services/AuthoritativeFxQuoteService';
 
 dotenv.config();
 
@@ -3005,32 +3006,54 @@ app.post(['/api/v2/payments/cancel', '/api/pi-payment/cancel', '/api/v1/pi-payme
 app.get(['/api/v2/payments/verify/:paymentId', '/api/pi-payment/verify/:paymentId', '/api/v2/pi/payments/verify', '/api/v2/payments/verify', '/api/pi-payment/verify'], paymentRateLimiter, handleVerifyPayment);
 app.get(['/api/v2/payments/config', '/api/pi-payment/config', '/api/v2/pi/config', '/api/v2/pi/diagnostic', '/api/pi/diagnostic'], handleGetPaymentConfig);
 
+// Server-issued authoritative FX quote. Client code must never invent settlement FX rates.
+app.get('/api/v2/fx/quote', paymentRateLimiter, (req, res) => {
+  try {
+    const currencyCode = String(req.query.currencyCode || '').trim().toUpperCase();
+    if (!currencyCode) return res.status(400).json({ success: false, error: 'CURRENCY_CODE_REQUIRED' });
+    const quote = issueAuthoritativeFxQuote(currencyCode);
+    return res.json({ success: true, quote });
+  } catch (error: any) {
+    const code = String(error?.message || 'FX_QUOTE_UNAVAILABLE');
+    return res.status(code === 'CURRENCY_CODE_REQUIRED' ? 400 : 503).json({
+      success: false,
+      error: code,
+      message: 'Authoritative FX quote is unavailable. No client-side FX rate may be used for settlement.'
+    });
+  }
+});
+
 // Server-side Utility Fulfillment & Verification Endpoint
 app.post('/api/v2/utility/fulfill', paymentRateLimiter, async (req, res) => {
-  const { paymentId, txid, category, country, countryCode, providerId, accountNumber, fiatAmount, fiatCurrency, piAmount, packageName, idempotencyKey } = req.body;
+  const { paymentId, txid, category, country, countryCode, providerId, accountNumber, fiatAmount, fiatCurrency, piAmount, fxQuote, packageName, idempotencyKey } = req.body;
 
   if (!paymentId) {
     res.status(400).json({ success: false, error: 'Missing paymentId parameter' });
     return;
   }
 
-  let numericFiatAmount = typeof fiatAmount === 'number' ? fiatAmount : parseFloat(String(fiatAmount || '').replace(/[^0-9.]/g, ''));
-  if (isNaN(numericFiatAmount) || !isFinite(numericFiatAmount) || numericFiatAmount <= 0) {
-    const numPi = Number(piAmount);
-    if (numPi > 0) {
-      const cfgRate = platformConfigRepo.getConfig().piRateUsd || 314159;
-      numericFiatAmount = numPi * cfgRate;
-    }
+  const normalizedFiatCurrency = String(fiatCurrency || '').trim().toUpperCase();
+  const numericFiatAmount = typeof fiatAmount === 'number'
+    ? fiatAmount
+    : parseFloat(String(fiatAmount || '').replace(/[^0-9.]/g, ''));
+
+  if (!normalizedFiatCurrency) {
+    return res.status(400).json({ success: false, error: 'FIAT_CURRENCY_REQUIRED' });
+  }
+  if (!Number.isFinite(numericFiatAmount) || numericFiatAmount <= 0) {
+    return res.status(400).json({ success: false, error: 'INVALID_FIAT_AMOUNT' });
   }
 
-  if (isNaN(numericFiatAmount) || !isFinite(numericFiatAmount) || numericFiatAmount <= 0) {
-    res.status(400).json({
+  const quoteValidation = validateAuthoritativeFxQuote(fxQuote, normalizedFiatCurrency);
+  if (!quoteValidation.valid) {
+    return res.status(422).json({
       success: false,
-      status: 'INVALID_AMOUNT',
-      message: 'Validation Error: fiatAmount must be a valid positive number greater than 0.'
+      status: 'AUTHORITATIVE_FX_QUOTE_REQUIRED',
+      error: quoteValidation.error,
+      message: 'Settlement requires a valid, unexpired server-issued FX quote. Client-supplied FX rates and Pi conversions are not trusted.'
     });
-    return;
   }
+  const authoritativeQuote = quoteValidation.quote;
 
   // Validate Airtime Category Country-Provider consistency
   if (category === 'airtime' || category === 'mobile_data') {
@@ -3087,6 +3110,16 @@ app.post('/api/v2/utility/fulfill', paymentRateLimiter, async (req, res) => {
 
   // Authoritative Pi Payment Verification
   const verification = await verifyPiPaymentAuthoritative(paymentId);
+  const paidPiAmount = Number(verification.paymentData?.amount);
+  if (!Number.isFinite(paidPiAmount) || paidPiAmount <= 0) {
+    return res.status(422).json({ success: false, status: 'PI_AMOUNT_UNAVAILABLE', error: 'PI_AMOUNT_UNAVAILABLE', message: 'The verified Pi payment amount is unavailable; fulfillment is blocked.' });
+  }
+
+  if (!expectedPiMatchesPaidAmount(numericFiatAmount, authoritativeQuote, paidPiAmount)) {
+    return res.status(422).json({ success: false, status: 'PI_FIAT_AMOUNT_MISMATCH', error: 'PI_FIAT_AMOUNT_MISMATCH', message: 'The verified Pi payment amount does not exactly match the server-issued FX quote and fiat amount.' });
+  }
+
+
 
   if (!verification.verified) {
     console.warn(`[Utility Fulfillment] Payment verification rejected for ID: ${paymentId}`);
