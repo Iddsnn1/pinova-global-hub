@@ -197,8 +197,8 @@ async function runTestSuite() {
     institutionId: 'inst-unilag-001',
     countryCode: 'NG'
   });
-  assert(validVerification.verified, 'Scenario 5.1: Known student matches institution registry');
-  assert(validVerification.verificationStatus === 'VERIFIED', 'Scenario 5.2: Verification status is VERIFIED');
+  assert(!validVerification.verified, 'Scenario 5.1: Student is not marked verified without an authoritative provider');
+  assert(validVerification.status === 'UNAVAILABLE', 'Scenario 5.2: Student verification fails closed while the official provider is unconfigured');
 
   // 5.2 Invalid Student Rejection
   const invalidVerification = await verificationService.verifyStudent({
@@ -244,7 +244,7 @@ async function runTestSuite() {
   const invoice = eduRepo.createInvoice({
     id: `inv-test-${Date.now()}`,
     invoiceNumber: `INV-TEST-001`,
-    institutionId: 'inst-unilag-01',
+    institutionId: 'inst-ng-unilag-002',
     institutionName: 'University of Lagos',
     studentId: 'std-ng-001',
     studentName: 'Chiamaka Adeleke',
@@ -266,7 +266,7 @@ async function runTestSuite() {
     totalAmount: 400,
     amountPaid: 0,
     outstandingBalance: 400,
-    currency: 'USD',
+    currency: 'PI',
     dueDate: '2025-12-31',
     status: 'UNPAID',
     issuedDate: new Date().toISOString(),
@@ -282,7 +282,7 @@ async function runTestSuite() {
   const partialPaymentResult = eduRepo.recordPayment({
     invoiceId: invoice.id,
     amountPaid: 250,
-    currency: 'USD',
+    currency: 'PI',
     paymentMethod: 'PI_NETWORK',
     payerUsername: 'pioneer_parent'
   });
@@ -296,7 +296,7 @@ async function runTestSuite() {
     eduRepo.recordPayment({
       invoiceId: invoice.id,
       amountPaid: 200, // Balance is 150, paying 200 is an overpayment!
-      currency: 'USD',
+      currency: 'PI',
       paymentMethod: 'PI_NETWORK',
       payerUsername: 'pioneer_parent'
     });
