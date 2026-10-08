@@ -3153,12 +3153,28 @@ app.post('/api/v2/utility/fulfill', paymentRateLimiter, async (req, res) => {
   // Merely setting fiatCurrency="NGN" must never bypass quote validation.
   if ((normalizedCategory === 'airtime' || normalizedCategory === 'mobile_data' || normalizedCategory === 'data') &&
       isNigerianProvider) {
-    res.status(422).json({
-      success: false,
-      status: 'AUTHORITATIVE_NGN_QUOTE_REQUIRED',
-      message: 'Nigerian airtime/data checkout is paused until the server can validate an unexpired authoritative NGN quote. No client-supplied amount or currency can authorize fulfillment.'
-    });
-    return;
+    // Payment has already been authoritatively verified. Record it as pending
+    // instead of returning an untracked error, but do not dispatch a provider
+    // purchase until a server-issued NGN quote and account verification exist.
+    const pendingRecord = {
+      transactionId: `UTIL-TX-${Date.now()}`,
+      paymentId,
+      txid: verifiedTxid,
+      status: 'FULFILLMENT_PENDING',
+      message: 'Pi payment verified. Nigerian airtime/data fulfillment is paused until an authoritative NGN quote and server-side provider verification are configured. Do not pay again.',
+      category: category || 'utility',
+      providerId: providerId || 'unknown',
+      accountNumber: accountNumber || '',
+      fiatAmount: Number(numericFiatAmount.toFixed(2)),
+      fiatCurrency: normalizedFiatCurrency,
+      piAmount: Number(Number(paidPiAmount).toFixed(12)),
+      packageName: packageName || 'Utility Payment',
+      timestamp: new Date().toISOString(),
+      providerReference: vtuNgAdapter.generateRequestId(paymentId, 'PEND'),
+      metadata: { fulfillmentBlocked: 'AUTHORITATIVE_NGN_QUOTE_REQUIRED' }
+    };
+    utilityFulfillmentRepo.recordTransaction(existingKey, pendingRecord);
+    return res.json({ success: true, data: pendingRecord });
   }
 
   // Execute VTU.ng v2 Adapter or Global Escrow Fallback
