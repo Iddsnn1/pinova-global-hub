@@ -479,25 +479,46 @@ export const TransportDiscovery: React.FC<TransportDiscoveryProps> = ({
           initialOrigin={originInput || 'KAN'}
           initialDestination={destinationInput || 'JED'}
           onBookingSuccess={(booking) => {
+            // The flight modal also emits reconciliation/failure records through
+            // this callback. Only a real carrier-issued ticket may become a
+            // successful utility transaction receipt.
+            const ticketIssued = booking.bookingStatus === 'TICKET_ISSUED' ||
+              booking.bookingStatus === 'VERIFIED_CARRIER_VOUCHER_ISSUED';
+            const paymentId = booking.payment?.piPaymentId;
+            const txid = booking.payment?.piTxid;
+            const transactionId = booking.bookingId;
+            const ticketReference = booking.pnr || booking.bookingReference || booking.ticketNumber;
+
+            if (!ticketIssued || !paymentId || !txid || !transactionId || !ticketReference) {
+              console.warn('[Transport] Flight receipt suppressed: carrier ticket or verified payment identifiers are missing.', {
+                bookingStatus: booking.bookingStatus,
+                hasPaymentId: Boolean(paymentId),
+                hasTxid: Boolean(txid),
+                hasTransactionId: Boolean(transactionId),
+                hasTicketReference: Boolean(ticketReference)
+              });
+              return;
+            }
+
             if (onTransactionSuccess) {
               onTransactionSuccess({
-                transactionId: booking.bookingId || `TX-FLIGHT-${Date.now()}`,
-                piPaymentId: booking.payment?.piPaymentId || `PI-PAY-${Date.now()}`,
-                piTxid: booking.payment?.piTxid,
+                transactionId,
+                piPaymentId: paymentId,
+                piTxid: txid,
                 category: 'transport',
                 providerId: `flight-${booking.flightSummary?.airline?.toLowerCase().replace(/[^a-z0-9]/g, '-') || 'airline'}`,
                 providerName: booking.flightSummary?.airline || 'Airline Carrier',
-                accountNumber: booking.pnr || booking.bookingReference || `PNR-${Date.now()}`,
+                accountNumber: ticketReference,
                 accountName: booking.passenger ? `${booking.passenger.givenName} ${booking.passenger.familyName}` : 'Passenger',
                 fiatAmount: booking.payment?.fiatAmount || 0,
                 fiatCurrency: booking.payment?.fiatCurrency || 'USD',
                 appliedPiRateUsd: booking.payment?.piRateApplied || piConversionConfig.piRateUsd,
                 piAmount: booking.payment?.piAmount || 0,
                 packageName: `${booking.flightSummary?.airline || 'Flight'} ${booking.flightSummary?.flightNumber || ''} (${booking.flightSummary?.originCode || ''} ➔ ${booking.flightSummary?.destinationCode || ''})`,
-                tokenOrCode: booking.pnr || booking.bookingReference || booking.ticketNumber,
+                tokenOrCode: ticketReference,
                 status: 'SUCCESS',
                 timestamp: booking.issuedAt || new Date().toISOString(),
-                orderProtectionGuaranteed: true,
+                orderProtectionGuaranteed: false,
                 buyerUsername
               });
             }
