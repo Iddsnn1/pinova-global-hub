@@ -14,7 +14,7 @@ export class AuthorizationService {
     this.userRepo = userRepo || new UserIdentityRepository();
     this.sessionEngine = new StorageEngine<SessionEntity>('user_sessions', 'token');
     this.revokedSessionEngine = new StorageEngine<{ token: string; revokedAt: number }>('revoked_user_sessions', 'token');
-    this.secretKey = process.env.JWT_SECRET || process.env.SESSION_SECRET || 'pinova-sec-auth-v2-master-key';
+    this.secretKey = process.env.JWT_SECRET || process.env.SESSION_SECRET || '';
   }
 
   public getUserRepo(): UserIdentityRepository {
@@ -28,6 +28,7 @@ export class AuthorizationService {
     param: string | { username: string; uid?: string; roles?: UserRole[]; accessToken?: string; institutionId?: string },
     ttlMs: number = 7 * 86400000
   ): SessionEntity & { user: AuthenticatedUser } {
+    if (!this.secretKey && process.env.NODE_ENV === 'production') throw new Error('SESSION_SIGNING_SECRET_REQUIRED');
     const username = typeof param === 'string' ? param : param.username;
     const uid = typeof param === 'object' ? param.uid : undefined;
     const roles = typeof param === 'object' ? param.roles : undefined;
@@ -103,6 +104,7 @@ export class AuthorizationService {
    * Authoritatively verifies an authentication token
    */
   public async verifyToken(tokenHeader?: string): Promise<AuthenticatedUser | null> {
+    if (process.env.NODE_ENV === 'production' && !this.secretKey) return null;
     if (!tokenHeader) return null;
 
     let token = tokenHeader.trim();
