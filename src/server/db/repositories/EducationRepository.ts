@@ -391,13 +391,17 @@ export class EducationRepository {
   // Pi financial values are represented in fixed 12-decimal units for settlement comparisons.
   // This avoids floating-point tolerances that could accept/reject values outside the canonical 12-decimal contract.
   private static toPiUnits(value: number | string): bigint {
-    const raw = String(value ?? '').trim();
+    // JavaScript serializes tiny numeric values in exponent notation
+    // (e.g. 0.000000000002 -> "2e-12"). Normalize numeric inputs to
+    // the canonical 12-decimal representation before exact parsing.
+    const raw = typeof value === 'number'
+      ? (Number.isFinite(value) ? value.toFixed(12) : '')
+      : String(value ?? '').trim();
     if (!/^\d+(?:\.\d+)?$/.test(raw)) throw new Error('INVALID_PI_AMOUNT');
     const [whole, fraction = ''] = raw.split('.');
     if (fraction.length > 12) throw new Error('PI_AMOUNT_MAX_12_DECIMALS');
     return (BigInt(whole) * 1000000000000n) + BigInt((fraction + '0'.repeat(12)).slice(0, 12));
   }
-
   private static fromPiUnits(units: bigint): number {
     const negative = units < 0n;
     const absolute = negative ? -units : units;
