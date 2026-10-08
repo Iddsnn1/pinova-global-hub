@@ -52,14 +52,14 @@ export class DirectApiValidationAdapter implements IProviderValidationAdapter {
     }
 
     return {
-      valid: true,
+      valid: false,
       accountNumber,
       providerId: this.providerId,
       providerName,
       requiresManualVerification: true,
       verificationMethod: 'MANUAL_VERIFICATION',
-      statusMessage: 'Account recorded for manual provider verification prior to settlement.',
-      disclaimer: 'Provider API offline or pending connection. Account details logged for manual operations check.'
+      statusMessage: 'Live provider verification is unavailable. Payment is blocked until the provider API confirms this account.',
+      disclaimer: 'No successful provider lookup was received; this account is not verified.'
     };
   }
 }
@@ -74,14 +74,14 @@ export class ManualVerificationAdapter implements IProviderValidationAdapter {
 
   async validateAccount(accountNumber: string, providerName: string): Promise<ValidationResult> {
     return {
-      valid: true,
+      valid: false,
       accountNumber,
       providerId: this.providerId,
       providerName,
       requiresManualVerification: true,
       verificationMethod: 'MANUAL_VERIFICATION',
-      statusMessage: 'Account recorded for manual provider verification prior to settlement.',
-      disclaimer: 'No direct customer lookup API available for this provider. Details will be verified manually by fulfillment operations.'
+      statusMessage: 'This provider has no live account-verification API. Payment is blocked until an authoritative verification service is configured.',
+      disclaimer: 'No direct customer lookup API is configured; the account is not verified.'
     };
   }
 }
