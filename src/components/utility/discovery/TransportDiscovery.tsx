@@ -88,8 +88,7 @@ export const TransportDiscovery: React.FC<TransportDiscoveryProps> = ({
   piConversionConfig,
   userBalancePi = 1250.00,
   buyerUsername = 'Pioneer_User',
-  onTransactionSuccess,
-  onSelectOption
+  onTransactionSuccess
 }) => {
   // 1. Initial State: No transport mode selected initially on clean landing
   const [selectedMode, setSelectedMode] = useState<TransportModeType | null>(null);
@@ -270,10 +269,6 @@ export const TransportDiscovery: React.FC<TransportDiscoveryProps> = ({
       phone: phone.trim(),
       coachClass: cabinClass
     };
-
-    const tripDetails = staticItem 
-      ? `${staticItem.providerName}: ${origin} ➔ ${destination} (${departureDate})`
-      : `${provider.name}: ${origin} ➔ ${destination} (${departureDate})`;
 
     const safeFiat = typeof fiatFare === 'number' && Number.isFinite(fiatFare) && fiatFare > 0 
       ? Number(fiatFare.toFixed(2)) 
