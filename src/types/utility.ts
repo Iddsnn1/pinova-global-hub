@@ -344,13 +344,22 @@ export interface PiConversionConfig {
   piRateUsd: number; // PiNova reference value: 314159 USD per 1 π; reference/display only.
   minPurchasePi: number; // e.g. 0.05 Pi
   maxPurchasePi: number; // e.g. 1000.00 Pi
-  currencyCode: string; // "USD"
-  currencySymbol: string; // "$"
-  autoRateUpdateEnabled: boolean; // Live market updates are display-only and never settlement authority.
-  autoUpdateSource?: string; // Display-rate source only; never used to alter native Pi settlement.
+  currencyCode: string; // UI/default display currency only.
+  currencySymbol: string; // UI/default display symbol only.
+  autoRateUpdateEnabled: boolean; // Live FX updates must be validated server-side before settlement.
+  autoUpdateSource?: string; // Explicit FX source identifier.
   lastUpdated: string;
   updatedBy: string;
 }
+export interface AuthoritativeFxQuote {
+  quoteId: string;
+  currencyCode: string;
+  unitsPerUsd: number; // 1 USD = X units of local fiat.
+  source: string;
+  issuedAt: string;
+  expiresAt: string;
+}
+
 
 export interface ConversionRateLog {
   id: string;
