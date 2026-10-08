@@ -7,11 +7,13 @@ import { StorageEngine } from '../db/StorageEngine';
 export class AuthorizationService {
   private userRepo: UserIdentityRepository;
   private sessionEngine: StorageEngine<SessionEntity>;
+  private revokedSessionEngine: StorageEngine<{ token: string; revokedAt: number }>;
   private secretKey: string;
 
   constructor(userRepo?: UserIdentityRepository) {
     this.userRepo = userRepo || new UserIdentityRepository();
     this.sessionEngine = new StorageEngine<SessionEntity>('user_sessions', 'token');
+    this.revokedSessionEngine = new StorageEngine<{ token: string; revokedAt: number }>('revoked_user_sessions', 'token');
     this.secretKey = process.env.JWT_SECRET || process.env.SESSION_SECRET || 'pinova-sec-auth-v2-master-key';
   }
 
@@ -111,6 +113,10 @@ export class AuthorizationService {
     }
 
     if (!token) return null;
+
+    // Check revocation before cached or portable sessions. Deleting only the cached
+    // session would allow a still-valid signed token through the stateless fallback.
+    if (this.revokedSessionEngine.get(token)) return null;
 
     // 1. Check Server Machine Secrets (Admin scripts / API keys)
     const adminSecret = process.env.ADMIN_API_KEY || process.env.PI_API_KEY || process.env.PI_SERVER_KEY;
@@ -281,7 +287,10 @@ export class AuthorizationService {
     let cleanToken = token.trim();
     if (cleanToken.startsWith('Bearer ')) cleanToken = cleanToken.substring(7).trim();
     if (cleanToken.startsWith('Key ')) cleanToken = cleanToken.substring(4).trim();
-    return this.sessionEngine.delete(cleanToken);
+    const existed = Boolean(this.sessionEngine.get(cleanToken));
+    const recorded = this.revokedSessionEngine.set(cleanToken, { token: cleanToken, revokedAt: Date.now() });
+    this.sessionEngine.delete(cleanToken);
+    return existed && recorded;
   }
 
   public hasPermission(user: AuthenticatedUser, permission: any): boolean {
