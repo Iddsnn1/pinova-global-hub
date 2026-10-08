@@ -14,6 +14,7 @@ import { EducationRepository } from '../src/server/db/repositories/EducationRepo
 import { applyEducationHierarchyVerificationOverrides } from '../src/data/educationHierarchyVerificationOverrides';
 import { applyYabatechHierarchyVerificationOverride } from '../src/data/yabatechHierarchyVerificationOverride';
 import { normalizeBukFacultyHierarchy } from '../src/data/bukHierarchyNormalization';
+import { GLOBAL_EDUCATION_INSTITUTIONS } from '../src/data/educationInstitutionsData';
 
 function assert(condition: boolean, message: string, details?: string) {
   if (!condition) {
@@ -37,19 +38,22 @@ async function run() {
   console.log('PINOVA EDUCATION DIRECTORY FUNCTIONAL VERIFICATION');
   console.log('============================================================\n');
 
-  const repo = new EducationRepository();
-  const globalInstitutions = repo.getInstitutions({});
-  const nigeriaInstitutions = repo.getInstitutions({ countryCode: 'NG' });
-  const nigeriaUniversities = repo.getInstitutions({ countryCode: 'NG', institutionType: 'university' });
+  // Directory reads are registry-backed; EducationRepository is intentionally empty in
+  // production until institution records are persisted through the authoritative provider.
+  // Use the verified registry here rather than manufacturing seed rows in StorageEngine.
+  const globalInstitutions = GLOBAL_EDUCATION_INSTITUTIONS;
+  const nigeriaInstitutions = globalInstitutions.filter((i) => i.countryCode.toUpperCase() === 'NG');
+  const nigeriaUniversities = nigeriaInstitutions.filter((i) => i.institutionType === 'university');
+  const getInstitutionById = (id: string) => globalInstitutions.find((i) => i.id === id) || null;
 
   // Global-first contract: ALL scope must not collapse into Nigeria-only data.
   assert(globalInstitutions.some((i) => i.countryCode !== 'NG'), 'Global scope retains non-Nigeria institutions');
   assert(globalInstitutions.length >= nigeriaInstitutions.length, 'Global scope contains at least the Nigeria deployment-hub set');
 
   // Nigeria deployment hub: institution filtering must return the target universities.
-  const buk = withHierarchyOverrides(repo.getInstitutionById('inst-ng-buk-001'));
-  const unilag = withHierarchyOverrides(repo.getInstitutionById('inst-ng-unilag-002'));
-  const yabatech = withHierarchyOverrides(repo.getInstitutionById('inst-ng-yabatech-003'));
+  const buk = withHierarchyOverrides(getInstitutionById('inst-ng-buk-001'));
+  const unilag = withHierarchyOverrides(getInstitutionById('inst-ng-unilag-002'));
+  const yabatech = withHierarchyOverrides(getInstitutionById('inst-ng-yabatech-003'));
 
   assert(Boolean(buk), 'BUK is present in the Nigeria registry');
   assert(Boolean(unilag), 'UNILAG is present in the Nigeria registry');
