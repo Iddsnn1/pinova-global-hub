@@ -526,9 +526,12 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
 
   // Execute Pi Payment
   const handleExecutePayment = async () => {
-    const finalPiAmount = calculateAuthoritativePiAmount(getActiveFiatPrice(), piConversionConfig.piRateUsd);
-
     if (!selectedProvider) return;
+    if (!fxQuote || fxQuote.currencyCode !== activeCurrency || fxQuoteLoading || fxQuoteError) {
+      setErrorMessage('Authoritative FX quote is unavailable or expired. Payment is paused.');
+      return;
+    }
+    const finalPiAmount = calculatedPiAmount;
     if (!accountNumber.trim()) {
       setErrorMessage(`Please enter your ${getUtilityFieldLabel()}.`);
       return;
@@ -571,7 +574,8 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
           accountName: accountValidationResult?.name || 'Verified Customer',
           fiatAmount: activeFiat,
           fiatCurrency: selectedProvider.currency,
-          piRateApplied: piConversionConfig.piRateUsd,
+          fxQuote,
+          piRateApplied: fxQuote.piReferenceRateUsd,
           packageName: selectedPackage?.name || 'Custom Purchase'
         }
       });
@@ -1268,7 +1272,13 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                             <div className="pt-2 flex items-center justify-between text-xs border-t border-slate-100 dark:border-slate-800">
                               <span className="font-bold text-slate-500">${pkg.fiatPrice.toFixed(2)} USD</span>
                               <span className="font-black text-amber-500 dark:text-amber-400">
-                                {formatPiAmount(calculateAuthoritativePiAmount(pkg.fiatPrice, piConversionConfig.piRateUsd))} π
+                                {fxQuote && fxQuote.currencyCode === String(pkg.currency || selectedProvider?.currency || 'USD').toUpperCase()
+  ? formatPiAmount(convertFiatToPi({
+      amount: pkg.fiatPrice,
+      currencyCode: String(pkg.currency || selectedProvider?.currency || 'USD').toUpperCase(),
+      unitsPerUsd: fxQuote.unitsPerUsd
+    }).piAmount)
+  : '—'} π
                               </span>
                             </div>
                           </div>
