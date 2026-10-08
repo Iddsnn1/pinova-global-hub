@@ -3514,7 +3514,7 @@ app.get('/api/education/guardians/:id/children', authenticate, (req: Authenticat
 });
 
 // 4. Invoices & Authoritative School Fees Engine (Phase 5 & 11 Remediation)
-app.get('/api/education/invoices', authenticate, (req: AuthenticatedRequest, res) => {
+app.get('/api/education/invoices', authenticate, async (req: AuthenticatedRequest, res) => {
   try {
     const { studentId, institutionId, status, guardianId } = req.query;
     const currentUser = req.user?.username;
@@ -3567,16 +3567,16 @@ app.get('/api/education/invoices', authenticate, (req: AuthenticatedRequest, res
       return;
     }
 
-    const invoices = educationRepo.getInvoices(filter);
+    const invoices = useNeonEducationLedger()\n      ? await neonEducationLedger.getInvoices(filter)\n      : educationRepo.getInvoices(filter);
     res.json({ success: true, count: invoices.length, invoices });
   } catch (err: any) {
     res.status(500).json({ success: false, error: 'INVOICES_FETCH_FAILED', message: err.message });
   }
 });
 
-app.get('/api/education/invoices/:id', authenticate, (req: AuthenticatedRequest, res) => {
+app.get('/api/education/invoices/:id', authenticate, async (req: AuthenticatedRequest, res) => {
   try {
-    const invoice = educationRepo.getInvoiceById(req.params.id);
+    const invoice = useNeonEducationLedger()\n      ? await neonEducationLedger.getInvoiceById(req.params.id)\n      : educationRepo.getInvoiceById(req.params.id);
     if (!invoice) {
       res.status(404).json({ success: false, error: 'INVOICE_NOT_FOUND' });
       return;
@@ -3906,7 +3906,7 @@ app.post('/api/education/invoices/pay', paymentRateLimiter, authenticate, async 
 });
 
 // 5b. Get Payment History for Specific Invoice (Ownership Protected)
-app.get('/api/education/invoices/:id/payments', authenticate, (req: AuthenticatedRequest, res) => {
+app.get('/api/education/invoices/:id/payments', authenticate, async (req: AuthenticatedRequest, res) => {
   try {
     const { id } = req.params;
     const invoice = educationRepo.getInvoiceById(id);
@@ -3943,7 +3943,7 @@ app.get('/api/education/invoices/:id/payments', authenticate, (req: Authenticate
       return;
     }
 
-    const payments = educationRepo.getPaymentsByInvoiceId(id);
+    const payments = useNeonEducationLedger()\n      ? await neonEducationLedger.getPaymentsByInvoiceId(id)\n      : educationRepo.getPaymentsByInvoiceId(id);
     res.json(payments);
   } catch (err: any) {
     console.error('[Education Payments History] Error:', err.message);
@@ -3952,10 +3952,10 @@ app.get('/api/education/invoices/:id/payments', authenticate, (req: Authenticate
 });
 
 // 6. Digital Receipt Verification (Tamper-Resistant Cryptographic Validation)
-app.get('/api/education/receipts/:receiptNumber/verify', receiptVerifyRateLimiter, (req, res) => {
+app.get('/api/education/receipts/:receiptNumber/verify', receiptVerifyRateLimiter, async (req, res) => {
   try {
     const { receiptNumber } = req.params;
-    const verification = educationRepo.verifyReceipt(receiptNumber);
+    const verification = useNeonEducationLedger()\n      ? await neonEducationLedger.verifyReceipt(receiptNumber)\n      : educationRepo.verifyReceipt(receiptNumber);
     if (!verification.found || !verification.receipt) {
       res.status(404).json({
         success: false,
@@ -3988,9 +3988,9 @@ app.get('/api/education/receipts/:receiptNumber/verify', receiptVerifyRateLimite
   }
 });
 
-app.get('/api/education/receipts/:receiptNumber', authenticate, (req: AuthenticatedRequest, res) => {
+app.get('/api/education/receipts/:receiptNumber', authenticate, async (req: AuthenticatedRequest, res) => {
   try {
-    const receipt = educationRepo.getReceiptByNumber(req.params.receiptNumber);
+    const receipt = useNeonEducationLedger()\n      ? await neonEducationLedger.getReceiptByNumber(req.params.receiptNumber)\n      : educationRepo.getReceiptByNumber(req.params.receiptNumber);
     if (!receipt) {
       res.status(404).json({ success: false, error: 'RECEIPT_NOT_FOUND' });
       return;
