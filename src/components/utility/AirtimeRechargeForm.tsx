@@ -580,7 +580,6 @@ export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
           {fxQuoteError && (
             <div className="text-[10px] text-rose-400 font-bold">Authoritative FX quote unavailable — payment is paused.</div>
           )}
-          </div>
         </div>
       )}
 
