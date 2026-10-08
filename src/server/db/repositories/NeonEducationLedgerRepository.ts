@@ -83,15 +83,22 @@ function digest(ref: string, inv: string, pay: string, student: string, inst: st
 }
 
 async function duplicate(client: PoolClient, invoiceId: string, key: string, piPaymentId: string, piTxid?: string) {
-  const r = await client.query(
-    'SELECT p.*, i.*, r.* FROM education_payments p ' +
-    'JOIN education_invoices i ON i.id = p.invoice_id ' +
-    'JOIN education_receipts r ON r.payment_id = p.id ' +
+  const pr = await client.query(
+    'SELECT p.* FROM education_payments p ' +
     'WHERE p.invoice_id = $1 AND (p.idempotency_key = $2 OR p.pi_payment_id = $3 OR ($4::text IS NOT NULL AND p.pi_txid = $4)) LIMIT 1',
     [invoiceId, key, piPaymentId, piTxid || null]
   );
-  if (!r.rows[0]) return null;
-  return { payment: payment(r.rows[0]), invoice: invoice(r.rows[0]), receipt: receipt(r.rows[0]) };
+  if (!pr.rows[0]) return null;
+
+  const ir = await client.query('SELECT * FROM education_invoices WHERE id = $1', [pr.rows[0].invoice_id]);
+  const rr = await client.query('SELECT * FROM education_receipts WHERE receipt_number = $1', [pr.rows[0].receipt_number]);
+  if (!ir.rows[0] || !rr.rows[0]) throw new Error('PAYMENT_REPLAY_RECEIPT_MISSING');
+
+  return {
+    payment: payment(pr.rows[0]),
+    invoice: invoice(ir.rows[0]),
+    receipt: receipt(rr.rows[0])
+  };
 }
 
 export class NeonEducationLedgerRepository {
