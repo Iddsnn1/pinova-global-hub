@@ -387,8 +387,8 @@ export class VtuNgAdapter {
 
     if (!this.isConfigured()) {
       return {
-        success: true,
-        valid: true,
+        success: false,
+        valid: false,
         accountStatus: 'UNCONFIGURED',
         errorCode: 'VTU_CREDENTIALS_MISSING',
         message: 'VTU.ng credentials not configured; live customer verification unavailable.'
@@ -409,7 +409,13 @@ export class VtuNgAdapter {
       const data = payload?.data || payload;
       const customerName = data?.customer_name || data?.name || data?.Customer_Name;
       const customerAddress = data?.customer_address || data?.address || data?.Address;
-      const isStatusValid = String(payload?.code || payload?.status || '').toLowerCase() === 'success' || Boolean(customerName);
+      const providerStatus = String(payload?.code ?? payload?.status ?? payload?.data?.status ?? '').toLowerCase();
+      const isStatusValid =
+        providerStatus === 'success' ||
+        providerStatus === 'successful' ||
+        payload?.success === true ||
+        data?.success === true ||
+        data?.valid === true;
 
       const verifyResult: VtuCustomerVerificationResult = {
         success: true,
@@ -455,6 +461,30 @@ export class VtuNgAdapter {
     const requestId = this.generateRequestId(params.paymentId, 'AIR');
     const normalizedService = this.mapServiceId(params.serviceId);
     const cleanPhone = this.formatPhoneNumber(params.phone);
+    if (!cleanPhone) {
+      return {
+        success: false,
+        fulfilled: false,
+        status: 'FAILED',
+        requestId,
+        errorCode: 'VTU_INVALID_CUSTOMER',
+        message: 'A valid Nigerian mobile number is required; no provider request was sent.'
+      };
+    }
+
+    // VTU.ng accepts integer NGN denominations, not USD or fractional values.
+    const amount = Number(params.amount);
+    const minimumAmount = normalizedService === 'mtn' ? 10 : 50;
+    if (!Number.isSafeInteger(amount) || amount < minimumAmount || amount > 50000) {
+      return {
+        success: false,
+        fulfilled: false,
+        status: 'FAILED',
+        requestId,
+        errorCode: 'VTU_PROVIDER_REJECTED',
+        message: `Airtime amount must be a whole NGN amount between ₦${minimumAmount} and ₦50,000 for ${normalizedService}.`
+      };
+    }
 
     if (!this.isConfigured()) {
       return {
@@ -473,23 +503,30 @@ export class VtuNgAdapter {
         request_id: requestId,
         phone: cleanPhone,
         service_id: normalizedService,
-        amount: Math.round(params.amount)
+        amount
       })
     });
 
     if (res.ok && res.data) {
       const payload: any = res.data;
-      const isSuccess = String(payload?.code || payload?.status || '').toLowerCase() === 'success';
+      const providerStatus = String(payload?.data?.status || payload?.status || '').toLowerCase();
+      const providerMessage = String(payload?.message || '');
+      const accepted = String(payload?.code || '').toLowerCase() === 'success';
+      // A successful HTTP/API acceptance is not proof that airtime was delivered.
+      const isFulfilled = accepted && (
+        ['completed', 'completed-api', 'fulfilled', 'delivered', 'success'].includes(providerStatus) ||
+        /airtime successfully delivered|recharge successfully delivered/i.test(providerMessage)
+      );
       const orderId = payload?.data?.order_id || payload?.order_id || payload?.data?.reference;
 
       return {
-        success: isSuccess,
-        fulfilled: isSuccess,
-        status: isSuccess ? 'FULFILLED' : 'FULFILLMENT_PENDING',
+        success: accepted,
+        fulfilled: isFulfilled,
+        status: isFulfilled ? 'FULFILLED' : (accepted ? 'FULFILLMENT_PENDING' : 'FAILED'),
         orderId: String(orderId || ''),
         requestId,
         providerReference: String(orderId || requestId),
-        message: payload?.message || (isSuccess ? 'Airtime recharge successful' : 'Airtime request accepted'),
+        message: payload?.message || (isFulfilled ? 'Airtime delivery confirmed by provider.' : 'Provider accepted the request; delivery confirmation is pending.'),
         rawResponse: payload
       };
     }
@@ -518,6 +555,16 @@ export class VtuNgAdapter {
     const requestId = this.generateRequestId(params.paymentId, 'DAT');
     const normalizedService = this.mapServiceId(params.serviceId);
     const cleanPhone = this.formatPhoneNumber(params.phone);
+    if (!cleanPhone) {
+      return {
+        success: false,
+        fulfilled: false,
+        status: 'FAILED',
+        requestId,
+        errorCode: 'VTU_INVALID_CUSTOMER',
+        message: 'A valid Nigerian mobile number is required; no provider request was sent.'
+      };
+    }
 
     if (!this.isConfigured()) {
       return {
@@ -584,6 +631,16 @@ export class VtuNgAdapter {
     const normalizedService = this.mapServiceId(params.serviceId);
     const cleanCustomer = params.customerId.replace(/[^a-zA-Z0-9]/g, '').trim();
     const cleanPhone = this.formatPhoneNumber(params.phone);
+    if (!cleanPhone) {
+      return {
+        success: false,
+        fulfilled: false,
+        status: 'FAILED',
+        requestId,
+        errorCode: 'VTU_INVALID_CUSTOMER',
+        message: 'A valid Nigerian mobile number is required; no provider request was sent.'
+      };
+    }
 
     if (!this.isConfigured()) {
       return {
@@ -659,6 +716,16 @@ export class VtuNgAdapter {
     const normalizedService = this.mapServiceId(params.serviceId);
     const cleanCard = params.smartcardNumber.replace(/[^a-zA-Z0-9]/g, '').trim();
     const cleanPhone = this.formatPhoneNumber(params.phone);
+    if (!cleanPhone) {
+      return {
+        success: false,
+        fulfilled: false,
+        status: 'FAILED',
+        requestId,
+        errorCode: 'VTU_INVALID_CUSTOMER',
+        message: 'A valid Nigerian mobile number is required; no provider request was sent.'
+      };
+    }
 
     if (!this.isConfigured()) {
       return {
@@ -748,8 +815,7 @@ export class VtuNgAdapter {
    */
   public verifyWebhookSignature(payloadString: string, signatureHeader?: string): boolean {
     if (!this.config.userPin) {
-      // If PIN not configured, allow payload with warning
-      return true;
+      return false;
     }
     if (!signatureHeader) {
       return false;
@@ -757,7 +823,9 @@ export class VtuNgAdapter {
 
     try {
       const computed = crypto.createHmac('sha256', this.config.userPin).update(payloadString).digest('hex');
-      return crypto.timingSafeEqual(Buffer.from(computed), Buffer.from(signatureHeader));
+      const expected = Buffer.from(computed, 'utf8');
+      const received = Buffer.from(signatureHeader.trim(), 'utf8');
+      return expected.length === received.length && crypto.timingSafeEqual(expected, received);
     } catch {
       return false;
     }
@@ -804,12 +872,13 @@ export class VtuNgAdapter {
    * Phone number format normalization to standard Nigerian 11-digit or international format
    */
   private formatPhoneNumber(phone: string): string {
-    if (!phone) return '08000000000';
-    let clean = phone.replace(/[^0-9]/g, '');
+    const raw = String(phone || '').trim();
+    let clean = raw.replace(/[^0-9]/g, '');
     if (clean.startsWith('234') && clean.length === 13) {
       clean = '0' + clean.slice(3);
     }
-    return clean || '08000000000';
+    // Never substitute a synthetic phone number: reject invalid input before provider dispatch.
+    return /^0[789][01]\d{8}$/.test(clean) ? clean : '';
   }
 }
 

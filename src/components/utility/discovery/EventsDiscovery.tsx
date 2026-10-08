@@ -185,6 +185,8 @@ export const EventsDiscovery: React.FC<EventsDiscoveryProps> = ({
 
   // Execute Pi Payment for Ticket
   const handleProcessTicketPayment = async () => {
+    setBookingErrorMessage('Server-verified event ticket issuance is not configured. Payment is paused; no ticket or QR pass has been issued.');
+    return;
     if (!selectedEventForBooking || !selectedTier) return;
     if (!attendeeName.trim()) {
       setBookingErrorMessage('Please enter the attendee full name.');

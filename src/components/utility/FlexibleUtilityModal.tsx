@@ -40,14 +40,16 @@ import {
   UtilityServiceProvider, 
   UtilityProviderPackage, 
   PiConversionConfig,
-  UtilityTransactionReceipt
+  UtilityTransactionReceipt,
+  AuthoritativeFxQuote
 } from '../../types/utility';
 import { UTILITY_CATEGORY_META, SAMPLE_UTILITY_PROVIDERS } from '../../data/utilityData';
 import { AIRTIME_COUNTRIES } from '../../data/airtimeData';
 import { ALL_GLOBAL_COUNTRIES } from '../../data/countriesData';
 import { createPiPayment } from '../../lib/piSdk';
 import { DigitalReceiptModal } from './DigitalReceiptModal';
-import { formatPiAmount, calculateAuthoritativePiAmount } from '../../utils/formatters';
+import { formatPiAmount } from '../../utils/formatters';
+import { convertFiatToPi } from '../../modules/pricing/currencyConversion';
 import { ProviderValidationFactory } from '../../modules/utility/providerValidation';
 import { supportsServiceDiscovery } from '../../lib/utility/serviceDiscovery';
 import { resolveElectricityProviders } from '../../lib/utility/electricityDiscovery';
@@ -185,6 +187,9 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [generatedReceipt, setGeneratedReceipt] = useState<UtilityTransactionReceipt | null>(null);
+  const [fxQuote, setFxQuote] = useState<AuthoritativeFxQuote | null>(null);
+  const [fxQuoteLoading, setFxQuoteLoading] = useState(false);
+  const [fxQuoteError, setFxQuoteError] = useState<string | null>(null);
 
   // Canonical full global country catalog derived from ALL_GLOBAL_COUNTRIES and SAMPLE_UTILITY_PROVIDERS
   const allGlobalCountries = useMemo(() => {
@@ -468,6 +473,35 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
     }
   };
 
+  useEffect(() => {
+    if (!selectedProvider) {
+      setFxQuote(null);
+      setFxQuoteError(null);
+      return;
+    }
+    const currencyCode = String(selectedPackage?.currency || selectedProvider.currency || 'USD').toUpperCase();
+    let cancelled = false;
+    setFxQuoteLoading(true);
+    setFxQuoteError(null);
+    fetch(`/api/v2/fx/quote?currencyCode=${encodeURIComponent(currencyCode)}`)
+      .then(async (response) => {
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok || !body?.success || !body?.quote) {
+          throw new Error(body?.error || 'AUTHORITATIVE_FX_QUOTE_UNAVAILABLE');
+        }
+        return body.quote as AuthoritativeFxQuote;
+      })
+      .then((quote) => { if (!cancelled) setFxQuote(quote); })
+      .catch((error) => {
+        if (!cancelled) {
+          setFxQuote(null);
+          setFxQuoteError(String(error?.message || 'AUTHORITATIVE_FX_QUOTE_UNAVAILABLE'));
+        }
+      })
+      .finally(() => { if (!cancelled) setFxQuoteLoading(false); });
+    return () => { cancelled = true; };
+  }, [selectedProvider?.id, selectedProvider?.currency, selectedPackage?.currency]);
+
   // Dynamic Pi Calculation
   const getActiveFiatPrice = (): number => {
     if (purchaseMode === 'package' && selectedPackage) {
@@ -480,7 +514,11 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
     return !isNaN(parsed) && isFinite(parsed) && parsed > 0 ? parsed : 0;
   };
 
-  const calculatedPiAmount = calculateAuthoritativePiAmount(getActiveFiatPrice(), piConversionConfig.piRateUsd);
+  const activeCurrency = String(selectedPackage?.currency || selectedProvider?.currency || 'USD').toUpperCase();
+  const conversion = fxQuote && fxQuote.currencyCode === activeCurrency && getActiveFiatPrice() > 0
+    ? convertFiatToPi({ amount: getActiveFiatPrice(), currencyCode: activeCurrency, unitsPerUsd: fxQuote.unitsPerUsd })
+    : null;
+  const calculatedPiAmount = conversion?.piAmount ?? 0;
   const minPiThreshold = piConversionConfig.minPurchasePi || 0.00000001;
   const isWithinLimits =
     calculatedPiAmount >= minPiThreshold &&
@@ -488,9 +526,12 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
 
   // Execute Pi Payment
   const handleExecutePayment = async () => {
-    const finalPiAmount = calculateAuthoritativePiAmount(getActiveFiatPrice(), piConversionConfig.piRateUsd);
-
     if (!selectedProvider) return;
+    if (!fxQuote || fxQuote.currencyCode !== activeCurrency || fxQuoteLoading || fxQuoteError) {
+      setErrorMessage('Authoritative FX quote is unavailable or expired. Payment is paused.');
+      return;
+    }
+    const finalPiAmount = calculatedPiAmount;
     if (!accountNumber.trim()) {
       setErrorMessage(`Please enter your ${getUtilityFieldLabel()}.`);
       return;
@@ -507,8 +548,8 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
       setErrorMessage(`Calculated Pi amount (${formatPiAmount(finalPiAmount)} π) is outside allowable limits.`);
       return;
     }
-    if (!accountValidationResult?.valid) {
-      setErrorMessage('Live provider/account verification is required before payment. No unverified utility payment will be submitted.');
+    if (!accountValidationResult?.valid || accountValidationResult.verificationMethod !== 'DIRECT_API' || accountValidationResult.requiresManualVerification) {
+      setErrorMessage('Authoritative live provider verification is required before payment. Manual or unavailable verification cannot be used for settlement.');
       return;
     }
 
@@ -533,22 +574,68 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
           accountName: accountValidationResult?.name || 'Verified Customer',
           fiatAmount: activeFiat,
           fiatCurrency: selectedProvider.currency,
-          piRateApplied: piConversionConfig.piRateUsd,
+          fxQuote,
+          piRateApplied: conversion?.piReferenceRateUsd ?? piConversionConfig.piRateUsd,
           packageName: selectedPackage?.name || 'Custom Purchase'
         }
       });
 
       if (paymentResult && paymentResult.success) {
-        const isFulfilled = paymentResult.fulfillmentStatus === 'FULFILLED';
-        const token = isFulfilled ? (paymentResult.data?.tokenOrCode || paymentResult.data?.providerReference) : undefined;
-        
-        const transactionId = paymentResult.data?.transactionId;
         const piPaymentId = paymentResult.paymentId;
         const piTxid = paymentResult.txid;
-        if (!transactionId || !piPaymentId || !piTxid) {
-          setErrorMessage('Payment was not accepted because the server did not return complete payment identifiers. No synthetic receipt was created.');
+        if (!piPaymentId || !piTxid || !fxQuote) {
+          setErrorMessage('Pi payment was verified, but required payment identifiers or the authoritative FX quote are missing. Do not pay again; contact support with the payment ID.');
           return;
         }
+
+        // Pi payment completion is not utility fulfillment. Ask the server to
+        // verify the payment again and dispatch only through its provider gate.
+        let fulfillmentResponse: Response;
+        let fulfillmentPayload: any;
+        try {
+          fulfillmentResponse = await fetch('/api/v2/utility/fulfill', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              paymentId: piPaymentId,
+              txid: piTxid,
+              category: selectedCategory,
+              country: selectedCountryObj.name,
+              countryCode: selectedCountryCode,
+              providerId: selectedProvider.id,
+              accountNumber,
+              fiatAmount: activeFiat,
+              fiatCurrency: String(selectedPackage?.currency || selectedProvider.currency || 'USD').toUpperCase(),
+              piAmount: finalPiAmount,
+              fxQuote,
+              packageName: selectedPackage?.name || 'Custom Purchase',
+              idempotencyKey: piPaymentId,
+              variationId: selectedPackage?.id
+            })
+          });
+          fulfillmentPayload = await fulfillmentResponse.json();
+        } catch {
+          setErrorMessage('Pi payment was verified, but the server could not confirm utility fulfillment. Do not pay again; contact support with payment ID: ' + piPaymentId);
+          return;
+        }
+
+        if (!fulfillmentResponse.ok || !fulfillmentPayload?.success || !fulfillmentPayload?.data?.transactionId) {
+          const serverMessage = typeof fulfillmentPayload?.message === 'string'
+            ? fulfillmentPayload.message
+            : typeof fulfillmentPayload?.data?.message === 'string'
+              ? fulfillmentPayload.data.message
+              : 'The provider has not confirmed fulfillment.';
+          setErrorMessage('Pi payment was verified, but utility fulfillment is not confirmed. Do not pay again. Payment ID: ' + piPaymentId + '. ' + serverMessage);
+          return;
+        }
+
+        const fulfillment = fulfillmentPayload.data;
+        const isFulfilled = fulfillment.status === 'FULFILLED';
+        const token = isFulfilled
+          ? (fulfillment.metadata?.token || fulfillment.providerReference)
+          : undefined;
+        const transactionId = fulfillment.transactionId;
+
         const receipt: UtilityTransactionReceipt = {
           transactionId,
           piPaymentId,
@@ -560,13 +647,13 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
           accountName: accountValidationResult?.name || 'Verified Customer',
           piAmount: finalPiAmount,
           fiatAmount: activeFiat,
-          fiatCurrency: selectedProvider.currency,
-          timestamp: new Date().toISOString(),
+          fiatCurrency: String(selectedPackage?.currency || selectedProvider.currency || 'USD').toUpperCase(),
+          timestamp: typeof fulfillment.timestamp === 'string' ? fulfillment.timestamp : new Date().toISOString(),
           status: isFulfilled ? 'SUCCESS' : 'PROCESSING',
           tokenOrCode: token,
           packageName: selectedPackage?.name,
-          appliedPiRateUsd: piConversionConfig.piRateUsd,
-          orderProtectionGuaranteed: paymentResult.data?.orderProtectionGuaranteed === true,
+          appliedPiRateUsd: conversion?.piReferenceRateUsd ?? piConversionConfig.piRateUsd,
+          orderProtectionGuaranteed: false,
           buyerUsername: buyerUsername || 'Pioneer_User'
         };
 
@@ -608,7 +695,7 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
 
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold px-2.5 py-1 rounded-xl bg-slate-800 text-amber-300 border border-amber-500/30">
-              Configured Rate: 1 π = ${piConversionConfig.piRateUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD
+              Configured Rate: 1 π = $314,159 USD
             </span>
             {onClose && (
               <button
@@ -1230,7 +1317,13 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                             <div className="pt-2 flex items-center justify-between text-xs border-t border-slate-100 dark:border-slate-800">
                               <span className="font-bold text-slate-500">${pkg.fiatPrice.toFixed(2)} USD</span>
                               <span className="font-black text-amber-500 dark:text-amber-400">
-                                {formatPiAmount(calculateAuthoritativePiAmount(pkg.fiatPrice, piConversionConfig.piRateUsd))} π
+                                {fxQuote && fxQuote.currencyCode === String(pkg.currency || selectedProvider?.currency || 'USD').toUpperCase()
+  ? formatPiAmount(convertFiatToPi({
+      amount: pkg.fiatPrice,
+      currencyCode: String(pkg.currency || selectedProvider?.currency || 'USD').toUpperCase(),
+      unitsPerUsd: fxQuote.unitsPerUsd
+    }).piAmount)
+  : '—'} π
                               </span>
                             </div>
                           </div>
@@ -1298,7 +1391,7 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                   </div>
 
                   <div className="flex justify-between items-center text-slate-300 pt-2 border-t border-slate-800">
-                    <span>Configured Rate:</span>
+                    <span>Pi Reference:</span>
                     <span className="font-mono font-bold text-purple-400">1 π = ${piConversionConfig.piRateUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD</span>
                   </div>
                 </div>
@@ -1329,7 +1422,7 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                 <button
                   type="button"
                   onClick={handleExecutePayment}
-                  disabled={isProcessingPayment || !selectedProvider || selectedProvider.enabled === false || !accountNumber.trim() || !isWithinLimits || getActiveFiatPrice() <= 0}
+                  disabled={isProcessingPayment || fxQuoteLoading || !!fxQuoteError || !fxQuote || !selectedProvider || selectedProvider.enabled === false || !accountNumber.trim() || !isWithinLimits || getActiveFiatPrice() <= 0}
                   className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-purple-600 via-indigo-600 to-amber-500 hover:opacity-95 disabled:opacity-50 text-white font-extrabold text-xs sm:text-sm shadow-xl shadow-purple-600/30 transition-all flex items-center justify-center gap-2"
                 >
                   {selectedProvider?.enabled === false ? (

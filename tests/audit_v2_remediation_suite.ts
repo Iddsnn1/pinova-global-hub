@@ -191,14 +191,14 @@ async function runTestSuite() {
 
   const verificationService = StudentVerificationService.getInstance();
 
-  // 5.1 Authoritative Verification
+  // 5.1 Authoritative Verification must fail closed until an official provider is configured.
   const validVerification = await verificationService.verifyStudent({
     studentReference: '2021/ENG/0491',
     institutionId: 'inst-unilag-001',
     countryCode: 'NG'
   });
-  assert(validVerification.verified, 'Scenario 5.1: Known student matches institution registry');
-  assert(validVerification.verificationStatus === 'VERIFIED', 'Scenario 5.2: Verification status is VERIFIED');
+  assert(!validVerification.verified, 'Scenario 5.1: Student verification fails closed without an authoritative provider');
+  assert(validVerification.verificationStatus === 'REJECTED' && validVerification.status === 'UNAVAILABLE', 'Scenario 5.2: Verification remains unavailable/rejected until an official provider is configured');
 
   // 5.2 Invalid Student Rejection
   const invalidVerification = await verificationService.verifyStudent({
@@ -266,7 +266,7 @@ async function runTestSuite() {
     totalAmount: 400,
     amountPaid: 0,
     outstandingBalance: 400,
-    currency: 'USD',
+    currency: 'PI',
     dueDate: '2025-12-31',
     status: 'UNPAID',
     issuedDate: new Date().toISOString(),
@@ -282,7 +282,9 @@ async function runTestSuite() {
   const partialPaymentResult = eduRepo.recordPayment({
     invoiceId: invoice.id,
     amountPaid: 250,
-    currency: 'USD',
+    currency: 'PI',
+    piAmount: 250,
+    piPaymentId: 'pi-payment-audit-partial-001',
     paymentMethod: 'PI_NETWORK',
     payerUsername: 'pioneer_parent'
   });
@@ -296,7 +298,9 @@ async function runTestSuite() {
     eduRepo.recordPayment({
       invoiceId: invoice.id,
       amountPaid: 200, // Balance is 150, paying 200 is an overpayment!
-      currency: 'USD',
+      currency: 'PI',
+      piAmount: 200,
+      piPaymentId: 'pi-payment-audit-overpayment-001',
       paymentMethod: 'PI_NETWORK',
       payerUsername: 'pioneer_parent'
     });
@@ -351,6 +355,11 @@ async function runTestSuite() {
     programmeName: 'B.Sc. Computer Science',
     applicantFullName: 'Emeka Okonkwo',
     applicantEmail: 'emeka@example.com',
+    educationTier: 'tertiary',
+    dateOfBirth: '2005-01-15',
+    applicationFeeFiat: 0,
+    applicationFeePaid: false,
+    applicationFeePi: 0,
     academicSession: '2025/2026',
     documents: []
   });

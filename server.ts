@@ -43,6 +43,7 @@ import { ProductRepository } from './src/server/db/repositories/ProductRepositor
 import { durableProductStorageEnabled, getDurableProduct, listDurableProducts, saveDurableProduct, updateDurableProductAvailability, reserveDurableProductStockBatch, softDeleteDurableProduct, deleteDurableProductBlob } from './src/server/services/DurableProductCatalog';
 import { durableOrderStorageEnabled, getDurableOrder, listDurableOrders, saveDurableOrder, markDurableOrderPaymentVerified, softDeleteDurableOrder } from './src/server/services/DurableOrderStore';
 import { get, list, put } from '@vercel/blob';
+import { issueAuthoritativeFxQuote, validateAuthoritativeFxQuote, expectedPiMatchesPaidAmount } from './src/server/services/AuthoritativeFxQuoteService';
 
 dotenv.config();
 
@@ -2325,61 +2326,100 @@ app.post('/api/v1/utility/config', handlePostUtilityConfig);
 
 // Provider Account Validation API (Adapter Pattern)
 const handleUtilityValidate = async (req: express.Request, res: express.Response) => {
-  const { providerId, accountNumber } = req.body;
-  if (!accountNumber) {
-    res.status(400).json({ error: 'Account number parameter is required' });
+  const providerId = typeof req.body?.providerId === 'string' ? req.body.providerId.trim() : '';
+  const accountNumber = typeof req.body?.accountNumber === 'string' ? req.body.accountNumber.trim() : '';
+
+  if (!providerId || !accountNumber) {
+    res.status(400).json({
+      success: false,
+      valid: false,
+      error: 'PROVIDER_AND_ACCOUNT_REQUIRED',
+      message: 'Provider and account number are required.'
+    });
     return;
   }
 
-  const directApiProviders = ['safaricom', 'mtn', 'ikedc', 'dstv', 'mpesa', 'airtel', 'gotv', 'startimes', 'eko-electric', 'abuja-electric', 'kano-electric'];
-  const isDirectApiSupported = directApiProviders.some((p) => (providerId || '').toLowerCase().includes(p));
+  // Provider allow-list is routing metadata only. It is never proof of a
+  // live provider lookup.
+  const directApiProviders = [
+    'safaricom', 'mtn', 'ikedc', 'dstv', 'mpesa', 'airtel', 'gotv',
+    'startimes', 'glo', '9mobile', 'eko-electric', 'abuja-electric', 'kano-electric'
+  ];
+  const normalizedProviderId = providerId.toLowerCase();
+  const isDirectApiSupported = directApiProviders.some((p) => normalizedProviderId.includes(p));
 
-  // If VTU.ng adapter is configured and this is a TV or utility provider, perform real customer lookup
-  if (vtuNgAdapter.isConfigured() && isDirectApiSupported) {
-    try {
-      const vtuResult = await vtuNgAdapter.verifyCustomer(providerId, accountNumber);
-      if (vtuResult.success && vtuResult.valid) {
-        res.json({
-          success: true,
-          valid: true,
-          accountNumber,
-          accountName: vtuResult.customerName || `Verified Account (${accountNumber.slice(-4)})`,
-          providerId: providerId || 'unknown',
-          requiresManualVerification: false,
-          verificationMethod: 'DIRECT_API',
-          statusMessage: 'Account structure validated via VTU.ng provider API gateway.',
-          disclaimer: 'Direct VTU.ng provider API validation.'
-        });
-        return;
-      }
-    } catch (e: any) {
-      console.warn('[Utility Validate] VTU customer lookup notice:', e.message);
-    }
-  }
-
-  if (isDirectApiSupported) {
-    res.json({
-      success: true,
-      valid: true,
-      accountNumber,
-      accountName: `Verified Account (${accountNumber.slice(-4)})`,
-      providerId: providerId || 'unknown',
-      requiresManualVerification: false,
-      verificationMethod: 'DIRECT_API',
-      statusMessage: 'Account structure validated via provider API gateway.',
-      disclaimer: 'Direct provider API validation.'
-    });
-  } else {
-    res.json({
-      success: true,
-      valid: true,
-      accountNumber,
-      accountName: `Account #${accountNumber}`,
-      providerId: providerId || 'unknown',
+  if (!isDirectApiSupported) {
+    res.status(422).json({
+      success: false,
+      valid: false,
+      error: 'PROVIDER_VERIFICATION_UNSUPPORTED',
+      providerId,
       requiresManualVerification: true,
       verificationMethod: 'MANUAL_VERIFICATION',
-      statusMessage: 'Account queued for manual verification by utility provider operations.',
-      disclaimer: 'No direct customer lookup API connected for this provider. Verified manually by fulfillment team.'
+      statusMessage: 'No authoritative live verification adapter is configured for this provider.',
+      disclaimer: 'Payment is blocked until an authoritative provider verification service is configured.'
+    });
+    return;
+  }
+
+  // Fail closed: provider name matching alone must never create a verified
+  // customer. The configured gateway must explicitly confirm the account.
+  if (!vtuNgAdapter.isConfigured()) {
+    res.status(503).json({
+      success: false,
+      valid: false,
+      error: 'PROVIDER_GATEWAY_UNAVAILABLE',
+      providerId,
+      requiresManualVerification: true,
+      verificationMethod: 'MANUAL_VERIFICATION',
+      statusMessage: 'Live provider verification is unavailable. Payment is blocked.',
+      disclaimer: 'Provider gateway is not configured; no account was verified.'
+    });
+    return;
+  }
+
+  try {
+    const vtuResult = await vtuNgAdapter.verifyCustomer(providerId, accountNumber);
+
+    if (vtuResult?.success === true && vtuResult?.valid === true) {
+      res.json({
+        success: true,
+        valid: true,
+        accountNumber,
+        accountName: typeof vtuResult.customerName === 'string' && vtuResult.customerName.trim()
+          ? vtuResult.customerName.trim()
+          : undefined,
+        providerId,
+        requiresManualVerification: false,
+        verificationMethod: 'DIRECT_API',
+        statusMessage: 'Account confirmed by the configured provider API gateway.',
+        disclaimer: 'Authoritative live provider verification.'
+      });
+      return;
+    }
+
+    res.status(422).json({
+      success: false,
+      valid: false,
+      error: 'PROVIDER_ACCOUNT_NOT_VERIFIED',
+      accountNumber,
+      providerId,
+      requiresManualVerification: true,
+      verificationMethod: 'MANUAL_VERIFICATION',
+      statusMessage: vtuResult?.message || 'Provider did not confirm this account.',
+      disclaimer: 'No authoritative provider confirmation was received; payment is blocked.'
+    });
+  } catch (e: any) {
+    console.warn('[Utility Validate] Provider gateway lookup failed:', e?.message || e);
+    res.status(503).json({
+      success: false,
+      valid: false,
+      error: 'PROVIDER_VERIFICATION_UNAVAILABLE',
+      providerId,
+      requiresManualVerification: true,
+      verificationMethod: 'MANUAL_VERIFICATION',
+      statusMessage: 'Live provider verification is unavailable. Payment is blocked.',
+      disclaimer: 'Provider lookup failed; no account was verified.'
     });
   }
 };
@@ -2714,7 +2754,8 @@ const handleCompletePayment = async (req: express.Request, res: express.Response
         paymentId: cleanPaymentId,
         txid: existingCompletion.txid || cleanTxid,
         status: 'completed',
-        message: 'Payment already completed (idempotent replay)'
+        fulfillmentStatus: 'PAYMENT_VERIFIED',
+        message: 'Payment already completed (idempotent replay). Service fulfillment is tracked separately.'
       });
       return;
     }
@@ -2798,7 +2839,7 @@ const handleCompletePayment = async (req: express.Request, res: express.Response
         const data = await response.json();
         paymentLedgerRepo.recordCompletion(cleanPaymentId, cleanTxid);
         console.log(`[Pi Completion Success] Payment ID: ${cleanPaymentId} | Endpoint: ${req.path} | Time: ${timestamp} | Status: 200`);
-        res.json({ success: true, paymentId: cleanPaymentId, txid: cleanTxid, status: 'completed', data });
+        res.json({ success: true, paymentId: cleanPaymentId, txid: cleanTxid, status: 'completed', fulfillmentStatus: 'PAYMENT_VERIFIED', message: 'Pi payment completed. Service fulfillment must be confirmed separately.', data });
         return;
       } catch (fetchErr: any) {
         clearTimeout(timeoutId);
@@ -2834,7 +2875,7 @@ const handleCompletePayment = async (req: express.Request, res: express.Response
 
           if (response.ok) {
             const data = await response.json();
-            res.json({ success: true, paymentId: cleanPaymentId, txid: cleanTxid, status: 'completed', data });
+            res.json({ success: true, paymentId: cleanPaymentId, txid: cleanTxid, status: 'completed', fulfillmentStatus: 'PAYMENT_VERIFIED', message: 'Pi payment completed. Service fulfillment must be confirmed separately.', data });
             return;
           }
         } catch (fetchErr: any) {
@@ -2849,7 +2890,8 @@ const handleCompletePayment = async (req: express.Request, res: express.Response
         paymentId: cleanPaymentId,
         txid: cleanTxid,
         status: 'completed',
-        message: 'Payment completed & Escrow locked in PiNova Ledger (Sandbox/Dev Test Payment)'
+        fulfillmentStatus: 'PAYMENT_VERIFIED',
+        message: 'Sandbox/dev Pi payment completed. Service fulfillment must be confirmed separately.'
       });
     }
   } catch (err: any) {
@@ -2966,32 +3008,54 @@ app.post(['/api/v2/payments/cancel', '/api/pi-payment/cancel', '/api/v1/pi-payme
 app.get(['/api/v2/payments/verify/:paymentId', '/api/pi-payment/verify/:paymentId', '/api/v2/pi/payments/verify', '/api/v2/payments/verify', '/api/pi-payment/verify'], paymentRateLimiter, handleVerifyPayment);
 app.get(['/api/v2/payments/config', '/api/pi-payment/config', '/api/v2/pi/config', '/api/v2/pi/diagnostic', '/api/pi/diagnostic'], handleGetPaymentConfig);
 
+// Server-issued authoritative FX quote. Client code must never invent settlement FX rates.
+app.get('/api/v2/fx/quote', paymentRateLimiter, (req, res) => {
+  try {
+    const currencyCode = String(req.query.currencyCode || '').trim().toUpperCase();
+    if (!currencyCode) return res.status(400).json({ success: false, error: 'CURRENCY_CODE_REQUIRED' });
+    const quote = issueAuthoritativeFxQuote(currencyCode);
+    return res.json({ success: true, quote });
+  } catch (error: any) {
+    const code = String(error?.message || 'FX_QUOTE_UNAVAILABLE');
+    return res.status(code === 'CURRENCY_CODE_REQUIRED' ? 400 : 503).json({
+      success: false,
+      error: code,
+      message: 'Authoritative FX quote is unavailable. No client-side FX rate may be used for settlement.'
+    });
+  }
+});
+
 // Server-side Utility Fulfillment & Verification Endpoint
 app.post('/api/v2/utility/fulfill', paymentRateLimiter, async (req, res) => {
-  const { paymentId, txid, category, country, countryCode, providerId, accountNumber, fiatAmount, piAmount, packageName, idempotencyKey } = req.body;
+  const { paymentId, txid, category, country, countryCode, providerId, accountNumber, fiatAmount, fiatCurrency, piAmount, fxQuote, packageName, idempotencyKey } = req.body;
 
   if (!paymentId) {
     res.status(400).json({ success: false, error: 'Missing paymentId parameter' });
     return;
   }
 
-  let numericFiatAmount = typeof fiatAmount === 'number' ? fiatAmount : parseFloat(String(fiatAmount || '').replace(/[^0-9.]/g, ''));
-  if (isNaN(numericFiatAmount) || !isFinite(numericFiatAmount) || numericFiatAmount <= 0) {
-    const numPi = Number(piAmount);
-    if (numPi > 0) {
-      const cfgRate = platformConfigRepo.getConfig().piRateUsd || 314159;
-      numericFiatAmount = numPi * cfgRate;
-    }
+  const normalizedFiatCurrency = String(fiatCurrency || '').trim().toUpperCase();
+  const numericFiatAmount = typeof fiatAmount === 'number'
+    ? fiatAmount
+    : parseFloat(String(fiatAmount || '').replace(/[^0-9.]/g, ''));
+
+  if (!normalizedFiatCurrency) {
+    return res.status(400).json({ success: false, error: 'FIAT_CURRENCY_REQUIRED' });
+  }
+  if (!Number.isFinite(numericFiatAmount) || numericFiatAmount <= 0) {
+    return res.status(400).json({ success: false, error: 'INVALID_FIAT_AMOUNT' });
   }
 
-  if (isNaN(numericFiatAmount) || !isFinite(numericFiatAmount) || numericFiatAmount <= 0) {
-    res.status(400).json({
+  const quoteValidation = validateAuthoritativeFxQuote(fxQuote, normalizedFiatCurrency);
+  if (!quoteValidation.valid) {
+    return res.status(422).json({
       success: false,
-      status: 'INVALID_AMOUNT',
-      message: 'Validation Error: fiatAmount must be a valid positive number greater than 0.'
+      status: 'AUTHORITATIVE_FX_QUOTE_REQUIRED',
+      error: 'error' in quoteValidation ? quoteValidation.error : 'AUTHORITATIVE_FX_QUOTE_INVALID',
+      message: 'Settlement requires a valid, unexpired server-issued FX quote. Client-supplied FX rates and Pi conversions are not trusted.'
     });
-    return;
   }
+  const authoritativeQuote = quoteValidation.quote;
 
   // Validate Airtime Category Country-Provider consistency
   if (category === 'airtime' || category === 'mobile_data') {
@@ -3048,6 +3112,16 @@ app.post('/api/v2/utility/fulfill', paymentRateLimiter, async (req, res) => {
 
   // Authoritative Pi Payment Verification
   const verification = await verifyPiPaymentAuthoritative(paymentId);
+  const paidPiAmount = Number(verification.paymentData?.amount);
+  if (!Number.isFinite(paidPiAmount) || paidPiAmount <= 0) {
+    return res.status(422).json({ success: false, status: 'PI_AMOUNT_UNAVAILABLE', error: 'PI_AMOUNT_UNAVAILABLE', message: 'The verified Pi payment amount is unavailable; fulfillment is blocked.' });
+  }
+
+  if (!expectedPiMatchesPaidAmount(numericFiatAmount, authoritativeQuote, paidPiAmount)) {
+    return res.status(422).json({ success: false, status: 'PI_FIAT_AMOUNT_MISMATCH', error: 'PI_FIAT_AMOUNT_MISMATCH', message: 'The verified Pi payment amount does not exactly match the server-issued FX quote and fiat amount.' });
+  }
+
+
 
   if (!verification.verified) {
     console.warn(`[Utility Fulfillment] Payment verification rejected for ID: ${paymentId}`);
@@ -3066,14 +3140,83 @@ app.post('/api/v2/utility/fulfill', paymentRateLimiter, async (req, res) => {
     txid ||
     '';
 
+  const normalizedCategory = String(category || 'utility').toLowerCase();
+  const isNigerianProvider =
+    (countryCode === 'NG' ||
+      !countryCode ||
+      providerId?.toLowerCase().includes('-ng') ||
+      providerId?.toLowerCase().includes('ikedc') ||
+      providerId?.toLowerCase().includes('dstv'));
+
+  // SAFETY GATE: VTU.ng settles Nigerian airtime/data in NGN, but the browser's
+  // fiatAmount/fiatCurrency fields are not an authoritative quote. Until a server-side
+  // quote service issues and validates a quoteId bound to provider, phone, NGN amount,
+  // Pi amount, expiry, and payment idempotency, do not dispatch Nigerian airtime/data.
+  // Merely setting fiatCurrency="NGN" must never bypass quote validation.
+  if ((normalizedCategory === 'airtime' || normalizedCategory === 'mobile_data' || normalizedCategory === 'data') &&
+      isNigerianProvider) {
+    // Payment has already been authoritatively verified. Record it as pending
+    // instead of returning an untracked error, but do not dispatch a provider
+    // purchase until a server-issued NGN quote and account verification exist.
+    const pendingRecord = {
+      transactionId: `UTIL-TX-${Date.now()}`,
+      paymentId,
+      txid: verifiedTxid,
+      status: 'FULFILLMENT_PENDING',
+      message: 'Pi payment verified. Nigerian airtime/data fulfillment is paused until an authoritative NGN quote and server-side provider verification are configured. Do not pay again.',
+      category: category || 'utility',
+      providerId: providerId || 'unknown',
+      accountNumber: accountNumber || '',
+      fiatAmount: Number(numericFiatAmount.toFixed(2)),
+      fiatCurrency: normalizedFiatCurrency,
+      piAmount: Number(Number(paidPiAmount).toFixed(12)),
+      packageName: packageName || 'Utility Payment',
+      timestamp: new Date().toISOString(),
+      providerReference: vtuNgAdapter.generateRequestId(paymentId, 'PEND'),
+      metadata: { fulfillmentBlocked: 'AUTHORITATIVE_NGN_QUOTE_REQUIRED' }
+    };
+    utilityFulfillmentRepo.recordTransaction(existingKey, pendingRecord);
+    return res.json({ success: true, data: pendingRecord });
+  }
+
   // Execute VTU.ng v2 Adapter or Global Escrow Fallback
+  // Re-verify the intended Nigerian airtime/data account on the server immediately
+  // before dispatch. Browser validation is advisory and never trusted for fulfillment.
+  if ((normalizedCategory === 'airtime' || normalizedCategory === 'mobile_data' || normalizedCategory === 'data') && isNigerianProvider) {
+    if (!vtuNgAdapter.isConfigured()) {
+      res.status(503).json({
+        success: false,
+        status: 'PROVIDER_GATEWAY_UNAVAILABLE',
+        message: 'Live provider verification is unavailable. Fulfillment is blocked.'
+      });
+      return;
+    }
+
+    try {
+      const verificationResult = await vtuNgAdapter.verifyCustomer(providerId || '', accountNumber || '');
+      if (verificationResult.success !== true || verificationResult.valid !== true) {
+        res.status(422).json({
+          success: false,
+          status: 'PROVIDER_ACCOUNT_NOT_VERIFIED',
+          message: verificationResult.message || 'The provider did not authoritatively verify this account. Fulfillment is blocked.'
+        });
+        return;
+      }
+    } catch (verificationError: any) {
+      console.warn('[Utility Fulfillment] Server-side provider re-verification failed:', verificationError?.message || verificationError);
+      res.status(503).json({
+        success: false,
+        status: 'PROVIDER_VERIFICATION_UNAVAILABLE',
+        message: 'Live provider verification failed. Fulfillment is blocked.'
+      });
+      return;
+    }
+  }
+
   let fulfillmentStatus: 'FULFILLED' | 'FULFILLMENT_PENDING' = 'FULFILLMENT_PENDING';
   let fulfillmentMessage = 'Payment verified successfully. Fulfillment is pending provider configuration or operator confirmation.';
   let providerRef: string = vtuNgAdapter.generateRequestId(paymentId, 'PEND');
   let fulfillmentMetadata: Record<string, any> | undefined = undefined;
-
-  const normalizedCategory = String(category || 'utility').toLowerCase();
-  const isNigerianProvider = (countryCode === 'NG' || !countryCode || providerId?.toLowerCase().includes('-ng') || providerId?.toLowerCase().includes('ikedc') || providerId?.toLowerCase().includes('dstv'));
 
   if (vtuNgAdapter.isConfigured() && isNigerianProvider) {
     try {
@@ -3168,7 +3311,8 @@ app.post('/api/v2/utility/fulfill', paymentRateLimiter, async (req, res) => {
     providerId: providerId || 'unknown',
     accountNumber: accountNumber || '',
     fiatAmount: Number(numericFiatAmount.toFixed(2)),
-    piAmount: Number(Number(piAmount || 0).toFixed(4)),
+    fiatCurrency: String(fiatCurrency || 'USD').toUpperCase(),
+    piAmount: Number(Number(piAmount || 0).toFixed(12)),
     packageName: packageName || 'Utility Payment',
     timestamp: new Date().toISOString(),
     providerReference: providerRef,

@@ -36,14 +36,14 @@ export class DirectApiValidationAdapter implements IProviderValidationAdapter {
       if (result.ok && result.data) {
         const data = result.data;
         return {
-          valid: data.valid ?? true,
+          valid: data.valid === true,
           accountNumber,
           providerId: this.providerId,
           providerName,
-          requiresManualVerification: data.requiresManualVerification ?? false,
-          verificationMethod: data.verificationMethod ?? 'DIRECT_API',
+          requiresManualVerification: data.requiresManualVerification === false && data.valid === true,
+          verificationMethod: data.verificationMethod === 'DIRECT_API' && data.valid === true ? 'DIRECT_API' : 'MANUAL_VERIFICATION',
           accountName: data.accountName,
-          statusMessage: data.statusMessage || 'Account confirmed via provider API gateway.',
+          statusMessage: data.statusMessage || (data.valid === true ? 'Account confirmed via provider API gateway.' : 'Provider did not authoritatively verify this account.'),
           disclaimer: data.disclaimer || 'Direct API verification.'
         };
       }
@@ -52,14 +52,14 @@ export class DirectApiValidationAdapter implements IProviderValidationAdapter {
     }
 
     return {
-      valid: true,
+      valid: false,
       accountNumber,
       providerId: this.providerId,
       providerName,
       requiresManualVerification: true,
       verificationMethod: 'MANUAL_VERIFICATION',
-      statusMessage: 'Account recorded for manual provider verification prior to settlement.',
-      disclaimer: 'Provider API offline or pending connection. Account details logged for manual operations check.'
+      statusMessage: 'Live provider verification is unavailable. Payment is blocked until the provider API confirms this account.',
+      disclaimer: 'No successful provider lookup was received; this account is not verified.'
     };
   }
 }
@@ -74,14 +74,14 @@ export class ManualVerificationAdapter implements IProviderValidationAdapter {
 
   async validateAccount(accountNumber: string, providerName: string): Promise<ValidationResult> {
     return {
-      valid: true,
+      valid: false,
       accountNumber,
       providerId: this.providerId,
       providerName,
       requiresManualVerification: true,
       verificationMethod: 'MANUAL_VERIFICATION',
-      statusMessage: 'Account recorded for manual provider verification prior to settlement.',
-      disclaimer: 'No direct customer lookup API available for this provider. Details will be verified manually by fulfillment operations.'
+      statusMessage: 'This provider has no live account-verification API. Payment is blocked until an authoritative verification service is configured.',
+      disclaimer: 'No direct customer lookup API is configured; the account is not verified.'
     };
   }
 }

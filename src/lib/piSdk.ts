@@ -3801,8 +3801,12 @@ export class PiSdkManagerService {
                           paymentId,
                           txid,
                           success: true,
-                          fulfillmentStatus: 'FULFILLED',
-                          message: 'Pi payment verified and completed successfully.',
+                          // Blockchain verification confirms payment only. A service is
+                          // fulfilled only when the backend explicitly confirms it.
+                          fulfillmentStatus: typeof data.fulfillmentStatus === 'string'
+                            ? data.fulfillmentStatus
+                            : 'PAYMENT_VERIFIED',
+                          message: 'Pi payment verified. Service fulfillment must be confirmed separately.',
                           data
                         });
 

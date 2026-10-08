@@ -204,6 +204,8 @@ export const ElectricityDiscovery: React.FC<ElectricityDiscoveryProps> = ({
 
   // Handle Payment Settlement
   const handleProceedPayment = async () => {
+    setErrorMessage('Server-verified electricity billing and STS token issuance are not configured. Payment is paused; no receipt or token has been issued.');
+    return;
     if (!selectedProvider) {
       setErrorMessage('Please select a utility distribution provider.');
       return;
