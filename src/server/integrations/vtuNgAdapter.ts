@@ -387,8 +387,8 @@ export class VtuNgAdapter {
 
     if (!this.isConfigured()) {
       return {
-        success: true,
-        valid: true,
+        success: false,
+        valid: false,
         accountStatus: 'UNCONFIGURED',
         errorCode: 'VTU_CREDENTIALS_MISSING',
         message: 'VTU.ng credentials not configured; live customer verification unavailable.'
@@ -409,7 +409,13 @@ export class VtuNgAdapter {
       const data = payload?.data || payload;
       const customerName = data?.customer_name || data?.name || data?.Customer_Name;
       const customerAddress = data?.customer_address || data?.address || data?.Address;
-      const isStatusValid = String(payload?.code || payload?.status || '').toLowerCase() === 'success' || Boolean(customerName);
+      const providerStatus = String(payload?.code ?? payload?.status ?? payload?.data?.status ?? '').toLowerCase();
+      const isStatusValid =
+        providerStatus === 'success' ||
+        providerStatus === 'successful' ||
+        payload?.success === true ||
+        data?.success === true ||
+        data?.valid === true;
 
       const verifyResult: VtuCustomerVerificationResult = {
         success: true,
@@ -748,8 +754,7 @@ export class VtuNgAdapter {
    */
   public verifyWebhookSignature(payloadString: string, signatureHeader?: string): boolean {
     if (!this.config.userPin) {
-      // If PIN not configured, allow payload with warning
-      return true;
+      return false;
     }
     if (!signatureHeader) {
       return false;
@@ -757,7 +762,9 @@ export class VtuNgAdapter {
 
     try {
       const computed = crypto.createHmac('sha256', this.config.userPin).update(payloadString).digest('hex');
-      return crypto.timingSafeEqual(Buffer.from(computed), Buffer.from(signatureHeader));
+      const expected = Buffer.from(computed, 'utf8');
+      const received = Buffer.from(signatureHeader.trim(), 'utf8');
+      return expected.length === received.length && crypto.timingSafeEqual(expected, received);
     } catch {
       return false;
     }
