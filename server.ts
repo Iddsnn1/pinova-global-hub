@@ -3533,16 +3533,36 @@ app.get('/api/education/invoices', authenticate, (req: AuthenticatedRequest, res
        false)
     );
 
-    if (!isAdmin && !isInstitutionStaff && !ownsGuardianFilter && !ownsStudentFilter) {
-      res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Invoice access requires an authorized student, guardian, or institution context.' });
-      return;
-    }
-
     const filter: any = {};
     if (studentId) filter.studentId = String(studentId);
     if (institutionId) filter.institutionId = String(institutionId);
     if (status) filter.status = String(status);
     if (guardianId) filter.guardianId = String(guardianId);
+
+    // A normal user requesting the invoice list without a filter is automatically
+    // scoped to their authenticated guardian/student identity. Never return the
+    // global invoice collection to a normal session.
+    if (!isAdmin && !isInstitutionStaff && !guardianId && !studentId) {
+      const scopedGuardian = String(req.user?.guardianId || currentUser || '').trim();
+      const scopedStudent = String((req.user as any)?.studentId || currentUserId || currentUser || '').trim();
+      if (scopedGuardian) {
+        filter.guardianId = scopedGuardian;
+      } else if (scopedStudent) {
+        filter.studentId = scopedStudent;
+      } else {
+        res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Invoice access requires an authenticated student or guardian context.' });
+        return;
+      }
+    }
+
+    if (!isAdmin && !isInstitutionStaff && guardianId && !ownsGuardianFilter) {
+      res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'The requested guardian invoice scope does not belong to the authenticated user.' });
+      return;
+    }
+    if (!isAdmin && !isInstitutionStaff && studentId && !ownsStudentFilter) {
+      res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'The requested student invoice scope does not belong to the authenticated user.' });
+      return;
+    }
 
     const invoices = educationRepo.getInvoices(filter);
     res.json({ success: true, count: invoices.length, invoices });
@@ -3707,7 +3727,7 @@ app.post('/api/education/invoices/pay', paymentRateLimiter, authenticate, async 
     );
     const isInvoiceOwner = isGuardianOwner || isStudentOwner;
 
-    if (isProduction && !isPlatformAdmin && !isInstitutionStaff && !isInvoiceOwner) {
+    if (isProduction && !isPlatformAdmin && !isInvoiceOwner) {
       res.status(403).json({
         success: false,
         error: 'FORBIDDEN',
