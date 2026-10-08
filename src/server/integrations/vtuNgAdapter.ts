@@ -461,6 +461,16 @@ export class VtuNgAdapter {
     const requestId = this.generateRequestId(params.paymentId, 'AIR');
     const normalizedService = this.mapServiceId(params.serviceId);
     const cleanPhone = this.formatPhoneNumber(params.phone);
+    if (!cleanPhone) {
+      return {
+        success: false,
+        fulfilled: false,
+        status: 'FAILED',
+        requestId,
+        errorCode: 'VTU_INVALID_CUSTOMER',
+        message: 'A valid Nigerian mobile number is required; no provider request was sent.'
+      };
+    }
 
     if (!this.isConfigured()) {
       return {
@@ -524,6 +534,16 @@ export class VtuNgAdapter {
     const requestId = this.generateRequestId(params.paymentId, 'DAT');
     const normalizedService = this.mapServiceId(params.serviceId);
     const cleanPhone = this.formatPhoneNumber(params.phone);
+    if (!cleanPhone) {
+      return {
+        success: false,
+        fulfilled: false,
+        status: 'FAILED',
+        requestId,
+        errorCode: 'VTU_INVALID_CUSTOMER',
+        message: 'A valid Nigerian mobile number is required; no provider request was sent.'
+      };
+    }
 
     if (!this.isConfigured()) {
       return {
@@ -590,6 +610,16 @@ export class VtuNgAdapter {
     const normalizedService = this.mapServiceId(params.serviceId);
     const cleanCustomer = params.customerId.replace(/[^a-zA-Z0-9]/g, '').trim();
     const cleanPhone = this.formatPhoneNumber(params.phone);
+    if (!cleanPhone) {
+      return {
+        success: false,
+        fulfilled: false,
+        status: 'FAILED',
+        requestId,
+        errorCode: 'VTU_INVALID_CUSTOMER',
+        message: 'A valid Nigerian mobile number is required; no provider request was sent.'
+      };
+    }
 
     if (!this.isConfigured()) {
       return {
@@ -665,6 +695,16 @@ export class VtuNgAdapter {
     const normalizedService = this.mapServiceId(params.serviceId);
     const cleanCard = params.smartcardNumber.replace(/[^a-zA-Z0-9]/g, '').trim();
     const cleanPhone = this.formatPhoneNumber(params.phone);
+    if (!cleanPhone) {
+      return {
+        success: false,
+        fulfilled: false,
+        status: 'FAILED',
+        requestId,
+        errorCode: 'VTU_INVALID_CUSTOMER',
+        message: 'A valid Nigerian mobile number is required; no provider request was sent.'
+      };
+    }
 
     if (!this.isConfigured()) {
       return {
@@ -811,12 +851,13 @@ export class VtuNgAdapter {
    * Phone number format normalization to standard Nigerian 11-digit or international format
    */
   private formatPhoneNumber(phone: string): string {
-    if (!phone) return '08000000000';
-    let clean = phone.replace(/[^0-9]/g, '');
+    const raw = String(phone || '').trim();
+    let clean = raw.replace(/[^0-9]/g, '');
     if (clean.startsWith('234') && clean.length === 13) {
       clean = '0' + clean.slice(3);
     }
-    return clean || '08000000000';
+    // Never substitute a synthetic phone number: reject invalid input before provider dispatch.
+    return /^0[789][01]\d{8}$/.test(clean) ? clean : '';
   }
 }
 
