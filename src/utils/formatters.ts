@@ -5,6 +5,8 @@
  * Guarantees that non-zero amounts are NEVER rounded to 0 or 0.0000.
  */
 
+import { convertFiatToPi } from './currencyToPi';
+
 export interface FormatPiOptions {
   minDecimals?: number;
   maxDecimals?: number;
