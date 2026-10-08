@@ -1019,8 +1019,9 @@ function MainAppContent() {
             buyerUsername={user.username}
             onSelectCategory={(cat) => setSelectedUtilityCategory(cat)}
             onTransactionSuccess={(receipt) => {
-              const transactionId = receipt.transactionId || `UTIL-TX-${Date.now()}`;
+              const transactionId = receipt.transactionId;
               const orderId = transactionId.startsWith('ORD-') ? transactionId : `ORD-${transactionId}`;
+              const isUtilityFulfilled = receipt.status === 'SUCCESS';
               
               const providerTitle = receipt.providerName || 'Utility Service';
               const categoryName = (receipt.category || 'utility').toUpperCase();
@@ -1045,7 +1046,7 @@ function MainAppContent() {
                       sellerId: 'system-utility-gateway',
                       sellerName: providerTitle,
                       sellerVerified: true,
-                      features: ['Instant Digital Fulfillment', 'PSTP Order Protection Active'],
+                      features: isUtilityFulfilled ? ['Provider fulfillment confirmed', 'PSTP order record'] : ['Pi payment verified', 'Provider fulfillment pending'],
                       shippingWeightKg: 0,
                       tags: ['utility', receipt.category || 'utility', providerTitle],
                       utilityProvider: providerTitle
@@ -1058,15 +1059,15 @@ function MainAppContent() {
                   }
                 ],
                 totalPi: receipt.piAmount,
-                escrowStatus: 'released',
-                pstpStatus: 'Completed',
-                piPaymentId: receipt.piPaymentId || `pi_pay_util_${Date.now()}`,
-                piTxid: receipt.piTxid || `0x${Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('')}`,
-                trackingNumber: receipt.tokenOrCode ? `TOKEN-${receipt.tokenOrCode}` : `UTIL-REF-${transactionId}`,
+                escrowStatus: isUtilityFulfilled ? 'released' : 'locked',
+                pstpStatus: isUtilityFulfilled ? 'Completed' : 'Payment Verified',
+                piPaymentId: receipt.piPaymentId,
+                piTxid: receipt.piTxid,
+                trackingNumber: receipt.tokenOrCode ? `TOKEN-${receipt.tokenOrCode}` : undefined,
                 carrier: 'Digital Direct Fulfillment',
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString(),
-                serverVerified: true,
+                serverVerified: isUtilityFulfilled,
                 digitalDeliveries: receipt.tokenOrCode ? [
                   {
                     productId: `prod-util-${providerTitle.toLowerCase().replace(/\s+/g, '-')}`,
@@ -1090,13 +1091,15 @@ function MainAppContent() {
                     note: 'Payment completed & verified server-side via Pi Platform API.'
                   },
                   {
-                    status: 'Completed',
+                    status: isUtilityFulfilled ? 'Completed' : 'Fulfillment Pending',
                     timestamp: new Date().toISOString(),
-                    actor: providerTitle,
-                    actorRole: 'seller',
-                    note: receipt.tokenOrCode
-                      ? `Service fulfilled. Digital Token/Code: ${receipt.tokenOrCode}`
-                      : `Service fulfilled & applied directly to account ${receipt.accountNumber}.`
+                    actor: isUtilityFulfilled ? providerTitle : 'PSTP_Protection_Server',
+                    actorRole: isUtilityFulfilled ? 'seller' : 'system',
+                    note: isUtilityFulfilled
+                      ? (receipt.tokenOrCode
+                        ? `Provider fulfillment confirmed. Digital Token/Code: ${receipt.tokenOrCode}`
+                        : `Provider fulfillment confirmed for account ${receipt.accountNumber}.`)
+                      : `Pi payment verified, but provider fulfillment is pending. No token or delivery is claimed for account ${receipt.accountNumber}.`
                   }
                 ]
               };
@@ -1129,8 +1132,10 @@ function MainAppContent() {
               setNotifications((prev) => [
                 {
                   id: `notif-${Date.now()}`,
-                  title: 'Utility Purchase Fulfilled & Order Recorded',
-                  message: `Successfully purchased ${providerTitle} (${receipt.accountNumber}) for ${formatPiAmount(receipt.piAmount)} π. Order ID: ${orderId}. Token: ${receipt.tokenOrCode || 'Delivered'}`,
+                  title: isUtilityFulfilled ? 'Utility Fulfillment Confirmed' : 'Utility Payment Verified — Fulfillment Pending',
+                  message: isUtilityFulfilled
+                    ? `Provider confirmed ${providerTitle} (${receipt.accountNumber}) for ${formatPiAmount(receipt.piAmount)} π. Order ID: ${orderId}.`
+                    : `Pi payment is verified, but ${providerTitle} fulfillment is pending for ${receipt.accountNumber}. Do not pay again. Order ID: ${orderId}.`,
                   type: 'order_protection',
                   timestamp: new Date().toISOString(),
                   read: false
