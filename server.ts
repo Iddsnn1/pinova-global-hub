@@ -2754,7 +2754,8 @@ const handleCompletePayment = async (req: express.Request, res: express.Response
         paymentId: cleanPaymentId,
         txid: existingCompletion.txid || cleanTxid,
         status: 'completed',
-        message: 'Payment already completed (idempotent replay)'
+        fulfillmentStatus: 'PAYMENT_VERIFIED',
+        message: 'Payment already completed (idempotent replay). Service fulfillment is tracked separately.'
       });
       return;
     }
@@ -2838,7 +2839,7 @@ const handleCompletePayment = async (req: express.Request, res: express.Response
         const data = await response.json();
         paymentLedgerRepo.recordCompletion(cleanPaymentId, cleanTxid);
         console.log(`[Pi Completion Success] Payment ID: ${cleanPaymentId} | Endpoint: ${req.path} | Time: ${timestamp} | Status: 200`);
-        res.json({ success: true, paymentId: cleanPaymentId, txid: cleanTxid, status: 'completed', data });
+        res.json({ success: true, paymentId: cleanPaymentId, txid: cleanTxid, status: 'completed', fulfillmentStatus: 'PAYMENT_VERIFIED', message: 'Pi payment completed. Service fulfillment must be confirmed separately.', data });
         return;
       } catch (fetchErr: any) {
         clearTimeout(timeoutId);
@@ -2874,7 +2875,7 @@ const handleCompletePayment = async (req: express.Request, res: express.Response
 
           if (response.ok) {
             const data = await response.json();
-            res.json({ success: true, paymentId: cleanPaymentId, txid: cleanTxid, status: 'completed', data });
+            res.json({ success: true, paymentId: cleanPaymentId, txid: cleanTxid, status: 'completed', fulfillmentStatus: 'PAYMENT_VERIFIED', message: 'Pi payment completed. Service fulfillment must be confirmed separately.', data });
             return;
           }
         } catch (fetchErr: any) {
@@ -2889,7 +2890,8 @@ const handleCompletePayment = async (req: express.Request, res: express.Response
         paymentId: cleanPaymentId,
         txid: cleanTxid,
         status: 'completed',
-        message: 'Payment completed & Escrow locked in PiNova Ledger (Sandbox/Dev Test Payment)'
+        fulfillmentStatus: 'PAYMENT_VERIFIED',
+        message: 'Sandbox/dev Pi payment completed. Service fulfillment must be confirmed separately.'
       });
     }
   } catch (err: any) {
