@@ -3619,6 +3619,14 @@ app.post('/api/education/invoices/:id/apply-scholarship', authenticate, requireR
   }
 });
 
+function parsePiUnits(value: unknown): bigint {
+  const raw = String(value ?? '').trim();
+  if (!/^\\d+(?:\\.\\d+)?$/.test(raw)) throw new Error('INVALID_PI_AMOUNT');
+  const [whole, fraction = ''] = raw.split('.');
+  if (fraction.length > 12) throw new Error('PI_AMOUNT_MAX_12_DECIMALS');
+  return BigInt(whole) * 1000000000000n + BigInt((fraction + '0'.repeat(12)).slice(0, 12));
+}
+
 // 5. Secure Pi School Fees Settlement & Digital Receipt Issuance (Phase 5 & 12 Remediation)
 app.post('/api/education/invoices/pay', paymentRateLimiter, authenticate, async (req: AuthenticatedRequest, res) => {
   try {
@@ -3661,8 +3669,8 @@ app.post('/api/education/invoices/pay', paymentRateLimiter, authenticate, async 
     }
 
     if (String(invoice.currency || '').trim().toUpperCase() === 'PI') {
-      const amountUnits = BigInt(amountText.replace('.', '').padEnd(12, '0'));
-      const balanceUnits = BigInt(Number(invoice.outstandingBalance).toFixed(12).replace('.', ''));
+      const amountUnits = parsePiUnits(amountText);
+      const balanceUnits = parsePiUnits(Number(invoice.outstandingBalance).toFixed(12));
       if (amountUnits > balanceUnits) {
         res.status(400).json({
           success: false,
@@ -3785,8 +3793,8 @@ app.post('/api/education/invoices/pay', paymentRateLimiter, authenticate, async 
         return;
       }
 
-      const requestedUnits = BigInt(amountText.replace('.', '').padEnd(12, '0'));
-      const authoritativeUnits = BigInt(authoritativePiAmount.toFixed(12).replace('.', ''));
+      const requestedUnits = parsePiUnits(amountText);
+      const authoritativeUnits = parsePiUnits(authoritativePiAmount.toFixed(12));
       if (requestedUnits !== authoritativeUnits) {
         res.status(400).json({
           success: false,
