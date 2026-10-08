@@ -652,7 +652,7 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
           status: isFulfilled ? 'SUCCESS' : 'PROCESSING',
           tokenOrCode: token,
           packageName: selectedPackage?.name,
-          appliedPiRateUsd: fxQuote.piReferenceRateUsd ?? piConversionConfig.piRateUsd,
+          appliedPiRateUsd: conversion?.piReferenceRateUsd ?? piConversionConfig.piRateUsd,
           orderProtectionGuaranteed: false,
           buyerUsername: buyerUsername || 'Pioneer_User'
         };
