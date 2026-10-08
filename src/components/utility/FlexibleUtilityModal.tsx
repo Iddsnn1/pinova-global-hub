@@ -40,14 +40,16 @@ import {
   UtilityServiceProvider, 
   UtilityProviderPackage, 
   PiConversionConfig,
-  UtilityTransactionReceipt
+  UtilityTransactionReceipt,
+  AuthoritativeFxQuote
 } from '../../types/utility';
 import { UTILITY_CATEGORY_META, SAMPLE_UTILITY_PROVIDERS } from '../../data/utilityData';
 import { AIRTIME_COUNTRIES } from '../../data/airtimeData';
 import { ALL_GLOBAL_COUNTRIES } from '../../data/countriesData';
 import { createPiPayment } from '../../lib/piSdk';
 import { DigitalReceiptModal } from './DigitalReceiptModal';
-import { formatPiAmount, calculateAuthoritativePiAmount } from '../../utils/formatters';
+import { formatPiAmount } from '../../utils/formatters';
+import { convertFiatToPi } from '../../modules/pricing/currencyConversion';
 import { ProviderValidationFactory } from '../../modules/utility/providerValidation';
 import { supportsServiceDiscovery } from '../../lib/utility/serviceDiscovery';
 import { resolveElectricityProviders } from '../../lib/utility/electricityDiscovery';
@@ -185,6 +187,9 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [generatedReceipt, setGeneratedReceipt] = useState<UtilityTransactionReceipt | null>(null);
+  const [fxQuote, setFxQuote] = useState<AuthoritativeFxQuote | null>(null);
+  const [fxQuoteLoading, setFxQuoteLoading] = useState(false);
+  const [fxQuoteError, setFxQuoteError] = useState<string | null>(null);
 
   // Canonical full global country catalog derived from ALL_GLOBAL_COUNTRIES and SAMPLE_UTILITY_PROVIDERS
   const allGlobalCountries = useMemo(() => {
@@ -468,6 +473,35 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
     }
   };
 
+  useEffect(() => {
+    if (!selectedProvider) {
+      setFxQuote(null);
+      setFxQuoteError(null);
+      return;
+    }
+    const currencyCode = String(selectedPackage?.currency || selectedProvider.currency || 'USD').toUpperCase();
+    let cancelled = false;
+    setFxQuoteLoading(true);
+    setFxQuoteError(null);
+    fetch(`/api/v2/fx/quote?currencyCode=${encodeURIComponent(currencyCode)}`)
+      .then(async (response) => {
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok || !body?.success || !body?.quote) {
+          throw new Error(body?.error || 'AUTHORITATIVE_FX_QUOTE_UNAVAILABLE');
+        }
+        return body.quote as AuthoritativeFxQuote;
+      })
+      .then((quote) => { if (!cancelled) setFxQuote(quote); })
+      .catch((error) => {
+        if (!cancelled) {
+          setFxQuote(null);
+          setFxQuoteError(String(error?.message || 'AUTHORITATIVE_FX_QUOTE_UNAVAILABLE'));
+        }
+      })
+      .finally(() => { if (!cancelled) setFxQuoteLoading(false); });
+    return () => { cancelled = true; };
+  }, [selectedProvider?.id, selectedProvider?.currency, selectedPackage?.currency]);
+
   // Dynamic Pi Calculation
   const getActiveFiatPrice = (): number => {
     if (purchaseMode === 'package' && selectedPackage) {
@@ -480,7 +514,11 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
     return !isNaN(parsed) && isFinite(parsed) && parsed > 0 ? parsed : 0;
   };
 
-  const calculatedPiAmount = calculateAuthoritativePiAmount(getActiveFiatPrice(), piConversionConfig.piRateUsd);
+  const activeCurrency = String(selectedPackage?.currency || selectedProvider?.currency || 'USD').toUpperCase();
+  const conversion = fxQuote && fxQuote.currencyCode === activeCurrency && getActiveFiatPrice() > 0
+    ? convertFiatToPi({ amount: getActiveFiatPrice(), currencyCode: activeCurrency, unitsPerUsd: fxQuote.unitsPerUsd })
+    : null;
+  const calculatedPiAmount = conversion?.piAmount ?? 0;
   const minPiThreshold = piConversionConfig.minPurchasePi || 0.00000001;
   const isWithinLimits =
     calculatedPiAmount >= minPiThreshold &&
@@ -608,7 +646,7 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
 
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold px-2.5 py-1 rounded-xl bg-slate-800 text-amber-300 border border-amber-500/30">
-              Configured Rate: 1 π = ${piConversionConfig.piRateUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD
+              Configured Rate: 1 π = $314,159 USD
             </span>
             {onClose && (
               <button
@@ -1298,7 +1336,7 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                   </div>
 
                   <div className="flex justify-between items-center text-slate-300 pt-2 border-t border-slate-800">
-                    <span>Configured Rate:</span>
+                    <span>Pi Reference:</span>
                     <span className="font-mono font-bold text-purple-400">1 π = ${piConversionConfig.piRateUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD</span>
                   </div>
                 </div>
@@ -1329,7 +1367,7 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                 <button
                   type="button"
                   onClick={handleExecutePayment}
-                  disabled={isProcessingPayment || !selectedProvider || selectedProvider.enabled === false || !accountNumber.trim() || !isWithinLimits || getActiveFiatPrice() <= 0}
+                  disabled={isProcessingPayment || fxQuoteLoading || !!fxQuoteError || !fxQuote || !selectedProvider || selectedProvider.enabled === false || !accountNumber.trim() || !isWithinLimits || getActiveFiatPrice() <= 0}
                   className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-purple-600 via-indigo-600 to-amber-500 hover:opacity-95 disabled:opacity-50 text-white font-extrabold text-xs sm:text-sm shadow-xl shadow-purple-600/30 transition-all flex items-center justify-center gap-2"
                 >
                   {selectedProvider?.enabled === false ? (
