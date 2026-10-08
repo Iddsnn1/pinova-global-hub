@@ -3482,7 +3482,7 @@ app.post('/api/education/invoices/pay', paymentRateLimiter, authenticate, async 
     const currentUserId = req.user?.id;
     const userRoles = req.user?.roles || [];
     const isPlatformAdmin = userRoles.includes('PLATFORM_ADMIN') || userRoles.includes('BURSAR') || userRoles.includes('FINANCE_ADMIN');
-    const isInstitutionStaff = Boolean(req.user?.institutionId && req.user.institutionId === invoice.institutionId);
+    const isInstitutionStaff = Boolean(roles.includes('INSTITUTION_ADMIN') && req.user?.institutionId && req.user.institutionId === invoice.institutionId);
     const isGuardianOwner = Boolean(
       (currentUser && invoice.guardianId && invoice.guardianId.toLowerCase() === currentUser.toLowerCase()) ||
       (currentUserId && invoice.guardianId && invoice.guardianId === currentUserId) ||
