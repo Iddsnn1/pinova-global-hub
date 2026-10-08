@@ -179,7 +179,6 @@ export const SchoolFeesEngine: React.FC<SchoolFeesEngineProps> = ({
           piPaymentId: paymentId,
           piTxid: txid,
           paymentMethod: 'PI_NETWORK',
-          payerUsername: 'pioneer_parent',
           idempotencyKey
         });
 
