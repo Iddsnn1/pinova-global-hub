@@ -2342,7 +2342,7 @@ const handleUtilityValidate = async (req: express.Request, res: express.Response
   // live provider lookup.
   const directApiProviders = [
     'safaricom', 'mtn', 'ikedc', 'dstv', 'mpesa', 'airtel', 'gotv',
-    'startimes', 'eko-electric', 'abuja-electric', 'kano-electric'
+    'startimes', 'glo', '9mobile', 'eko-electric', 'abuja-electric', 'kano-electric'
   ];
   const normalizedProviderId = providerId.toLowerCase();
   const isDirectApiSupported = directApiProviders.some((p) => normalizedProviderId.includes(p));
@@ -3106,6 +3106,39 @@ app.post('/api/v2/utility/fulfill', paymentRateLimiter, async (req, res) => {
     '';
 
   // Execute VTU.ng v2 Adapter or Global Escrow Fallback
+  // Re-verify the intended Nigerian airtime/data account on the server immediately
+  // before dispatch. Browser validation is advisory and never trusted for fulfillment.
+  if ((normalizedCategory === 'airtime' || normalizedCategory === 'mobile_data' || normalizedCategory === 'data') && isNigerianProvider) {
+    if (!vtuNgAdapter.isConfigured()) {
+      res.status(503).json({
+        success: false,
+        status: 'PROVIDER_GATEWAY_UNAVAILABLE',
+        message: 'Live provider verification is unavailable. Fulfillment is blocked.'
+      });
+      return;
+    }
+
+    try {
+      const verificationResult = await vtuNgAdapter.verifyCustomer(providerId || '', accountNumber || '');
+      if (verificationResult.success !== true || verificationResult.valid !== true) {
+        res.status(422).json({
+          success: false,
+          status: 'PROVIDER_ACCOUNT_NOT_VERIFIED',
+          message: verificationResult.message || 'The provider did not authoritatively verify this account. Fulfillment is blocked.'
+        });
+        return;
+      }
+    } catch (verificationError: any) {
+      console.warn('[Utility Fulfillment] Server-side provider re-verification failed:', verificationError?.message || verificationError);
+      res.status(503).json({
+        success: false,
+        status: 'PROVIDER_VERIFICATION_UNAVAILABLE',
+        message: 'Live provider verification failed. Fulfillment is blocked.'
+      });
+      return;
+    }
+  }
+
   let fulfillmentStatus: 'FULFILLED' | 'FULFILLMENT_PENDING' = 'FULFILLMENT_PENDING';
   let fulfillmentMessage = 'Payment verified successfully. Fulfillment is pending provider configuration or operator confirmation.';
   let providerRef: string = vtuNgAdapter.generateRequestId(paymentId, 'PEND');
