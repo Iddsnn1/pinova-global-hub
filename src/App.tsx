@@ -1059,7 +1059,7 @@ function MainAppContent() {
                   }
                 ],
                 totalPi: receipt.piAmount,
-                escrowStatus: isUtilityFulfilled ? 'released' : 'locked',
+                escrowStatus: isUtilityFulfilled ? 'released' : 'in_escrow',
                 pstpStatus: isUtilityFulfilled ? 'Completed' : 'Payment Verified',
                 piPaymentId: receipt.piPaymentId,
                 piTxid: receipt.piTxid,
@@ -1091,7 +1091,7 @@ function MainAppContent() {
                     note: 'Payment completed & verified server-side via Pi Platform API.'
                   },
                   {
-                    status: isUtilityFulfilled ? 'Completed' : 'Fulfillment Pending',
+                    status: isUtilityFulfilled ? 'Completed' : 'Processing',
                     timestamp: new Date().toISOString(),
                     actor: isUtilityFulfilled ? providerTitle : 'PSTP_Protection_Server',
                     actorRole: isUtilityFulfilled ? 'seller' : 'system',
