@@ -600,7 +600,7 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
               paymentId: piPaymentId,
               txid: piTxid,
               category: selectedCategory,
-              country: selectedCountry.name,
+              country: selectedCountryObj.name,
               countryCode: selectedCountryCode,
               providerId: selectedProvider.id,
               accountNumber,
