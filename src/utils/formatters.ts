@@ -23,10 +23,16 @@ export function calculateAuthoritativePiAmount(
   _piRateUsd?: number
 ): number {
   if (!Number.isFinite(fiatAmount) || fiatAmount <= 0) return 0;
-  // Hub-wide fixed PiNova reference. The optional second argument remains
-  // only for backward-compatible callers and is intentionally ignored.
-  const PI_REFERENCE_RATE_USD = 314159;
-  return Number((fiatAmount / PI_REFERENCE_RATE_USD).toFixed(12));
+  // Legacy callers supply USD amounts. Route through the shared engine with
+  // an explicit USD/USD quote. This is reference math, not payment authority
+  // or a live non-USD foreign-exchange conversion.
+  const result = convertFiatToPi({
+    fiatAmount,
+    fiatCurrency: 'USD',
+    usdPerFiatUnit: 1,
+    fxAsOf: new Date().toISOString(),
+  });
+  return Number(result.piAmount);
 }
 
 /**
