@@ -581,16 +581,61 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
       });
 
       if (paymentResult && paymentResult.success) {
-        const isFulfilled = paymentResult.fulfillmentStatus === 'FULFILLED';
-        const token = isFulfilled ? (paymentResult.data?.tokenOrCode || paymentResult.data?.providerReference) : undefined;
-        
-        const transactionId = paymentResult.data?.transactionId;
         const piPaymentId = paymentResult.paymentId;
         const piTxid = paymentResult.txid;
-        if (!transactionId || !piPaymentId || !piTxid) {
-          setErrorMessage('Payment was not accepted because the server did not return complete payment identifiers. No synthetic receipt was created.');
+        if (!piPaymentId || !piTxid || !fxQuote) {
+          setErrorMessage('Pi payment was verified, but required payment identifiers or the authoritative FX quote are missing. Do not pay again; contact support with the payment ID.');
           return;
         }
+
+        // Pi payment completion is not utility fulfillment. Ask the server to
+        // verify the payment again and dispatch only through its provider gate.
+        let fulfillmentResponse: Response;
+        let fulfillmentPayload: any;
+        try {
+          fulfillmentResponse = await fetch('/api/v2/utility/fulfill', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              paymentId: piPaymentId,
+              txid: piTxid,
+              category: selectedCategory,
+              country: selectedCountry.name,
+              countryCode: selectedCountryCode,
+              providerId: selectedProvider.id,
+              accountNumber,
+              fiatAmount: activeFiat,
+              fiatCurrency: String(selectedPackage?.currency || selectedProvider.currency || 'USD').toUpperCase(),
+              piAmount: finalPiAmount,
+              fxQuote,
+              packageName: selectedPackage?.name || 'Custom Purchase',
+              idempotencyKey: piPaymentId,
+              variationId: selectedPackage?.id
+            })
+          });
+          fulfillmentPayload = await fulfillmentResponse.json();
+        } catch {
+          setErrorMessage('Pi payment was verified, but the server could not confirm utility fulfillment. Do not pay again; contact support with payment ID: ' + piPaymentId);
+          return;
+        }
+
+        if (!fulfillmentResponse.ok || !fulfillmentPayload?.success || !fulfillmentPayload?.data?.transactionId) {
+          const serverMessage = typeof fulfillmentPayload?.message === 'string'
+            ? fulfillmentPayload.message
+            : typeof fulfillmentPayload?.data?.message === 'string'
+              ? fulfillmentPayload.data.message
+              : 'The provider has not confirmed fulfillment.';
+          setErrorMessage('Pi payment was verified, but utility fulfillment is not confirmed. Do not pay again. Payment ID: ' + piPaymentId + '. ' + serverMessage);
+          return;
+        }
+
+        const fulfillment = fulfillmentPayload.data;
+        const isFulfilled = fulfillment.status === 'FULFILLED';
+        const token = isFulfilled
+          ? (fulfillment.metadata?.token || fulfillment.providerReference)
+          : undefined;
+        const transactionId = fulfillment.transactionId;
+
         const receipt: UtilityTransactionReceipt = {
           transactionId,
           piPaymentId,
@@ -602,13 +647,13 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
           accountName: accountValidationResult?.name || 'Verified Customer',
           piAmount: finalPiAmount,
           fiatAmount: activeFiat,
-          fiatCurrency: selectedProvider.currency,
-          timestamp: new Date().toISOString(),
+          fiatCurrency: String(selectedPackage?.currency || selectedProvider.currency || 'USD').toUpperCase(),
+          timestamp: typeof fulfillment.timestamp === 'string' ? fulfillment.timestamp : new Date().toISOString(),
           status: isFulfilled ? 'SUCCESS' : 'PROCESSING',
           tokenOrCode: token,
           packageName: selectedPackage?.name,
-          appliedPiRateUsd: piConversionConfig.piRateUsd,
-          orderProtectionGuaranteed: paymentResult.data?.orderProtectionGuaranteed === true,
+          appliedPiRateUsd: fxQuote.piReferenceRateUsd ?? piConversionConfig.piRateUsd,
+          orderProtectionGuaranteed: false,
           buyerUsername: buyerUsername || 'Pioneer_User'
         };
 
