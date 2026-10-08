@@ -36,14 +36,14 @@ export class DirectApiValidationAdapter implements IProviderValidationAdapter {
       if (result.ok && result.data) {
         const data = result.data;
         return {
-          valid: data.valid ?? true,
+          valid: data.valid === true,
           accountNumber,
           providerId: this.providerId,
           providerName,
-          requiresManualVerification: data.requiresManualVerification ?? false,
-          verificationMethod: data.verificationMethod ?? 'DIRECT_API',
+          requiresManualVerification: data.requiresManualVerification === false && data.valid === true,
+          verificationMethod: data.verificationMethod === 'DIRECT_API' && data.valid === true ? 'DIRECT_API' : 'MANUAL_VERIFICATION',
           accountName: data.accountName,
-          statusMessage: data.statusMessage || 'Account confirmed via provider API gateway.',
+          statusMessage: data.statusMessage || (data.valid === true ? 'Account confirmed via provider API gateway.' : 'Provider did not authoritatively verify this account.'),
           disclaimer: data.disclaimer || 'Direct API verification.'
         };
       }
