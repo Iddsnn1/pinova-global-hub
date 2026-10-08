@@ -392,7 +392,7 @@ export class EducationRepository {
   // This avoids floating-point tolerances that could accept/reject values outside the canonical 12-decimal contract.
   private static toPiUnits(value: number | string): bigint {
     const raw = String(value ?? '').trim();
-    if (!/^\\d+(?:\\.\\d+)?$/.test(raw)) throw new Error('INVALID_PI_AMOUNT');
+    if (!/^\d+(?:\.\d+)?$/.test(raw)) throw new Error('INVALID_PI_AMOUNT');
     const [whole, fraction = ''] = raw.split('.');
     if (fraction.length > 12) throw new Error('PI_AMOUNT_MAX_12_DECIMALS');
     return (BigInt(whole) * 1000000000000n) + BigInt((fraction + '0'.repeat(12)).slice(0, 12));
