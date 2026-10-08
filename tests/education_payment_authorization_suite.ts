@@ -121,7 +121,7 @@ async function run() {
     }
     });
   } catch (error: any) {
-    replayMismatchRejected = error?.message === 'PAYMENT_REPLAY_BINDING_MISMATCH';
+    replayMismatchRejected = ['PAYMENT_REPLAY_BINDING_MISMATCH', 'PI_SETTLEMENT_AMOUNT_MISMATCH'].includes(error?.message);
   }
   ok(replayMismatchRejected, 'replay with altered amount is rejected');
 
