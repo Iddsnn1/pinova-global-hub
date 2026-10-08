@@ -472,6 +472,20 @@ export class VtuNgAdapter {
       };
     }
 
+    // VTU.ng accepts integer NGN denominations, not USD or fractional values.
+    const amount = Number(params.amount);
+    const minimumAmount = normalizedService === 'mtn' ? 10 : 50;
+    if (!Number.isSafeInteger(amount) || amount < minimumAmount || amount > 50000) {
+      return {
+        success: false,
+        fulfilled: false,
+        status: 'FAILED',
+        requestId,
+        errorCode: 'VTU_PROVIDER_REJECTED',
+        message: `Airtime amount must be a whole NGN amount between ₦${minimumAmount} and ₦50,000 for ${normalizedService}.`
+      };
+    }
+
     if (!this.isConfigured()) {
       return {
         success: false,
@@ -489,23 +503,30 @@ export class VtuNgAdapter {
         request_id: requestId,
         phone: cleanPhone,
         service_id: normalizedService,
-        amount: Math.round(params.amount)
+        amount
       })
     });
 
     if (res.ok && res.data) {
       const payload: any = res.data;
-      const isSuccess = String(payload?.code || payload?.status || '').toLowerCase() === 'success';
+      const providerStatus = String(payload?.data?.status || payload?.status || '').toLowerCase();
+      const providerMessage = String(payload?.message || '');
+      const accepted = String(payload?.code || '').toLowerCase() === 'success';
+      // A successful HTTP/API acceptance is not proof that airtime was delivered.
+      const isFulfilled = accepted && (
+        ['completed', 'completed-api', 'fulfilled', 'delivered', 'success'].includes(providerStatus) ||
+        /airtime successfully delivered|recharge successfully delivered/i.test(providerMessage)
+      );
       const orderId = payload?.data?.order_id || payload?.order_id || payload?.data?.reference;
 
       return {
-        success: isSuccess,
-        fulfilled: isSuccess,
-        status: isSuccess ? 'FULFILLED' : 'FULFILLMENT_PENDING',
+        success: accepted,
+        fulfilled: isFulfilled,
+        status: isFulfilled ? 'FULFILLED' : (accepted ? 'FULFILLMENT_PENDING' : 'FAILED'),
         orderId: String(orderId || ''),
         requestId,
         providerReference: String(orderId || requestId),
-        message: payload?.message || (isSuccess ? 'Airtime recharge successful' : 'Airtime request accepted'),
+        message: payload?.message || (isFulfilled ? 'Airtime delivery confirmed by provider.' : 'Provider accepted the request; delivery confirmation is pending.'),
         rawResponse: payload
       };
     }
