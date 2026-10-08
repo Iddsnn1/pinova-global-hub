@@ -3113,15 +3113,17 @@ app.post('/api/v2/utility/fulfill', paymentRateLimiter, async (req, res) => {
       providerId?.toLowerCase().includes('ikedc') ||
       providerId?.toLowerCase().includes('dstv'));
 
-  // VTU.ng settles Nigerian airtime/data in NGN. Never reinterpret a client-supplied
-  // USD/EUR/etc. amount as NGN without an authoritative FX quote.
+  // SAFETY GATE: VTU.ng settles Nigerian airtime/data in NGN, but the browser's
+  // fiatAmount/fiatCurrency fields are not an authoritative quote. Until a server-side
+  // quote service issues and validates a quoteId bound to provider, phone, NGN amount,
+  // Pi amount, expiry, and payment idempotency, do not dispatch Nigerian airtime/data.
+  // Merely setting fiatCurrency="NGN" must never bypass quote validation.
   if ((normalizedCategory === 'airtime' || normalizedCategory === 'mobile_data' || normalizedCategory === 'data') &&
-      isNigerianProvider &&
-      String(fiatCurrency || '').toUpperCase() !== 'NGN') {
+      isNigerianProvider) {
     res.status(422).json({
       success: false,
-      status: 'AUTHORITATIVE_LOCAL_CURRENCY_REQUIRED',
-      message: 'Nigerian VTU fulfillment requires an authoritative NGN amount. No client-supplied FX conversion is accepted.'
+      status: 'AUTHORITATIVE_NGN_QUOTE_REQUIRED',
+      message: 'Nigerian airtime/data checkout is paused until the server can validate an unexpired authoritative NGN quote. No client-supplied amount or currency can authorize fulfillment.'
     });
     return;
   }
