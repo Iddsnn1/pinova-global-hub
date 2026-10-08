@@ -177,7 +177,7 @@ export class NeonEducationLedgerRepository {
       'created_at, updated_at) VALUES (' +
       '$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb,$15::jsonb,' +
       '$16::numeric,$17::numeric,$18,$19::numeric,$20::numeric,$21::numeric,$22::numeric,' +
-      'PI',$23,$24,$25,$26,$27,$28,$29,$30)',
+      "'PI',$23,$24,$25,$26,$27,$28,$29,$30)",
       [
         record.id, record.invoiceNumber, record.institutionId, record.institutionName,
         record.studentId, record.studentName, record.studentMatricOrReg || null,
