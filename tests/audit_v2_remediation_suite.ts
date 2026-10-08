@@ -266,7 +266,7 @@ async function runTestSuite() {
     totalAmount: 400,
     amountPaid: 0,
     outstandingBalance: 400,
-    currency: 'USD',
+    currency: 'PI',
     dueDate: '2025-12-31',
     status: 'UNPAID',
     issuedDate: new Date().toISOString(),
@@ -296,7 +296,7 @@ async function runTestSuite() {
     eduRepo.recordPayment({
       invoiceId: invoice.id,
       amountPaid: 200, // Balance is 150, paying 200 is an overpayment!
-      currency: 'USD',
+      currency: 'PI',
       paymentMethod: 'PI_NETWORK',
       payerUsername: 'pioneer_parent'
     });
