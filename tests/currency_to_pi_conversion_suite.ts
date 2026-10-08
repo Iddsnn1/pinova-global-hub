@@ -4,6 +4,7 @@ import {
   CurrencyConversionError,
   PI_REFERENCE_RATE_USD,
 } from '../src/utils/currencyToPi';
+import { calculateAuthoritativePiAmount, calculatePiAmountFromFiatQuote } from '../src/utils/formatters';
 
 const fxAsOf = '2026-10-09T12:00:00.000Z';
 
@@ -55,5 +56,12 @@ assert.throws(
   () => convertFiatToPi({ fiatAmount: 1e-10, fiatCurrency: 'USD', usdPerFiatUnit: 1, fxAsOf }),
   CurrencyConversionError,
 );
+
+
+assert.throws(() => convertFiatToPi({ fiatAmount: 100, fiatCurrency: 'USD', usdPerFiatUnit: 1, fxAsOf: '2020-01-01T00:00:00.000Z' }), /stale/i);
+assert.throws(() => convertFiatToPi({ fiatAmount: 100, fiatCurrency: 'USD', usdPerFiatUnit: 1, fxAsOf: '2030-01-01T00:00:00.000Z' }), /future/i);
+assert.throws(() => convertFiatToPi({ fiatAmount: 100, fiatCurrency: 'USD', usdPerFiatUnit: 1, fxAsOf, maxFxAgeMs: 0 }), /maximum FX quote age/i);
+assert.equal(calculatePiAmountFromFiatQuote({ fiatAmount: 1000, fiatCurrency: 'NGN', usdPerFiatUnit: 0.00065, fxAsOf }), '0.000002070000');
+assert.equal(calculateAuthoritativePiAmount(1, 500000), 0.000002);
 
 console.log('Global currency-to-Pi conversion suite: all assertions passed.');
