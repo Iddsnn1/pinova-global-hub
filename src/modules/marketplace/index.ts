@@ -415,8 +415,13 @@ export class MultiCurrencyReferenceCalculator {
   };
 
   getEstimatedValue(amountPi: number, currencyCode: string = 'USD'): string {
-    const config = this.referenceRates[currencyCode] || this.referenceRates.USD;
+    const normalizedCurrencyCode = String(currencyCode || '').trim().toUpperCase();
+    const config = this.referenceRates[normalizedCurrencyCode];
+    if (!config || !Number.isFinite(amountPi) || amountPi < 0) {
+      return `Estimate unavailable (${normalizedCurrencyCode || 'unknown currency'})`;
+    }
     const value = amountPi * config.rate;
+    if (!Number.isFinite(value)) return `Estimate unavailable (${normalizedCurrencyCode})`;
     return `${config.symbol}${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   }
 
