@@ -3049,7 +3049,7 @@ app.post('/api/v2/utility/fulfill', paymentRateLimiter, async (req, res) => {
     return res.status(422).json({
       success: false,
       status: 'AUTHORITATIVE_FX_QUOTE_REQUIRED',
-      error: quoteValidation.error,
+      error: 'error' in quoteValidation ? quoteValidation.error : 'AUTHORITATIVE_FX_QUOTE_INVALID',
       message: 'Settlement requires a valid, unexpired server-issued FX quote. Client-supplied FX rates and Pi conversions are not trusted.'
     });
   }
