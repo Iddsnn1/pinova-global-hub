@@ -283,6 +283,8 @@ async function runTestSuite() {
     invoiceId: invoice.id,
     amountPaid: 250,
     currency: 'PI',
+    piAmount: 250,
+    piPaymentId: `test-partial-${Date.now()}`,
     paymentMethod: 'PI_NETWORK',
     payerUsername: 'pioneer_parent'
   });
@@ -297,6 +299,8 @@ async function runTestSuite() {
       invoiceId: invoice.id,
       amountPaid: 200, // Balance is 150, paying 200 is an overpayment!
       currency: 'PI',
+      piAmount: 200,
+      piPaymentId: `test-overpayment-${Date.now()}`,
       paymentMethod: 'PI_NETWORK',
       payerUsername: 'pioneer_parent'
     });
