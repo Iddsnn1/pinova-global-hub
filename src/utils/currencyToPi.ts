@@ -10,6 +10,9 @@
  */
 export const PI_REFERENCE_RATE_USD = 314159;
 export const PI_AMOUNT_DECIMALS = 12;
+/** FX quotes older than this are rejected unless a stricter limit is supplied. */
+export const DEFAULT_MAX_FX_AGE_MS = 24 * 60 * 60 * 1000;
+const ALLOWED_FX_CLOCK_SKEW_MS = 60 * 1000;
 
 export interface FiatToPiQuote {
   fiatAmount: number;
@@ -20,6 +23,8 @@ export interface FiatToPiQuote {
   fxAsOf: string;
   /** Optional override for controlled tests/configuration. */
   piReferenceRateUsd?: number;
+  /** Optional stricter maximum quote age. Defaults to 24 hours. */
+  maxFxAgeMs?: number;
 }
 
 export interface FiatToPiResult {
@@ -50,6 +55,7 @@ export function convertFiatToPi(quote: FiatToPiQuote): FiatToPiResult {
 
   const { fiatAmount, fiatCurrency, usdPerFiatUnit, fxAsOf } = quote;
   const piReferenceRateUsd = quote.piReferenceRateUsd ?? PI_REFERENCE_RATE_USD;
+  const maxFxAgeMs = quote.maxFxAgeMs ?? DEFAULT_MAX_FX_AGE_MS;
 
   if (!Number.isFinite(fiatAmount) || fiatAmount <= 0) {
     throw new CurrencyConversionError('Fiat amount must be a finite positive number.');
@@ -62,6 +68,17 @@ export function convertFiatToPi(quote: FiatToPiQuote): FiatToPiResult {
   }
   if (typeof fxAsOf !== 'string' || !Number.isFinite(Date.parse(fxAsOf))) {
     throw new CurrencyConversionError('A valid FX quote timestamp is required.');
+  }
+  if (!Number.isFinite(maxFxAgeMs) || maxFxAgeMs <= 0) {
+    throw new CurrencyConversionError('Maximum FX quote age must be a positive finite duration.');
+  }
+  const quoteTime = Date.parse(fxAsOf);
+  const quoteAgeMs = Date.now() - quoteTime;
+  if (quoteAgeMs < -ALLOWED_FX_CLOCK_SKEW_MS) {
+    throw new CurrencyConversionError('FX quote timestamp is in the future.');
+  }
+  if (quoteAgeMs > maxFxAgeMs) {
+    throw new CurrencyConversionError('FX quote is stale and must be refreshed.');
   }
   if (!Number.isFinite(piReferenceRateUsd) || piReferenceRateUsd <= 0) {
     throw new CurrencyConversionError('Pi reference rate must be a finite positive number.');
