@@ -78,9 +78,11 @@ export const AdmissionsPipeline: React.FC<AdmissionsPipelineProps> = ({
         applicantEmail: email,
         applicantPhone: phone,
         dateOfBirth,
-        applicationFeeFiat: 20,
-        applicationFeePaid: true,
-        applicationFeePi: 0.000063,
+        // Application fees must come from an authoritative provider-backed catalog.
+        // Never mark an admission fee as paid or invent a Pi amount in the client.
+        applicationFeeFiat: 0,
+        applicationFeePaid: false,
+        applicationFeePi: 0,
         documents: [
           {
             id: `doc-${Date.now()}-1`,
@@ -261,7 +263,7 @@ export const AdmissionsPipeline: React.FC<AdmissionsPipelineProps> = ({
             {/* Application Fee Notice */}
             <div className="bg-amber-950/30 border border-amber-500/30 p-3 rounded-xl flex justify-between items-center text-xs">
               <span className="text-slate-300">Standard Institution Processing Fee:</span>
-              <span className="text-amber-400 font-bold font-mono">$20.00 USD (0.000063 π)</span>
+              <span className="text-amber-400 font-bold font-mono">Provider fee required — no fee quoted</span>
             </div>
 
             {statusMessage && (
@@ -280,11 +282,11 @@ export const AdmissionsPipeline: React.FC<AdmissionsPipelineProps> = ({
               </button>
               <button
                 type="submit"
-                disabled={submitting}
+                disabled={true}
                 className="px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black transition shadow-md shadow-amber-500/20 flex items-center gap-1.5"
               >
                 <Send className="w-3.5 h-3.5" />
-                <span>{submitting ? 'Submitting Application...' : 'Submit & Pay Fee with Pi'}</span>
+                <span>{submitting ? 'Submitting Application...' : 'Application fee provider required'}</span>
               </button>
             </div>
           </form>

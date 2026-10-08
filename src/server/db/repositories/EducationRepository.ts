@@ -293,7 +293,7 @@ export class EducationRepository {
     tax: number;
     totalAmount: number;
   } {
-    const round2 = (num: number) => Math.round((num + Number.EPSILON) * 100) / 100;
+    const round2 = (num: number) => Math.round((num + Number.EPSILON) * 1_000_000_000_000) / 1_000_000_000_000;
     const subtotal = Math.max(0, round2(params.subtotal || 0));
     const compulsoryFees = Math.max(0, round2(params.compulsoryFees || 0));
     const optionalFees = Math.max(0, round2(params.optionalFees || 0));
@@ -374,13 +374,40 @@ export class EducationRepository {
       (params.paymentId || '').trim(),
       (params.studentId || '').trim(),
       (params.institutionId || '').trim(),
-      Number(params.amount).toFixed(2),
+      (() => {
+        const units = EducationRepository.toPiUnits(params.amount);
+        const whole = units / 1000000000000n;
+        const fraction = (units % 1000000000000n).toString().padStart(12, '0');
+        return `${whole.toString()}.${fraction}`;
+      })(),
       (params.currency || 'PI').trim().toUpperCase(),
       (params.paymentTimestamp || '').trim(),
       (params.settlementStatus || 'SETTLED').trim().toUpperCase()
     ].join('|');
 
     return crypto.createHash('sha256').update(canonicalPayload).digest('hex');
+  }
+
+  // Pi financial values are represented in fixed 12-decimal units for settlement comparisons.
+  // This avoids floating-point tolerances that could accept/reject values outside the canonical 12-decimal contract.
+  private static toPiUnits(value: number | string): bigint {
+    // JavaScript serializes tiny numeric values in exponent notation
+    // (e.g. 0.000000000002 -> "2e-12"). Normalize numeric inputs to
+    // the canonical 12-decimal representation before exact parsing.
+    const raw = typeof value === 'number'
+      ? (Number.isFinite(value) ? value.toFixed(12) : '')
+      : String(value ?? '').trim();
+    if (!/^\d+(?:\.\d+)?$/.test(raw)) throw new Error('INVALID_PI_AMOUNT');
+    const [whole, fraction = ''] = raw.split('.');
+    if (fraction.length > 12) throw new Error('PI_AMOUNT_MAX_12_DECIMALS');
+    return (BigInt(whole) * 1000000000000n) + BigInt((fraction + '0'.repeat(12)).slice(0, 12));
+  }
+  private static fromPiUnits(units: bigint): number {
+    const negative = units < 0n;
+    const absolute = negative ? -units : units;
+    const whole = absolute / 1000000000000n;
+    const fraction = (absolute % 1000000000000n).toString().padStart(12, '0');
+    return Number((negative ? '-' : '') + whole.toString() + '.' + fraction);
   }
 
   // --- Payments & Tamper-Evident Receipts ---
@@ -414,8 +441,12 @@ export class EducationRepository {
 
       const sameInvoice = existingPayment.invoiceId === params.invoiceId;
       const sameCurrency = existingPayment.currency.trim().toUpperCase() === String(params.currency || '').trim().toUpperCase();
-      const sameAmount = Math.abs(existingPayment.amountPaid - params.amountPaid) <= 0.00000001;
-      const samePiAmount = Math.abs(existingPayment.piAmount - Number(params.piAmount ?? 0)) <= 0.00000001;
+      const sameAmount = String(existingPayment.currency || '').trim().toUpperCase() === 'PI'
+        ? EducationRepository.toPiUnits(existingPayment.amountPaid) === EducationRepository.toPiUnits(params.amountPaid)
+        : existingPayment.amountPaid === params.amountPaid;
+      const samePiAmount = String(existingPayment.currency || '').trim().toUpperCase() === 'PI'
+        ? EducationRepository.toPiUnits(existingPayment.piAmount) === EducationRepository.toPiUnits(Number(params.piAmount ?? 0))
+        : existingPayment.piAmount === Number(params.piAmount ?? 0);
       const samePiPayment = (existingPayment.piPaymentId || '') === (params.piPaymentId || '');
       const samePayer = existingPayment.payerUsername.trim().toLowerCase() === params.payerUsername.trim().toLowerCase();
 
@@ -451,12 +482,18 @@ export class EducationRepository {
       const submittedPiAmount = Number(params.piAmount);
       if (!Number.isFinite(paidPiAmount) || paidPiAmount <= 0) throw new Error('PI_AMOUNT_REQUIRED');
       if (!Number.isFinite(submittedPiAmount) || submittedPiAmount <= 0) throw new Error('PI_AMOUNT_REQUIRED');
-      if (Math.abs(submittedPiAmount - paidPiAmount) > 0.000000000001) throw new Error('PI_AMOUNT_MISMATCH');
+      if (EducationRepository.toPiUnits(submittedPiAmount) !== EducationRepository.toPiUnits(paidPiAmount)) throw new Error('PI_AMOUNT_MISMATCH');
     }
 
     // Phase 10: Prevent overpayment beyond outstanding balance
-    if (params.amountPaid > invoice.outstandingBalance + 0.001) {
-      throw new Error(`Payment amount (${params.amountPaid} π) exceeds outstanding balance (${invoice.outstandingBalance} π). Overpayment rejected.`);
+    if (String(invoice.currency || '').trim().toUpperCase() === 'PI') {
+      const paymentUnits = EducationRepository.toPiUnits(params.amountPaid);
+      const balanceUnits = EducationRepository.toPiUnits(invoice.outstandingBalance);
+      if (paymentUnits > balanceUnits) {
+        throw new Error(`Payment amount (${params.amountPaid} π) exceeds outstanding balance (${invoice.outstandingBalance} π). Overpayment rejected.`);
+      }
+    } else if (params.amountPaid > invoice.outstandingBalance) {
+      throw new Error(`Payment amount (${params.amountPaid}) exceeds outstanding balance (${invoice.outstandingBalance}). Overpayment rejected.`);
     }
 
     const timestamp = new Date().toISOString();
@@ -479,9 +516,14 @@ export class EducationRepository {
     });
 
     // 4. Update Invoice Balances
-    const newAmountPaid = invoice.amountPaid + params.amountPaid;
-    const newOutstandingBalance = Math.max(0, invoice.totalAmount - newAmountPaid);
-    const newStatus = newOutstandingBalance <= 0.001 ? 'PAID' : 'PARTIALLY_PAID';
+    const isPiInvoice = String(invoice.currency || '').trim().toUpperCase() === 'PI';
+    const newAmountPaid = isPiInvoice
+      ? EducationRepository.fromPiUnits(EducationRepository.toPiUnits(invoice.amountPaid) + EducationRepository.toPiUnits(params.amountPaid))
+      : invoice.amountPaid + params.amountPaid;
+    const newOutstandingBalance = isPiInvoice
+      ? EducationRepository.fromPiUnits(EducationRepository.toPiUnits(invoice.totalAmount) - EducationRepository.toPiUnits(newAmountPaid) < 0n ? 0n : EducationRepository.toPiUnits(invoice.totalAmount) - EducationRepository.toPiUnits(newAmountPaid))
+      : Math.max(0, invoice.totalAmount - newAmountPaid);
+    const newStatus: EducationInvoice['status'] = newOutstandingBalance === 0 ? 'PAID' : (newAmountPaid > 0 ? 'PARTIALLY_PAID' : 'UNPAID');
 
     const updatedInvoice: EducationInvoice = {
       ...invoice,

@@ -42,7 +42,8 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({ products, openCreateOn
     setSubmitError(null);
     try {
       // Catalog reads are server-authoritative but do not require a fresh Pi/vendor authentication round-trip.
-      // Seller mutations remain protected by vendorAuthenticatedFetch; this keeps catalog refresh fast and deterministic.\n      const response = await fetch('/api/products', { method: 'GET', headers: { Accept: 'application/json' }, cache: 'no-store' });
+      // Seller mutations remain protected by vendorAuthenticatedFetch; this keeps catalog refresh fast and deterministic.
+      const response = await fetch('/api/products', { method: 'GET', headers: { Accept: 'application/json' }, cache: 'no-store' });
       const text = await response.text();
       if (!response.ok) {
         let data: any = null;

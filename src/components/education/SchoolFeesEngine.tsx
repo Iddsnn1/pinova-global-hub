@@ -155,7 +155,7 @@ export const SchoolFeesEngine: React.FC<SchoolFeesEngineProps> = ({
     setErrorMessage(null);
     setSuccessMessage(null);
 
-    const idempotencyKey = `IDEMP-FEES-${selectedInvoice.id}-${Date.now()}`;
+    const idempotencyKey = `IDEMP-FEES-${selectedInvoice.id}-${selectedInvoice.outstandingBalance.toFixed(12)}-${nativePiAmount.toFixed(12)}-${nativeSettlementCurrency}`;
     const memo = `Tuition Fee: ${selectedInvoice.studentName} - ${selectedInvoice.institutionName} (${selectedInvoice.invoiceNumber})`;
     const metadata = {
       type: 'EDUCATION_FEE_PAYMENT',

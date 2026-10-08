@@ -39,6 +39,7 @@ import { StudentVerificationService } from './src/server/services/StudentVerific
 import { getNigeriaAuthoritativeProviderForCapability } from './src/server/services/AuthoritativeEducationProviderRegistry';
 import { verifyJambCapsAuthorization } from './src/server/services/JambCapsAuthorizationService';
 import { EducationRepository } from './src/server/db/repositories/EducationRepository';
+import { NeonEducationLedgerRepository } from './src/server/db/repositories/NeonEducationLedgerRepository';
 import { ProductRepository } from './src/server/db/repositories/ProductRepository';
 import { durableProductStorageEnabled, getDurableProduct, listDurableProducts, saveDurableProduct, updateDurableProductAvailability, reserveDurableProductStockBatch, softDeleteDurableProduct, deleteDurableProductBlob } from './src/server/services/DurableProductCatalog';
 import { durableOrderStorageEnabled, getDurableOrder, listDurableOrders, saveDurableOrder, markDurableOrderPaymentVerified, softDeleteDurableOrder } from './src/server/services/DurableOrderStore';
@@ -245,6 +246,8 @@ app.use((req, res, next) => {
 });
 
 const isProduction = process.env.NODE_ENV === 'production';
+const neonEducationLedger = new NeonEducationLedgerRepository();
+const useNeonEducationLedger = () => process.env.EDUCATION_NEON_LEDGER_ENABLED === 'true';
 
 // Phase 16 & 17: Production CORS & Restricted Frame Ancestors
 const ALLOWED_CORS_ORIGINS = [
@@ -3511,7 +3514,7 @@ app.get('/api/education/guardians/:id/children', authenticate, (req: Authenticat
 });
 
 // 4. Invoices & Authoritative School Fees Engine (Phase 5 & 11 Remediation)
-app.get('/api/education/invoices', authenticate, (req: AuthenticatedRequest, res) => {
+app.get('/api/education/invoices', authenticate, async (req: AuthenticatedRequest, res) => {
   try {
     const { studentId, institutionId, status, guardianId } = req.query;
     const currentUser = req.user?.username;
@@ -3533,27 +3536,51 @@ app.get('/api/education/invoices', authenticate, (req: AuthenticatedRequest, res
        false)
     );
 
-    if (!isAdmin && !isInstitutionStaff && !ownsGuardianFilter && !ownsStudentFilter) {
-      res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Invoice access requires an authorized student, guardian, or institution context.' });
-      return;
-    }
-
     const filter: any = {};
     if (studentId) filter.studentId = String(studentId);
     if (institutionId) filter.institutionId = String(institutionId);
     if (status) filter.status = String(status);
     if (guardianId) filter.guardianId = String(guardianId);
 
-    const invoices = educationRepo.getInvoices(filter);
+    // A normal user requesting the invoice list without a filter is automatically
+    // scoped to their authenticated guardian/student identity. Never return the
+    // global invoice collection to a normal session.
+    if (!isAdmin && !isInstitutionStaff && !guardianId && !studentId) {
+      const scopedGuardian = String(req.user?.guardianId || currentUser || '').trim();
+      const scopedStudent = String((req.user as any)?.studentId || currentUserId || currentUser || '').trim();
+      if (scopedGuardian) {
+        filter.guardianId = scopedGuardian;
+      } else if (scopedStudent) {
+        filter.studentId = scopedStudent;
+      } else {
+        res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Invoice access requires an authenticated student or guardian context.' });
+        return;
+      }
+    }
+
+    if (!isAdmin && !isInstitutionStaff && guardianId && !ownsGuardianFilter) {
+      res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'The requested guardian invoice scope does not belong to the authenticated user.' });
+      return;
+    }
+    if (!isAdmin && !isInstitutionStaff && studentId && !ownsStudentFilter) {
+      res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'The requested student invoice scope does not belong to the authenticated user.' });
+      return;
+    }
+
+    const invoices = useNeonEducationLedger()
+      ? await neonEducationLedger.getInvoices(filter)
+      : educationRepo.getInvoices(filter);
     res.json({ success: true, count: invoices.length, invoices });
   } catch (err: any) {
     res.status(500).json({ success: false, error: 'INVOICES_FETCH_FAILED', message: err.message });
   }
 });
 
-app.get('/api/education/invoices/:id', authenticate, (req: AuthenticatedRequest, res) => {
+app.get('/api/education/invoices/:id', authenticate, async (req: AuthenticatedRequest, res) => {
   try {
-    const invoice = educationRepo.getInvoiceById(req.params.id);
+    const invoice = useNeonEducationLedger()
+      ? await neonEducationLedger.getInvoiceById(req.params.id)
+      : educationRepo.getInvoiceById(req.params.id);
     if (!invoice) {
       res.status(404).json({ success: false, error: 'INVOICE_NOT_FOUND' });
       return;
@@ -3619,6 +3646,14 @@ app.post('/api/education/invoices/:id/apply-scholarship', authenticate, requireR
   }
 });
 
+function parsePiUnits(value: unknown): bigint {
+  const raw = String(value ?? '').trim();
+  if (!/^\\d+(?:\\.\\d+)?$/.test(raw)) throw new Error('INVALID_PI_AMOUNT');
+  const [whole, fraction = ''] = raw.split('.');
+  if (fraction.length > 12) throw new Error('PI_AMOUNT_MAX_12_DECIMALS');
+  return BigInt(whole) * 1000000000000n + BigInt((fraction + '0'.repeat(12)).slice(0, 12));
+}
+
 // 5. Secure Pi School Fees Settlement & Digital Receipt Issuance (Phase 5 & 12 Remediation)
 app.post('/api/education/invoices/pay', paymentRateLimiter, authenticate, async (req: AuthenticatedRequest, res) => {
   try {
@@ -3638,11 +3673,16 @@ app.post('/api/education/invoices/pay', paymentRateLimiter, authenticate, async 
       return;
     }
 
-    const numericAmount = Number(amountPaid);
-    if (!numericAmount || numericAmount <= 0) {
-      res.status(400).json({ success: false, error: 'INVALID_AMOUNT', message: 'Payment amount must be greater than zero' });
+    const amountText = String(amountPaid ?? '').trim();
+    if (!/^\\d+(?:\\.\\d+)?$/.test(amountText) || Number(amountPaid) <= 0) {
+      res.status(400).json({ success: false, error: 'INVALID_AMOUNT', message: 'Payment amount must be a positive decimal value.' });
       return;
     }
+    if (amountText.includes('.') && amountText.split('.')[1].length > 12) {
+      res.status(400).json({ success: false, error: 'PI_AMOUNT_MAX_12_DECIMALS', message: 'Pi settlement amounts support at most 12 decimal places.' });
+      return;
+    }
+    const numericAmount = Number(amountPaid);
 
     const invoice = educationRepo.getInvoiceById(invoiceId);
     if (!invoice) {
@@ -3655,11 +3695,22 @@ app.post('/api/education/invoices/pay', paymentRateLimiter, authenticate, async 
       return;
     }
 
-    if (numericAmount > invoice.outstandingBalance + 0.01) {
+    if (String(invoice.currency || '').trim().toUpperCase() === 'PI') {
+      const amountUnits = parsePiUnits(amountText);
+      const balanceUnits = parsePiUnits(Number(invoice.outstandingBalance).toFixed(12));
+      if (amountUnits > balanceUnits) {
+        res.status(400).json({
+          success: false,
+          error: 'AMOUNT_EXCEEDS_BALANCE',
+          message: 'Payment amount exceeds the exact 12-decimal Pi outstanding balance.'
+        });
+        return;
+      }
+    } else if (numericAmount > invoice.outstandingBalance) {
       res.status(400).json({
         success: false,
         error: 'AMOUNT_EXCEEDS_BALANCE',
-        message: `Amount $${numericAmount} exceeds current outstanding balance of $${invoice.outstandingBalance.toFixed(2)}`
+        message: `Amount ${numericAmount} exceeds current outstanding balance of ${invoice.outstandingBalance}`
       });
       return;
     }
@@ -3683,7 +3734,7 @@ app.post('/api/education/invoices/pay', paymentRateLimiter, authenticate, async 
     );
     const isInvoiceOwner = isGuardianOwner || isStudentOwner;
 
-    if (isProduction && !isPlatformAdmin && !isInstitutionStaff && !isInvoiceOwner) {
+    if (isProduction && !isPlatformAdmin && !isInvoiceOwner) {
       res.status(403).json({
         success: false,
         error: 'FORBIDDEN',
@@ -3769,11 +3820,13 @@ app.post('/api/education/invoices/pay', paymentRateLimiter, authenticate, async 
         return;
       }
 
-      if (Math.abs(numericAmount - authoritativePiAmount) > 0.00000001) {
+      const requestedUnits = parsePiUnits(amountText);
+      const authoritativeUnits = parsePiUnits(authoritativePiAmount.toFixed(12));
+      if (requestedUnits !== authoritativeUnits) {
         res.status(400).json({
           success: false,
           error: 'PI_AMOUNT_MISMATCH',
-          message: 'The requested settlement amount does not match the authoritative Pi payment amount.'
+          message: 'The requested settlement amount does not exactly match the authoritative Pi payment amount at 12-decimal precision.'
         });
         return;
       }
@@ -3809,17 +3862,27 @@ app.post('/api/education/invoices/pay', paymentRateLimiter, authenticate, async 
     const effectiveIdempotencyKey = idempotencyKey || piPaymentId;
 
     // Execute atomic settlement in repository with canonical SHA-256 digest creation
-    const result = educationRepo.recordPayment({
-      invoiceId,
-      amountPaid: numericAmount,
-      currency,
-      piAmount: Number(req.body.piAmount),
-      piPaymentId,
-      piTxid: req.body.piTxid,
-      paymentMethod,
-      payerUsername,
-      idempotencyKey: effectiveIdempotencyKey
-    });
+    const result = useNeonEducationLedger()
+      ? await neonEducationLedger.recordPayment({
+          invoiceId,
+          amountPaid: numericAmount,
+          piAmount: Number(req.body.piAmount),
+          piPaymentId,
+          piTxid: req.body.piTxid,
+          payerUsername,
+          idempotencyKey: effectiveIdempotencyKey
+        })
+      : educationRepo.recordPayment({
+          invoiceId,
+          amountPaid: numericAmount,
+          currency,
+          piAmount: Number(req.body.piAmount),
+          piPaymentId,
+          piTxid: req.body.piTxid,
+          paymentMethod,
+          payerUsername,
+          idempotencyKey: effectiveIdempotencyKey
+        });
 
     // Record immutable audit log
     auditService.recordPstpAudit({
@@ -3847,7 +3910,7 @@ app.post('/api/education/invoices/pay', paymentRateLimiter, authenticate, async 
 });
 
 // 5b. Get Payment History for Specific Invoice (Ownership Protected)
-app.get('/api/education/invoices/:id/payments', authenticate, (req: AuthenticatedRequest, res) => {
+app.get('/api/education/invoices/:id/payments', authenticate, async (req: AuthenticatedRequest, res) => {
   try {
     const { id } = req.params;
     const invoice = educationRepo.getInvoiceById(id);
@@ -3884,7 +3947,9 @@ app.get('/api/education/invoices/:id/payments', authenticate, (req: Authenticate
       return;
     }
 
-    const payments = educationRepo.getPaymentsByInvoiceId(id);
+    const payments = useNeonEducationLedger()
+      ? await neonEducationLedger.getPaymentsByInvoiceId(id)
+      : educationRepo.getPaymentsByInvoiceId(id);
     res.json(payments);
   } catch (err: any) {
     console.error('[Education Payments History] Error:', err.message);
@@ -3893,10 +3958,12 @@ app.get('/api/education/invoices/:id/payments', authenticate, (req: Authenticate
 });
 
 // 6. Digital Receipt Verification (Tamper-Resistant Cryptographic Validation)
-app.get('/api/education/receipts/:receiptNumber/verify', receiptVerifyRateLimiter, (req, res) => {
+app.get('/api/education/receipts/:receiptNumber/verify', receiptVerifyRateLimiter, async (req, res) => {
   try {
     const { receiptNumber } = req.params;
-    const verification = educationRepo.verifyReceipt(receiptNumber);
+    const verification = useNeonEducationLedger()
+      ? await neonEducationLedger.verifyReceipt(receiptNumber)
+      : educationRepo.verifyReceipt(receiptNumber);
     if (!verification.found || !verification.receipt) {
       res.status(404).json({
         success: false,
@@ -3929,9 +3996,11 @@ app.get('/api/education/receipts/:receiptNumber/verify', receiptVerifyRateLimite
   }
 });
 
-app.get('/api/education/receipts/:receiptNumber', authenticate, (req: AuthenticatedRequest, res) => {
+app.get('/api/education/receipts/:receiptNumber', authenticate, async (req: AuthenticatedRequest, res) => {
   try {
-    const receipt = educationRepo.getReceiptByNumber(req.params.receiptNumber);
+    const receipt = useNeonEducationLedger()
+      ? await neonEducationLedger.getReceiptByNumber(req.params.receiptNumber)
+      : educationRepo.getReceiptByNumber(req.params.receiptNumber);
     if (!receipt) {
       res.status(404).json({ success: false, error: 'RECEIPT_NOT_FOUND' });
       return;

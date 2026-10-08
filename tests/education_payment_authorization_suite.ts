@@ -119,6 +119,86 @@ async function run() {
   const tampered = repo.verifyReceipt(receiptNumber);
   ok(tampered.status === 'TAMPERED' && !tampered.valid, 'receipt amount mutation fails SHA-256 verification');
 
+  // 12-decimal Pi precision: values differing by 1e-12 are distinct and must not be absorbed by a loose tolerance.
+  const precisionInvoice = repo.createInvoice({
+    id: 'inv-edu-precision-001',
+    invoiceNumber: 'INV/EDU/PRECISION/001',
+    institutionId: 'inst-001',
+    institutionName: 'Authorized Institution Test Fixture',
+    studentId: 'student-precision',
+    studentName: 'Precision Student',
+    studentMatricOrReg: 'MAT-PRECISION',
+    guardianId: 'guardian-001',
+    educationTier: 'tertiary',
+    educationLevel: 'Undergraduate',
+    programmeOrClass: 'Precision Test',
+    academicSession: '2026/2027',
+    termOrSemester: 'Semester 1',
+    items: [{ id: 'fee-p', category: 'tuition', description: 'Precision Tuition', amount: 1.000000000001, isCompulsory: true }],
+    subtotal: 1.000000000001,
+    discountAmount: 0,
+    taxAmount: 0,
+    totalAmount: 1.000000000001,
+    amountPaid: 0,
+    outstandingBalance: 1.000000000001,
+    currency: 'PI',
+    dueDate: '2026-10-31T00:00:00.000Z',
+    status: 'UNPAID',
+    allowedInstallments: 2,
+    installmentsPaidCount: 0,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  });
+
+  const precisionFirst = repo.recordPayment({
+    invoiceId: precisionInvoice.id,
+    amountPaid: 1,
+    currency: 'PI',
+    piAmount: 1,
+    piPaymentId: 'pi-pay-precision-001',
+    piTxid: 'tx-precision-001',
+    paymentMethod: 'PI_NETWORK',
+    payerUsername: 'guardian-001',
+    idempotencyKey: 'edu-precision-001'
+  });
+  ok(precisionFirst.invoice.outstandingBalance === 0.000000000001, '12-decimal balance retains the final 1e-12 Pi unit');
+
+  let precisionOverpayRejected = false;
+  try {
+    repo.recordPayment({
+      invoiceId: precisionInvoice.id,
+      amountPaid: 0.000000000002,
+      currency: 'PI',
+      piAmount: 0.000000000002,
+      piPaymentId: 'pi-pay-precision-over',
+      piTxid: 'tx-precision-over',
+      paymentMethod: 'PI_NETWORK',
+      payerUsername: 'guardian-001',
+      idempotencyKey: 'edu-precision-over'
+    });
+  } catch (error: any) {
+    precisionOverpayRejected = /exceeds outstanding balance/i.test(error?.message || '');
+  }
+  ok(precisionOverpayRejected, '12-decimal overpayment is rejected without tolerance leakage');
+
+  let precisionMismatchRejected = false;
+  try {
+    repo.recordPayment({
+      invoiceId: precisionInvoice.id,
+      amountPaid: 0.000000000001,
+      currency: 'PI',
+      piAmount: 0.000000000002,
+      piPaymentId: 'pi-pay-precision-mismatch',
+      piTxid: 'tx-precision-mismatch',
+      paymentMethod: 'PI_NETWORK',
+      payerUsername: 'guardian-001',
+      idempotencyKey: 'edu-precision-mismatch'
+    });
+  } catch (error: any) {
+    precisionMismatchRejected = error?.message === 'PI_AMOUNT_MISMATCH';
+  }
+  ok(precisionMismatchRejected, 'Pi amount mismatch of exactly 1e-12 is rejected');
+
   setJambCapsAuthoritativeAdapter(null);
   const noAdapter = await verifyJambCapsAuthorization({
     candidateReference: 'JAMB-TEST-001',
