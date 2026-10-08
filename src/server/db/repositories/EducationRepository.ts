@@ -374,7 +374,12 @@ export class EducationRepository {
       (params.paymentId || '').trim(),
       (params.studentId || '').trim(),
       (params.institutionId || '').trim(),
-      Number(params.amount).toFixed(2),
+      (() => {
+        const units = EducationRepository.toPiUnits(params.amount);
+        const whole = units / 1000000000000n;
+        const fraction = (units % 1000000000000n).toString().padStart(12, '0');
+        return `${whole.toString()}.${fraction}`;
+      })(),
       (params.currency || 'PI').trim().toUpperCase(),
       (params.paymentTimestamp || '').trim(),
       (params.settlementStatus || 'SETTLED').trim().toUpperCase()
