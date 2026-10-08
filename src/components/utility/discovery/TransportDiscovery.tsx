@@ -129,6 +129,24 @@ export const TransportDiscovery: React.FC<TransportDiscoveryProps> = ({
   const [email, setEmail] = useState<string>('');
   const [phone, setPhone] = useState<string>('');
 
+  // Keep passenger confirmation inside the transport flow until an authorized
+  // carrier booking reference exists; do not fall back to the discovery view.
+  const [confirmedPassenger, setConfirmedPassenger] = useState<{
+    provider: UtilityServiceProvider;
+    staticItem?: TransportSearchResultItem;
+    fiatFare: number;
+    piFare: number;
+    passengerDetails: {
+      title: 'Mr' | 'Mrs' | 'Ms' | 'Dr';
+      givenName: string;
+      familyName: string;
+      passportNumber?: string;
+      email?: string;
+      phone?: string;
+      coachClass?: string;
+    };
+  } | null>(null);
+
   // Pi Fare Calculator
   const calculatePi = (fiatAmount: number): number => {
     const rate = piConversionConfig?.piRateUsd > 0 ? piConversionConfig.piRateUsd : 314159;
@@ -261,20 +279,13 @@ export const TransportDiscovery: React.FC<TransportDiscoveryProps> = ({
       ? Number(fiatFare.toFixed(2)) 
       : 25.0;
 
-    onSelectOption(provider, {
-      originCode: origin,
-      destinationCode: destination,
+    setConfirmedPassenger({
+      provider,
+      staticItem,
       fiatFare: safeFiat,
-      piAmount: piFare,
-      tripDetails,
-      transportType: selectedMode || 'rail',
-      airline: provider.name,
-      flightNumber: staticItem?.flightOrTripNumber || `EXP-${Math.floor(100 + Math.random() * 900)}`,
-      departureTime: staticItem?.departureTime || `${departureDate}T08:30:00Z`,
-      arrivalTime: staticItem?.arrivalTime || `${departureDate}T11:45:00Z`,
+      piFare,
       passengerDetails
     });
-
     setSelectedPendingOption(null);
   };
 
@@ -966,6 +977,36 @@ export const TransportDiscovery: React.FC<TransportDiscoveryProps> = ({
               ? `Select your starting station or city to begin ${getModeLabel(selectedMode)} route discovery.`
               : `Now enter your target destination to resolve verified direct routes and schedules.`}
           </p>
+        </div>
+      )}
+
+      {/* Review & Pay state for Rail/Bus. No Pi charge starts here because NRC
+          does not yet expose an authorized server-side booking/payment gateway. */}
+      {confirmedPassenger && (
+        <div className="fixed inset-0 z-[60] bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-lg w-full p-6 space-y-5 shadow-2xl text-slate-900 dark:text-white">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+              <div>
+                <div className="text-[10px] font-black uppercase tracking-wider text-purple-600 dark:text-purple-400">Transport Review</div>
+                <h4 className="text-base font-black">Review & Pay with Pi</h4>
+              </div>
+              <button type="button" onClick={() => setConfirmedPassenger(null)} className="text-xs text-slate-500 hover:text-slate-900 dark:hover:text-white px-2.5 py-1 rounded-xl bg-slate-100 dark:bg-slate-800">Back</button>
+            </div>
+            <div className="p-4 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-3 text-xs">
+              <div className="flex justify-between gap-4"><span className="text-slate-500 dark:text-slate-400">Route</span><strong>{originInput} ➔ {destinationInput}</strong></div>
+              <div className="flex justify-between gap-4"><span className="text-slate-500 dark:text-slate-400">Carrier</span><strong>{confirmedPassenger.provider.name}</strong></div>
+              <div className="flex justify-between gap-4"><span className="text-slate-500 dark:text-slate-400">Passenger</span><strong>{confirmedPassenger.passengerDetails.givenName} {confirmedPassenger.passengerDetails.familyName}</strong></div>
+              <div className="flex justify-between gap-4"><span className="text-slate-500 dark:text-slate-400">Fare</span><strong>${confirmedPassenger.fiatFare.toFixed(2)} USD</strong></div>
+              <div className="flex justify-between gap-4 pt-2 border-t border-slate-200 dark:border-slate-800"><span className="font-extrabold text-amber-600 dark:text-amber-300">Pi Required</span><strong className="text-amber-600 dark:text-amber-300 font-mono">{formatPiAmount(confirmedPassenger.piFare)} π</strong></div>
+            </div>
+            <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-[11px] leading-relaxed text-amber-800 dark:text-amber-200">
+              <strong>Payment protected:</strong> Pi payment remains blocked until an authorized NRC booking/fulfillment gateway returns a live booking reference. No synthetic ticket is created.
+            </div>
+            <button type="button" disabled className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 disabled:opacity-50 text-white font-black text-xs flex items-center justify-center gap-2">
+              <ShieldCheck className="w-4 h-4" />
+              <span>NRC Booking Gateway Required Before Payment</span>
+            </button>
+          </div>
         </div>
       )}
 
