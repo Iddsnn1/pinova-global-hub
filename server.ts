@@ -3692,6 +3692,17 @@ app.post('/api/education/invoices/pay', paymentRateLimiter, authenticate, async 
       return;
     }
 
+    let authoritativeEducationSettlement: {
+      verified: true;
+      source: 'pi_platform' | 'sandbox_dev';
+      paymentId: string;
+      amount: number;
+      txid: string;
+      userUid: string;
+      network: string;
+      direction: string;
+    } | undefined;
+
     // Pi Network authoritative server verification
     if (paymentMethod === 'PI_NETWORK') {
       if (!piPaymentId) {
@@ -3769,6 +3780,17 @@ app.post('/api/education/invoices/pay', paymentRateLimiter, authenticate, async 
         return;
       }
 
+      authoritativeEducationSettlement = {
+        verified: true,
+        source: verification.source,
+        paymentId: piPaymentId,
+        amount: authoritativePiAmount,
+        txid: authoritativeTxid,
+        userUid: authoritativeUserUid,
+        network: String(paymentData?.network || '').trim(),
+        direction
+      };
+
       if (Math.abs(numericAmount - authoritativePiAmount) > 0.00000001) {
         res.status(400).json({
           success: false,
@@ -3818,7 +3840,8 @@ app.post('/api/education/invoices/pay', paymentRateLimiter, authenticate, async 
       piTxid: req.body.piTxid,
       paymentMethod,
       payerUsername,
-      idempotencyKey: effectiveIdempotencyKey
+      idempotencyKey: effectiveIdempotencyKey,
+      authoritativePiSettlement: authoritativeEducationSettlement
     });
 
     // Record immutable audit log
