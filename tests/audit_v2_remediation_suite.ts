@@ -329,14 +329,14 @@ async function runTestSuite() {
       amountPaid: 200, // Balance is 150, paying 200 is an overpayment!
       currency: 'PI',
       piAmount: 200,
-      piPaymentId: `test-overpayment-${Date.now()}`,
+      piPaymentId: 'test-overpayment-fixed',
       piTxid: 'sandbox-tx-overpayment',
       paymentMethod: 'PI_NETWORK',
       payerUsername: 'pioneer_parent',
       authoritativePiSettlement: {
         verified: true,
         source: 'sandbox_dev',
-        paymentId: `test-overpayment-${Date.now()}`,
+        paymentId: 'test-overpayment-fixed',
         amount: 200,
         txid: 'sandbox-tx-overpayment',
         userUid: 'sandbox-user-001',
