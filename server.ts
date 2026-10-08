@@ -2325,61 +2325,100 @@ app.post('/api/v1/utility/config', handlePostUtilityConfig);
 
 // Provider Account Validation API (Adapter Pattern)
 const handleUtilityValidate = async (req: express.Request, res: express.Response) => {
-  const { providerId, accountNumber } = req.body;
-  if (!accountNumber) {
-    res.status(400).json({ error: 'Account number parameter is required' });
+  const providerId = typeof req.body?.providerId === 'string' ? req.body.providerId.trim() : '';
+  const accountNumber = typeof req.body?.accountNumber === 'string' ? req.body.accountNumber.trim() : '';
+
+  if (!providerId || !accountNumber) {
+    res.status(400).json({
+      success: false,
+      valid: false,
+      error: 'PROVIDER_AND_ACCOUNT_REQUIRED',
+      message: 'Provider and account number are required.'
+    });
     return;
   }
 
-  const directApiProviders = ['safaricom', 'mtn', 'ikedc', 'dstv', 'mpesa', 'airtel', 'gotv', 'startimes', 'eko-electric', 'abuja-electric', 'kano-electric'];
-  const isDirectApiSupported = directApiProviders.some((p) => (providerId || '').toLowerCase().includes(p));
+  // Provider allow-list is routing metadata only. It is never proof of a
+  // live provider lookup.
+  const directApiProviders = [
+    'safaricom', 'mtn', 'ikedc', 'dstv', 'mpesa', 'airtel', 'gotv',
+    'startimes', 'eko-electric', 'abuja-electric', 'kano-electric'
+  ];
+  const normalizedProviderId = providerId.toLowerCase();
+  const isDirectApiSupported = directApiProviders.some((p) => normalizedProviderId.includes(p));
 
-  // If VTU.ng adapter is configured and this is a TV or utility provider, perform real customer lookup
-  if (vtuNgAdapter.isConfigured() && isDirectApiSupported) {
-    try {
-      const vtuResult = await vtuNgAdapter.verifyCustomer(providerId, accountNumber);
-      if (vtuResult.success && vtuResult.valid) {
-        res.json({
-          success: true,
-          valid: true,
-          accountNumber,
-          accountName: vtuResult.customerName || `Verified Account (${accountNumber.slice(-4)})`,
-          providerId: providerId || 'unknown',
-          requiresManualVerification: false,
-          verificationMethod: 'DIRECT_API',
-          statusMessage: 'Account structure validated via VTU.ng provider API gateway.',
-          disclaimer: 'Direct VTU.ng provider API validation.'
-        });
-        return;
-      }
-    } catch (e: any) {
-      console.warn('[Utility Validate] VTU customer lookup notice:', e.message);
-    }
-  }
-
-  if (isDirectApiSupported) {
-    res.json({
-      success: true,
-      valid: true,
-      accountNumber,
-      accountName: `Verified Account (${accountNumber.slice(-4)})`,
-      providerId: providerId || 'unknown',
-      requiresManualVerification: false,
-      verificationMethod: 'DIRECT_API',
-      statusMessage: 'Account structure validated via provider API gateway.',
-      disclaimer: 'Direct provider API validation.'
-    });
-  } else {
-    res.json({
-      success: true,
-      valid: true,
-      accountNumber,
-      accountName: `Account #${accountNumber}`,
-      providerId: providerId || 'unknown',
+  if (!isDirectApiSupported) {
+    res.status(422).json({
+      success: false,
+      valid: false,
+      error: 'PROVIDER_VERIFICATION_UNSUPPORTED',
+      providerId,
       requiresManualVerification: true,
       verificationMethod: 'MANUAL_VERIFICATION',
-      statusMessage: 'Account queued for manual verification by utility provider operations.',
-      disclaimer: 'No direct customer lookup API connected for this provider. Verified manually by fulfillment team.'
+      statusMessage: 'No authoritative live verification adapter is configured for this provider.',
+      disclaimer: 'Payment is blocked until an authoritative provider verification service is configured.'
+    });
+    return;
+  }
+
+  // Fail closed: provider name matching alone must never create a verified
+  // customer. The configured gateway must explicitly confirm the account.
+  if (!vtuNgAdapter.isConfigured()) {
+    res.status(503).json({
+      success: false,
+      valid: false,
+      error: 'PROVIDER_GATEWAY_UNAVAILABLE',
+      providerId,
+      requiresManualVerification: true,
+      verificationMethod: 'MANUAL_VERIFICATION',
+      statusMessage: 'Live provider verification is unavailable. Payment is blocked.',
+      disclaimer: 'Provider gateway is not configured; no account was verified.'
+    });
+    return;
+  }
+
+  try {
+    const vtuResult = await vtuNgAdapter.verifyCustomer(providerId, accountNumber);
+
+    if (vtuResult?.success === true && vtuResult?.valid === true) {
+      res.json({
+        success: true,
+        valid: true,
+        accountNumber,
+        accountName: typeof vtuResult.customerName === 'string' && vtuResult.customerName.trim()
+          ? vtuResult.customerName.trim()
+          : undefined,
+        providerId,
+        requiresManualVerification: false,
+        verificationMethod: 'DIRECT_API',
+        statusMessage: 'Account confirmed by the configured provider API gateway.',
+        disclaimer: 'Authoritative live provider verification.'
+      });
+      return;
+    }
+
+    res.status(422).json({
+      success: false,
+      valid: false,
+      error: 'PROVIDER_ACCOUNT_NOT_VERIFIED',
+      accountNumber,
+      providerId,
+      requiresManualVerification: true,
+      verificationMethod: 'MANUAL_VERIFICATION',
+      statusMessage: vtuResult?.message || 'Provider did not confirm this account.',
+      disclaimer: 'No authoritative provider confirmation was received; payment is blocked.'
+    });
+  } catch (e: any) {
+    console.warn('[Utility Validate] Provider gateway lookup failed:', e?.message || e);
+    res.status(503).json({
+      success: false,
+      valid: false,
+      error: 'PROVIDER_VERIFICATION_UNAVAILABLE',
+      providerId,
+      requiresManualVerification: true,
+      verificationMethod: 'MANUAL_VERIFICATION',
+      statusMessage: 'Live provider verification is unavailable. Payment is blocked.',
+      disclaimer: 'Provider lookup failed; no account was verified.'
     });
   }
 };
