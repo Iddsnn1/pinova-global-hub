@@ -5,6 +5,7 @@ import {
   PI_REFERENCE_RATE_USD,
 } from '../src/utils/currencyToPi';
 import { calculateAuthoritativePiAmount, calculatePiAmountFromFiatQuote } from '../src/utils/formatters';
+import { marketplaceService } from '../src/modules/marketplace';
 
 // Keep the shared quote timestamp fresh regardless of runner timezone/date.
 const fxAsOf = new Date(Date.now() - 60_000).toISOString();
@@ -64,5 +65,12 @@ assert.throws(() => convertFiatToPi({ fiatAmount: 100, fiatCurrency: 'USD', usdP
 assert.throws(() => convertFiatToPi({ fiatAmount: 100, fiatCurrency: 'USD', usdPerFiatUnit: 1, fxAsOf, maxFxAgeMs: 0 }), /maximum FX quote age/i);
 assert.equal(calculatePiAmountFromFiatQuote({ fiatAmount: 1000, fiatCurrency: 'NGN', usdPerFiatUnit: 0.00065, fxAsOf }), Number((0.65 / PI_REFERENCE_RATE_USD).toFixed(12)));
 assert.equal(calculateAuthoritativePiAmount(1, 500000), 0.000002);
+
+// Marketplace display estimates must not silently treat unknown currencies as USD.
+assert.equal(marketplaceService.currencyCalculator.getEstimatedValue(1, 'XOF'), 'Estimate unavailable (XOF)');
+assert.equal(marketplaceService.currencyCalculator.getEstimatedValue(1, 'usd').includes('
+
+console.log('Global currency-to-Pi conversion suite: all assertions passed.');
+), true);
 
 console.log('Global currency-to-Pi conversion suite: all assertions passed.');
