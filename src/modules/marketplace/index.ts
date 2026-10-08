@@ -480,4 +480,3 @@ export class MarketplaceService implements IMarketplaceService {
 export const marketplaceService = new MarketplaceService();
 
 
-export const marketplaceService = new MarketplaceService();
