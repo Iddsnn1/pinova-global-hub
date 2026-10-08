@@ -124,6 +124,77 @@ export class NeonEducationLedgerRepository {
     return rows.map(invoice);
   }
 
+  /**
+   * Persists an already provider-authoritative invoice.
+   * Fee calculation is intentionally outside this repository.
+   */
+  async createInvoice(input: EducationInvoice): Promise<EducationInvoice> {
+    if (String(input.currency || '').trim().toUpperCase() !== 'PI') {
+      throw new Error('PI_NATIVE_INVOICE_REQUIRED');
+    }
+
+    const total = decimal(input.totalAmount);
+    const subtotal = decimal(input.subtotal);
+    const discount = decimal(input.discountAmount);
+    const tax = decimal(input.taxAmount);
+    const amountPaid = decimal(input.amountPaid);
+    const outstanding = decimal(input.outstandingBalance);
+
+    if (units(amountPaid) !== 0n) throw new Error('INVOICE_INITIAL_PAYMENT_MUST_BE_ZERO');
+    if (units(outstanding) !== units(total)) throw new Error('INVOICE_BALANCE_INCONSISTENT');
+    if (!input.id || !input.invoiceNumber || !input.institutionId || !input.studentId) {
+      throw new Error('INVOICE_REQUIRED_FIELDS_MISSING');
+    }
+
+    const now = new Date().toISOString();
+    const issuedAt = input.issuedDate || now;
+    if (!input.dueDate || Number.isNaN(new Date(input.dueDate).getTime())) {
+      throw new Error('INVOICE_DUE_DATE_REQUIRED');
+    }
+
+    const record = {
+      ...input,
+      currency: 'PI' as const,
+      subtotal: Number(subtotal),
+      discountAmount: Number(discount),
+      taxAmount: Number(tax),
+      totalAmount: Number(total),
+      amountPaid: 0,
+      outstandingBalance: Number(outstanding),
+      status: 'UNPAID',
+      issuedDate: issuedAt,
+      createdAt: input.createdAt || now,
+      updatedAt: now
+    };
+
+    await neonQuery(
+      'INSERT INTO education_invoices (' +
+      'id, invoice_number, institution_id, institution_name, student_id, student_name, ' +
+      'student_matric_or_reg, guardian_id, education_tier, education_level, programme_or_class, ' +
+      'academic_session, term_or_semester, items, line_items, subtotal, discount_amount, ' +
+      'discount_reason, tax_amount, total_amount, amount_paid, outstanding_balance, currency, ' +
+      'country_code, due_date, issued_date, status, allowed_installments, installments_paid_count, ' +
+      'created_at, updated_at) VALUES (' +
+      '$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb,$15::jsonb,' +
+      '$16::numeric,$17::numeric,$18,$19::numeric,$20::numeric,$21::numeric,$22::numeric,' +
+      'PI',$23,$24,$25,$26,$27,$28,$29,$30,$31)',
+      [
+        record.id, record.invoiceNumber, record.institutionId, record.institutionName,
+        record.studentId, record.studentName, record.studentMatricOrReg || null,
+        record.guardianId || null, record.educationTier, record.educationLevel || null,
+        record.programmeOrClass, record.academicSession, record.termOrSemester,
+        JSON.stringify(record.items || []), JSON.stringify(record.lineItems || null),
+        subtotal, discount, record.discountReason || null, tax, total, '0.000000000000',
+        outstanding, record.countryCode || null, record.dueDate, issuedAt, 'UNPAID',
+        record.allowedInstallments || 1, 0, record.createdAt, record.updatedAt
+      ]
+    );
+
+    const rows = await neonQuery<any>('SELECT * FROM education_invoices WHERE id = $1 LIMIT 1', [record.id]);
+    if (!rows[0]) throw new Error('INVOICE_PERSISTENCE_FAILED');
+    return invoice(rows[0]);
+  }
+
   async recordPayment(params: {
     invoiceId: string; amountPaid: number | string; piAmount: number | string;
     piPaymentId: string; piTxid?: string; payerUsername: string; idempotencyKey: string;
