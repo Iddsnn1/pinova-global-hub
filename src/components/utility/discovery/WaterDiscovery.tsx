@@ -184,6 +184,8 @@ export const WaterDiscovery: React.FC<WaterDiscoveryProps> = ({
 
   // Handle Pi Payment Execution
   const handleProcessPayment = async () => {
+    setErrorMessage('Server-verified water billing and meter-token issuance are not configured. Payment is paused; no receipt or token has been issued.');
+    return;
     if (!selectedProvider || !selectedWaterService) {
       setErrorMessage('Please select a water service provider and service type.');
       return;
