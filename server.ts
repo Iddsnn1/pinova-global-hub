@@ -3638,11 +3638,16 @@ app.post('/api/education/invoices/pay', paymentRateLimiter, authenticate, async 
       return;
     }
 
-    const numericAmount = Number(amountPaid);
-    if (!numericAmount || numericAmount <= 0) {
-      res.status(400).json({ success: false, error: 'INVALID_AMOUNT', message: 'Payment amount must be greater than zero' });
+    const amountText = String(amountPaid ?? '').trim();
+    if (!/^\\d+(?:\\.\\d+)?$/.test(amountText) || Number(amountPaid) <= 0) {
+      res.status(400).json({ success: false, error: 'INVALID_AMOUNT', message: 'Payment amount must be a positive decimal value.' });
       return;
     }
+    if (amountText.includes('.') && amountText.split('.')[1].length > 12) {
+      res.status(400).json({ success: false, error: 'PI_AMOUNT_MAX_12_DECIMALS', message: 'Pi settlement amounts support at most 12 decimal places.' });
+      return;
+    }
+    const numericAmount = Number(amountPaid);
 
     const invoice = educationRepo.getInvoiceById(invoiceId);
     if (!invoice) {
@@ -3655,11 +3660,22 @@ app.post('/api/education/invoices/pay', paymentRateLimiter, authenticate, async 
       return;
     }
 
-    if (numericAmount > invoice.outstandingBalance + 0.01) {
+    if (String(invoice.currency || '').trim().toUpperCase() === 'PI') {
+      const amountUnits = BigInt(amountText.replace('.', '').padEnd(12, '0'));
+      const balanceUnits = BigInt(Number(invoice.outstandingBalance).toFixed(12).replace('.', ''));
+      if (amountUnits > balanceUnits) {
+        res.status(400).json({
+          success: false,
+          error: 'AMOUNT_EXCEEDS_BALANCE',
+          message: 'Payment amount exceeds the exact 12-decimal Pi outstanding balance.'
+        });
+        return;
+      }
+    } else if (numericAmount > invoice.outstandingBalance) {
       res.status(400).json({
         success: false,
         error: 'AMOUNT_EXCEEDS_BALANCE',
-        message: `Amount $${numericAmount} exceeds current outstanding balance of $${invoice.outstandingBalance.toFixed(2)}`
+        message: `Amount ${numericAmount} exceeds current outstanding balance of ${invoice.outstandingBalance}`
       });
       return;
     }
@@ -3769,11 +3785,13 @@ app.post('/api/education/invoices/pay', paymentRateLimiter, authenticate, async 
         return;
       }
 
-      if (Math.abs(numericAmount - authoritativePiAmount) > 0.00000001) {
+      const requestedUnits = BigInt(amountText.replace('.', '').padEnd(12, '0'));
+      const authoritativeUnits = BigInt(authoritativePiAmount.toFixed(12).replace('.', ''));
+      if (requestedUnits !== authoritativeUnits) {
         res.status(400).json({
           success: false,
           error: 'PI_AMOUNT_MISMATCH',
-          message: 'The requested settlement amount does not match the authoritative Pi payment amount.'
+          message: 'The requested settlement amount does not exactly match the authoritative Pi payment amount at 12-decimal precision.'
         });
         return;
       }
