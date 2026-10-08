@@ -6,7 +6,8 @@ import {
 } from '../src/utils/currencyToPi';
 import { calculateAuthoritativePiAmount, calculatePiAmountFromFiatQuote } from '../src/utils/formatters';
 
-const fxAsOf = '2026-10-09T12:00:00.000Z';
+// Keep the shared quote timestamp fresh regardless of runner timezone/date.
+const fxAsOf = new Date(Date.now() - 60_000).toISOString();
 
 // USD is a 1:1 FX quote in this deterministic unit test.
 const oneUsd = convertFiatToPi({
