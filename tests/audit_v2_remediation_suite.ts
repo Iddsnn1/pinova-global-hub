@@ -358,7 +358,7 @@ async function runTestSuite() {
     educationTier: 'tertiary',
     dateOfBirth: '2005-04-12',
     applicationFeeFiat: 0,
-    applicationFeePaid: 0,
+    applicationFeePaid: false,
     academicSession: '2025/2026',
     documents: []
   });
