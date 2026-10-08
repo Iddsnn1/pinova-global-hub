@@ -6,6 +6,7 @@ import {
 } from '../src/utils/currencyToPi';
 import { calculateAuthoritativePiAmount, calculatePiAmountFromFiatQuote } from '../src/utils/formatters';
 import { marketplaceService } from '../src/modules/marketplace';
+import { validateTrustedFxQuote } from '../src/server/services/TrustedFxQuoteService';
 
 // Keep the shared quote timestamp fresh regardless of runner timezone/date.
 const fxAsOf = new Date(Date.now() - 60_000).toISOString();
@@ -58,8 +59,6 @@ assert.throws(
   () => convertFiatToPi({ fiatAmount: 1e-10, fiatCurrency: 'USD', usdPerFiatUnit: 1, fxAsOf }),
   CurrencyConversionError,
 );
-
-
 assert.throws(() => convertFiatToPi({ fiatAmount: 100, fiatCurrency: 'USD', usdPerFiatUnit: 1, fxAsOf: '2020-01-01T00:00:00.000Z' }), /stale/i);
 assert.throws(() => convertFiatToPi({ fiatAmount: 100, fiatCurrency: 'USD', usdPerFiatUnit: 1, fxAsOf: '2030-01-01T00:00:00.000Z' }), /future/i);
 assert.throws(() => convertFiatToPi({ fiatAmount: 100, fiatCurrency: 'USD', usdPerFiatUnit: 1, fxAsOf, maxFxAgeMs: 0 }), /maximum FX quote age/i);
@@ -68,9 +67,40 @@ assert.equal(calculateAuthoritativePiAmount(1, 500000), 0.000002);
 
 // Marketplace display estimates must not silently treat unknown currencies as USD.
 assert.equal(marketplaceService.currencyCalculator.getEstimatedValue(1, 'XOF'), 'Estimate unavailable (XOF)');
-assert.equal(marketplaceService.currencyCalculator.getEstimatedValue(1, 'usd').includes('
+assert.equal(marketplaceService.currencyCalculator.getEstimatedValue(1, 'usd').includes('$'), true);
 
-console.log('Global currency-to-Pi conversion suite: all assertions passed.');
-), true);
+// Trusted FX quotes require an explicitly configured source, matching currency,
+// positive rates, and a fresh timestamp. These are deterministic fixture tests.
+const trustedFxNow = Date.parse('2026-10-09T12:00:00.000Z');
+const validNgnQuote = {
+  currency: 'NGN',
+  usdPerFiatUnit: 0.00065,
+  asOf: '2026-10-09T11:55:00.000Z',
+  source: 'configured-test-provider',
+};
+assert.equal(
+  validateTrustedFxQuote(validNgnQuote, 'NGN', 'configured-test-provider', trustedFxNow).usdPerFiatUnit,
+  0.00065,
+);
+assert.throws(
+  () => validateTrustedFxQuote(validNgnQuote, 'NGN', '', trustedFxNow),
+  /FX_TRUSTED_SOURCE_NOT_CONFIGURED/,
+);
+assert.throws(
+  () => validateTrustedFxQuote({ ...validNgnQuote, source: 'untrusted-provider' }, 'NGN', 'configured-test-provider', trustedFxNow),
+  /FX_SOURCE_UNTRUSTED/,
+);
+assert.throws(
+  () => validateTrustedFxQuote(validNgnQuote, 'KES', 'configured-test-provider', trustedFxNow),
+  /FX_CURRENCY_MISMATCH/,
+);
+assert.throws(
+  () => validateTrustedFxQuote({ ...validNgnQuote, asOf: '2026-10-09T10:00:00.000Z' }, 'NGN', 'configured-test-provider', trustedFxNow),
+  /FX_QUOTE_STALE/,
+);
+assert.throws(
+  () => validateTrustedFxQuote({ ...validNgnQuote, usdPerFiatUnit: 0 }, 'NGN', 'configured-test-provider', trustedFxNow),
+  /FX_RATE_INVALID/,
+);
 
 console.log('Global currency-to-Pi conversion suite: all assertions passed.');
