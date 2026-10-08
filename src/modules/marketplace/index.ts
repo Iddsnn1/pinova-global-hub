@@ -478,24 +478,6 @@ export class MarketplaceService implements IMarketplaceService {
 }
 
 export const marketplaceService = new MarketplaceService();
-, rate: 314159 },
-    NGN: { symbol: '₦', rate: 450000.0 },
-    KES: { symbol: 'KSh', rate: 40500.0 },
-    VND: { symbol: '₫', rate: 7800000.0 },
-    PHP: { symbol: '₱', rate: 17800.0 },
-    INR: { symbol: '₹', rate: 26000.0 }
-  };
-
-  getEstimatedValue(amountPi: number, currencyCode: string = 'USD'): string {
-    const config = this.referenceRates[currencyCode] || this.referenceRates.USD;
-    const value = amountPi * config.rate;
-    return `${config.symbol}${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  }
-
-  getAvailableCurrencies() {
-    return Object.keys(this.referenceRates);
-  }
-}
 
 export interface IMarketplaceService {
   calculateTotal(items: OrderItem[]): number;
