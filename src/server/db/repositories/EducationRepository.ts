@@ -519,7 +519,7 @@ export class EducationRepository {
     const newOutstandingBalance = isPiInvoice
       ? EducationRepository.fromPiUnits(EducationRepository.toPiUnits(invoice.totalAmount) - EducationRepository.toPiUnits(newAmountPaid) < 0n ? 0n : EducationRepository.toPiUnits(invoice.totalAmount) - EducationRepository.toPiUnits(newAmountPaid))
       : Math.max(0, invoice.totalAmount - newAmountPaid);
-    const newStatus = isPiInvoice ? newOutstandingBalance === 0 : newOutstandingBalance <= 0;
+    const newStatus: EducationInvoice['status'] = newOutstandingBalance === 0 ? 'PAID' : (newAmountPaid > 0 ? 'PARTIALLY_PAID' : 'UNPAID');
 
     const updatedInvoice: EducationInvoice = {
       ...invoice,
