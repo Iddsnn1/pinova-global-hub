@@ -3567,7 +3567,9 @@ app.get('/api/education/invoices', authenticate, async (req: AuthenticatedReques
       return;
     }
 
-    const invoices = useNeonEducationLedger()\n      ? await neonEducationLedger.getInvoices(filter)\n      : educationRepo.getInvoices(filter);
+    const invoices = useNeonEducationLedger()
+      ? await neonEducationLedger.getInvoices(filter)
+      : educationRepo.getInvoices(filter);
     res.json({ success: true, count: invoices.length, invoices });
   } catch (err: any) {
     res.status(500).json({ success: false, error: 'INVOICES_FETCH_FAILED', message: err.message });
@@ -3576,7 +3578,9 @@ app.get('/api/education/invoices', authenticate, async (req: AuthenticatedReques
 
 app.get('/api/education/invoices/:id', authenticate, async (req: AuthenticatedRequest, res) => {
   try {
-    const invoice = useNeonEducationLedger()\n      ? await neonEducationLedger.getInvoiceById(req.params.id)\n      : educationRepo.getInvoiceById(req.params.id);
+    const invoice = useNeonEducationLedger()
+      ? await neonEducationLedger.getInvoiceById(req.params.id)
+      : educationRepo.getInvoiceById(req.params.id);
     if (!invoice) {
       res.status(404).json({ success: false, error: 'INVOICE_NOT_FOUND' });
       return;
@@ -3943,7 +3947,9 @@ app.get('/api/education/invoices/:id/payments', authenticate, async (req: Authen
       return;
     }
 
-    const payments = useNeonEducationLedger()\n      ? await neonEducationLedger.getPaymentsByInvoiceId(id)\n      : educationRepo.getPaymentsByInvoiceId(id);
+    const payments = useNeonEducationLedger()
+      ? await neonEducationLedger.getPaymentsByInvoiceId(id)
+      : educationRepo.getPaymentsByInvoiceId(id);
     res.json(payments);
   } catch (err: any) {
     console.error('[Education Payments History] Error:', err.message);
@@ -3955,7 +3961,9 @@ app.get('/api/education/invoices/:id/payments', authenticate, async (req: Authen
 app.get('/api/education/receipts/:receiptNumber/verify', receiptVerifyRateLimiter, async (req, res) => {
   try {
     const { receiptNumber } = req.params;
-    const verification = useNeonEducationLedger()\n      ? await neonEducationLedger.verifyReceipt(receiptNumber)\n      : educationRepo.verifyReceipt(receiptNumber);
+    const verification = useNeonEducationLedger()
+      ? await neonEducationLedger.verifyReceipt(receiptNumber)
+      : educationRepo.verifyReceipt(receiptNumber);
     if (!verification.found || !verification.receipt) {
       res.status(404).json({
         success: false,
@@ -3990,7 +3998,9 @@ app.get('/api/education/receipts/:receiptNumber/verify', receiptVerifyRateLimite
 
 app.get('/api/education/receipts/:receiptNumber', authenticate, async (req: AuthenticatedRequest, res) => {
   try {
-    const receipt = useNeonEducationLedger()\n      ? await neonEducationLedger.getReceiptByNumber(req.params.receiptNumber)\n      : educationRepo.getReceiptByNumber(req.params.receiptNumber);
+    const receipt = useNeonEducationLedger()
+      ? await neonEducationLedger.getReceiptByNumber(req.params.receiptNumber)
+      : educationRepo.getReceiptByNumber(req.params.receiptNumber);
     if (!receipt) {
       res.status(404).json({ success: false, error: 'RECEIPT_NOT_FOUND' });
       return;
