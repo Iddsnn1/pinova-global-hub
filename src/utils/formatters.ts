@@ -5,7 +5,7 @@
  * Guarantees that non-zero amounts are NEVER rounded to 0 or 0.0000.
  */
 
-import { convertFiatToPi } from './currencyToPi';
+import { convertFiatToPi, FiatToPiQuote, PI_REFERENCE_RATE_USD } from './currencyToPi';
 
 export interface FormatPiOptions {
   minDecimals?: number;
@@ -18,9 +18,14 @@ export interface FormatPiOptions {
  * Calculates authoritative Pi amount from fiat price and configured rate.
  * Uses 8 decimal places for micro-amounts to ensure precision is maintained.
  */
+export function calculatePiAmountFromFiatQuote(quote: FiatToPiQuote): number {
+  return Number(convertFiatToPi(quote).piAmount);
+}
+
+/** Legacy USD-only display conversion; not FX or payment authorization. */
 export function calculateAuthoritativePiAmount(
   fiatAmount: number,
-  _piRateUsd?: number
+  piRateUsd?: number
 ): number {
   if (!Number.isFinite(fiatAmount) || fiatAmount <= 0) return 0;
   // Legacy callers supply USD amounts. Route through the shared engine with
@@ -31,6 +36,7 @@ export function calculateAuthoritativePiAmount(
     fiatCurrency: 'USD',
     usdPerFiatUnit: 1,
     fxAsOf: new Date().toISOString(),
+    piReferenceRateUsd: Number.isFinite(piRateUsd) && Number(piRateUsd) > 0 ? Number(piRateUsd) : PI_REFERENCE_RATE_USD,
   });
   return Number(result.piAmount);
 }
