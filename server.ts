@@ -3105,6 +3105,14 @@ app.post('/api/v2/utility/fulfill', paymentRateLimiter, async (req, res) => {
     txid ||
     '';
 
+  const normalizedCategory = String(category || 'utility').toLowerCase();
+  const isNigerianProvider =
+    (countryCode === 'NG' ||
+      !countryCode ||
+      providerId?.toLowerCase().includes('-ng') ||
+      providerId?.toLowerCase().includes('ikedc') ||
+      providerId?.toLowerCase().includes('dstv'));
+
   // VTU.ng settles Nigerian airtime/data in NGN. Never reinterpret a client-supplied
   // USD/EUR/etc. amount as NGN without an authoritative FX quote.
   if ((normalizedCategory === 'airtime' || normalizedCategory === 'mobile_data' || normalizedCategory === 'data') &&
@@ -3156,9 +3164,6 @@ app.post('/api/v2/utility/fulfill', paymentRateLimiter, async (req, res) => {
   let fulfillmentMessage = 'Payment verified successfully. Fulfillment is pending provider configuration or operator confirmation.';
   let providerRef: string = vtuNgAdapter.generateRequestId(paymentId, 'PEND');
   let fulfillmentMetadata: Record<string, any> | undefined = undefined;
-
-  const normalizedCategory = String(category || 'utility').toLowerCase();
-  const isNigerianProvider = (countryCode === 'NG' || !countryCode || providerId?.toLowerCase().includes('-ng') || providerId?.toLowerCase().includes('ikedc') || providerId?.toLowerCase().includes('dstv'));
 
   if (vtuNgAdapter.isConfigured() && isNigerianProvider) {
     try {
