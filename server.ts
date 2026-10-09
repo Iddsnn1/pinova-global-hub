@@ -33,6 +33,7 @@ import {
   Permission
 } from './src/server/auth';
 import { createRateLimiter } from './src/server/auth/rateLimit';
+import { calculateFiatToPiWithConfiguredFx } from './src/server/services/TrustedFxProviderService';
 import { AuditService } from './src/server/services/AuditService';
 import { EducationClassificationEngine } from './src/server/services/EducationClassificationEngine';
 import { StudentVerificationService } from './src/server/services/StudentVerificationService';
@@ -6005,6 +6006,51 @@ process.on('uncaughtException', (err) => {
 });
 
 const productRepository = new ProductRepository();
+
+// Public conversion estimate endpoint. The caller supplies only amount and currency;
+ // rates and timestamps are fetched and validated server-side from the configured provider.
+const fxQuoteRateLimiter = createRateLimiter({
+  windowMs: 60000,
+  maxRequests: 30,
+  message: 'Currency conversion rate limit exceeded. Please retry shortly.',
+});
+
+const handleFiatToPiEstimate = async (req: express.Request, res: express.Response) => {
+  const fiatAmount = Number(req.body?.fiatAmount);
+  const currency = String(req.body?.currency || '').trim().toUpperCase();
+  if (!Number.isFinite(fiatAmount) || fiatAmount <= 0 || fiatAmount > 1_000_000_000_000) {
+    return res.status(400).json({ success: false, code: 'FIAT_AMOUNT_INVALID' });
+  }
+  if (!/^[A-Z]{3}$/.test(currency)) {
+    return res.status(400).json({ success: false, code: 'FIAT_CURRENCY_INVALID' });
+  }
+
+  try {
+    const conversion = await calculateFiatToPiWithConfiguredFx(fiatAmount, currency);
+    return res.json({
+      success: true,
+      conversion,
+      estimateOnly: true,
+      paymentAuthorized: false,
+      referenceRateDisclaimer: '1 Pi = USD 314,159 is a PiNova community reference, not an official Pi Network market rate.',
+    });
+  } catch (error) {
+    const code = error instanceof Error && error.message.startsWith('FX_')
+      ? error.message
+      : 'FX_CONVERSION_UNAVAILABLE';
+    // Fail closed: never return a guessed conversion or provider credentials/details.
+    return res.status(503).json({
+      success: false,
+      code,
+      message: 'A fresh trusted FX quote is unavailable. No Pi conversion estimate was returned.',
+      estimateOnly: true,
+      paymentAuthorized: false,
+    });
+  }
+};
+
+app.post('/api/currency/fiat-to-pi', fxQuoteRateLimiter, handleFiatToPiEstimate);
+app.post('/api/v1/currency/fiat-to-pi', fxQuoteRateLimiter, handleFiatToPiEstimate);
 
 app.get('/api/products', (req, res) => {
   try {
