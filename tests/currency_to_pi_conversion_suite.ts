@@ -10,7 +10,7 @@ import { validateTrustedFxQuote } from '../src/server/services/TrustedFxQuoteSer
 import { calculateTrustedFiatToPi } from '../src/server/services/TrustedFiatToPiService';
 import { pricingEngine } from '../src/modules/pricing';
 import type { PiConversionConfig } from '../src/types/utility';
-import { parseTrustedFxProviderPayload, getTrustedFxProviderConfig } from '../src/server/services/TrustedFxProviderService';
+import { parseTrustedFxProviderPayload, parseCurrencyApiPayload, getTrustedFxProviderConfig } from '../src/server/services/TrustedFxProviderService';
 
 // Keep the shared quote timestamp fresh regardless of runner timezone/date.
 const fxAsOf = new Date(Date.now() - 60_000).toISOString();
@@ -105,6 +105,36 @@ assert.throws(
 assert.throws(
   () => parseTrustedFxProviderPayload({ ...providerPayload, baseCurrency: 'EUR' }, 'NGN', 'fixture-fx-provider', providerNow),
   /FX_PROVIDER_BASE_CURRENCY_UNSUPPORTED/,
+);
+ // CurrencyAPI native schema: provider timestamp and USD-base quote are preserved.
+const currencyApiQuote = parseCurrencyApiPayload({
+  meta: { last_updated_at: '2026-10-09T11:55:00.000Z' },
+  data: { NGN: { code: 'NGN', value: 1538.4615384615383 } },
+}, 'NGN', 'currencyapi.com', providerNow);
+assert.equal(currencyApiQuote.source, 'currencyapi.com');
+assert.equal(currencyApiQuote.currency, 'NGN');
+assert.equal(currencyApiQuote.asOf, '2026-10-09T11:55:00.000Z');
+assert.ok(Math.abs(currencyApiQuote.usdPerFiatUnit - (1 / 1538.4615384615383)) < 1e-15);
+assert.throws(
+  () => parseCurrencyApiPayload({
+    meta: { last_updated_at: '2026-10-09T10:00:00.000Z' },
+    data: { NGN: { code: 'NGN', value: 1500 } },
+  }, 'NGN', 'currencyapi.com', providerNow),
+  /FX_QUOTE_STALE/,
+);
+assert.throws(
+  () => parseCurrencyApiPayload({
+    meta: { last_updated_at: '2026-10-09T11:55:00.000Z' },
+    data: { NGN: { code: 'NGN', value: 0 } },
+  }, 'NGN', 'currencyapi.com', providerNow),
+  /FX_PROVIDER_RATE_MISSING_OR_INVALID/,
+);
+assert.throws(
+  () => parseCurrencyApiPayload({
+    meta: { last_updated_at: '2026-10-09T11:55:00.000Z' },
+    data: { NGN: { code: 'NGN', value: 1500 } },
+  }, 'NGN', 'other-provider', providerNow),
+  /FX_SOURCE_UNTRUSTED/,
 );
 assert.throws(
   () => getTrustedFxProviderConfig({}),
