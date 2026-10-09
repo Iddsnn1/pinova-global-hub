@@ -1231,7 +1231,7 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                                 : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-purple-500'
                             }`}
                           >
-                            ${activeFiatCurrency ? formatFiat(amt, activeFiatCurrency) : amt.toFixed(2)}
+                            {activeFiatCurrency ? formatFiat(amt, activeFiatCurrency) : amt.toFixed(2)}
                           </button>
                         ))}
                       </div>
