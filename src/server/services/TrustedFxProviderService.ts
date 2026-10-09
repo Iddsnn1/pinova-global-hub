@@ -1,3 +1,4 @@
+import { calculateTrustedFiatToPi, type TrustedFiatToPiRequest } from './TrustedFiatToPiService';
 import {
   DEFAULT_MAX_TRUSTED_FX_AGE_MS,
   validateTrustedFxQuote,
@@ -107,4 +108,26 @@ export function getTrustedFxProviderConfig(env: Record<string, string | undefine
   if (!source) throw new Error('FX_TRUSTED_SOURCE_NOT_CONFIGURED');
   parseEndpoint(endpoint);
   return { endpoint, source, apiKey, timeoutMs: 5000, maxAgeMs: DEFAULT_MAX_TRUSTED_FX_AGE_MS };
+}
+
+/**
+ * Convenience orchestration for server-side estimates: fetch a fresh quote
+ * from the configured provider, then convert. It does not create or authorize
+ * any payment; payment code must still verify the canonical invoice amount.
+ */
+export async function calculateFiatToPiWithConfiguredFx(
+  fiatAmount: number,
+  currencyCode: string,
+  env: Record<string, string | undefined> = process.env,
+): Promise<ReturnType<typeof calculateTrustedFiatToPi>> {
+  const config = getTrustedFxProviderConfig(env);
+  const quote = await fetchTrustedFxQuote(currencyCode, config);
+  const request: TrustedFiatToPiRequest = {
+    fiatAmount,
+    currency: currencyCode,
+    quote,
+    trustedSource: config.source,
+    maxAgeMs: config.maxAgeMs,
+  };
+  return calculateTrustedFiatToPi(request);
 }
