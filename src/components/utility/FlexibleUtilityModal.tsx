@@ -645,7 +645,7 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
 
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold px-2.5 py-1 rounded-xl bg-slate-800 text-amber-300 border border-amber-500/30">
-              Configured Rate: 1 π = ${piConversionConfig.piRateUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD
+              PiNova community reference (not a market FX rate): 1 π = ${piConversionConfig.piRateUsd.toLocaleString(undefined, { maximumFractionDigits: 0 })} USD
             </span>
             {onClose && (
               <button
