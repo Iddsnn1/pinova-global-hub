@@ -148,7 +148,7 @@ const COUNTRY_CURRENCY: Record<string, string> = {
   BO:'BOB', CU:'CUP', TT:'TTD', BB:'BBD', BS:'BSD', BZ:'BZD', GY:'GYD', SR:'SRD',
   AG:'XCD', DM:'XCD', GD:'XCD', LC:'XCD', VC:'XCD', KN:'XCD', FJ:'FJD',
   PG:'PGK', WS:'WST', TO:'TOP', VU:'VUV', SB:'SBD', KI:'AUD', NR:'AUD', TV:'AUD',
-  KH:'KHR', LA:'LAK', BN:'BND', MV:'MVR', BT:'BTN', MN:'MNT', TJ:'TJS', TM:'TMT',
+  KH:'KHR', LA:'LAK', BN:'BND', MV:'MVR', BT:'BTN', TJ:'TJS', TM:'TMT',
   KG:'KGS', AM:'AMD', GE:'GEL', HK:'HKD', TW:'TWD', PS:'ILS', IR:'IRR', IQ:'IQD',
   LB:'LBP', SY:'SYP', RU:'RUB', XK:'EUR', MT:'EUR', SM:'EUR', AD:'EUR', VA:'EUR'
 };
