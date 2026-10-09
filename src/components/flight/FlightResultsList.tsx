@@ -46,10 +46,14 @@ const FlightOfferCard: React.FC<{
   const activeFareConditions = selectedFareOption?.fareConditions || offer.fareConditions;
   const activeSeats = selectedFareOption ? selectedFareOption.seatsAvailable : offer.seatsAvailable;
 
-  const piCalculated = piRateUsd > 0 ? (activeFareAmountFiat / piRateUsd) : 0;
-  const formattedPi = piCalculated < 0.0001 
-    ? piCalculated.toFixed(6) 
-    : piCalculated.toFixed(6).replace(/0+$/, '').replace(/\.$/, '');
+  const activeFareCurrency = String(selectedFareOption ? selectedFareOption.fareCurrency : offer.fareCurrency || '').trim().toUpperCase();
+  const hasPiEstimate = activeFareCurrency === 'USD' && Number.isFinite(piRateUsd) && piRateUsd > 0;
+  const piCalculated = hasPiEstimate ? (activeFareAmountFiat / piRateUsd) : 0;
+  const formattedPi = hasPiEstimate
+    ? (piCalculated < 0.0001
+      ? piCalculated.toFixed(6)
+      : piCalculated.toFixed(6).replace(/0+$/, '').replace(/\.$/, ''))
+    : 'Unavailable';
 
   const formatTime = (isoString: string) => {
     try {
@@ -72,6 +76,9 @@ const FlightOfferCard: React.FC<{
   const airlineMeta = AIRLINE_INFO[offer.airline];
 
   const handleSelect = () => {
+    // Do not allow checkout with a zero/fabricated Pi amount when the fare is
+    // not USD. A trusted server FX quote must be integrated before enabling it.
+    if (!hasPiEstimate || !Number.isFinite(piCalculated) || piCalculated <= 0) return;
     const chosenOffer: FlightOffer = {
       ...offer,
       offerId: activeOfferId, // Preserves exact Duffel offer ID for selected fare
@@ -139,7 +146,7 @@ const FlightOfferCard: React.FC<{
             <span className="text-sm font-sans font-bold">π</span>
           </div>
           <div className="text-xs text-slate-400 font-semibold">
-            ≈ ${activeFareAmountFiat.toLocaleString(undefined, { minimumFractionDigits: 2 })} {offer.fareCurrency}
+            {activeFareAmountFiat.toLocaleString(undefined, { minimumFractionDigits: 2 })} {activeFareCurrency}
           </div>
         </div>
       </div>
@@ -212,7 +219,10 @@ const FlightOfferCard: React.FC<{
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             {offer.fareOptions.map((opt) => {
               const isSelected = opt.offerId === activeOfferId;
-              const optPi = piRateUsd > 0 ? (opt.fareAmountFiat / piRateUsd).toFixed(4) : '0';
+              const optionCurrency = String(opt.fareCurrency || '').trim().toUpperCase();
+              const optPi = optionCurrency === 'USD' && piRateUsd > 0
+                ? (opt.fareAmountFiat / piRateUsd).toFixed(4)
+                : 'Unavailable';
               return (
                 <button
                   key={opt.offerId}
@@ -231,7 +241,7 @@ const FlightOfferCard: React.FC<{
                     {isSelected && <CheckCircle2 className="w-3.5 h-3.5 text-purple-400" />}
                   </div>
                   <div className="text-sm font-black text-amber-300 mt-1 font-mono">
-                    ${opt.fareAmountFiat.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    {opt.fareAmountFiat.toLocaleString(undefined, { minimumFractionDigits: 2 })} {optionCurrency}
                   </div>
                   <div className="text-[10px] text-slate-400">
                     {optPi} π • {opt.baggage?.checkedBaggage || 'Standard Baggage'}
@@ -257,6 +267,8 @@ const FlightOfferCard: React.FC<{
 
         <button
           onClick={handleSelect}
+          disabled={!hasPiEstimate || !Number.isFinite(piCalculated) || piCalculated <= 0}
+          title={!hasPiEstimate ? 'Pi conversion unavailable for this currency until trusted FX is configured.' : undefined}
           className="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-extrabold text-xs rounded-xl shadow-md shadow-purple-600/30 flex items-center gap-1.5 transition-all"
         >
           <span>Select & Book</span>
