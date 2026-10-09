@@ -10,6 +10,7 @@ import { validateTrustedFxQuote } from '../src/server/services/TrustedFxQuoteSer
 import { calculateTrustedFiatToPi } from '../src/server/services/TrustedFiatToPiService';
 import { pricingEngine } from '../src/modules/pricing';
 import type { PiConversionConfig } from '../src/types/utility';
+import { parseTrustedFxProviderPayload, getTrustedFxProviderConfig } from '../src/server/services/TrustedFxProviderService';
 
 // Keep the shared quote timestamp fresh regardless of runner timezone/date.
 const fxAsOf = new Date(Date.now() - 60_000).toISOString();
@@ -76,6 +77,43 @@ assert.equal(pricingEngine.calculatePiFromFiat(1, usdPricingConfig), Number((1 /
 assert.equal(pricingEngine.calculatePiFromFiat(1000, ngnPricingConfig), 0);
 assert.equal(pricingEngine.calculateFiatFromPi(1, ngnPricingConfig), 0);
 assert.match(pricingEngine.getPricingDisclaimer(), /not an official Pi Network market rate/i);
+
+// Provider adapter consumes only an explicitly normalized, USD-base payload.
+const providerNow = Date.parse('2026-10-09T12:00:00.000Z');
+const providerPayload = {
+  source: 'fixture-fx-provider',
+  asOf: '2026-10-09T11:55:00.000Z',
+  baseCurrency: 'USD',
+  rates: { NGN: 1538.4615384615383 },
+};
+const parsedProviderQuote = parseTrustedFxProviderPayload(
+  providerPayload,
+  'NGN',
+  'fixture-fx-provider',
+  providerNow,
+);
+assert.equal(parsedProviderQuote.currency, 'NGN');
+assert.ok(Math.abs(parsedProviderQuote.usdPerFiatUnit - (1 / 1538.4615384615383)) < 1e-15);
+assert.throws(
+  () => parseTrustedFxProviderPayload(providerPayload, 'NGN', 'different-provider', providerNow),
+  /FX_SOURCE_UNTRUSTED/,
+);
+assert.throws(
+  () => parseTrustedFxProviderPayload({ ...providerPayload, rates: {} }, 'NGN', 'fixture-fx-provider', providerNow),
+  /FX_PROVIDER_RATE_MISSING_OR_INVALID/,
+);
+assert.throws(
+  () => parseTrustedFxProviderPayload({ ...providerPayload, baseCurrency: 'EUR' }, 'NGN', 'fixture-fx-provider', providerNow),
+  /FX_PROVIDER_BASE_CURRENCY_UNSUPPORTED/,
+);
+assert.throws(
+  () => getTrustedFxProviderConfig({}),
+  /FX_PROVIDER_ENDPOINT_NOT_CONFIGURED/,
+);
+assert.throws(
+  () => getTrustedFxProviderConfig({ PINOVA_FX_PROVIDER_URL: 'http://example.com/rates', PINOVA_FX_PROVIDER_SOURCE: 'fixture-fx-provider' }),
+  /FX_PROVIDER_HTTPS_REQUIRED/,
+);
 
 // Marketplace display estimates must not silently treat unknown currencies as USD.
 assert.equal(marketplaceService.currencyCalculator.getEstimatedValue(1, 'XOF'), 'Estimate unavailable (XOF)');
