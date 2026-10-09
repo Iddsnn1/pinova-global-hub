@@ -152,14 +152,12 @@ const COUNTRY_CURRENCY: Record<string, string> = {
   LB:'LBP', SY:'SYP', RU:'RUB', XK:'EUR', MT:'EUR', SM:'EUR', AD:'EUR', VA:'EUR'
 };
 
-function currencyForUtility(countryCode: string, providerCurrency?: string, packageCurrency?: string): string | null {
-  if (packageCurrency && /^[A-Z]{3}$/.test(packageCurrency.toUpperCase())) return packageCurrency.toUpperCase();
+function currencyForUtility(countryCode: string, providerCurrency?: string): string | null {
   const code = String(countryCode || 'GLOBAL').toUpperCase();
-  if (code === 'GLOBAL') {
-    const currency = String(providerCurrency || '').toUpperCase();
-    return /^[A-Z]{3}$/.test(currency) ? currency : null;
-  }
-  return COUNTRY_CURRENCY[code] || null;
+  // The selected country is authoritative; package metadata must not override local currency.
+  if (code !== 'GLOBAL') return COUNTRY_CURRENCY[code] || null;
+  const currency = String(providerCurrency || '').toUpperCase();
+  return /^[A-Z]{3}$/.test(currency) ? currency : null;
 }
 
 function formatFiat(value: number, currency: string): string {
