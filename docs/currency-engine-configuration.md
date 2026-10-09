@@ -18,9 +18,11 @@ Configure these variables only in the server runtime (Vercel Production/Preview
 or the applicable server environment). Never expose the provider key through a
 `VITE_*` variable or return it to the browser.
 
-- `PINOVA_FX_PROVIDER_URL`: HTTPS endpoint returning the normalized JSON contract below.
-- `PINOVA_FX_PROVIDER_SOURCE`: exact source identifier expected in each response.
-- `PINOVA_FX_PROVIDER_API_KEY`: optional bearer token, only if required by the chosen provider.
+- `PINOVA_FX_PROVIDER_URL`: HTTPS endpoint. For CurrencyAPI, use `https://api.currencyapi.com/v3/latest`.
+- `PINOVA_FX_PROVIDER_SOURCE`: set to `currencyapi.com` when using CurrencyAPI; for the generic adapter, this must match the `source` field returned by your normalized endpoint.
+- `PINOVA_FX_PROVIDER_API_KEY`: secret API key. CurrencyAPI authentication uses the `apikey` HTTP header; generic providers use a bearer header.
+
+The native CurrencyAPI adapter requests the selected currency with `base_currency=USD`, reads `meta.last_updated_at` as the provider timestamp, and reads `data[CODE].value` as units of that currency per USD. It never puts the API key in the URL. The free CurrencyAPI plan updates daily and is for private use; the current 15-minute freshness rule will therefore reject those daily quotes. Do not loosen freshness to make the free plan pass. For commercial production and 60-second updates, the CurrencyAPI Medium plan advertises those features; verify the plan and account terms before enabling checkout.
 
 The code rejects non-HTTPS endpoints, URLs containing embedded credentials,
 redirects, non-JSON responses, invalid rates, mismatched source identifiers,
@@ -71,7 +73,8 @@ do not relabel or fabricate its source, rate, or timestamp.
 
 - [ ] Select an FX provider and verify its provenance, terms, supported currencies,
       timestamp semantics, availability, and rate limits.
-- [ ] Implement the provider-specific response adapter if needed.
+- [x] Implement a native CurrencyAPI response adapter for `meta.last_updated_at` and `data[CODE].value`.
+- [ ] Confirm the account has a commercial plan whose update interval satisfies the 15-minute freshness policy.
 - [ ] Add the three server environment variables above in Preview first.
 - [ ] Test NGN and other target currencies against independently verified test
       fixtures; never put real API keys in source control.
