@@ -536,12 +536,18 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
     return !isNaN(parsed) && isFinite(parsed) && parsed > 0 ? parsed : 0;
   };
 
-  const activeFiatAmount = getActiveFiatPrice();
-  const activeFiatCurrency = currencyForUtility(
-    selectedCountryCode,
-    selectedProvider?.currency,
-    purchaseMode === 'package' ? selectedPackage?.currency : undefined
+  const activeFiatCurrency = currencyForUtility(selectedCountryCode, selectedProvider?.currency);
+  const selectedPackageCurrency = String(selectedPackage?.currency || selectedProvider?.currency || '').toUpperCase();
+  const selectedPackageMatchesCountry = Boolean(
+    selectedPackage && activeFiatCurrency && selectedPackageCurrency === activeFiatCurrency
   );
+  const compatiblePackages = (selectedProvider?.packages || []).filter((pkg) => {
+    const packageCurrency = String(pkg.currency || selectedProvider?.currency || '').toUpperCase();
+    return Boolean(activeFiatCurrency && packageCurrency === activeFiatCurrency);
+  });
+  const activeFiatAmount = purchaseMode === 'package'
+    ? (selectedPackageMatchesCountry && selectedPackage ? selectedPackage.fiatPrice : 0)
+    : getActiveFiatPrice();
 
   // Quote-only preview. The endpoint returns paymentAuthorized:false; this quote
   // must never be treated as the server's final invoice/payment authorization.
@@ -1236,9 +1242,16 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                     </div>
                   )}
 
-                  {purchaseMode === 'package' && selectedProvider.packages.length > 0 && (
+                  {purchaseMode === 'package' && selectedProvider.packages.length > 0 && compatiblePackages.length === 0 && (
+                    <div className="p-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 text-xs text-amber-700 dark:text-amber-300">
+                      <strong>Local-currency package pricing unavailable.</strong>
+                      <p className="mt-1">These packages are not priced in {activeFiatCurrency || 'the selected country currency'}. We will not relabel a price from another currency. Choose Custom Amount if available; checkout remains paused until a fresh trusted FX quote and server-side invoice authorization are available.</p>
+                    </div>
+                  )}
+
+                  {purchaseMode === 'package' && selectedProvider.packages.length > 0 && compatiblePackages.length > 0 && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                      {selectedProvider.packages.map((pkg) => {
+                      {compatiblePackages.map((pkg) => {
                         const isSelected = selectedPackage?.id === pkg.id;
                         return (
                           <div
@@ -1321,7 +1334,9 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                     <span>Package / Value:</span>
                     <span className="font-bold text-white">
                       {purchaseMode === 'package'
-                        ? (selectedPackage ? `${selectedPackage.name} (${formatFiat(selectedPackage.fiatPrice, selectedPackage.currency || activeFiatCurrency || 'USD')})` : 'Package')
+                        ? (selectedPackageMatchesCountry && selectedPackage
+                            ? `${selectedPackage.name} (${formatFiat(selectedPackage.fiatPrice, selectedPackageCurrency)})`
+                            : 'Package unavailable: no verified price in selected currency')
                         : (getActiveFiatPrice() > 0 && activeFiatCurrency ? formatFiat(getActiveFiatPrice(), activeFiatCurrency) : '—')}
                     </span>
                   </div>
