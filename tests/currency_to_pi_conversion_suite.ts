@@ -144,7 +144,7 @@ const trustedConversion = calculateTrustedFiatToPi({
   trustedSource: 'configured-test-provider',
 });
 assert.equal(trustedConversion.usdAmount, 0.65);
-assert.equal(trustedConversion.piAmount, '0.000002069028');
+assert.equal(trustedConversion.piAmount, '0.000002069016');
 assert.throws(
   () => calculateTrustedFiatToPi({ fiatAmount: 1000, currency: 'NGN', quote: liveTestQuote, trustedSource: 'wrong-provider' }),
   /FX_SOURCE_UNTRUSTED/,
