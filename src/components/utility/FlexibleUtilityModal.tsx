@@ -45,9 +45,8 @@ import {
 import { UTILITY_CATEGORY_META, SAMPLE_UTILITY_PROVIDERS } from '../../data/utilityData';
 import { AIRTIME_COUNTRIES } from '../../data/airtimeData';
 import { ALL_GLOBAL_COUNTRIES } from '../../data/countriesData';
-import { createPiPayment } from '../../lib/piSdk';
 import { DigitalReceiptModal } from './DigitalReceiptModal';
-import { formatPiAmount, calculateAuthoritativePiAmount } from '../../utils/formatters';
+import { formatPiAmount } from '../../utils/formatters';
 import { ProviderValidationFactory } from '../../modules/utility/providerValidation';
 import { supportsServiceDiscovery } from '../../lib/utility/serviceDiscovery';
 import { resolveElectricityProviders } from '../../lib/utility/electricityDiscovery';
@@ -129,7 +128,7 @@ function getDefaultDesignationsForCategory(category: UtilityCategoryType): strin
 const COUNTRY_CURRENCY: Record<string, string> = {
   NG:'NGN', GH:'GHS', KE:'KES', ZA:'ZAR', EG:'EGP', ET:'ETB', UG:'UGX', TZ:'TZS',
   RW:'RWF', CM:'XAF', CI:'XOF', SN:'XOF', MA:'MAD', DZ:'DZD', AO:'AOA', ZM:'ZMW',
-  ZW:'ZWL', NA:'NAD', BW:'BWP', MZ:'MZN', MU:'MUR', US:'USD', CA:'CAD', BR:'BRL',
+  ZW:'ZWG', NA:'NAD', BW:'BWP', MZ:'MZN', MU:'MUR', US:'USD', CA:'CAD', BR:'BRL',
   MX:'MXN', AR:'ARS', CO:'COP', CL:'CLP', PE:'PEN', GB:'GBP', DE:'EUR', FR:'EUR',
   IT:'EUR', ES:'EUR', NL:'EUR', CH:'CHF', SE:'SEK', PL:'PLN', BE:'EUR', AT:'EUR',
   NO:'NOK', DK:'DKK', FI:'EUR', IE:'EUR', PT:'EUR', GR:'EUR', AE:'AED', SA:'SAR',
@@ -242,7 +241,6 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
   const [trustedConversionError, setTrustedConversionError] = useState<string | null>(null);
 
   // Review & Processing State
-  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [generatedReceipt, setGeneratedReceipt] = useState<UtilityTransactionReceipt | null>(null);
 
@@ -1233,7 +1231,7 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                                 : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-purple-500'
                             }`}
                           >
-                            ${amt}.00
+                            ${activeFiatCurrency ? formatFiat(amt, activeFiatCurrency) : amt.toFixed(2)}
                           </button>
                         ))}
                       </div>
@@ -1263,10 +1261,8 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                             <h5 className="font-bold text-xs text-slate-900 dark:text-slate-100">{pkg.name}</h5>
                             <p className="text-[10px] text-slate-400 line-clamp-1">{pkg.description}</p>
                             <div className="pt-2 flex items-center justify-between text-xs border-t border-slate-100 dark:border-slate-800">
-                              <span className="font-bold text-slate-500">${pkg.fiatPrice.toFixed(2)} USD</span>
-                              <span className="font-black text-amber-500 dark:text-amber-400">
-                                {formatPiAmount(calculateAuthoritativePiAmount(pkg.fiatPrice, piConversionConfig.piRateUsd))} π
-                              </span>
+                              <span className="font-bold text-slate-500">{formatFiat(pkg.fiatPrice, pkg.currency || activeFiatCurrency || 'USD')}</span>
+                              <span className="text-[10px] font-semibold text-slate-400">Pi estimate after trusted FX quote</span>
                             </div>
                           </div>
                         );
@@ -1379,11 +1375,6 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                     <>
                       <AlertCircle className="w-4 h-4 text-amber-300" />
                       <span>Gateway Onboarding Pending — Direct Vending Paused</span>
-                    </>
-                  ) : isProcessingPayment ? (
-                    <>
-                      <RefreshCw className="w-4 h-4 animate-spin text-white" />
-                      <span>Processing with Pi Wallet...</span>
                     </>
                   ) : (
                     <>
