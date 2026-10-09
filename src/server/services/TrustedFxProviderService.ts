@@ -20,6 +20,11 @@ interface ProviderPayload {
   rates?: unknown;
 }
 
+interface CurrencyApiPayload {
+  meta?: { last_updated_at?: unknown };
+  data?: Record<string, { code?: unknown; value?: unknown } | undefined>;
+}
+
 function parseEndpoint(endpoint: string): URL {
   let url: URL;
   try { url = new URL(endpoint); } catch { throw new Error('FX_PROVIDER_ENDPOINT_INVALID'); }
@@ -62,6 +67,37 @@ export function parseTrustedFxProviderPayload(
   }, currency, expectedSource, nowMs, maxAgeMs);
 }
 
+/**
+ * CurrencyAPI's native response uses meta.last_updated_at and data[CODE].value,
+ * where the default USD base means value is units of the requested currency per
+ * USD. Its API key is sent in the documented 'apikey' header, never in the URL.
+ */
+export function parseCurrencyApiPayload(
+  payload: CurrencyApiPayload,
+  currencyCode: string,
+  expectedSource = 'currencyapi.com',
+  nowMs = Date.now(),
+  maxAgeMs = DEFAULT_MAX_TRUSTED_FX_AGE_MS,
+): TrustedFxQuote {
+  if (!payload || typeof payload !== 'object') throw new Error('FX_PROVIDER_PAYLOAD_INVALID');
+  if (expectedSource !== 'currencyapi.com') throw new Error('FX_SOURCE_UNTRUSTED');
+  const currency = String(currencyCode || '').trim().toUpperCase();
+  if (!/^[A-Z]{3}$/.test(currency)) throw new Error('FX_CURRENCY_INVALID');
+  const item = payload.data?.[currency];
+  if (!item || item.code !== currency) throw new Error('FX_PROVIDER_RATE_MISSING_OR_INVALID');
+  const unitsPerUsd = item.value;
+  if (typeof unitsPerUsd !== 'number' || !Number.isFinite(unitsPerUsd) || unitsPerUsd <= 0) {
+    throw new Error('FX_PROVIDER_RATE_MISSING_OR_INVALID');
+  }
+  if (typeof payload.meta?.last_updated_at !== 'string') throw new Error('FX_TIMESTAMP_INVALID');
+  return validateTrustedFxQuote({
+    currency,
+    usdPerFiatUnit: 1 / unitsPerUsd,
+    asOf: payload.meta.last_updated_at,
+    source: expectedSource,
+  }, currency, expectedSource, nowMs, maxAgeMs);
+}
+
 export async function fetchTrustedFxQuote(
   currencyCode: string,
   config: TrustedFxProviderConfig,
@@ -70,6 +106,15 @@ export async function fetchTrustedFxQuote(
   if (!config || !String(config.endpoint || '').trim()) throw new Error('FX_PROVIDER_ENDPOINT_NOT_CONFIGURED');
   if (!String(config.source || '').trim()) throw new Error('FX_TRUSTED_SOURCE_NOT_CONFIGURED');
   const endpoint = parseEndpoint(config.endpoint);
+  const isCurrencyApi = endpoint.hostname === 'api.currencyapi.com';
+  if (isCurrencyApi && config.source !== 'currencyapi.com') throw new Error('FX_SOURCE_UNTRUSTED');
+  const currency = String(currencyCode || '').trim().toUpperCase();
+  if (!/^[A-Z]{3}$/.test(currency)) throw new Error('FX_CURRENCY_INVALID');
+  if (isCurrencyApi) {
+    endpoint.searchParams.set('base_currency', 'USD');
+    endpoint.searchParams.set('currencies', currency);
+    endpoint.searchParams.set('type', 'fiat');
+  }
   const timeoutMs = config.timeoutMs ?? 5000;
   const maxAgeMs = config.maxAgeMs ?? DEFAULT_MAX_TRUSTED_FX_AGE_MS;
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0 || timeoutMs > 30000) throw new Error('FX_PROVIDER_TIMEOUT_CONFIG_INVALID');
@@ -78,7 +123,10 @@ export async function fetchTrustedFxQuote(
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const headers: Record<string, string> = { Accept: 'application/json' };
-    if (config.apiKey) headers.Authorization = `Bearer ${config.apiKey}`;
+    if (config.apiKey) {
+      if (isCurrencyApi) headers.apikey = config.apiKey;
+      else headers.Authorization = `Bearer ${config.apiKey}`;
+    }
     const response = await fetch(endpoint, {
       method: 'GET',
       headers,
@@ -89,8 +137,9 @@ export async function fetchTrustedFxQuote(
     if (!response.ok) throw new Error('FX_PROVIDER_HTTP_ERROR');
     const contentType = response.headers.get('content-type') || '';
     if (!contentType.toLowerCase().includes('application/json')) throw new Error('FX_PROVIDER_CONTENT_TYPE_INVALID');
-    const payload = await response.json() as ProviderPayload;
-    return parseTrustedFxProviderPayload(payload, currencyCode, config.source, nowMs, maxAgeMs);
+    const payload = await response.json() as ProviderPayload & CurrencyApiPayload;
+    if (isCurrencyApi) return parseCurrencyApiPayload(payload, currency, config.source, nowMs, maxAgeMs);
+    return parseTrustedFxProviderPayload(payload, currency, config.source, nowMs, maxAgeMs);
   } catch (error) {
     if (error instanceof Error && error.message.startsWith('FX_')) throw error;
     if (controller.signal.aborted) throw new Error('FX_PROVIDER_TIMEOUT');
