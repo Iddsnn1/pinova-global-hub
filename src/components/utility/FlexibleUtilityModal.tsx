@@ -146,7 +146,7 @@ const COUNTRY_CURRENCY: Record<string, string> = {
   NE:'XOF', SS:'SSP', SL:'SLE', TG:'XOF', SZ:'SZL', LS:'LSL', KM:'KMF', ER:'ERN',
   SC:'SCR', HT:'HTG', DO:'DOP', CR:'CRC', GT:'GTQ', HN:'HNL', SV:'USD', EC:'USD',
   BO:'BOB', CU:'CUP', TT:'TTD', BB:'BBD', BS:'BSD', BZ:'BZD', GY:'GYD', SR:'SRD',
-  AG:'XCD', DM:'XCD', GD:'XCD', LC:'XCD', VC:'XCD', KN:'XCD', VC:'XCD', FJ:'FJD',
+  AG:'XCD', DM:'XCD', GD:'XCD', LC:'XCD', VC:'XCD', KN:'XCD', FJ:'FJD',
   PG:'PGK', WS:'WST', TO:'TOP', VU:'VUV', SB:'SBD', KI:'AUD', NR:'AUD', TV:'AUD',
   KH:'KHR', LA:'LAK', BN:'BND', MV:'MVR', BT:'BTN', MN:'MNT', TJ:'TJS', TM:'TMT',
   KG:'KGS', AM:'AMD', GE:'GEL', HK:'HKD', TW:'TWD', PS:'ILS', IR:'IRR', IQ:'IQD',
@@ -613,105 +613,11 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
     calculatedPiAmount <= (piConversionConfig.maxPurchasePi || 1000.00);
 
   // Quote-only estimate. Checkout stays blocked until the server independently
-  // validates the canonical utility invoice against this quote.
+  // validates the canonical utility invoice and authorizes the payment.
   const handleExecutePayment = async () => {
     setErrorMessage('Checkout is paused: the FX endpoint currently returns an estimate only, not payment authorization. Server-side invoice validation must be integrated before this utility can be paid.');
-    return;
-    const finalPiAmount = calculatedPiAmount;
-
-    if (!selectedProvider) return;
-    if (!accountNumber.trim()) {
-      setErrorMessage(`Please enter your ${getUtilityFieldLabel()}.`);
-      return;
-    }
-    if (purchaseMode === 'custom' && Number(getActiveFiatPrice()) <= 0) {
-      setErrorMessage('Please enter a valid amount greater than $0.');
-      return;
-    }
-    if (purchaseMode === 'package' && !selectedPackage) {
-      setErrorMessage('Please select a package plan.');
-      return;
-    }
-    if (!isWithinLimits) {
-      setErrorMessage(`Calculated Pi amount (${formatPiAmount(finalPiAmount)} π) is outside allowable limits.`);
-      return;
-    }
-    if (!accountValidationResult?.valid) {
-      setErrorMessage('Live provider/account verification is required before payment. No unverified utility payment will be submitted.');
-      return;
-    }
-
-    setErrorMessage(null);
-    setIsProcessingPayment(true);
-
-    const activeFiat = getActiveFiatPrice();
-    const memoText = `${selectedProvider.name} (${selectedDesignation}) - ${accountNumber} ($${activeFiat.toFixed(2)})`;
-
-    try {
-      const paymentResult = await createPiPayment({
-        amountPi: finalPiAmount,
-        memo: memoText,
-        metadata: {
-          category: selectedCategory,
-          countryCode: selectedCountryCode,
-          state: selectedState,
-          providerId: selectedProvider.id,
-          providerName: selectedProvider.name,
-          designation: selectedDesignation,
-          accountNumber,
-          accountName: accountValidationResult?.name || 'Verified Customer',
-          fiatAmount: activeFiat,
-          fiatCurrency: selectedProvider.currency,
-          piRateApplied: piConversionConfig.piRateUsd,
-          packageName: selectedPackage?.name || 'Custom Purchase'
-        }
-      });
-
-      if (paymentResult && paymentResult.success) {
-        const isFulfilled = paymentResult.fulfillmentStatus === 'FULFILLED';
-        const token = isFulfilled ? (paymentResult.data?.tokenOrCode || paymentResult.data?.providerReference) : undefined;
-        
-        const transactionId = paymentResult.data?.transactionId;
-        const piPaymentId = paymentResult.paymentId;
-        const piTxid = paymentResult.txid;
-        if (!transactionId || !piPaymentId || !piTxid) {
-          setErrorMessage('Payment was not accepted because the server did not return complete payment identifiers. No synthetic receipt was created.');
-          return;
-        }
-        const receipt: UtilityTransactionReceipt = {
-          transactionId,
-          piPaymentId,
-          piTxid,
-          category: selectedCategory,
-          providerId: selectedProvider.id,
-          providerName: selectedProvider.name,
-          accountNumber,
-          accountName: accountValidationResult?.name || 'Verified Customer',
-          piAmount: finalPiAmount,
-          fiatAmount: activeFiat,
-          fiatCurrency: selectedProvider.currency,
-          timestamp: new Date().toISOString(),
-          status: isFulfilled ? 'SUCCESS' : 'PROCESSING',
-          tokenOrCode: token,
-          packageName: selectedPackage?.name,
-          appliedPiRateUsd: piConversionConfig.piRateUsd,
-          orderProtectionGuaranteed: paymentResult.data?.orderProtectionGuaranteed === true,
-          buyerUsername: buyerUsername || 'Pioneer_User'
-        };
-
-        setGeneratedReceipt(receipt);
-        if (onTransactionSuccess) {
-          onTransactionSuccess(receipt);
-        }
-      } else {
-        setErrorMessage(paymentResult?.message || 'Payment process cancelled or incomplete.');
-      }
-    } catch (err: any) {
-      setErrorMessage(err?.message || 'Payment execution failed. Please check wallet connectivity.');
-    } finally {
-      setIsProcessingPayment(false);
-    }
   };
+
 
   const activeDesignations = selectedProvider?.designations || getDefaultDesignationsForCategory(selectedCategory);
 
