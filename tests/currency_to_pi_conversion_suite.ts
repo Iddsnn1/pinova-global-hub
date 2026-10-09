@@ -7,6 +7,7 @@ import {
 import { calculateAuthoritativePiAmount, calculatePiAmountFromFiatQuote } from '../src/utils/formatters';
 import { marketplaceService } from '../src/modules/marketplace';
 import { validateTrustedFxQuote } from '../src/server/services/TrustedFxQuoteService';
+import { calculateTrustedFiatToPi } from '../src/server/services/TrustedFiatToPiService';
 
 // Keep the shared quote timestamp fresh regardless of runner timezone/date.
 const fxAsOf = new Date(Date.now() - 60_000).toISOString();
@@ -81,6 +82,27 @@ const validNgnQuote = {
 assert.equal(
   validateTrustedFxQuote(validNgnQuote, 'NGN', 'configured-test-provider', trustedFxNow).usdPerFiatUnit,
   0.00065,
+);
+
+// Server conversion accepts only an explicitly trusted, fresh quote and keeps
+// the Pi amount at the shared 12-decimal precision. This uses a live timestamp
+// solely to make the test independent of the runner's wall clock.
+const liveTestQuote = { ...validNgnQuote, asOf: new Date(Date.now() - 60_000).toISOString() };
+const trustedConversion = calculateTrustedFiatToPi({
+  fiatAmount: 1000,
+  currency: 'NGN',
+  quote: liveTestQuote,
+  trustedSource: 'configured-test-provider',
+});
+assert.equal(trustedConversion.usdAmount, 0.65);
+assert.equal(trustedConversion.piAmount, '0.000002069028');
+assert.throws(
+  () => calculateTrustedFiatToPi({ fiatAmount: 1000, currency: 'NGN', quote: liveTestQuote, trustedSource: 'wrong-provider' }),
+  /FX_SOURCE_UNTRUSTED/,
+);
+assert.throws(
+  () => calculateTrustedFiatToPi({ fiatAmount: 1000, currency: 'NGN', quote: { ...liveTestQuote, asOf: '2020-01-01T00:00:00.000Z' }, trustedSource: 'configured-test-provider' }),
+  /FX_QUOTE_STALE/,
 );
 assert.throws(
   () => validateTrustedFxQuote(validNgnQuote, 'NGN', '', trustedFxNow),
