@@ -122,6 +122,55 @@ function getDefaultDesignationsForCategory(category: UtilityCategoryType): strin
   }
 }
 
+
+
+// ISO 4217 currency by country. Unknown mappings fail closed instead of silently
+// pricing a local service in USD.
+const COUNTRY_CURRENCY: Record<string, string> = {
+  NG:'NGN', GH:'GHS', KE:'KES', ZA:'ZAR', EG:'EGP', ET:'ETB', UG:'UGX', TZ:'TZS',
+  RW:'RWF', CM:'XAF', CI:'XOF', SN:'XOF', MA:'MAD', DZ:'DZD', AO:'AOA', ZM:'ZMW',
+  ZW:'ZWL', NA:'NAD', BW:'BWP', MZ:'MZN', MU:'MUR', US:'USD', CA:'CAD', BR:'BRL',
+  MX:'MXN', AR:'ARS', CO:'COP', CL:'CLP', PE:'PEN', GB:'GBP', DE:'EUR', FR:'EUR',
+  IT:'EUR', ES:'EUR', NL:'EUR', CH:'CHF', SE:'SEK', PL:'PLN', BE:'EUR', AT:'EUR',
+  NO:'NOK', DK:'DKK', FI:'EUR', IE:'EUR', PT:'EUR', GR:'EUR', AE:'AED', SA:'SAR',
+  QA:'QAR', KW:'KWD', OM:'OMR', BH:'BHD', JO:'JOD', TR:'TRY', IN:'INR', JP:'JPY',
+  KR:'KRW', PH:'PHP', ID:'IDR', VN:'VND', TH:'THB', MY:'MYR', SG:'SGD', PK:'PKR',
+  BD:'BDT', LK:'LKR', NP:'NPR', AU:'AUD', NZ:'NZD', AF:'AFN', AL:'ALL', AZ:'AZN',
+  BA:'BAM', BG:'BGN', BY:'BYN', CN:'CNY', CZ:'CZK', HR:'EUR', CY:'EUR', EE:'EUR',
+  HU:'HUF', IS:'ISK', IL:'ILS', JM:'JMD', KZ:'KZT', LT:'EUR', LU:'EUR', LV:'EUR',
+  MD:'MDL', MC:'EUR', MN:'MNT', ME:'EUR', MM:'MMK', NI:'NIO', PA:'USD', PY:'PYG',
+  RO:'RON', RS:'RSD', SK:'EUR', SI:'EUR', SO:'SOS', SD:'SDG', TN:'TND', UA:'UAH',
+  UY:'UYU', UZ:'UZS', VE:'VES', YE:'YER', BJ:'XOF', BF:'XOF', BI:'BIF', CV:'CVE',
+  CF:'XAF', TD:'XAF', CG:'XAF', CD:'CDF', DJ:'DJF', GQ:'XAF', GA:'XAF', GM:'GMD',
+  GN:'GNF', GW:'XOF', LR:'LRD', LY:'LYD', MG:'MGA', MW:'MWK', ML:'XOF', MR:'MRU',
+  NE:'XOF', SS:'SSP', SL:'SLE', TG:'XOF', SZ:'SZL', LS:'LSL', KM:'KMF', ER:'ERN',
+  SC:'SCR', HT:'HTG', DO:'DOP', CR:'CRC', GT:'GTQ', HN:'HNL', SV:'USD', EC:'USD',
+  BO:'BOB', CU:'CUP', TT:'TTD', BB:'BBD', BS:'BSD', BZ:'BZD', GY:'GYD', SR:'SRD',
+  AG:'XCD', DM:'XCD', GD:'XCD', LC:'XCD', VC:'XCD', KN:'XCD', VC:'XCD', FJ:'FJD',
+  PG:'PGK', WS:'WST', TO:'TOP', VU:'VUV', SB:'SBD', KI:'AUD', NR:'AUD', TV:'AUD',
+  KH:'KHR', LA:'LAK', BN:'BND', MV:'MVR', BT:'BTN', MN:'MNT', TJ:'TJS', TM:'TMT',
+  KG:'KGS', AM:'AMD', GE:'GEL', HK:'HKD', TW:'TWD', PS:'ILS', IR:'IRR', IQ:'IQD',
+  LB:'LBP', SY:'SYP', RU:'RUB', XK:'EUR', MT:'EUR', SM:'EUR', AD:'EUR', VA:'EUR'
+};
+
+function currencyForUtility(countryCode: string, providerCurrency?: string, packageCurrency?: string): string | null {
+  if (packageCurrency && /^[A-Z]{3}$/.test(packageCurrency.toUpperCase())) return packageCurrency.toUpperCase();
+  const code = String(countryCode || 'GLOBAL').toUpperCase();
+  if (code === 'GLOBAL') {
+    const currency = String(providerCurrency || '').toUpperCase();
+    return /^[A-Z]{3}$/.test(currency) ? currency : null;
+  }
+  return COUNTRY_CURRENCY[code] || null;
+}
+
+function formatFiat(value: number, currency: string): string {
+  try {
+    return new Intl.NumberFormat(undefined, { style: 'currency', currency, maximumFractionDigits: 2 }).format(value);
+  } catch {
+    return `${currency} ${value.toFixed(2)}`;
+  }
+}
+
 export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
   onClose,
   piConversionConfig,
@@ -180,6 +229,17 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
     verificationMethod?: string;
     disclaimer?: string;
   } | null>(null);
+
+  const [trustedConversion, setTrustedConversion] = useState<{
+    fiatAmount: number;
+    fiatCurrency: string;
+    usdAmount: number;
+    piAmount: string;
+    piReferenceRateUsd: number;
+    fxAsOf: string;
+  } | null>(null);
+  const [isLoadingTrustedConversion, setIsLoadingTrustedConversion] = useState(false);
+  const [trustedConversionError, setTrustedConversionError] = useState<string | null>(null);
 
   // Review & Processing State
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
@@ -480,15 +540,84 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
     return !isNaN(parsed) && isFinite(parsed) && parsed > 0 ? parsed : 0;
   };
 
-  const calculatedPiAmount = calculateAuthoritativePiAmount(getActiveFiatPrice(), piConversionConfig.piRateUsd);
+  const activeFiatAmount = getActiveFiatPrice();
+  const activeFiatCurrency = currencyForUtility(
+    selectedCountryCode,
+    selectedProvider?.currency,
+    purchaseMode === 'package' ? selectedPackage?.currency : undefined
+  );
+
+  // Quote-only preview. The endpoint returns paymentAuthorized:false; this quote
+  // must never be treated as the server's final invoice/payment authorization.
+  useEffect(() => {
+    setTrustedConversion(null);
+    setTrustedConversionError(null);
+    if (!Number.isFinite(activeFiatAmount) || activeFiatAmount <= 0) {
+      setIsLoadingTrustedConversion(false);
+      return;
+    }
+    if (!activeFiatCurrency) {
+      setIsLoadingTrustedConversion(false);
+      setTrustedConversionError('No trusted currency mapping is configured for this country. Conversion and checkout are unavailable.');
+      return;
+    }
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      setIsLoadingTrustedConversion(true);
+      try {
+        const response = await fetch('/api/currency/fiat-to-pi', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          cache: 'no-store',
+          body: JSON.stringify({ fiatAmount: activeFiatAmount, currency: activeFiatCurrency })
+        });
+        const payload = await response.json();
+        if (!response.ok || payload?.success !== true || payload?.paymentAuthorized !== false ||
+            !payload?.conversion || !Number.isFinite(Number(payload.conversion.usdAmount)) ||
+            !Number.isFinite(Number(payload.conversion.piAmount)) ||
+            !Number.isFinite(Date.parse(payload.conversion.fxAsOf))) {
+          throw new Error(payload?.message || payload?.code || 'A fresh trusted FX quote is unavailable.');
+        }
+        if (!cancelled) {
+          setTrustedConversion({
+            fiatAmount: Number(payload.conversion.fiatAmount),
+            fiatCurrency: String(payload.conversion.fiatCurrency),
+            usdAmount: Number(payload.conversion.usdAmount),
+            piAmount: String(payload.conversion.piAmount),
+            piReferenceRateUsd: Number(payload.conversion.piReferenceRateUsd),
+            fxAsOf: String(payload.conversion.fxAsOf)
+          });
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setTrustedConversionError(error instanceof Error ? error.message : 'Trusted FX conversion is unavailable.');
+        }
+      } finally {
+        if (!cancelled) setIsLoadingTrustedConversion(false);
+      }
+    }, 400);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [activeFiatAmount, activeFiatCurrency]);
+
+  const calculatedPiAmount = trustedConversion &&
+    trustedConversion.fiatAmount === activeFiatAmount &&
+    trustedConversion.fiatCurrency === activeFiatCurrency
+      ? Number(trustedConversion.piAmount)
+      : 0;
   const minPiThreshold = piConversionConfig.minPurchasePi || 0.00000001;
   const isWithinLimits =
     calculatedPiAmount >= minPiThreshold &&
     calculatedPiAmount <= (piConversionConfig.maxPurchasePi || 1000.00);
 
-  // Execute Pi Payment
+  // Quote-only estimate. Checkout stays blocked until the server independently
+  // validates the canonical utility invoice against this quote.
   const handleExecutePayment = async () => {
-    const finalPiAmount = calculateAuthoritativePiAmount(getActiveFiatPrice(), piConversionConfig.piRateUsd);
+    setErrorMessage('Checkout is paused: the FX endpoint currently returns an estimate only, not payment authorization. Server-side invoice validation must be integrated before this utility can be paid.');
+    return;
+    const finalPiAmount = calculatedPiAmount;
 
     if (!selectedProvider) return;
     if (!accountNumber.trim()) {
@@ -1171,18 +1300,18 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                     <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-3">
                       <div className="flex justify-between text-xs">
                         <span className="font-bold text-slate-700 dark:text-slate-300">Enter Purchase Amount</span>
-                        <span className="text-slate-400 font-medium">USD ($)</span>
+                        <span className="text-slate-400 font-medium">{activeFiatCurrency || 'Currency unavailable'}</span>
                       </div>
 
                       <div className="relative">
-                        <span className="absolute left-3.5 top-2.5 text-base font-black text-slate-400">$</span>
+                        <span className="absolute left-3.5 top-2.5 text-sm font-black text-slate-400">{activeFiatCurrency || '—'}</span>
                         <input
                           type="text"
                           inputMode="decimal"
                           value={customAmountInput}
                           onChange={(e) => handleCustomAmountChange(e.target.value)}
                           placeholder="0.00"
-                          className="w-full pl-8 pr-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-black text-lg text-slate-900 dark:text-slate-100 focus:outline-none focus:border-purple-500"
+                          className="w-full pl-14 pr-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-black text-lg text-slate-900 dark:text-slate-100 focus:outline-none focus:border-purple-500"
                         />
                       </div>
 
@@ -1291,24 +1420,33 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                   <div className="flex justify-between items-center text-slate-300">
                     <span>Package / Value:</span>
                     <span className="font-bold text-white">
-                      {purchaseMode === 'package' 
-                        ? (selectedPackage ? `${selectedPackage.name} ($${selectedPackage.fiatPrice.toFixed(2)} USD)` : 'Package') 
-                        : (getActiveFiatPrice() > 0 ? `$${getActiveFiatPrice().toFixed(2)} USD` : '$0.00 USD')}
+                      {purchaseMode === 'package'
+                        ? (selectedPackage ? `${selectedPackage.name} (${formatFiat(selectedPackage.fiatPrice, selectedPackage.currency || activeFiatCurrency || 'USD')})` : 'Package')
+                        : (getActiveFiatPrice() > 0 && activeFiatCurrency ? formatFiat(getActiveFiatPrice(), activeFiatCurrency) : '—')}
                     </span>
                   </div>
 
                   <div className="flex justify-between items-center text-slate-300 pt-2 border-t border-slate-800">
                     <span>Configured Rate:</span>
-                    <span className="font-mono font-bold text-purple-400">1 π = ${piConversionConfig.piRateUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD</span>
+                    <span className="font-mono font-bold text-purple-400">1 π = ${piConversionConfig.piRateUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD (PiNova reference)</span>
                   </div>
                 </div>
 
-                {/* Total Pi Display */}
-                <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-1 text-center">
-                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Total Pi Cost</span>
-                  <div className="text-2xl sm:text-3xl font-black text-amber-400 tracking-tight">
-                    {formatPiAmount(calculatedPiAmount)} π
-                  </div>
+                {/* Trusted FX estimate; never authorizes payment. */}
+                <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-2 text-center">
+                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Pi Conversion Estimate</span>
+                  {isLoadingTrustedConversion ? (
+                    <div className="text-xs text-slate-300 flex items-center justify-center gap-2"><RefreshCw className="w-4 h-4 animate-spin" /> Checking trusted FX rate…</div>
+                  ) : trustedConversion && calculatedPiAmount > 0 ? (
+                    <>
+                      <div className="text-xs text-slate-300">{formatFiat(trustedConversion.fiatAmount, trustedConversion.fiatCurrency)} → {formatFiat(trustedConversion.usdAmount, 'USD')}</div>
+                      <div className="text-2xl sm:text-3xl font-black text-amber-400 tracking-tight">{formatPiAmount(calculatedPiAmount)} π</div>
+                      <div className="text-[10px] text-slate-400">FX timestamp: {new Date(trustedConversion.fxAsOf).toLocaleString()}</div>
+                      <div className="text-[10px] text-amber-300">Estimate only — not payment authorization.</div>
+                    </>
+                  ) : (
+                    <div className="text-xs text-amber-300">{trustedConversionError || 'Enter an amount to request a trusted FX quote.'}</div>
+                  )}
                 </div>
 
                 {/* Error Banner */}
@@ -1319,17 +1457,16 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                   </div>
                 )}
 
-                {/* Order Guarantee */}
-                <div className="p-3 rounded-xl bg-purple-950/80 border border-purple-800/80 flex items-center gap-2.5 text-[11px] text-purple-200">
-                  <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
-                  <span>Protected by Pi Escrow. Instant digital fulfillment upon payment.</span>
+                <div className="p-3 rounded-xl bg-amber-950/60 border border-amber-800/80 flex items-start gap-2.5 text-[11px] text-amber-200">
+                  <ShieldCheck className="w-4 h-4 text-amber-300 shrink-0" />
+                  <span>FX quote is an estimate only. Checkout remains paused until server-side invoice verification and payment authorization are connected.</span>
                 </div>
 
                 {/* PAY WITH PI WALLET BUTTON */}
                 <button
                   type="button"
                   onClick={handleExecutePayment}
-                  disabled={isProcessingPayment || !selectedProvider || selectedProvider.enabled === false || !accountNumber.trim() || !isWithinLimits || getActiveFiatPrice() <= 0}
+                  disabled={true}
                   className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-purple-600 via-indigo-600 to-amber-500 hover:opacity-95 disabled:opacity-50 text-white font-extrabold text-xs sm:text-sm shadow-xl shadow-purple-600/30 transition-all flex items-center justify-center gap-2"
                 >
                   {selectedProvider?.enabled === false ? (
@@ -1345,7 +1482,7 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                   ) : (
                     <>
                       <Lock className="w-4 h-4 text-amber-300" />
-                      <span>Pay {formatPiAmount(calculatedPiAmount)} π with Pi Wallet</span>
+                      <span>Checkout Paused — Verification Required</span>
                     </>
                   )}
                 </button>
