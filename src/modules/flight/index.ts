@@ -56,9 +56,15 @@ export async function searchFlights(
       // Map live results from Duffel API
       const liveOffers: FlightOffer[] = data.liveResults.map((off: any) => {
         const fiat = typeof off.fareAmountFiat === 'number' ? off.fareAmountFiat : parseFloat(off.fareAmountFiat) || 0;
+        const currency = String(off.currency || '').trim().toUpperCase();
         const taxes = typeof off.taxesAndFeesFiat === 'number' ? off.taxesAndFeesFiat : Math.round(fiat * 0.14);
         const base = typeof off.baseFareFiat === 'number' ? off.baseFareFiat : Math.max(0, fiat - taxes);
-        const pi = Number.isFinite(fiat) && fiat > 0 ? Number((fiat / 314159).toFixed(12)) : 0;
+        // Never treat an unknown or non-USD airline fare as USD. Until a fresh
+        // trusted FX quote is supplied by the server, only USD can be converted
+        // to the PiNova community reference estimate here.
+        const pi = currency === 'USD' && Number.isFinite(fiat) && fiat > 0
+          ? Number((fiat / 314159).toFixed(12))
+          : 0;
 
         return {
           offerId: off.offerId,
@@ -84,7 +90,7 @@ export async function searchFlights(
           baseFareFiat: base,
           taxesAndFeesFiat: taxes,
           fareBrandName: off.fareBrandName,
-          fareCurrency: off.currency || 'USD',
+          fareCurrency: currency,
           fareAmountPi: pi,
           seatsAvailable: typeof off.seatsAvailable === 'number' ? off.seatsAvailable : 1,
           fareConditions: off.fareConditions || 'Live Duffel Carrier Tariff. Changeable subject to airline rules.',
