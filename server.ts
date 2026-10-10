@@ -2348,7 +2348,14 @@ const handleUtilityValidate = async (req: express.Request, res: express.Response
     try {
       const vtuResult = await vtuNgAdapter.verifyCustomer(providerId, accountNumber.trim());
       const customerName = typeof vtuResult.customerName === 'string' ? vtuResult.customerName.trim() : '';
-      if (vtuResult.success === true && vtuResult.valid === true && customerName.length > 0) {
+      // Some upstream adapters/gateways return a generated label such as
+      // "Verified Account (9981)" after checking only the number format. That is
+      // not a subscriber identity and must never be promoted to verified status.
+      const isPlaceholderCustomerName =
+        /^(?:verified\\s+account|account(?:\\s+(?:number|holder))?|customer|subscriber|unknown|n\\/?a|test|demo)(?:\\b|\\s*[(#:]|$)/i.test(customerName) ||
+        /^\\+?[\\d\\s().-]+$/.test(customerName);
+      if (vtuResult.success === true && vtuResult.valid === true &&
+          customerName.length > 0 && !isPlaceholderCustomerName) {
         res.json({
           success: true,
           valid: true,
