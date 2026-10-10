@@ -1223,22 +1223,28 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                         />
                       </div>
 
-                      <div className="flex flex-wrap gap-2 pt-1">
-                        {[5, 10, 25, 50, 100].map((amt) => (
-                          <button
-                            key={amt}
-                            type="button"
-                            onClick={() => handleSelectPresetAmount(amt)}
-                            className={`px-3 py-1 rounded-lg text-xs font-bold border transition-colors ${
-                              customAmountInput === amt.toString()
-                                ? 'bg-purple-600 text-white border-purple-600 shadow-sm'
-                                : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-purple-500'
-                            }`}
-                          >
-                            {activeFiatCurrency ? formatFiat(amt, activeFiatCurrency) : amt.toFixed(2)}
-                          </button>
-                        ))}
-                      </div>
+                      {activeFiatCurrency === 'USD' ? (
+                        <div className="flex flex-wrap gap-2 pt-1">
+                          {[5, 10, 25, 50, 100].map((amt) => (
+                            <button
+                              key={amt}
+                              type="button"
+                              onClick={() => handleSelectPresetAmount(amt)}
+                              className={`px-3 py-1 rounded-lg text-xs font-bold border transition-colors ${
+                                customAmountInput === amt.toString()
+                                  ? 'bg-purple-600 text-white border-purple-600 shadow-sm'
+                                  : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-purple-500'
+                              }`}
+                            >
+                              {formatFiat(amt, 'USD')}
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="pt-1 text-[11px] text-amber-600 dark:text-amber-300">
+                          No verified preset denominations are configured for {activeFiatCurrency || 'this currency'}. Enter only an amount confirmed by the provider. Checkout remains paused until server-side invoice verification and payment authorization are available.
+                        </p>
+                      )}
                     </div>
                   )}
 
@@ -1331,7 +1337,7 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                   )}
 
                   <div className="flex justify-between items-center text-slate-300">
-                    <span>Package / Value:</span>
+                    <span>{purchaseMode === 'package' ? 'Package / Value:' : 'Custom Amount:'}</span>
                     <span className="font-bold text-white">
                       {purchaseMode === 'package'
                         ? (selectedPackageMatchesCountry && selectedPackage
