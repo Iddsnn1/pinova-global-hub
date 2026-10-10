@@ -2326,63 +2326,59 @@ app.post('/api/v1/utility/config', handlePostUtilityConfig);
 
 // Provider Account Validation API (Adapter Pattern)
 const handleUtilityValidate = async (req: express.Request, res: express.Response) => {
-  const { providerId, accountNumber } = req.body;
-  if (!accountNumber) {
-    res.status(400).json({ error: 'Account number parameter is required' });
+  const { providerId, accountNumber } = req.body || {};
+  if (typeof accountNumber !== 'string' || !accountNumber.trim()) {
+    res.status(400).json({
+      success: false,
+      valid: false,
+      requiresManualVerification: true,
+      verificationMethod: 'MANUAL_VERIFICATION',
+      statusMessage: 'A customer account number is required.'
+    });
     return;
   }
 
+  const normalizedProviderId = String(providerId || '').toLowerCase();
   const directApiProviders = ['safaricom', 'mtn', 'ikedc', 'dstv', 'mpesa', 'airtel', 'gotv', 'startimes', 'eko-electric', 'abuja-electric', 'kano-electric'];
-  const isDirectApiSupported = directApiProviders.some((p) => (providerId || '').toLowerCase().includes(p));
+  const isDirectApiSupported = directApiProviders.some((p) => normalizedProviderId.includes(p));
 
-  // If VTU.ng adapter is configured and this is a TV or utility provider, perform real customer lookup
+  // Only a configured upstream lookup can verify an account. Never infer that a
+  // number is valid from its format, provider ID, or a successful HTTP response.
   if (vtuNgAdapter.isConfigured() && isDirectApiSupported) {
     try {
-      const vtuResult = await vtuNgAdapter.verifyCustomer(providerId, accountNumber);
-      if (vtuResult.success && vtuResult.valid) {
+      const vtuResult = await vtuNgAdapter.verifyCustomer(providerId, accountNumber.trim());
+      const customerName = typeof vtuResult.customerName === 'string' ? vtuResult.customerName.trim() : '';
+      if (vtuResult.success === true && vtuResult.valid === true && customerName.length > 0) {
         res.json({
           success: true,
           valid: true,
-          accountNumber,
-          accountName: vtuResult.customerName || `Verified Account (${accountNumber.slice(-4)})`,
+          accountNumber: accountNumber.trim(),
+          accountName: customerName,
           providerId: providerId || 'unknown',
           requiresManualVerification: false,
           verificationMethod: 'DIRECT_API',
-          statusMessage: 'Account structure validated via VTU.ng provider API gateway.',
-          disclaimer: 'Direct VTU.ng provider API validation.'
+          statusMessage: 'Subscriber account confirmed by the configured provider lookup.',
+          disclaimer: 'Verification was returned by the configured upstream provider.'
         });
         return;
       }
     } catch (e: any) {
-      console.warn('[Utility Validate] VTU customer lookup notice:', e.message);
+      console.warn('[Utility Validate] VTU customer lookup notice:', e?.message || 'lookup failed');
     }
   }
 
-  if (isDirectApiSupported) {
-    res.json({
-      success: true,
-      valid: true,
-      accountNumber,
-      accountName: `Verified Account (${accountNumber.slice(-4)})`,
-      providerId: providerId || 'unknown',
-      requiresManualVerification: false,
-      verificationMethod: 'DIRECT_API',
-      statusMessage: 'Account structure validated via provider API gateway.',
-      disclaimer: 'Direct provider API validation.'
-    });
-  } else {
-    res.json({
-      success: true,
-      valid: true,
-      accountNumber,
-      accountName: `Account #${accountNumber}`,
-      providerId: providerId || 'unknown',
-      requiresManualVerification: true,
-      verificationMethod: 'MANUAL_VERIFICATION',
-      statusMessage: 'Account queued for manual verification by utility provider operations.',
-      disclaimer: 'No direct customer lookup API connected for this provider. Verified manually by fulfillment team.'
-    });
-  }
+  res.status(200).json({
+    success: false,
+    valid: false,
+    accountNumber: accountNumber.trim(),
+    providerId: providerId || 'unknown',
+    requiresManualVerification: true,
+    verificationMethod: 'MANUAL_VERIFICATION',
+    statusMessage: isDirectApiSupported
+      ? 'Subscriber account could not be verified. A configured provider lookup with an explicit account confirmation is required.'
+      : 'No live subscriber lookup is configured for this provider. The account has not been verified.',
+    disclaimer: 'Do not treat number format or a placeholder account label as verification. Checkout must remain blocked until an authoritative provider lookup confirms the account.'
+  });
 };
 
 // Electricity Real Meter / Provider Verification API Endpoint
