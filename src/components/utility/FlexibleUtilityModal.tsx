@@ -536,7 +536,17 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
     return !isNaN(parsed) && isFinite(parsed) && parsed > 0 ? parsed : 0;
   };
 
-  const activeFiatCurrency = currencyForUtility(selectedCountryCode, selectedProvider?.currency);
+  // In Global Services mode, a country-specific provider (e.g. MTN Nigeria)
+  // must determine the local billing currency. Otherwise its legacy USD metadata
+  // can leak into a Nigeria airtime checkout even though the provider is Nigerian.
+  const providerCountryCode = selectedProvider?.countryCode ||
+    allGlobalCountries.find((country) =>
+      country.name.toLowerCase() === String(selectedProvider?.country || '').toLowerCase()
+    )?.code || 'GLOBAL';
+  const effectiveCurrencyCountryCode = selectedCountryCode !== 'GLOBAL'
+    ? selectedCountryCode
+    : providerCountryCode;
+  const activeFiatCurrency = currencyForUtility(effectiveCurrencyCountryCode, selectedProvider?.currency);
   const selectedPackageCurrency = String(selectedPackage?.currency || selectedProvider?.currency || '').toUpperCase();
   const selectedPackageMatchesCountry = Boolean(
     selectedPackage && activeFiatCurrency && selectedPackageCurrency === activeFiatCurrency
