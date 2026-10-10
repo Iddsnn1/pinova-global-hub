@@ -56,7 +56,17 @@ async function run() {
     piTxid: 'tx-security-001',
     paymentMethod: 'PI_NETWORK',
     payerUsername: 'guardian-001',
-    idempotencyKey: 'edu-idem-001'
+    idempotencyKey: 'edu-idem-001',
+    authoritativePiSettlement: {
+      verified: true,
+      source: 'sandbox_dev',
+      paymentId: 'pi-pay-security-001',
+      amount: 3.5,
+      txid: 'tx-security-001',
+      userUid: 'sandbox-user-001',
+      network: 'Pi Testnet',
+      direction: 'user_to_app'
+    }
   });
 
   ok(first.payment.status === 'VERIFIED_COMPLETED', 'verified Pi payment creates completed education settlement');
@@ -72,7 +82,17 @@ async function run() {
     piTxid: 'tx-security-001',
     paymentMethod: 'PI_NETWORK',
     payerUsername: 'guardian-001',
-    idempotencyKey: 'edu-idem-001'
+    idempotencyKey: 'edu-idem-001',
+    authoritativePiSettlement: {
+      verified: true,
+      source: 'sandbox_dev',
+      paymentId: 'pi-pay-security-001',
+      amount: 3.5,
+      txid: 'tx-security-001',
+      userUid: 'sandbox-user-001',
+      network: 'Pi Testnet',
+      direction: 'user_to_app'
+    }
   });
   ok(replay.payment.id === first.payment.id, 'exact replay returns the original settlement');
   ok(repo.getAllPayments().length === 1, 'exact replay does not create a second payment');
@@ -88,10 +108,20 @@ async function run() {
       piTxid: 'tx-security-001',
       paymentMethod: 'PI_NETWORK',
       payerUsername: 'guardian-001',
-      idempotencyKey: 'edu-idem-001'
+      idempotencyKey: 'edu-idem-001',
+      authoritativePiSettlement: {
+      verified: true,
+      source: 'sandbox_dev',
+      paymentId: 'pi-pay-security-001',
+      amount: 3.5,
+      txid: 'tx-security-001',
+      userUid: 'sandbox-user-001',
+      network: 'Pi Testnet',
+      direction: 'user_to_app'
+    }
     });
   } catch (error: any) {
-    replayMismatchRejected = error?.message === 'PAYMENT_REPLAY_BINDING_MISMATCH';
+    replayMismatchRejected = ['PAYMENT_REPLAY_BINDING_MISMATCH', 'PI_SETTLEMENT_AMOUNT_MISMATCH'].includes(error?.message);
   }
   ok(replayMismatchRejected, 'replay with altered amount is rejected');
 
@@ -106,7 +136,17 @@ async function run() {
       piTxid: 'tx-security-001',
       paymentMethod: 'PI_NETWORK',
       payerUsername: 'guardian-001',
-      idempotencyKey: 'edu-idem-001'
+      idempotencyKey: 'edu-idem-001',
+      authoritativePiSettlement: {
+      verified: true,
+      source: 'sandbox_dev',
+      paymentId: 'pi-pay-security-001',
+      amount: 3.5,
+      txid: 'tx-security-001',
+      userUid: 'sandbox-user-001',
+      network: 'Pi Testnet',
+      direction: 'user_to_app'
+    }
     });
   } catch (error: any) {
     crossInvoiceReplayRejected = error?.message === 'PAYMENT_REPLAY_BINDING_MISMATCH';

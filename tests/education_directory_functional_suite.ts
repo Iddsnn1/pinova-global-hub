@@ -10,7 +10,8 @@ import os from 'os';
 import path from 'path';
 process.env.PINOVA_DATA_DIR = path.join(os.tmpdir(), `pinova_education_directory_test_${Date.now()}`);
 
-import { EducationRepository } from '../src/server/db/repositories/EducationRepository';
+import { InstitutionProfile } from '../src/types/education';
+import { GLOBAL_EDUCATION_INSTITUTIONS } from '../src/data/educationInstitutionsData';
 import { applyEducationHierarchyVerificationOverrides } from '../src/data/educationHierarchyVerificationOverrides';
 import { applyYabatechHierarchyVerificationOverride } from '../src/data/yabatechHierarchyVerificationOverride';
 import { normalizeBukFacultyHierarchy } from '../src/data/bukHierarchyNormalization';
@@ -22,7 +23,7 @@ function assert(condition: boolean, message: string, details?: string) {
   console.log(`[PASS] ${message}`);
 }
 
-function withHierarchyOverrides(institution: ReturnType<EducationRepository['getInstitutionById']>) {
+function withHierarchyOverrides(institution: InstitutionProfile | null | undefined) {
   if (!institution) return null;
   const corrected = applyEducationHierarchyVerificationOverrides(institution);
   const withYabatechCorrection = applyYabatechHierarchyVerificationOverride(corrected);
@@ -37,19 +38,20 @@ async function run() {
   console.log('PINOVA EDUCATION DIRECTORY FUNCTIONAL VERIFICATION');
   console.log('============================================================\n');
 
-  const repo = new EducationRepository();
-  const globalInstitutions = repo.getInstitutions({});
-  const nigeriaInstitutions = repo.getInstitutions({ countryCode: 'NG' });
-  const nigeriaUniversities = repo.getInstitutions({ countryCode: 'NG', institutionType: 'university' });
+  // Read the canonical institution registry directly. EducationRepository intentionally
+  // starts empty in isolated tests and must not be mistaken for the published directory.
+  const globalInstitutions = GLOBAL_EDUCATION_INSTITUTIONS;
+  const nigeriaInstitutions = globalInstitutions.filter((i) => i.countryCode === 'NG');
+  const nigeriaUniversities = nigeriaInstitutions.filter((i) => i.institutionType === 'university');
 
   // Global-first contract: ALL scope must not collapse into Nigeria-only data.
   assert(globalInstitutions.some((i) => i.countryCode !== 'NG'), 'Global scope retains non-Nigeria institutions');
   assert(globalInstitutions.length >= nigeriaInstitutions.length, 'Global scope contains at least the Nigeria deployment-hub set');
 
   // Nigeria deployment hub: institution filtering must return the target universities.
-  const buk = withHierarchyOverrides(repo.getInstitutionById('inst-ng-buk-001'));
-  const unilag = withHierarchyOverrides(repo.getInstitutionById('inst-ng-unilag-002'));
-  const yabatech = withHierarchyOverrides(repo.getInstitutionById('inst-ng-yabatech-003'));
+  const buk = withHierarchyOverrides(globalInstitutions.find((i) => i.id === 'inst-ng-buk-001'));
+  const unilag = withHierarchyOverrides(globalInstitutions.find((i) => i.id === 'inst-ng-unilag-002'));
+  const yabatech = withHierarchyOverrides(globalInstitutions.find((i) => i.id === 'inst-ng-yabatech-003'));
 
   assert(Boolean(buk), 'BUK is present in the Nigeria registry');
   assert(Boolean(unilag), 'UNILAG is present in the Nigeria registry');

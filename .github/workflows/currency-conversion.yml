@@ -1,0 +1,51 @@
+name: Currency Engine Validation
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/utils/currencyToPi.ts"
+      - "src/server/services/TrustedFx*.ts"
+      - "src/modules/pricing/**"
+      - "src/modules/marketplace/**"
+      - "src/context/LanguageContext.tsx"
+      - "tests/currency_to_pi_conversion_suite.ts"
+      - "package.json"
+      - ".github/workflows/currency-conversion.yml"
+  push:
+    branches: [feat/global-currency-pi-engine]
+    paths:
+      - "src/utils/currencyToPi.ts"
+      - "src/server/services/TrustedFx*.ts"
+      - "src/modules/pricing/**"
+      - "src/modules/marketplace/**"
+      - "src/context/LanguageContext.tsx"
+      - "tests/currency_to_pi_conversion_suite.ts"
+      - "package.json"
+      - ".github/workflows/currency-conversion.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: currency-engine-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Test currency conversion and type-check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Currency conversion tests
+        run: npm run test:currency
+      - name: TypeScript check
+        run: npm run lint

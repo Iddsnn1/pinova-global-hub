@@ -197,8 +197,8 @@ async function runTestSuite() {
     institutionId: 'inst-unilag-001',
     countryCode: 'NG'
   });
-  assert(validVerification.verified, 'Scenario 5.1: Known student matches institution registry');
-  assert(validVerification.verificationStatus === 'VERIFIED', 'Scenario 5.2: Verification status is VERIFIED');
+  assert(!validVerification.verified, 'Scenario 5.1: Student is not marked verified without an authoritative provider');
+  assert(validVerification.status === 'UNAVAILABLE', 'Scenario 5.2: Student verification fails closed while the official provider is unconfigured');
 
   // 5.2 Invalid Student Rejection
   const invalidVerification = await verificationService.verifyStudent({
@@ -244,7 +244,7 @@ async function runTestSuite() {
   const invoice = eduRepo.createInvoice({
     id: `inv-test-${Date.now()}`,
     invoiceNumber: `INV-TEST-001`,
-    institutionId: 'inst-unilag-01',
+    institutionId: 'inst-ng-unilag-002',
     institutionName: 'University of Lagos',
     studentId: 'std-ng-001',
     studentName: 'Chiamaka Adeleke',
@@ -266,7 +266,7 @@ async function runTestSuite() {
     totalAmount: 400,
     amountPaid: 0,
     outstandingBalance: 400,
-    currency: 'USD',
+    currency: 'PI',
     dueDate: '2025-12-31',
     status: 'UNPAID',
     issuedDate: new Date().toISOString(),
@@ -278,13 +278,44 @@ async function runTestSuite() {
 
   assert(invoice.outstandingBalance === 400, 'Scenario 6.7: Invoice initialized with correct balance');
 
-  // 6.4 Valid Partial Payment
+  // 6.4 Direct repository calls must not settle without server verification proof.
+  let missingProofRejected = false;
+  try {
+    eduRepo.recordPayment({
+      invoiceId: invoice.id,
+      amountPaid: 250,
+      currency: 'PI',
+      piAmount: 250,
+      piPaymentId: `test-partial-${Date.now()}`,
+      paymentMethod: 'PI_NETWORK',
+      payerUsername: 'pioneer_parent'
+    });
+  } catch (err: any) {
+    missingProofRejected = err.message === 'PI_SETTLEMENT_PROOF_REQUIRED';
+  }
+  assert(missingProofRejected, 'Scenario 6.8: Repository rejects Pi settlement without authoritative proof');
+
+  // Non-production fixture explicitly models the output of the sandbox verifier.
+  const partialId = `test-partial-${Date.now()}`;
   const partialPaymentResult = eduRepo.recordPayment({
     invoiceId: invoice.id,
     amountPaid: 250,
-    currency: 'USD',
+    currency: 'PI',
+    piAmount: 250,
+    piPaymentId: partialId,
+    piTxid: 'sandbox-tx-partial',
     paymentMethod: 'PI_NETWORK',
-    payerUsername: 'pioneer_parent'
+    payerUsername: 'pioneer_parent',
+    authoritativePiSettlement: {
+      verified: true,
+      source: 'sandbox_dev',
+      paymentId: partialId,
+      amount: 250,
+      txid: 'sandbox-tx-partial',
+      userUid: 'sandbox-user-001',
+      network: 'Pi Testnet',
+      direction: 'user_to_app'
+    }
   });
   assert(partialPaymentResult.invoice.amountPaid === 250, 'Scenario 6.8: Invoice records partial payment');
   assert(partialPaymentResult.invoice.outstandingBalance === 150, 'Scenario 6.9: Outstanding balance reduced to 150');
@@ -296,9 +327,22 @@ async function runTestSuite() {
     eduRepo.recordPayment({
       invoiceId: invoice.id,
       amountPaid: 200, // Balance is 150, paying 200 is an overpayment!
-      currency: 'USD',
+      currency: 'PI',
+      piAmount: 200,
+      piPaymentId: 'test-overpayment-fixed',
+      piTxid: 'sandbox-tx-overpayment',
       paymentMethod: 'PI_NETWORK',
-      payerUsername: 'pioneer_parent'
+      payerUsername: 'pioneer_parent',
+      authoritativePiSettlement: {
+        verified: true,
+        source: 'sandbox_dev',
+        paymentId: 'test-overpayment-fixed',
+        amount: 200,
+        txid: 'sandbox-tx-overpayment',
+        userUid: 'sandbox-user-001',
+        network: 'Pi Testnet',
+        direction: 'user_to_app'
+      }
     });
   } catch (err: any) {
     if (err.message.includes('exceeds outstanding balance')) {
@@ -351,6 +395,10 @@ async function runTestSuite() {
     programmeName: 'B.Sc. Computer Science',
     applicantFullName: 'Emeka Okonkwo',
     applicantEmail: 'emeka@example.com',
+    educationTier: 'tertiary',
+    dateOfBirth: '2005-04-12',
+    applicationFeeFiat: 0,
+    applicationFeePaid: false,
     academicSession: '2025/2026',
     documents: []
   });

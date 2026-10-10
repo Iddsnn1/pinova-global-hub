@@ -1,4 +1,5 @@
 import { AirportOption, FlightOffer } from '../types/flight';
+import { convertFiatToPi } from '../utils/currencyToPi';
 
 export const GLOBAL_AIRPORTS: AirportOption[] = [
   // West & Central Africa
@@ -234,7 +235,15 @@ export function generateVerifiedCarrierOffers(
     const finalFiatFare = Math.round(tpl.basePriceFiat * cabinMultiplier);
     const taxesFees = Math.round(finalFiatFare * 0.14);
     const baseFare = finalFiatFare - taxesFees;
-    const finalPiFare = piRateUsd > 0 ? Number((finalFiatFare / piRateUsd).toFixed(4)) : 0;
+    const finalPiFare = piRateUsd > 0
+      ? Number(convertFiatToPi({
+          fiatAmount: finalFiatFare,
+          fiatCurrency: 'USD',
+          usdPerFiatUnit: 1,
+          fxAsOf: new Date().toISOString(),
+          piReferenceRateUsd: piRateUsd,
+        }).piAmount)
+      : 0;
 
     const bagAllow: string = 
       cabinClass === 'first' ? '3 x 32kg Checked + 2 x 10kg Cabin' :

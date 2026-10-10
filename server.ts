@@ -33,6 +33,7 @@ import {
   Permission
 } from './src/server/auth';
 import { createRateLimiter } from './src/server/auth/rateLimit';
+import { calculateFiatToPiWithConfiguredFx } from './src/server/services/TrustedFxProviderService';
 import { AuditService } from './src/server/services/AuditService';
 import { EducationClassificationEngine } from './src/server/services/EducationClassificationEngine';
 import { StudentVerificationService } from './src/server/services/StudentVerificationService';
@@ -2325,63 +2326,66 @@ app.post('/api/v1/utility/config', handlePostUtilityConfig);
 
 // Provider Account Validation API (Adapter Pattern)
 const handleUtilityValidate = async (req: express.Request, res: express.Response) => {
-  const { providerId, accountNumber } = req.body;
-  if (!accountNumber) {
-    res.status(400).json({ error: 'Account number parameter is required' });
+  const { providerId, accountNumber } = req.body || {};
+  if (typeof accountNumber !== 'string' || !accountNumber.trim()) {
+    res.status(400).json({
+      success: false,
+      valid: false,
+      requiresManualVerification: true,
+      verificationMethod: 'MANUAL_VERIFICATION',
+      statusMessage: 'A customer account number is required.'
+    });
     return;
   }
 
+  const normalizedProviderId = String(providerId || '').toLowerCase();
   const directApiProviders = ['safaricom', 'mtn', 'ikedc', 'dstv', 'mpesa', 'airtel', 'gotv', 'startimes', 'eko-electric', 'abuja-electric', 'kano-electric'];
-  const isDirectApiSupported = directApiProviders.some((p) => (providerId || '').toLowerCase().includes(p));
+  const isDirectApiSupported = directApiProviders.some((p) => normalizedProviderId.includes(p));
 
-  // If VTU.ng adapter is configured and this is a TV or utility provider, perform real customer lookup
+  // Only a configured upstream lookup can verify an account. Never infer that a
+  // number is valid from its format, provider ID, or a successful HTTP response.
   if (vtuNgAdapter.isConfigured() && isDirectApiSupported) {
     try {
-      const vtuResult = await vtuNgAdapter.verifyCustomer(providerId, accountNumber);
-      if (vtuResult.success && vtuResult.valid) {
+      const vtuResult = await vtuNgAdapter.verifyCustomer(providerId, accountNumber.trim());
+      const customerName = typeof vtuResult.customerName === 'string' ? vtuResult.customerName.trim() : '';
+      // Some upstream adapters/gateways return a generated label such as
+      // "Verified Account (9981)" after checking only the number format. That is
+      // not a subscriber identity and must never be promoted to verified status.
+      const isPlaceholderCustomerName =
+        /^(?:verified\s+account|account(?:\s+(?:number|holder))?|customer|subscriber|unknown|n\/?a|test|demo)(?:\b|\s*[(#:]|$)/i.test(customerName) ||
+        /^\+?[\d\s().-]+$/.test(customerName);
+      if (vtuResult.success === true && vtuResult.valid === true &&
+          customerName.length > 0 && !isPlaceholderCustomerName) {
         res.json({
           success: true,
           valid: true,
-          accountNumber,
-          accountName: vtuResult.customerName || `Verified Account (${accountNumber.slice(-4)})`,
+          accountNumber: accountNumber.trim(),
+          accountName: customerName,
           providerId: providerId || 'unknown',
           requiresManualVerification: false,
           verificationMethod: 'DIRECT_API',
-          statusMessage: 'Account structure validated via VTU.ng provider API gateway.',
-          disclaimer: 'Direct VTU.ng provider API validation.'
+          statusMessage: 'Subscriber account confirmed by the configured provider lookup.',
+          disclaimer: 'Verification was returned by the configured upstream provider.'
         });
         return;
       }
     } catch (e: any) {
-      console.warn('[Utility Validate] VTU customer lookup notice:', e.message);
+      console.warn('[Utility Validate] VTU customer lookup notice:', e?.message || 'lookup failed');
     }
   }
 
-  if (isDirectApiSupported) {
-    res.json({
-      success: true,
-      valid: true,
-      accountNumber,
-      accountName: `Verified Account (${accountNumber.slice(-4)})`,
-      providerId: providerId || 'unknown',
-      requiresManualVerification: false,
-      verificationMethod: 'DIRECT_API',
-      statusMessage: 'Account structure validated via provider API gateway.',
-      disclaimer: 'Direct provider API validation.'
-    });
-  } else {
-    res.json({
-      success: true,
-      valid: true,
-      accountNumber,
-      accountName: `Account #${accountNumber}`,
-      providerId: providerId || 'unknown',
-      requiresManualVerification: true,
-      verificationMethod: 'MANUAL_VERIFICATION',
-      statusMessage: 'Account queued for manual verification by utility provider operations.',
-      disclaimer: 'No direct customer lookup API connected for this provider. Verified manually by fulfillment team.'
-    });
-  }
+  res.status(200).json({
+    success: false,
+    valid: false,
+    accountNumber: accountNumber.trim(),
+    providerId: providerId || 'unknown',
+    requiresManualVerification: true,
+    verificationMethod: 'MANUAL_VERIFICATION',
+    statusMessage: isDirectApiSupported
+      ? 'Subscriber account could not be verified. A configured provider lookup with an explicit account confirmation is required.'
+      : 'No live subscriber lookup is configured for this provider. The account has not been verified.',
+    disclaimer: 'Do not treat number format or a placeholder account label as verification. Checkout must remain blocked until an authoritative provider lookup confirms the account.'
+  });
 };
 
 // Electricity Real Meter / Provider Verification API Endpoint
@@ -3692,6 +3696,17 @@ app.post('/api/education/invoices/pay', paymentRateLimiter, authenticate, async 
       return;
     }
 
+    let authoritativeEducationSettlement: {
+      verified: true;
+      source: 'pi_platform' | 'sandbox_dev';
+      paymentId: string;
+      amount: number;
+      txid: string;
+      userUid: string;
+      network: string;
+      direction: string;
+    } | undefined;
+
     // Pi Network authoritative server verification
     if (paymentMethod === 'PI_NETWORK') {
       if (!piPaymentId) {
@@ -3769,6 +3784,17 @@ app.post('/api/education/invoices/pay', paymentRateLimiter, authenticate, async 
         return;
       }
 
+      authoritativeEducationSettlement = {
+        verified: true,
+        source: verification.source,
+        paymentId: piPaymentId,
+        amount: authoritativePiAmount,
+        txid: authoritativeTxid,
+        userUid: authoritativeUserUid,
+        network: String(paymentData?.network || '').trim(),
+        direction
+      };
+
       if (Math.abs(numericAmount - authoritativePiAmount) > 0.00000001) {
         res.status(400).json({
           success: false,
@@ -3818,7 +3844,8 @@ app.post('/api/education/invoices/pay', paymentRateLimiter, authenticate, async 
       piTxid: req.body.piTxid,
       paymentMethod,
       payerUsername,
-      idempotencyKey: effectiveIdempotencyKey
+      idempotencyKey: effectiveIdempotencyKey,
+      authoritativePiSettlement: authoritativeEducationSettlement
     });
 
     // Record immutable audit log
@@ -5982,6 +6009,51 @@ process.on('uncaughtException', (err) => {
 });
 
 const productRepository = new ProductRepository();
+
+// Public conversion estimate endpoint. The caller supplies only amount and currency;
+ // rates and timestamps are fetched and validated server-side from the configured provider.
+const fxQuoteRateLimiter = createRateLimiter({
+  windowMs: 60000,
+  maxRequests: 30,
+  message: 'Currency conversion rate limit exceeded. Please retry shortly.',
+});
+
+const handleFiatToPiEstimate = async (req: express.Request, res: express.Response) => {
+  const fiatAmount = Number(req.body?.fiatAmount);
+  const currency = String(req.body?.currency || '').trim().toUpperCase();
+  if (!Number.isFinite(fiatAmount) || fiatAmount <= 0 || fiatAmount > 1_000_000_000_000) {
+    return res.status(400).json({ success: false, code: 'FIAT_AMOUNT_INVALID' });
+  }
+  if (!/^[A-Z]{3}$/.test(currency)) {
+    return res.status(400).json({ success: false, code: 'FIAT_CURRENCY_INVALID' });
+  }
+
+  try {
+    const conversion = await calculateFiatToPiWithConfiguredFx(fiatAmount, currency);
+    return res.json({
+      success: true,
+      conversion,
+      estimateOnly: true,
+      paymentAuthorized: false,
+      referenceRateDisclaimer: '1 Pi = USD 314,159 is a PiNova community reference, not an official Pi Network market rate.',
+    });
+  } catch (error) {
+    const code = error instanceof Error && error.message.startsWith('FX_')
+      ? error.message
+      : 'FX_CONVERSION_UNAVAILABLE';
+    // Fail closed: never return a guessed conversion or provider credentials/details.
+    return res.status(503).json({
+      success: false,
+      code,
+      message: 'A fresh trusted FX quote is unavailable. No Pi conversion estimate was returned.',
+      estimateOnly: true,
+      paymentAuthorized: false,
+    });
+  }
+};
+
+app.post('/api/currency/fiat-to-pi', fxQuoteRateLimiter, handleFiatToPiEstimate);
+app.post('/api/v1/currency/fiat-to-pi', fxQuoteRateLimiter, handleFiatToPiEstimate);
 
 app.get('/api/products', (req, res) => {
   try {

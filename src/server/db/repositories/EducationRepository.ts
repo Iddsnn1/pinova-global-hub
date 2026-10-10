@@ -394,6 +394,16 @@ export class EducationRepository {
     paymentMethod: 'PI_NETWORK' | 'FIAT_ESCROW' | 'SCHOLARSHIP_GRANT';
     payerUsername: string;
     idempotencyKey?: string;
+    authoritativePiSettlement?: {
+      verified: true;
+      source: 'pi_platform' | 'sandbox_dev';
+      paymentId: string;
+      amount: number;
+      txid: string;
+      userUid: string;
+      network: string;
+      direction: string;
+    };
   }): {
     success: boolean;
     payment: EducationPaymentTransaction;
@@ -409,6 +419,20 @@ export class EducationRepository {
     );
 
     if (existingPayment) {
+      // A replay is still a Pi settlement request: require the same server-verified
+      // proof before returning an existing receipt, rather than treating idempotency
+      // as a way to bypass the authoritative payment guard.
+      if (params.paymentMethod === 'PI_NETWORK') {
+        const settlement = params.authoritativePiSettlement;
+        if (!settlement || settlement.verified !== true) throw new Error('PI_SETTLEMENT_PROOF_REQUIRED');
+        if (process.env.NODE_ENV === 'production' && settlement.source !== 'pi_platform') throw new Error('PI_PLATFORM_VERIFICATION_REQUIRED');
+        if (settlement.paymentId !== String(params.piPaymentId || '')) throw new Error('PI_SETTLEMENT_ID_MISMATCH');
+        if (!Number.isFinite(settlement.amount) ||
+            Math.abs(settlement.amount - Number(params.piAmount)) > 0.000000000001 ||
+            Math.abs(settlement.amount - Number(params.amountPaid)) > 0.000000000001) throw new Error('PI_SETTLEMENT_AMOUNT_MISMATCH');
+        if (!settlement.txid || settlement.txid !== String(params.piTxid || '')) throw new Error('PI_SETTLEMENT_TXID_MISMATCH');
+        if (!settlement.userUid || !settlement.network || settlement.direction !== 'user_to_app') throw new Error('PI_SETTLEMENT_IDENTITY_INVALID');
+      }
       const existingInvoice = this.invoicesEngine.get(existingPayment.invoiceId);
       if (!existingInvoice) throw new Error('PAYMENT_REPLAY_INVOICE_MISSING');
 
@@ -442,6 +466,15 @@ export class EducationRepository {
 
     if (params.paymentMethod === 'PI_NETWORK') {
       if (!params.piPaymentId) throw new Error('PI_PAYMENT_ID_REQUIRED');
+      const settlement = params.authoritativePiSettlement;
+      if (!settlement || settlement.verified !== true) throw new Error('PI_SETTLEMENT_PROOF_REQUIRED');
+      if (process.env.NODE_ENV === 'production' && settlement.source !== 'pi_platform') throw new Error('PI_PLATFORM_VERIFICATION_REQUIRED');
+      if (settlement.paymentId !== params.piPaymentId) throw new Error('PI_SETTLEMENT_ID_MISMATCH');
+      if (!Number.isFinite(settlement.amount) || settlement.amount <= 0 ||
+          Math.abs(settlement.amount - Number(params.piAmount)) > 0.000000000001 ||
+          Math.abs(settlement.amount - Number(params.amountPaid)) > 0.000000000001) throw new Error('PI_SETTLEMENT_AMOUNT_MISMATCH');
+      if (!settlement.txid || settlement.txid !== String(params.piTxid || '')) throw new Error('PI_SETTLEMENT_TXID_MISMATCH');
+      if (!settlement.userUid || !settlement.network || settlement.direction !== 'user_to_app') throw new Error('PI_SETTLEMENT_IDENTITY_INVALID');
       const invoiceCurrency = String(invoice.currency || '').trim().toUpperCase();
       const paymentCurrency = String(params.currency || '').trim().toUpperCase();
       if (invoiceCurrency !== 'PI') throw new Error('PI_NATIVE_INVOICE_REQUIRED');
