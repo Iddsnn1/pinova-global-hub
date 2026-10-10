@@ -505,7 +505,7 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
 
       setAccountValidationResult({
         valid: result.valid,
-        name: result.accountName || `Verified Account #${accountNumber}`,
+        name: result.valid && result.verificationMethod === 'DIRECT_API' && !result.requiresManualVerification ? result.accountName : undefined,
         message: result.statusMessage,
         requiresManualVerification: result.requiresManualVerification,
         verificationMethod: result.verificationMethod,
@@ -1151,7 +1151,7 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                         : 'bg-rose-500/10 text-rose-500 border border-rose-500/20'
                     }`}>
                       <div className="flex items-center gap-2">
-                        <CheckCircle2 className="w-4 h-4 shrink-0" />
+                        {accountValidationResult.valid ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
                         <span className="font-bold">{accountValidationResult.name}</span>
                       </div>
                       <p className="text-[11px] opacity-90 pl-6">{accountValidationResult.message}</p>
@@ -1329,7 +1329,7 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                     <span className="font-mono font-bold text-white truncate max-w-[140px]">{accountNumber || '—'}</span>
                   </div>
 
-                  {accountValidationResult?.name && (
+                  {accountValidationResult?.valid && accountValidationResult?.name && (
                     <div className="flex justify-between items-center text-slate-300">
                       <span>Verified Name:</span>
                       <span className="font-bold text-emerald-400 truncate max-w-[140px]">{accountValidationResult.name}</span>
