@@ -171,8 +171,8 @@ function formatFiat(value: number, currency: string): string {
 export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
   onClose,
   piConversionConfig,
-  userBalancePi = 1250.00,
-  buyerUsername = 'Pioneer_User',
+  userBalancePi = 0,
+  buyerUsername = '',
   onTransactionSuccess,
   defaultCategory = 'airtime',
   initialCountryCode = 'GLOBAL',
