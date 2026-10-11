@@ -1,5 +1,5 @@
 import { randomUUID, createHash } from 'node:crypto';
-import { Pool, type PoolClient } from 'pg';
+import { Pool } from 'pg';
 import {
   authorizeUtilityPayment,
   type CanonicalUtilityInvoice,
