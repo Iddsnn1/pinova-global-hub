@@ -26,9 +26,6 @@ CREATE TABLE IF NOT EXISTS public.utility_invoices (
   fulfilled_at timestamptz,
   CHECK (expires_at > created_at)
 );
--- Supports applying this migration after an earlier draft where payment_id was NOT NULL.
-ALTER TABLE public.utility_invoices ALTER COLUMN payment_id DROP NOT NULL;
-
 CREATE INDEX IF NOT EXISTS utility_invoices_owner_created_idx
   ON public.utility_invoices (owner_user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS utility_invoices_status_expiry_idx
