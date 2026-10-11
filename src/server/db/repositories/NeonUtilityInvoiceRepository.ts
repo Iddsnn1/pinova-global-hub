@@ -5,6 +5,7 @@ import {
   type CanonicalUtilityInvoice,
   type PiPaymentVerificationData,
 } from '../../services/UtilityPaymentAuthorizationService';
+import { validateTrustedFxQuote } from '../../services/TrustedFxQuoteService';
 
 export interface NewUtilityInvoice {
   ownerUserId: string;
@@ -60,6 +61,18 @@ type InvoiceRow = {
   expires_at: Date | string;
   created_at: Date | string;
 };
+
+
+function isPositiveDecimal(value: string, maxDecimals: number): boolean {
+  if (typeof value !== 'string' || !/^(?:0|[1-9]\\d*)(?:\\.\\d+)?$/.test(value)) return false;
+  const [whole, fraction = ''] = value.split('.');
+  if (fraction.length > maxDecimals) return false;
+  try {
+    return BigInt(whole) > 0n || /[1-9]/.test(fraction);
+  } catch {
+    return false;
+  }
+}
 
 function iso(value: Date | string): string {
   return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
@@ -118,6 +131,17 @@ export class NeonUtilityInvoiceRepository {
   async createInvoice(input: NewUtilityInvoice): Promise<CreatedUtilityInvoice> {
     const currency = String(input.fiatCurrency || '').trim().toUpperCase();
     if (!/^[A-Z]{3}$/.test(currency)) throw new Error('UTILITY_FIAT_CURRENCY_INVALID');
+    if (!isPositiveDecimal(input.fiatAmount, 8)) throw new Error('UTILITY_FIAT_AMOUNT_INVALID');
+    const piPico = piAmountToPico(input.piAmount);
+    if (piPico === null || piPico <= 0n) throw new Error('UTILITY_PI_AMOUNT_INVALID');
+    if (!isPositiveDecimal(input.fxUsdPerFiatUnit, 16)) throw new Error('UTILITY_FX_RATE_INVALID');
+    const expectedFxSource = process.env.PINOVA_FX_PROVIDER_SOURCE?.trim() || '';
+    validateTrustedFxQuote({
+      currency,
+      usdPerFiatUnit: Number(input.fxUsdPerFiatUnit),
+      asOf: input.fxAsOf,
+      source: input.fxSource,
+    }, currency, expectedFxSource);
     if (!input.ownerUserId || !input.serviceCategory || !input.providerId || !input.accountNumber) {
       throw new Error('UTILITY_INVOICE_FIELDS_REQUIRED');
     }
