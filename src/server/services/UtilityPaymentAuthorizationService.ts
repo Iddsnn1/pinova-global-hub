@@ -11,7 +11,7 @@ export interface CanonicalUtilityInvoice {
   fiatAmount: string;
   fiatCurrency: string;
   piAmount: string;
-  status: 'OPEN' | 'PAID' | 'FULFILLMENT_PENDING' | 'FULFILLED' | 'CANCELLED';
+  status: 'OPEN' | 'PAID' | 'FULFILLMENT_PENDING' | 'FULFILLED' | 'CANCELLED' | 'FAILED';
 }
 
 export interface PiPaymentVerificationData {
