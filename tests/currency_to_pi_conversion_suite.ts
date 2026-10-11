@@ -146,7 +146,7 @@ assert.throws(
 );
 
 // Marketplace display estimates must not silently treat unknown currencies as USD.
-assert.equal(marketplaceService.currencyCalculator.getEstimatedValue(1, 'XOF'), 'Estimate unavailable (XOF)');
+assert.equal(marketplaceService.currencyCalculator.getEstimatedValue(1, 'XOF'), 'Estimate unavailable (XOF; trusted FX quote required)');
 assert.equal(marketplaceService.currencyCalculator.getEstimatedValue(1, 'usd').includes('$'), true);
 
 // Trusted FX quotes require an explicitly configured source, matching currency,
