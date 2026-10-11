@@ -228,12 +228,9 @@ export class NeonUtilityInvoiceRepository {
         return { status: 'REJECTED', error: 'UTILITY_INVOICE_NOT_FOUND' };
       }
       const invoice = mapInvoice(row);
-      if (Date.parse(invoice.expiresAt) <= Date.now()) {
-        await client.query('ROLLBACK');
-        inTransaction = false;
-        return { status: 'REJECTED', error: 'UTILITY_INVOICE_EXPIRED' };
-      }
-      const authorization = authorizeUtilityPayment(invoice, paymentId, paymentData);
+      // Validate the Pi payload independently of lifecycle state so a legitimate
+      // retry can retrieve its recorded result after the invoice is no longer OPEN.
+      const authorization = authorizeUtilityPayment({ ...invoice, status: 'OPEN' }, paymentId, paymentData);
       if (!authorization.authorized) {
         await client.query('ROLLBACK');
         inTransaction = false;
@@ -249,6 +246,44 @@ export class NeonUtilityInvoiceRepository {
       const requestFingerprint = createHash('sha256')
         .update([invoiceId, paymentId, txid, authorization.paidPiAmount || ''].join('|'))
         .digest('hex');
+
+      // Idempotent retries must be checked before expiry/state rejection. This
+      // lets a completed request return its cached result without fulfilling twice.
+      const prior = await client.query(
+        `SELECT invoice_id, payment_id, request_fingerprint, status, response
+         FROM public.utility_payment_idempotency WHERE idempotency_key = $1 FOR UPDATE`,
+        [paymentId],
+      );
+      const priorRecord = prior.rows[0];
+      if (priorRecord) {
+        if (priorRecord.invoice_id !== invoiceId || priorRecord.payment_id !== paymentId ||
+            priorRecord.request_fingerprint !== requestFingerprint) {
+          await client.query('ROLLBACK');
+          inTransaction = false;
+          return { status: 'REJECTED', error: 'UTILITY_IDEMPOTENCY_CONFLICT' };
+        }
+        await client.query('COMMIT');
+        inTransaction = false;
+        if (priorRecord.status === 'RESOLVED') {
+          return { status: 'RESOLVED', invoiceId, paymentId, txid, response: priorRecord.response };
+        }
+        if (priorRecord.status === 'FAILED') {
+          return { status: 'REJECTED', error: 'UTILITY_PAYMENT_PREVIOUSLY_FAILED' };
+        }
+        return { status: 'IN_PROGRESS', invoiceId, paymentId, txid };
+      }
+
+      if (Date.parse(invoice.expiresAt) <= Date.now()) {
+        await client.query('ROLLBACK');
+        inTransaction = false;
+        return { status: 'REJECTED', error: 'UTILITY_INVOICE_EXPIRED' };
+      }
+      if (invoice.status !== 'OPEN') {
+        await client.query('ROLLBACK');
+        inTransaction = false;
+        return { status: 'REJECTED', error: 'UTILITY_INVOICE_NOT_PAYABLE' };
+      }
+
       const keyResult = await client.query(
         `INSERT INTO public.utility_payment_idempotency
           (idempotency_key, invoice_id, payment_id, request_fingerprint, status, expires_at)
