@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import type { Pool, PoolClient } from 'pg';
+import type { Pool } from 'pg';
 import { NeonUtilityInvoiceRepository } from '../src/server/db/repositories/NeonUtilityInvoiceRepository';
 
 const now = new Date();
