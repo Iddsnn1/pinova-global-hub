@@ -588,7 +588,17 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
             !payload?.conversion || !Number.isFinite(Number(payload.conversion.usdAmount)) ||
             !Number.isFinite(Number(payload.conversion.piAmount)) ||
             !Number.isFinite(Date.parse(payload.conversion.fxAsOf))) {
-          throw new Error(payload?.message || payload?.code || 'A fresh trusted FX quote is unavailable.');
+          const fxCode = typeof payload?.code === 'string' ? payload.code : '';
+          const fxMessage = fxCode === 'FX_QUOTE_STALE'
+            ? 'The trusted FX quote is older than the allowed 15-minute window. Checkout remains paused; no Pi amount was estimated.'
+            : fxCode === 'FX_PROVIDER_ENDPOINT_NOT_CONFIGURED' || fxCode === 'FX_TRUSTED_SOURCE_NOT_CONFIGURED'
+              ? 'The trusted FX provider is not fully configured on the server. Checkout remains paused.'
+              : fxCode === 'FX_PROVIDER_HTTP_ERROR'
+                ? 'The FX provider rejected or could not serve the quote request. Check the provider plan and server-side API configuration.'
+                : fxCode === 'FX_PROVIDER_TIMEOUT' || fxCode === 'FX_PROVIDER_REQUEST_FAILED'
+                  ? 'The trusted FX provider did not return a usable quote. Please retry later; checkout remains paused.'
+                  : payload?.message || fxCode || 'A fresh trusted FX quote is unavailable.';
+          throw new Error(fxMessage);
         }
         if (!cancelled) {
           setTrustedConversion({
