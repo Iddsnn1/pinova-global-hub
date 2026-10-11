@@ -403,22 +403,72 @@ export class SearchDiscoveryEngine {
 }
 
 export class MultiCurrencyReferenceCalculator {
-  // Administrator controlled reference rates for user estimation convenience (1 Pi = X Currency)
-  private referenceRates: Record<string, { symbol: string; rate: number }> = {
-    // PiNova fixed reference: 1 π = $314,159 USD. Display/reference only.
-    USD: { symbol: '$', rate: 314159 },
-    NGN: { symbol: '₦', rate: 450000.0 },
-    KES: { symbol: 'KSh', rate: 40500.0 },
-    VND: { symbol: '₫', rate: 7800000.0 },
-    PHP: { symbol: '₱', rate: 17800.0 },
-    INR: { symbol: '₹', rate: 26000.0 }
+  // Display-only community reference. Non-USD display rates must come from a
+  // fresh trusted FX quote; hard-coded fiat rates are not settlement inputs.
+  private readonly referenceRates: Record<string, { symbol: string; rate: number }> = {
+    USD: { symbol: '
+
+export interface IMarketplaceService {
+  calculateTotal(items: OrderItem[]): number;
+  formatOrderStatus(status: EscrowStatus): string;
+}
+
+export class MarketplaceService implements IMarketplaceService {
+  inventoryManager = new InventoryManager();
+  warehouseManager = new WarehouseManager();
+  shippingPartners = new ShippingPartnerRegistry();
+  deliveryTracker = new DeliveryTracker();
+  returnsManager = new ReturnsRmaManager();
+  vendorPayoutEngine = new VendorPayoutEngine();
+  taxRuleEngine = new TaxRuleEngine();
+  comparisonEngine = new ProductComparisonEngine();
+  promotionsEngine = new PromotionsEngine();
+  digitalFulfillmentEngine = new DigitalFulfillmentEngine();
+  seoGenerator = new SeoMetadataGenerator();
+  bulkManager = new BulkProductManager();
+  moderationEngine = new ProductModerationEngine();
+  engagementEngine = new CustomerEngagementEngine();
+  searchDiscoveryEngine = new SearchDiscoveryEngine();
+  currencyCalculator = new MultiCurrencyReferenceCalculator();
+
+  calculateTotal(items: OrderItem[]): number {
+    return items.reduce((acc, item) => {
+      const discounted = item.product.discountPercent 
+        ? item.product.pricePi * (1 - item.product.discountPercent / 100)
+        : item.product.pricePi;
+      return acc + discounted * item.quantity;
+    }, 0);
+  }
+
+  formatOrderStatus(status: EscrowStatus): string {
+    switch (status) {
+      case 'in_escrow':
+        return 'Payment Verified & Order Confirmed';
+      case 'shipped':
+        return 'Order In Transit';
+      case 'delivered':
+        return 'Order Delivered';
+      case 'released':
+        return 'Order Completed & Settled';
+      case 'disputed':
+        return 'Dispute Under Review';
+      case 'refunded':
+        return 'Order Refunded';
+      default:
+        return 'Order Processed';
+    }
+  }
+}
+
+export const marketplaceService = new MarketplaceService();
+, rate: 314159 }
   };
 
   getEstimatedValue(amountPi: number, currencyCode: string = 'USD'): string {
     const normalizedCurrencyCode = String(currencyCode || '').trim().toUpperCase();
     const config = this.referenceRates[normalizedCurrencyCode];
     if (!config || !Number.isFinite(amountPi) || amountPi < 0) {
-      return `Estimate unavailable (${normalizedCurrencyCode || 'unknown currency'})`;
+      return `Estimate unavailable (${normalizedCurrencyCode || 'unknown currency'}; trusted FX quote required)`;
     }
     const value = amountPi * config.rate;
     if (!Number.isFinite(value)) return `Estimate unavailable (${normalizedCurrencyCode})`;
@@ -426,6 +476,7 @@ export class MultiCurrencyReferenceCalculator {
   }
 
   getAvailableCurrencies() {
+    // Only currencies with a conversion source wired into this legacy calculator.
     return Object.keys(this.referenceRates);
   }
 }
