@@ -53,17 +53,45 @@ export async function searchFlights(
     const data = await res.json();
 
     if (data.success && data.apiConfigured && Array.isArray(data.liveResults) && data.liveResults.length > 0) {
-      // Map live results from Duffel API
+      // Resolve one trusted FX quote per distinct currency through the server.
+      // Quotes are estimates only; flight booking/payment must revalidate the
+      // live offer and independently calculate/authorize the canonical amount.
+      const currencies = [...new Set<string>(data.liveResults.map((off: any) =>
+        String(off.currency || '').trim().toUpperCase()
+      ).filter((currency: string) => /^[A-Z]{3}$/.test(currency)))];
+      const piPerFiatUnit = new Map<string, number>();
+      await Promise.all(currencies.map(async (currency) => {
+        try {
+          const quoteResponse = await fetch('/api/currency/fiat-to-pi', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            cache: 'no-store',
+            body: JSON.stringify({ fiatAmount: 1, currency })
+          });
+          if (!quoteResponse.ok) return;
+          const quotePayload = await quoteResponse.json();
+          const usdAmount = quotePayload?.success === true
+            ? Number(quotePayload?.conversion?.usdAmount)
+            : Number.NaN;
+          if (Number.isFinite(usdAmount) && usdAmount > 0) {
+            // Use the server's trusted FX result; this client-side rate is display-only.
+            piPerFiatUnit.set(currency, usdAmount / 314159);
+          }
+        } catch {
+          // Keep the currency unavailable if the trusted server quote fails.
+        }
+      }));
+
+      // Map live results from Duffel API. Missing/stale FX means no estimate,
+      // never a guessed exchange rate or a fabricated 0π fare.
       const liveOffers: FlightOffer[] = data.liveResults.map((off: any) => {
         const fiat = typeof off.fareAmountFiat === 'number' ? off.fareAmountFiat : parseFloat(off.fareAmountFiat) || 0;
         const currency = String(off.currency || '').trim().toUpperCase();
         const taxes = typeof off.taxesAndFeesFiat === 'number' ? off.taxesAndFeesFiat : Math.round(fiat * 0.14);
         const base = typeof off.baseFareFiat === 'number' ? off.baseFareFiat : Math.max(0, fiat - taxes);
-        // Never treat an unknown or non-USD airline fare as USD. Until a fresh
-        // trusted FX quote is supplied by the server, only USD can be converted
-        // to the PiNova community reference estimate here.
-        const pi = currency === 'USD' && Number.isFinite(fiat) && fiat > 0
-          ? Number((fiat / 314159).toFixed(12))
+        const piPerUnit = piPerFiatUnit.get(currency);
+        const pi = Number.isFinite(fiat) && fiat > 0 && piPerUnit && piPerUnit > 0
+          ? Number((fiat * piPerUnit).toFixed(12))
           : 0;
 
         return {
