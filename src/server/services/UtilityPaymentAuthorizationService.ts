@@ -76,7 +76,10 @@ export function authorizeUtilityPayment(
   if (invoice.status !== 'OPEN') {
     return { authorized: false, error: 'UTILITY_INVOICE_NOT_PAYABLE' };
   }
-  const verifiedPaymentId = String(paymentData?.identifier || paymentId || '');
+  // Never substitute the caller-supplied ID for the identifier returned by Pi.
+  // Missing provider identity must fail closed rather than appear verified.
+  const verifiedPaymentId =
+    typeof paymentData?.identifier === 'string' ? paymentData.identifier : '';
   if (!paymentId || invoice.paymentId !== paymentId || verifiedPaymentId !== paymentId) {
     return { authorized: false, error: 'PI_PAYMENT_ID_MISMATCH' };
   }
