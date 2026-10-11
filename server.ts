@@ -5514,6 +5514,113 @@ const handleFlightBook = async (req: express.Request, res: express.Response) => 
         return;
       }
 
+      // 5a. Reconcile the completed Pi payment against the current authoritative
+      // Duffel fare. The browser's fareAmountPi is display-only and is never
+      // accepted as the settlement amount. Missing/stale FX or any mismatch
+      // blocks airline order creation and records a protected reconciliation case.
+      let expectedPiAmount: number;
+      let actualPiAmount: number;
+      try {
+        const conversion = await calculateFiatToPiWithConfiguredFx(
+          Number(authoritativeAmount),
+          authoritativeCurrency
+        );
+        expectedPiAmount = Number(conversion.piAmount);
+        actualPiAmount = Number(verification.paymentData?.amount);
+        if (
+          !Number.isFinite(expectedPiAmount) ||
+          expectedPiAmount <= 0 ||
+          !Number.isFinite(actualPiAmount) ||
+          actualPiAmount <= 0
+        ) {
+          throw new Error('PI_AMOUNT_INVALID');
+        }
+      } catch (conversionError) {
+        const failedAt = new Date().toISOString();
+        const failedRecord = flightFulfillmentRepo.recordBooking(cleanPaymentId, {
+          id: `FLT-BOK-${cleanPaymentId}`,
+          key: cleanPaymentId,
+          paymentId: cleanPaymentId,
+          bookingAttemptId,
+          offerId: cleanOfferId,
+          idempotencyKey: stableIdempotencyKey,
+          pnr: null,
+          bookingReference: `ESCROW-${cleanPaymentId.slice(-8).toUpperCase()}`,
+          duffelOrderId: null,
+          ticketNumber: null,
+          bookingStatus: 'BOOKING_FAILED_HELD_FOR_REFUND' as const,
+          reconciliationStatus: 'PENDING' as const,
+          provider: 'duffel',
+          bookingMode: 'LIVE_DUFFEL' as const,
+          isLiveBooking: false,
+          message: 'Pi payment was verified, but the authoritative fare could not be reconciled with a fresh trusted FX quote. Airline order creation is blocked; refund/reconciliation is required.',
+          passengerName: `${passengerDetails?.givenName || 'Pioneer'} ${passengerDetails?.familyName || 'Traveler'}`,
+          timestamp: failedAt,
+          createdAt: failedAt,
+          updatedAt: failedAt,
+          metadata: {
+            authoritativeFiatAmount: authoritativeAmount,
+            authoritativeFiatCurrency: authoritativeCurrency,
+            reconciliationReason: conversionError instanceof Error && conversionError.message.startsWith('FX_')
+              ? conversionError.message
+              : 'AUTHORITATIVE_PI_CONVERSION_FAILED'
+          }
+        });
+        res.status(503).json({
+          success: false,
+          error: 'AUTHORITATIVE_PI_CONVERSION_UNAVAILABLE',
+          status: 'BOOKING_FAILED_HELD_FOR_REFUND',
+          message: 'Pi payment was verified, but the current airline fare could not be reconciled using trusted FX. No airline order was created; refund/reconciliation is required.',
+          booking: failedRecord,
+          reqId
+        });
+        return;
+      }
+
+      // Pi payments are rounded to the engine's 12-decimal contract. A mismatch
+      // is not silently topped up, partially accepted, or booked against.
+      if (Math.abs(actualPiAmount - expectedPiAmount) > 1e-12) {
+        const failedAt = new Date().toISOString();
+        const failedRecord = flightFulfillmentRepo.recordBooking(cleanPaymentId, {
+          id: `FLT-BOK-${cleanPaymentId}`,
+          key: cleanPaymentId,
+          paymentId: cleanPaymentId,
+          bookingAttemptId,
+          offerId: cleanOfferId,
+          idempotencyKey: stableIdempotencyKey,
+          pnr: null,
+          bookingReference: `ESCROW-${cleanPaymentId.slice(-8).toUpperCase()}`,
+          duffelOrderId: null,
+          ticketNumber: null,
+          bookingStatus: 'BOOKING_FAILED_HELD_FOR_REFUND' as const,
+          reconciliationStatus: 'PENDING' as const,
+          provider: 'duffel',
+          bookingMode: 'LIVE_DUFFEL' as const,
+          isLiveBooking: false,
+          message: 'Verified Pi payment does not match the current authoritative airline fare. Airline order creation is blocked; refund/reconciliation is required.',
+          passengerName: `${passengerDetails?.givenName || 'Pioneer'} ${passengerDetails?.familyName || 'Traveler'}`,
+          timestamp: failedAt,
+          createdAt: failedAt,
+          updatedAt: failedAt,
+          metadata: {
+            authoritativeFiatAmount: authoritativeAmount,
+            authoritativeFiatCurrency: authoritativeCurrency,
+            expectedPiAmount: expectedPiAmount.toFixed(12),
+            actualPiAmount: actualPiAmount.toFixed(12),
+            reconciliationReason: 'PI_PAYMENT_AMOUNT_MISMATCH'
+          }
+        });
+        res.status(409).json({
+          success: false,
+          error: 'PI_PAYMENT_AMOUNT_MISMATCH',
+          status: 'BOOKING_FAILED_HELD_FOR_REFUND',
+          message: 'The verified Pi payment does not match the current airline fare. No airline order was created; refund/reconciliation is required.',
+          booking: failedRecord,
+          reqId
+        });
+        return;
+      }
+
       // 6. Build Duffel POST /air/orders Payload
       const orderPayload = {
         data: {
