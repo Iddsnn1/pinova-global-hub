@@ -274,6 +274,9 @@ export class NeonUtilityInvoiceRepository {
         if (record.status === 'RESOLVED') {
           return { status: 'RESOLVED', invoiceId, paymentId, txid, response: record.response };
         }
+        if (record.status === 'FAILED') {
+          return { status: 'REJECTED', error: 'UTILITY_PAYMENT_PREVIOUSLY_FAILED' };
+        }
         return { status: 'IN_PROGRESS', invoiceId, paymentId, txid };
       }
 
