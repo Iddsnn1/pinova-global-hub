@@ -5584,7 +5584,7 @@ const handleFlightBook = async (req: express.Request, res: express.Response) => 
 
       // Pi payments are rounded to the engine's 12-decimal contract. A mismatch
       // is not silently topped up, partially accepted, or booked against.
-      if (Math.abs(actualPiAmount - expectedPiAmount) > 1e-12) {
+      if (Math.abs(actualPiAmount - expectedPiAmount) >= 1e-12) {
         const failedAt = new Date().toISOString();
         const failedRecord = flightFulfillmentRepo.recordBooking(cleanPaymentId, {
           id: `FLT-BOK-${cleanPaymentId}`,
