@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import type { Pool } from 'pg';
 import { NeonUtilityInvoiceRepository } from '../src/server/db/repositories/NeonUtilityInvoiceRepository';
 
@@ -23,13 +24,16 @@ const invoiceRow = {
   created_at: now.toISOString(),
 };
 
-function mockPoolForReservation(options: { amount?: number; updateRows?: number } = {}) {
+function mockPoolForReservation(options: { amount?: number; updateRows?: number; invoiceStatus?: string; priorRecord?: Record<string, unknown> } = {}) {
   const statements: string[] = [];
   const client = {
     query: async (sql: string) => {
       statements.push(sql.trim().replace(/\s+/g, ' '));
       if (sql.includes('FROM public.utility_invoices') && sql.includes('FOR UPDATE')) {
-        return { rows: [invoiceRow], rowCount: 1 };
+        return { rows: [{ ...invoiceRow, status: options.invoiceStatus ?? 'OPEN' }], rowCount: 1 };
+      }
+      if (sql.includes('FROM public.utility_payment_idempotency') && sql.includes('FOR UPDATE')) {
+        return { rows: options.priorRecord ? [options.priorRecord] : [], rowCount: options.priorRecord ? 1 : 0 };
       }
       if (sql.includes('INSERT INTO public.utility_payment_idempotency')) {
         return { rows: [{ idempotency_key: 'pi-payment-01' }], rowCount: 1 };
@@ -76,6 +80,36 @@ async function run() {
   assert.deepEqual(rejected, { status: 'REJECTED', error: 'PI_PAYMENT_AMOUNT_MISMATCH' });
   assert.ok(mismatch.statements.includes('ROLLBACK'));
   assert.ok(!mismatch.statements.some((statement) => statement.includes('INSERT INTO public.utility_payment_idempotency')));
+
+  const fingerprint = createHash('sha256')
+    .update(['UTIL-INV-TEST', 'pi-payment-01', 'pi-tx-01', '0.000002069016'].join('|'))
+    .digest('hex');
+  const replay = mockPoolForReservation({
+    invoiceStatus: 'FULFILLED',
+    priorRecord: {
+      invoice_id: 'UTIL-INV-TEST',
+      payment_id: 'pi-payment-01',
+      request_fingerprint: fingerprint,
+      status: 'RESOLVED',
+      response: { success: true, providerReference: 'provider-ref-01' },
+    },
+  });
+  const replayRepo = new NeonUtilityInvoiceRepository(replay.pool);
+  const replayResult = await replayRepo.authorizeAndReserve('UTIL-INV-TEST', 'buyer-01', 'pi-payment-01', {
+    identifier: 'pi-payment-01',
+    amount: 0.000002069016,
+    status: { developer_completed: true },
+    transaction: { verified: true, txid: 'pi-tx-01' },
+  });
+  assert.deepEqual(replayResult, {
+    status: 'RESOLVED',
+    invoiceId: 'UTIL-INV-TEST',
+    paymentId: 'pi-payment-01',
+    txid: 'pi-tx-01',
+    response: { success: true, providerReference: 'provider-ref-01' },
+  });
+  assert.ok(!replay.statements.some((statement) => statement.includes('INSERT INTO public.utility_payment_idempotency')));
+  assert.ok(!replay.statements.some((statement) => statement.includes('INSERT INTO public.utility_fulfillment_attempts')));
 
   const race = mockPoolForReservation({ updateRows: 0 });
   const raceRepo = new NeonUtilityInvoiceRepository(race.pool);
