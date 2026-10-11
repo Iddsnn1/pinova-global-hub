@@ -406,7 +406,25 @@ export class MultiCurrencyReferenceCalculator {
   // Display-only community reference. Non-USD display rates must come from a
   // fresh trusted FX quote; hard-coded fiat rates are not settlement inputs.
   private readonly referenceRates: Record<string, { symbol: string; rate: number }> = {
-    USD: { symbol: '
+    USD: { symbol: '$', rate: 314159 }
+  };
+
+  getEstimatedValue(amountPi: number, currencyCode: string = 'USD'): string {
+    const normalizedCurrencyCode = String(currencyCode || '').trim().toUpperCase();
+    const config = this.referenceRates[normalizedCurrencyCode];
+    if (!config || !Number.isFinite(amountPi) || amountPi < 0) {
+      return `Estimate unavailable (${normalizedCurrencyCode || 'unknown currency'}; trusted FX quote required)`;
+    }
+    const value = amountPi * config.rate;
+    if (!Number.isFinite(value)) return `Estimate unavailable (${normalizedCurrencyCode})`;
+    return `${config.symbol}${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  }
+
+  getAvailableCurrencies() {
+    // Only currencies with a conversion source wired into this legacy calculator.
+    return Object.keys(this.referenceRates);
+  }
+}
 
 export interface IMarketplaceService {
   calculateTotal(items: OrderItem[]): number;
