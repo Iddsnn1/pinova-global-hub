@@ -5504,11 +5504,17 @@ const handleFlightBook = async (req: express.Request, res: express.Response) => 
       const authoritativeAmount = typeof currentOffer.total_amount === 'string' && currentOffer.total_amount.trim() ? currentOffer.total_amount.trim() : '0.00';
       const authoritativeCurrency = typeof currentOffer.total_currency === 'string' && currentOffer.total_currency.trim() ? currentOffer.total_currency.trim() : 'USD';
 
-      if (parseFloat(authoritativeAmount) <= 0) {
+      const authoritativeFiatNumber = Number(authoritativeAmount);
+      if (
+        !/^\d+(?:\.\d+)?$/.test(authoritativeAmount) ||
+        !Number.isFinite(authoritativeFiatNumber) ||
+        authoritativeFiatNumber <= 0 ||
+        !/^[A-Z]{3}$/.test(authoritativeCurrency)
+      ) {
         res.status(400).json({
           success: false,
           error: 'DUFFEL_VALIDATION_ERROR',
-          message: 'Authoritative offer has an invalid carrier fare amount. Please search again.',
+          message: 'Authoritative offer has an invalid carrier fare amount or currency. Please search again.',
           reqId
         });
         return;
@@ -5522,7 +5528,7 @@ const handleFlightBook = async (req: express.Request, res: express.Response) => 
       let actualPiAmount: number;
       try {
         const conversion = await calculateFiatToPiWithConfiguredFx(
-          Number(authoritativeAmount),
+          authoritativeFiatNumber,
           authoritativeCurrency
         );
         expectedPiAmount = Number(conversion.piAmount);
