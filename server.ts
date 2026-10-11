@@ -5545,7 +5545,6 @@ const handleFlightBook = async (req: express.Request, res: express.Response) => 
         const failedAt = new Date().toISOString();
         const failedRecord = flightFulfillmentRepo.recordBooking(cleanPaymentId, {
           id: `FLT-BOK-${cleanPaymentId}`,
-          key: cleanPaymentId,
           paymentId: cleanPaymentId,
           bookingAttemptId,
           offerId: cleanOfferId,
@@ -5589,7 +5588,6 @@ const handleFlightBook = async (req: express.Request, res: express.Response) => 
         const failedAt = new Date().toISOString();
         const failedRecord = flightFulfillmentRepo.recordBooking(cleanPaymentId, {
           id: `FLT-BOK-${cleanPaymentId}`,
-          key: cleanPaymentId,
           paymentId: cleanPaymentId,
           bookingAttemptId,
           offerId: cleanOfferId,
