@@ -65,7 +65,7 @@ type InvoiceRow = {
 
 
 function isPositiveDecimal(value: string, maxDecimals: number): boolean {
-  if (typeof value !== 'string' || !/^(?:0|[1-9]\\d*)(?:\\.\\d+)?$/.test(value)) return false;
+  if (typeof value !== 'string' || !/^(?:0|[1-9]\d*)(?:\.\d+)?$/.test(value)) return false;
   const [whole, fraction = ''] = value.split('.');
   if (fraction.length > maxDecimals) return false;
   try {
