@@ -2,6 +2,7 @@ import { randomUUID, createHash } from 'node:crypto';
 import { Pool } from 'pg';
 import {
   authorizeUtilityPayment,
+  piAmountToPico,
   type CanonicalUtilityInvoice,
   type PiPaymentVerificationData,
 } from '../../services/UtilityPaymentAuthorizationService';
