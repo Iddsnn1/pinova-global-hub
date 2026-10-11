@@ -57,7 +57,7 @@ type InvoiceRow = {
   fx_source: string;
   fx_as_of: Date | string;
   fx_usd_per_fiat_unit: string;
-  status: CanonicalUtilityInvoice['status'] | 'FAILED';
+  status: CanonicalUtilityInvoice['status'];
   payment_txid: string | null;
   expires_at: Date | string;
   created_at: Date | string;
@@ -87,7 +87,7 @@ function mapInvoice(row: InvoiceRow): CreatedUtilityInvoice {
     fiatAmount: String(row.fiat_amount),
     fiatCurrency: row.fiat_currency.trim().toUpperCase(),
     piAmount: String(row.pi_amount),
-    status: row.status === 'FAILED' ? 'CANCELLED' : row.status,
+    status: row.status,
     serviceCategory: row.service_category,
     providerId: row.provider_id,
     accountNumber: row.account_number,
