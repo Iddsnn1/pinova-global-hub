@@ -39,6 +39,14 @@ assert.equal(
   'PI_PAYMENT_ID_MISMATCH',
 );
 assert.equal(
+  authorizeUtilityPayment(invoice, 'pi-payment-001', { ...payment, identifier: undefined }).error,
+  'PI_PAYMENT_ID_MISMATCH',
+);
+assert.equal(
+  authorizeUtilityPayment(invoice, 'pi-payment-001', { ...payment, identifier: 123 }).error,
+  'PI_PAYMENT_ID_MISMATCH',
+);
+assert.equal(
   authorizeUtilityPayment(invoice, 'pi-payment-001', { ...payment, status: { developer_completed: false } }).error,
   'PI_PAYMENT_NOT_COMPLETED',
 );
