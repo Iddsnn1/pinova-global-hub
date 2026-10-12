@@ -3,6 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import dotenv from 'dotenv';
 import crypto from 'crypto';
+import { piAmountToPico } from './src/server/services/UtilityPaymentAuthorizationService';
 import { GoogleGenAI } from '@google/genai';
 import {
   paymentLedgerRepo,
@@ -3459,7 +3460,13 @@ app.post('/api/education/invoices/pay', paymentRateLimiter, authenticate, async 
       return;
     }
 
-    if (numericAmount > invoice.outstandingBalance + 0.01) {
+    const invoiceCurrency = String(invoice.currency || '').trim().toUpperCase();
+    const requestedPico = piAmountToPico(amountPaid);
+    const outstandingPico = invoiceCurrency === 'PI' ? piAmountToPico(invoice.outstandingBalance) : null;
+    const exceedsOutstanding = invoiceCurrency === 'PI'
+      ? requestedPico === null || outstandingPico === null || requestedPico > outstandingPico
+      : numericAmount > invoice.outstandingBalance;
+    if (exceedsOutstanding) {
       res.status(400).json({
         success: false,
         error: 'AMOUNT_EXCEEDS_BALANCE',
@@ -3595,7 +3602,13 @@ app.post('/api/education/invoices/pay', paymentRateLimiter, authenticate, async 
         direction
       };
 
-      if (Math.abs(numericAmount - authoritativePiAmount) > 0.00000001) {
+      const requestedSettlementPico = piAmountToPico(amountPaid);
+      const authoritativeSettlementPico = piAmountToPico(paymentData?.amount);
+      if (
+        requestedSettlementPico === null ||
+        authoritativeSettlementPico === null ||
+        requestedSettlementPico !== authoritativeSettlementPico
+      ) {
         res.status(400).json({
           success: false,
           error: 'PI_AMOUNT_MISMATCH',
@@ -3632,7 +3645,7 @@ app.post('/api/education/invoices/pay', paymentRateLimiter, authenticate, async 
       res.status(401).json({ success: false, error: 'AUTHENTICATED_USERNAME_REQUIRED', message: 'Authenticated payer identity is required.' });
       return;
     }
-    const effectiveIdempotencyKey = idempotencyKey || piPaymentId;
+    const effectiveIdempotencyKey = piPaymentId || idempotencyKey;
 
     // Execute atomic settlement in repository with canonical SHA-256 digest creation
     const result = educationRepo.recordPayment({
