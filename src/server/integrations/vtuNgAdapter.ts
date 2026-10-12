@@ -747,17 +747,18 @@ export class VtuNgAdapter {
    * Webhook Signature Verification using VTU_USER_PIN (HMAC / SHA256)
    */
   public verifyWebhookSignature(payloadString: string, signatureHeader?: string): boolean {
-    if (!this.config.userPin) {
-      // If PIN not configured, allow payload with warning
-      return true;
-    }
-    if (!signatureHeader) {
+    // Fail closed: never accept a webhook when the signing secret is missing.
+    if (!this.config.userPin || !signatureHeader || typeof payloadString !== 'string') {
       return false;
     }
 
     try {
+      const supplied = signatureHeader.trim();
       const computed = crypto.createHmac('sha256', this.config.userPin).update(payloadString).digest('hex');
-      return crypto.timingSafeEqual(Buffer.from(computed), Buffer.from(signatureHeader));
+      const computedBytes = Buffer.from(computed, 'utf8');
+      const suppliedBytes = Buffer.from(supplied, 'utf8');
+      if (computedBytes.length !== suppliedBytes.length) return false;
+      return crypto.timingSafeEqual(computedBytes, suppliedBytes);
     } catch {
       return false;
     }
