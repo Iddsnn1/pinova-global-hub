@@ -386,9 +386,11 @@ export class VtuNgAdapter {
     }
 
     if (!this.isConfigured()) {
+      // Never report a customer as verified when no authoritative provider
+      // lookup occurred. UI must not treat configuration absence as approval.
       return {
-        success: true,
-        valid: true,
+        success: false,
+        valid: false,
         accountStatus: 'UNCONFIGURED',
         errorCode: 'VTU_CREDENTIALS_MISSING',
         message: 'VTU.ng credentials not configured; live customer verification unavailable.'
