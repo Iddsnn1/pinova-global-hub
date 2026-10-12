@@ -3034,52 +3034,31 @@ app.post('/api/v2/utility/vtu/requery', paymentRateLimiter, async (_req, res) =>
   });
 });
 
-// VTU.ng Webhook / Status Callback Endpoint with Signature Verification
+// VTU.ng Webhook / Status Callback Endpoint.
+// Signature verification is enabled, but state mutation stays disabled until webhook
+// request IDs are reconciled against durable Neon invoice/fulfillment records. The
+// legacy utilityFulfillmentRepo is process-local and must not be treated as authority.
 app.post('/api/v2/utility/vtu/webhook', (req, res) => {
-  try {
-    const rawSignature = (req.headers['x-vtu-signature'] || req.headers['signature'] || req.headers['x-signature']) as string | undefined;
-    const rawBodyBuffer = (req as any).rawBody;
-    if (!Buffer.isBuffer(rawBodyBuffer)) {
-      res.status(400).json({ success: false, error: 'RAW_WEBHOOK_BODY_REQUIRED' });
-      return;
-    }
-    const rawBody = rawBodyBuffer.toString('utf8');
-
-    // Verify the provider signature against the exact request bytes.
-    const isSignatureValid = vtuNgAdapter.verifyWebhookSignature(rawBody, rawSignature);
-    if (!isSignatureValid) {
-      console.warn('[VTU.ng Webhook] Rejected incoming webhook with invalid signature');
-      res.status(401).json({ success: false, error: 'INVALID_WEBHOOK_SIGNATURE' });
-      return;
-    }
-
-    const { request_id, order_id, status, token, units } = req.body || {};
-    if (request_id) {
-      // Find and idempotently update transaction status if registered
-      const existing = utilityFulfillmentRepo.findByKey(request_id);
-      if (existing) {
-        const normalizedStatus = String(status || '').toUpperCase();
-        const updatedStatus = normalizedStatus === 'SUCCESS' || normalizedStatus === 'COMPLETED' ? 'FULFILLED' : (normalizedStatus === 'FAILED' ? 'FAILED' : 'FULFILLMENT_PENDING');
-        
-        utilityFulfillmentRepo.recordTransaction(request_id, {
-          ...existing,
-          status: updatedStatus as any,
-          providerReference: order_id ? String(order_id) : existing.providerReference,
-          metadata: {
-            ...(existing.metadata || {}),
-            token: token || existing.metadata?.token,
-            units: units || existing.metadata?.units,
-            webhookReceivedAt: new Date().toISOString()
-          }
-        });
-      }
-    }
-
-    res.json({ success: true, received: true });
-  } catch (err: any) {
-    console.warn('[VTU.ng Webhook] Processing error:', err.message);
-    res.status(500).json({ success: false, error: 'WEBHOOK_PROCESSING_ERROR' });
+  const rawSignature = (req.headers['x-vtu-signature'] || req.headers['signature'] || req.headers['x-signature']) as string | undefined;
+  const rawBodyBuffer = (req as any).rawBody;
+  if (!Buffer.isBuffer(rawBodyBuffer)) {
+    return res.status(400).json({ success: false, error: 'RAW_WEBHOOK_BODY_REQUIRED' });
   }
+
+  const isSignatureValid = vtuNgAdapter.verifyWebhookSignature(rawBodyBuffer.toString('utf8'), rawSignature);
+  if (!isSignatureValid) {
+    console.warn('[VTU.ng Webhook] Rejected incoming webhook with invalid signature');
+    return res.status(401).json({ success: false, error: 'INVALID_WEBHOOK_SIGNATURE' });
+  }
+
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('Retry-After', '300');
+  return res.status(503).json({
+    success: false,
+    received: false,
+    error: 'UTILITY_WEBHOOK_PERSISTENCE_REQUIRED',
+    message: 'Signed webhook accepted for authentication only; fulfillment status updates remain paused until request IDs are reconciled through durable Neon invoice and fulfillment records.'
+  });
 });
 
 // ==========================================
