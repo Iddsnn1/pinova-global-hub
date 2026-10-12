@@ -64,7 +64,14 @@ export function piAmountToPico(value: unknown): bigint | null {
     }
     if (negative) raw = `-${raw}`;
   }
-  // No signs, separators, exponent notation, or more than 12 decimal places.
+  // Trailing fractional zeroes do not add precision. Trim them before enforcing
+  // the 12-decimal contract, but keep rejecting any non-zero digit beyond pico-Pi.
+  if (typeof value === 'string' && raw.includes('.')) {
+    const [wholePart, fractionPart = ''] = raw.split('.');
+    const trimmedFraction = fractionPart.replace(/0+$/, '');
+    raw = trimmedFraction ? `${wholePart}.${trimmedFraction}` : wholePart;
+  }
+  // No signs, separators, exponent notation, or more than 12 significant decimal places.
   if (!/^(?:0|[1-9]\d*)(?:\.\d{1,12})?$/.test(raw)) return null;
   const [whole, fraction = ''] = raw.split('.');
   try {
