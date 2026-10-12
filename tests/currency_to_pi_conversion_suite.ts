@@ -144,6 +144,14 @@ assert.throws(
   () => getTrustedFxProviderConfig({ PINOVA_FX_PROVIDER_URL: 'http://example.com/rates', PINOVA_FX_PROVIDER_SOURCE: 'fixture-fx-provider' }),
   /FX_PROVIDER_HTTPS_REQUIRED/,
 );
+assert.throws(
+  () => getTrustedFxProviderConfig({ PINOVA_FX_PROVIDER_URL: 'https://api.currencyapi.com/v3/latest', PINOVA_FX_PROVIDER_SOURCE: 'currencyapi.com' }),
+  /FX_PROVIDER_API_KEY_REQUIRED/,
+);
+assert.throws(
+  () => getTrustedFxProviderConfig({ PINOVA_FX_PROVIDER_URL: 'https://api.currencyapi.com/v3/latest', PINOVA_FX_PROVIDER_SOURCE: 'currencyapi.com', PINOVA_FX_PROVIDER_API_KEY: '   ' }),
+  /FX_PROVIDER_API_KEY_REQUIRED/,
+);
 
 // Marketplace display estimates must not silently treat unknown currencies as USD.
 assert.equal(marketplaceService.currencyCalculator.getEstimatedValue(1, 'XOF'), 'Estimate unavailable (XOF; trusted FX quote required)');
