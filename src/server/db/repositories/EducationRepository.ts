@@ -1026,10 +1026,20 @@ export class EducationRepository {
     if (scholarship.eligibleCountries?.length && invoice.countryCode && !scholarship.eligibleCountries.includes(invoice.countryCode)) {
       return { success: false, error: 'SCHOLARSHIP_COUNTRY_NOT_ELIGIBLE' };
     }
+    // Scholarship coverage is denominated in USD, while all invoices currently
+    // accepted by createInvoice are Pi-denominated. Never compare or apply USD
+    // directly to a Pi balance: that silently mixes currencies and can over/under
+    // credit a student's invoice. Keep this operation fail-closed until the
+    // trusted FX quote is incorporated into the scholarship settlement contract.
+    const invoiceCurrency = String(invoice.currency || '').trim().toUpperCase();
+    if (invoiceCurrency !== 'USD') {
+      return { success: false, error: 'SCHOLARSHIP_FX_CONVERSION_REQUIRED' };
+    }
+
     const deduction = Math.min(scholarship.coverageAmountUsd, invoice.outstandingBalance);
     const newAmountPaid = invoice.amountPaid + deduction;
     const newOutstanding = Math.max(0, invoice.totalAmount - newAmountPaid);
-    const newStatus = newOutstanding <= 0.001 ? 'PAID' : 'PARTIALLY_PAID';
+    const newStatus = newOutstanding === 0 ? 'PAID' : 'PARTIALLY_PAID';
 
     const updated: EducationInvoice = {
       ...invoice,
