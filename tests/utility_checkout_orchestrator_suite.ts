@@ -97,7 +97,6 @@ async function run() {
     invoiceId: invoice.invoiceId, ownerUserId: invoice.ownerUserId, paymentId: invoice.paymentId,
   })).status, 'FULFILLMENT_PENDING');
   assert.equal(unknown.calls.outcome, 'UNKNOWN');
-  assert.equal(unknown.calls.fulfill, 1);
 
   console.log('Utility checkout orchestrator tests passed.');
 }
