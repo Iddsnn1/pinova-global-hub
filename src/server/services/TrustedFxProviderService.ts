@@ -108,6 +108,8 @@ export async function fetchTrustedFxQuote(
   const endpoint = parseEndpoint(config.endpoint);
   const isCurrencyApi = endpoint.hostname === 'api.currencyapi.com';
   if (isCurrencyApi && config.source !== 'currencyapi.com') throw new Error('FX_SOURCE_UNTRUSTED');
+  // CurrencyAPI requires a server-side key; never make an anonymous request or fall back.
+  if (isCurrencyApi && !String(config.apiKey || '').trim()) throw new Error('FX_PROVIDER_API_KEY_REQUIRED');
   const currency = String(currencyCode || '').trim().toUpperCase();
   if (!/^[A-Z]{3}$/.test(currency)) throw new Error('FX_CURRENCY_INVALID');
   if (isCurrencyApi) {
@@ -155,7 +157,10 @@ export function getTrustedFxProviderConfig(env: Record<string, string | undefine
   const apiKey = env.PINOVA_FX_PROVIDER_API_KEY?.trim() || undefined;
   if (!endpoint) throw new Error('FX_PROVIDER_ENDPOINT_NOT_CONFIGURED');
   if (!source) throw new Error('FX_TRUSTED_SOURCE_NOT_CONFIGURED');
-  parseEndpoint(endpoint);
+  const parsedEndpoint = parseEndpoint(endpoint);
+  if (parsedEndpoint.hostname === 'api.currencyapi.com' && !apiKey) {
+    throw new Error('FX_PROVIDER_API_KEY_REQUIRED');
+  }
   return { endpoint, source, apiKey, timeoutMs: 5000, maxAgeMs: DEFAULT_MAX_TRUSTED_FX_AGE_MS };
 }
 
