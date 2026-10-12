@@ -399,6 +399,32 @@ export class EducationRepository {
     return crypto.createHash('sha256').update(canonicalPayload).digest('hex');
   }
 
+  /** Legacy canonical payload retained so receipts created before v2 remain verifiable. */
+  public static computeLegacyReceiptDigest(params: {
+    receiptReference: string;
+    invoiceReference: string;
+    paymentId?: string;
+    studentId?: string;
+    institutionId: string;
+    amount: number;
+    currency: string;
+    paymentTimestamp: string;
+    settlementStatus: string;
+  }): string {
+    const canonicalPayload = [
+      (params.receiptReference || '').trim().toUpperCase(),
+      (params.invoiceReference || '').trim(),
+      (params.paymentId || '').trim(),
+      (params.studentId || '').trim(),
+      (params.institutionId || '').trim(),
+      Number(params.amount).toFixed(2),
+      (params.currency || 'PI').trim().toUpperCase(),
+      (params.paymentTimestamp || '').trim(),
+      (params.settlementStatus || 'SETTLED').trim().toUpperCase()
+    ].join('|');
+    return crypto.createHash('sha256').update(canonicalPayload).digest('hex');
+  }
+
   // --- Payments & Tamper-Evident Receipts ---
   public recordPayment(params: {
     invoiceId: string;
@@ -617,7 +643,7 @@ export class EducationRepository {
       receiptNumber,
       verificationReference: verificationRef,
       verificationHash: auditHash,
-      algorithm: 'SHA-256',
+      algorithm: 'SHA-256-v2',
       invoiceId: invoice.id,
       invoiceNumber: invoice.invoiceNumber,
       paymentId,
@@ -711,7 +737,7 @@ export class EducationRepository {
     }
 
     // Phase 12: authoritatively recompute canonical digest from record fields
-    const expectedDigest = EducationRepository.computeReceiptDigest({
+    const digestParams = {
       receiptReference: receipt.receiptNumber,
       invoiceReference: receipt.invoiceNumber || receipt.invoiceId,
       paymentId: receipt.paymentId || receipt.piPaymentId || '',
@@ -725,7 +751,11 @@ export class EducationRepository {
       paymentMethod: receipt.paymentMethod,
       paymentTimestamp: receipt.paymentDate,
       settlementStatus: receipt.settlementStatus || 'SETTLED'
-    });
+    };
+    // Keep legacy receipts verifiable without weakening v2 metadata binding.
+    const expectedDigest = receipt.algorithm === 'SHA-256-v2'
+      ? EducationRepository.computeReceiptDigest(digestParams)
+      : EducationRepository.computeLegacyReceiptDigest(digestParams);
 
     const isTampered = expectedDigest !== receipt.verificationHash;
     if (isTampered) {
