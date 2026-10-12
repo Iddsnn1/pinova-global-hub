@@ -5,6 +5,8 @@ export * from './repositories/PstpAuditRepository';
 export * from './repositories/PstpDisputeRepository';
 export * from './repositories/FlightFulfillmentRepository';
 export * from './repositories/UtilityFulfillmentRepository';
+// Export the durable Neon invoice repository without eagerly creating a DB pool.
+export * from './repositories/NeonUtilityInvoiceRepository';
 export * from './repositories/SecurityEventRepository';
 export * from './repositories/IdempotencyRepository';
 export * from './repositories/PlatformConfigRepository';
