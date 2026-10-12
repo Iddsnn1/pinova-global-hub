@@ -118,10 +118,18 @@ async function run() {
     numberOfAwards: 1,
     applicationCount: 0
   });
+  const invoiceBeforeScholarship = repo.getInvoiceById(precisionInvoice.id);
   const scholarshipCurrencyGuard = repo.applyScholarshipToInvoice(precisionInvoice.id, scholarship.id);
+  const invoiceAfterScholarship = repo.getInvoiceById(precisionInvoice.id);
   ok(
     !scholarshipCurrencyGuard.success && scholarshipCurrencyGuard.error === 'SCHOLARSHIP_FX_CONVERSION_REQUIRED',
     'USD scholarship is not applied directly to a Pi-denominated invoice'
+  );
+  ok(
+    invoiceBeforeScholarship?.amountPaid === invoiceAfterScholarship?.amountPaid &&
+      invoiceBeforeScholarship?.outstandingBalance === invoiceAfterScholarship?.outstandingBalance &&
+      invoiceBeforeScholarship?.status === invoiceAfterScholarship?.status,
+    'rejected cross-currency scholarship leaves invoice balance and status unchanged'
   );
 
   let picoOverpaymentRejected = false;
