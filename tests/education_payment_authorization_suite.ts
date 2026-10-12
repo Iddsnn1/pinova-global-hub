@@ -264,6 +264,14 @@ async function run() {
   const tampered = repo.verifyReceipt(receiptNumber);
   ok(tampered.status === 'TAMPERED' && !tampered.valid, 'receipt amount mutation fails SHA-256 verification');
 
+  const precisionReceipt = repo.getReceiptByNumber(almostPaid.receipt.receiptNumber)!;
+  precisionReceipt.piTxid = 'tampered-transaction-id';
+  const piMetadataTampered = repo.verifyReceipt(precisionReceipt.receiptNumber);
+  ok(
+    piMetadataTampered.status === 'TAMPERED' && !piMetadataTampered.valid,
+    'receipt Pi transaction metadata mutation fails SHA-256 verification'
+  );
+
   setJambCapsAuthoritativeAdapter(null);
   const noAdapter = await verifyJambCapsAuthorization({
     candidateReference: 'JAMB-TEST-001',
