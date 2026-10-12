@@ -3670,7 +3670,8 @@ app.post('/api/education/invoices/pay', paymentRateLimiter, authenticate, async 
     const result = educationRepo.recordPayment({
       invoiceId,
       amountPaid: numericAmount,
-      currency,
+      // The invoice is the currency authority; never persist a client-supplied currency label.
+      currency: invoiceCurrency,
       piAmount: Number(req.body.piAmount),
       piPaymentId,
       piTxid: req.body.piTxid,
@@ -3687,7 +3688,7 @@ app.post('/api/education/invoices/pay', paymentRateLimiter, authenticate, async 
       actor: payerUsername,
       actorRole: 'payer',
       action: 'EDUCATION_FEE_PAID',
-      details: `Paid ${numericAmount} ${currency} (Pi: ${result.payment.piAmount}) for student ${invoice.studentName}`,
+      details: `Paid ${numericAmount} ${invoiceCurrency} (Pi: ${result.payment.piAmount}) for student ${invoice.studentName}`,
       ipAddress: req.ip || '127.0.0.1',
       deviceInfo: (req.headers['user-agent'] as string) || 'Pi Browser Web'
     });
