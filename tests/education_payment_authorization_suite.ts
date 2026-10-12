@@ -178,6 +178,7 @@ async function run() {
     'receipt digest distinguishes amounts differing by one pico-Pi'
   );
 
+  const paymentCountBeforeReplay = repo.getAllPayments().length;
   const replay = repo.recordPayment({
     invoiceId: invoice.id,
     amountPaid: 3.5,
@@ -200,7 +201,7 @@ async function run() {
     }
   });
   ok(replay.payment.id === first.payment.id, 'exact replay returns the original settlement');
-  ok(repo.getAllPayments().length === 1, 'exact replay does not create a second payment');
+  ok(repo.getAllPayments().length === paymentCountBeforeReplay, 'exact replay does not create a second payment');
 
   let replayMismatchRejected = false;
   try {
