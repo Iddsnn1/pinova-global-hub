@@ -3,6 +3,8 @@ import crypto from 'node:crypto';
 import { VtuNgAdapter } from '../src/server/integrations/vtuNgAdapter';
 
 const previousPin = process.env.VTU_USER_PIN;
+const previousUsername = process.env.VTU_USERNAME;
+const previousPassword = process.env.VTU_PASSWORD;
 
 function signature(secret: string, body: string): string {
   return crypto.createHmac('sha256', secret).update(body).digest('hex');
@@ -10,7 +12,14 @@ function signature(secret: string, body: string): string {
 
 try {
   delete process.env.VTU_USER_PIN;
+  delete process.env.VTU_USERNAME;
+  delete process.env.VTU_PASSWORD;
   const noSecret = new VtuNgAdapter();
+  const unconfiguredCustomer = await noSecret.verifyCustomer('mtn', '08000000000');
+  assert.equal(unconfiguredCustomer.success, false,
+    'missing provider credentials must not report a successful customer verification');
+  assert.equal(unconfiguredCustomer.valid, false,
+    'missing provider credentials must not mark the customer as valid');
   const body = '{ "request_id": "PNV-1", "status": "SUCCESS" }';
   assert.equal(noSecret.verifyWebhookSignature(body, signature('secret', body)), false,
     'missing webhook secret must reject even a correctly formed signature');
@@ -36,4 +45,8 @@ try {
 } finally {
   if (previousPin === undefined) delete process.env.VTU_USER_PIN;
   else process.env.VTU_USER_PIN = previousPin;
+  if (previousUsername === undefined) delete process.env.VTU_USERNAME;
+  else process.env.VTU_USERNAME = previousUsername;
+  if (previousPassword === undefined) delete process.env.VTU_PASSWORD;
+  else process.env.VTU_PASSWORD = previousPassword;
 }
