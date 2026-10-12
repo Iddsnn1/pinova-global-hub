@@ -41,9 +41,30 @@ export interface UtilityPaymentAuthorizationResult {
 /** Convert a plain decimal amount to integer pico-Pi units without float math. */
 export function piAmountToPico(value: unknown): bigint | null {
   if (typeof value !== 'string' && typeof value !== 'number') return null;
-  if (typeof value === 'number' && !Number.isFinite(value)) return null;
-  const raw = String(value).trim();
-  // No exponent notation, signs, separators, or more than 12 decimal places.
+  if (typeof value === 'number' && (!Number.isFinite(value) || value < 0 || value >= 1e21)) return null;
+  let raw = String(value).trim();
+  // JavaScript may stringify small finite numbers in exponent notation. Expand
+  // that representation only for numeric inputs; caller-supplied strings with
+  // exponent notation remain invalid. Then enforce the 12-decimal contract.
+  if (typeof value === 'number' && /e/i.test(raw)) {
+    const [mantissa, exponentText] = raw.toLowerCase().split('e');
+    const exponent = Number(exponentText);
+    if (!Number.isInteger(exponent)) return null;
+    const negative = mantissa.startsWith('-');
+    const unsigned = negative ? mantissa.slice(1) : mantissa;
+    const [wholePart, fractionPart = ''] = unsigned.split('.');
+    const digits = wholePart + fractionPart;
+    const decimalPosition = wholePart.length + exponent;
+    if (decimalPosition <= 0) {
+      raw = `0.${'0'.repeat(-decimalPosition)}${digits}`;
+    } else if (decimalPosition >= digits.length) {
+      raw = `${digits}${'0'.repeat(decimalPosition - digits.length)}`;
+    } else {
+      raw = `${digits.slice(0, decimalPosition)}.${digits.slice(decimalPosition)}`;
+    }
+    if (negative) raw = `-${raw}`;
+  }
+  // No signs, separators, exponent notation, or more than 12 decimal places.
   if (!/^(?:0|[1-9]\d*)(?:\.\d{1,12})?$/.test(raw)) return null;
   const [whole, fraction = ''] = raw.split('.');
   try {
