@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { piAmountToPico } from '../../services/UtilityPaymentAuthorizationService';
 import { StorageEngine } from '../StorageEngine';
 import {
   InstitutionProfile,
@@ -427,9 +428,17 @@ export class EducationRepository {
         if (!settlement || settlement.verified !== true) throw new Error('PI_SETTLEMENT_PROOF_REQUIRED');
         if (process.env.NODE_ENV === 'production' && settlement.source !== 'pi_platform') throw new Error('PI_PLATFORM_VERIFICATION_REQUIRED');
         if (settlement.paymentId !== String(params.piPaymentId || '')) throw new Error('PI_SETTLEMENT_ID_MISMATCH');
-        if (!Number.isFinite(settlement.amount) ||
-            Math.abs(settlement.amount - Number(params.piAmount)) > 0.000000000001 ||
-            Math.abs(settlement.amount - Number(params.amountPaid)) > 0.000000000001) throw new Error('PI_SETTLEMENT_AMOUNT_MISMATCH');
+        const settlementPico = piAmountToPico(settlement.amount);
+        const replayPiAmountPico = piAmountToPico(params.piAmount);
+        const replayPaidAmountPico = piAmountToPico(params.amountPaid);
+        if (
+          settlementPico === null ||
+          replayPiAmountPico === null ||
+          replayPaidAmountPico === null ||
+          settlementPico <= 0n ||
+          settlementPico !== replayPiAmountPico ||
+          settlementPico !== replayPaidAmountPico
+        ) throw new Error('PI_SETTLEMENT_AMOUNT_MISMATCH');
         if (!settlement.txid || settlement.txid !== String(params.piTxid || '')) throw new Error('PI_SETTLEMENT_TXID_MISMATCH');
         if (!settlement.userUid || !settlement.network || settlement.direction !== 'user_to_app') throw new Error('PI_SETTLEMENT_IDENTITY_INVALID');
       }
@@ -438,8 +447,15 @@ export class EducationRepository {
 
       const sameInvoice = existingPayment.invoiceId === params.invoiceId;
       const sameCurrency = existingPayment.currency.trim().toUpperCase() === String(params.currency || '').trim().toUpperCase();
-      const sameAmount = Math.abs(existingPayment.amountPaid - params.amountPaid) <= 0.00000001;
-      const samePiAmount = Math.abs(existingPayment.piAmount - Number(params.piAmount ?? 0)) <= 0.00000001;
+      const sameAmount = sameCurrency && sameCurrency === 'PI'
+        ? piAmountToPico(existingPayment.amountPaid) !== null &&
+          piAmountToPico(existingPayment.amountPaid) === piAmountToPico(params.amountPaid)
+        : Math.abs(existingPayment.amountPaid - params.amountPaid) <= 0.00000001;
+      const existingPiAmountPico = piAmountToPico(existingPayment.piAmount);
+      const requestedPiAmountPico = piAmountToPico(params.piAmount ?? 0);
+      const samePiAmount = existingPiAmountPico !== null &&
+        requestedPiAmountPico !== null &&
+        existingPiAmountPico === requestedPiAmountPico;
       const samePiPayment = (existingPayment.piPaymentId || '') === (params.piPaymentId || '');
       const samePayer = existingPayment.payerUsername.trim().toLowerCase() === params.payerUsername.trim().toLowerCase();
 
@@ -470,9 +486,17 @@ export class EducationRepository {
       if (!settlement || settlement.verified !== true) throw new Error('PI_SETTLEMENT_PROOF_REQUIRED');
       if (process.env.NODE_ENV === 'production' && settlement.source !== 'pi_platform') throw new Error('PI_PLATFORM_VERIFICATION_REQUIRED');
       if (settlement.paymentId !== params.piPaymentId) throw new Error('PI_SETTLEMENT_ID_MISMATCH');
-      if (!Number.isFinite(settlement.amount) || settlement.amount <= 0 ||
-          Math.abs(settlement.amount - Number(params.piAmount)) > 0.000000000001 ||
-          Math.abs(settlement.amount - Number(params.amountPaid)) > 0.000000000001) throw new Error('PI_SETTLEMENT_AMOUNT_MISMATCH');
+      const settlementPico = piAmountToPico(settlement.amount);
+      const submittedPiPico = piAmountToPico(params.piAmount);
+      const paidAmountPico = piAmountToPico(params.amountPaid);
+      if (
+        settlementPico === null ||
+        submittedPiPico === null ||
+        paidAmountPico === null ||
+        settlementPico <= 0n ||
+        settlementPico !== submittedPiPico ||
+        settlementPico !== paidAmountPico
+      ) throw new Error('PI_SETTLEMENT_AMOUNT_MISMATCH');
       if (!settlement.txid || settlement.txid !== String(params.piTxid || '')) throw new Error('PI_SETTLEMENT_TXID_MISMATCH');
       if (!settlement.userUid || !settlement.network || settlement.direction !== 'user_to_app') throw new Error('PI_SETTLEMENT_IDENTITY_INVALID');
       const invoiceCurrency = String(invoice.currency || '').trim().toUpperCase();
@@ -484,12 +508,19 @@ export class EducationRepository {
       const submittedPiAmount = Number(params.piAmount);
       if (!Number.isFinite(paidPiAmount) || paidPiAmount <= 0) throw new Error('PI_AMOUNT_REQUIRED');
       if (!Number.isFinite(submittedPiAmount) || submittedPiAmount <= 0) throw new Error('PI_AMOUNT_REQUIRED');
-      if (Math.abs(submittedPiAmount - paidPiAmount) > 0.000000000001) throw new Error('PI_AMOUNT_MISMATCH');
+      if (piAmountToPico(submittedPiAmount) !== piAmountToPico(paidPiAmount)) throw new Error('PI_AMOUNT_MISMATCH');
     }
 
     // Phase 10: Prevent overpayment beyond outstanding balance
-    if (params.amountPaid > invoice.outstandingBalance + 0.001) {
-      throw new Error(`Payment amount (${params.amountPaid} π) exceeds outstanding balance (${invoice.outstandingBalance} π). Overpayment rejected.`);
+    const requestedPaymentPico = piAmountToPico(params.amountPaid);
+    const outstandingBalancePico = piAmountToPico(invoice.outstandingBalance);
+    if (
+      requestedPaymentPico === null ||
+      outstandingBalancePico === null ||
+      requestedPaymentPico <= 0n ||
+      requestedPaymentPico > outstandingBalancePico
+    ) {
+      throw new Error(`Payment amount (${params.amountPaid} π) exceeds or cannot be represented within outstanding balance (${invoice.outstandingBalance} π). Overpayment rejected.`);
     }
 
     const timestamp = new Date().toISOString();
