@@ -3369,17 +3369,25 @@ app.get('/api/education/invoices/:id', authenticate, (req: AuthenticatedRequest,
       return;
     }
     const roles = req.user?.roles || [];
-    const isAdmin = roles.some((r: string) => ['PLATFORM_ADMIN', 'BURSAR', 'FINANCE_ADMIN', 'INSTITUTION_ADMIN'].includes(r));
     const currentUser = req.user?.username;
     const currentUserId = req.user?.id;
-    const authorized = isAdmin ||
-      Boolean(req.user?.institutionId && req.user.institutionId === invoice.institutionId) ||
-      Boolean(currentUser && invoice.guardianId && invoice.guardianId.toLowerCase() === currentUser.toLowerCase()) ||
-      Boolean(currentUserId && invoice.guardianId === currentUserId) ||
-      Boolean(req.user?.guardianId && invoice.guardianId && req.user.guardianId.toLowerCase() === invoice.guardianId.toLowerCase()) ||
-      Boolean(currentUser && invoice.studentId && invoice.studentId.toLowerCase() === currentUser.toLowerCase()) ||
-      Boolean(currentUserId && invoice.studentId === currentUserId) ||
-      false;
+    const isPlatformAdmin = roles.includes('PLATFORM_ADMIN');
+    const isInstitutionStaff = Boolean(
+      roles.some((role: string) => ['BURSAR', 'FINANCE_ADMIN', 'INSTITUTION_ADMIN'].includes(role)) &&
+      req.user?.institutionId &&
+      req.user.institutionId === invoice.institutionId
+    );
+    const isGuardianOwner = Boolean(
+      (currentUser && invoice.guardianId && invoice.guardianId.toLowerCase() === currentUser.toLowerCase()) ||
+      (currentUserId && invoice.guardianId === currentUserId) ||
+      (req.user?.guardianId && invoice.guardianId && req.user.guardianId.toLowerCase() === invoice.guardianId.toLowerCase())
+    );
+    const isStudentOwner = Boolean(
+      (currentUser && invoice.studentId && invoice.studentId.toLowerCase() === currentUser.toLowerCase()) ||
+      (currentUserId && invoice.studentId === currentUserId) ||
+      ((req.user as any)?.studentId && invoice.studentId && (req.user as any).studentId.toLowerCase() === invoice.studentId.toLowerCase())
+    );
+    const authorized = isPlatformAdmin || isInstitutionStaff || isGuardianOwner || isStudentOwner;
     if (!authorized) {
       res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Access denied to this invoice.' });
       return;
@@ -3710,8 +3718,12 @@ app.get('/api/education/invoices/:id/payments', authenticate, (req: Authenticate
     const currentUser = req.user?.username;
     const currentUserId = req.user?.id;
     const userRoles = req.user?.roles || [];
-    const isPlatformAdmin = userRoles.includes('PLATFORM_ADMIN') || userRoles.includes('BURSAR') || userRoles.includes('FINANCE_ADMIN');
-    const isInstitutionStaff = Boolean(req.user?.institutionId && req.user.institutionId === invoice.institutionId);
+    const isPlatformAdmin = userRoles.includes('PLATFORM_ADMIN');
+    const isInstitutionStaff = Boolean(
+      userRoles.some((role: string) => ['BURSAR', 'FINANCE_ADMIN', 'INSTITUTION_ADMIN'].includes(role)) &&
+      req.user?.institutionId &&
+      req.user.institutionId === invoice.institutionId
+    );
 
     const isGuardianOwner = Boolean(
       (currentUser && invoice.guardianId && invoice.guardianId.toLowerCase() === currentUser.toLowerCase()) ||
@@ -3721,12 +3733,11 @@ app.get('/api/education/invoices/:id/payments', authenticate, (req: Authenticate
     const isStudentOwner = Boolean(
       (currentUser && invoice.studentId && invoice.studentId.toLowerCase() === currentUser.toLowerCase()) ||
       (currentUserId && invoice.studentId && invoice.studentId === currentUserId) ||
-      (currentUser && invoice.studentName && invoice.studentName.toLowerCase() === currentUser.toLowerCase()) ||
       ((req.user as any)?.studentId && invoice.studentId && (req.user as any).studentId.toLowerCase() === invoice.studentId.toLowerCase())
     );
     const isAuthorized = isPlatformAdmin || isInstitutionStaff || isGuardianOwner || isStudentOwner;
 
-    if (isProduction && !isAuthorized) {
+    if (!isAuthorized) {
       res.status(403).json({
         success: false,
         error: 'FORBIDDEN',
