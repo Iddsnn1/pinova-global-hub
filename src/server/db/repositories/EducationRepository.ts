@@ -508,7 +508,13 @@ export class EducationRepository {
       const submittedPiAmount = Number(params.piAmount);
       if (!Number.isFinite(paidPiAmount) || paidPiAmount <= 0) throw new Error('PI_AMOUNT_REQUIRED');
       if (!Number.isFinite(submittedPiAmount) || submittedPiAmount <= 0) throw new Error('PI_AMOUNT_REQUIRED');
-      if (piAmountToPico(submittedPiAmount) !== piAmountToPico(paidPiAmount)) throw new Error('PI_AMOUNT_MISMATCH');
+      const submittedPiAmountPico = piAmountToPico(submittedPiAmount);
+      const paidPiAmountPico = piAmountToPico(paidPiAmount);
+      if (
+        submittedPiAmountPico === null ||
+        paidPiAmountPico === null ||
+        submittedPiAmountPico !== paidPiAmountPico
+      ) throw new Error('PI_AMOUNT_MISMATCH');
     }
 
     // Phase 10: Prevent overpayment beyond outstanding balance
