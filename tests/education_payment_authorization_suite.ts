@@ -102,6 +102,28 @@ async function run() {
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
   });
+  const scholarship = repo.createScholarship({
+    title: 'Currency guard test scholarship',
+    sponsorName: 'Test sponsor',
+    sponsorType: 'institution',
+    badge: 'TEST',
+    description: 'Regression fixture',
+    coverageType: 'Partial Tuition (50%)',
+    amountValue: '$100 / Year',
+    coverageAmountUsd: 100,
+    applicableTiers: ['tertiary'],
+    eligibleCountries: ['NG'],
+    deadline: '2026-12-31T00:00:00.000Z',
+    eligibilityCriteria: [],
+    numberOfAwards: 1,
+    applicationCount: 0
+  });
+  const scholarshipCurrencyGuard = repo.applyScholarshipToInvoice(precisionInvoice.id, scholarship.id);
+  ok(
+    !scholarshipCurrencyGuard.success && scholarshipCurrencyGuard.error === 'SCHOLARSHIP_FX_CONVERSION_REQUIRED',
+    'USD scholarship is not applied directly to a Pi-denominated invoice'
+  );
+
   let picoOverpaymentRejected = false;
   try {
     repo.recordPayment({
