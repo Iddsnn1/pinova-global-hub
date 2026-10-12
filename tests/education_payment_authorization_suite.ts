@@ -47,6 +47,25 @@ async function run() {
     updatedAt: new Date().toISOString()
   });
 
+  const picoInvoice = repo.createInvoice({
+    ...invoice,
+    id: 'inv-edu-security-pico-001',
+    invoiceNumber: 'INV/EDU/SEC/PICO/001',
+    items: [{ id: 'fee-pico', category: 'tuition', description: 'Pico-Pi precision fixture', amount: 0.000000000001, isCompulsory: true }],
+    subtotal: 0.000000000001,
+    discountAmount: 0,
+    taxAmount: 0,
+    totalAmount: 0.000000000001,
+    amountPaid: 0,
+    outstandingBalance: 0.000000000001,
+    currency: 'PI',
+    status: 'UNPAID'
+  });
+  ok(
+    picoInvoice.totalAmount === 0.000000000001 && picoInvoice.outstandingBalance === 0.000000000001,
+    'invoice creation preserves one pico-Pi instead of rounding it to zero'
+  );
+
   const first = repo.recordPayment({
     invoiceId: invoice.id,
     amountPaid: 3.5,
