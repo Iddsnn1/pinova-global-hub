@@ -130,6 +130,54 @@ async function run() {
   }
   ok(picoOverpaymentRejected, 'overpayment of exactly one pico-Pi is rejected');
 
+  const almostPaid = repo.recordPayment({
+    invoiceId: precisionInvoice.id,
+    amountPaid: 3.499999999999,
+    currency: 'PI',
+    piAmount: 3.499999999999,
+    piPaymentId: 'pi-pay-security-almost-paid',
+    piTxid: 'tx-security-almost-paid',
+    paymentMethod: 'PI_NETWORK',
+    payerUsername: 'guardian-001',
+    idempotencyKey: 'edu-idem-almost-paid',
+    authoritativePiSettlement: {
+      verified: true,
+      source: 'sandbox_dev',
+      paymentId: 'pi-pay-security-almost-paid',
+      amount: 3.499999999999,
+      txid: 'tx-security-almost-paid',
+      userUid: 'sandbox-user-001',
+      network: 'Pi Testnet',
+      direction: 'user_to_app'
+    }
+  });
+  ok(almostPaid.invoice.status === 'PARTIALLY_PAID', 'one pico-Pi outstanding keeps invoice partially paid');
+  ok(almostPaid.invoice.outstandingBalance === 0.000000000001, 'one pico-Pi outstanding is preserved exactly');
+  ok(
+    EducationRepository.computeReceiptDigest({
+      receiptReference: 'RCP-PRECISION',
+      invoiceReference: 'INV-PRECISION',
+      paymentId: 'PAY-PRECISION',
+      studentId: 'student-001',
+      institutionId: 'inst-001',
+      amount: 0.000000000001,
+      currency: 'PI',
+      paymentTimestamp: '2026-10-12T00:00:00.000Z',
+      settlementStatus: 'SETTLED'
+    }) !== EducationRepository.computeReceiptDigest({
+      receiptReference: 'RCP-PRECISION',
+      invoiceReference: 'INV-PRECISION',
+      paymentId: 'PAY-PRECISION',
+      studentId: 'student-001',
+      institutionId: 'inst-001',
+      amount: 0.000000000002,
+      currency: 'PI',
+      paymentTimestamp: '2026-10-12T00:00:00.000Z',
+      settlementStatus: 'SETTLED'
+    }),
+    'receipt digest distinguishes amounts differing by one pico-Pi'
+  );
+
   const replay = repo.recordPayment({
     invoiceId: invoice.id,
     amountPaid: 3.5,
