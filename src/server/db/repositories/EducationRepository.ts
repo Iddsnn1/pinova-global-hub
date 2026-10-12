@@ -368,6 +368,10 @@ export class EducationRepository {
     currency: string;
     paymentTimestamp: string;
     settlementStatus: string;
+    piAmount?: number;
+    piPaymentId?: string;
+    piTxid?: string;
+    paymentMethod?: string;
   }): string {
     const currency = (params.currency || 'PI').trim().toUpperCase();
     // Pi receipts must preserve all 12 decimal places; formatting to 2 decimals
@@ -384,6 +388,10 @@ export class EducationRepository {
       (params.institutionId || '').trim(),
       canonicalAmount,
       currency,
+      (params.piAmount === undefined ? '' : (piAmountToPico(params.piAmount)?.toString() ?? 'INVALID_PI_AMOUNT')),
+      (params.piPaymentId || '').trim(),
+      (params.piTxid || '').trim(),
+      (params.paymentMethod || '').trim().toUpperCase(),
       (params.paymentTimestamp || '').trim(),
       (params.settlementStatus || 'SETTLED').trim().toUpperCase()
     ].join('|');
@@ -556,6 +564,10 @@ export class EducationRepository {
       institutionId: invoice.institutionId,
       amount: params.amountPaid,
       currency: params.currency,
+      piAmount: params.piAmount,
+      piPaymentId: params.piPaymentId,
+      piTxid: params.piTxid,
+      paymentMethod: params.paymentMethod,
       paymentTimestamp: timestamp,
       settlementStatus: 'SETTLED'
     });
@@ -707,6 +719,10 @@ export class EducationRepository {
       institutionId: receipt.institutionId,
       amount: receipt.amountPaid,
       currency: receipt.currency,
+      piAmount: receipt.piAmount,
+      piPaymentId: receipt.piPaymentId,
+      piTxid: receipt.piTxid,
+      paymentMethod: receipt.paymentMethod,
       paymentTimestamp: receipt.paymentDate,
       settlementStatus: receipt.settlementStatus || 'SETTLED'
     });
