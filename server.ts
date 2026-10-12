@@ -186,7 +186,13 @@ const PORT = process.env.DEFAULT_APP_PORT
   ? Number(process.env.DEFAULT_APP_PORT) 
   : (process.env.NGINX_PORT ? 3000 : (Number(process.env.PORT) || 3000));
 
-app.use(express.json());
+app.use(express.json({
+  // Preserve the exact bytes for provider webhook HMAC verification.
+  // Re-serializing req.body can change whitespace/key order and invalidate the signature.
+  verify: (req: any, _res, buf) => {
+    req.rawBody = Buffer.from(buf);
+  }
+}));
 
 // Initialize core server-side services
 const auditService = AuditService.getInstance(pstpAuditRepo);
@@ -3032,9 +3038,14 @@ app.post('/api/v2/utility/vtu/requery', paymentRateLimiter, async (_req, res) =>
 app.post('/api/v2/utility/vtu/webhook', (req, res) => {
   try {
     const rawSignature = (req.headers['x-vtu-signature'] || req.headers['signature'] || req.headers['x-signature']) as string | undefined;
-    const rawBody = JSON.stringify(req.body || {});
-    
-    // Validate signature using VTU_USER_PIN if configured
+    const rawBodyBuffer = (req as any).rawBody;
+    if (!Buffer.isBuffer(rawBodyBuffer)) {
+      res.status(400).json({ success: false, error: 'RAW_WEBHOOK_BODY_REQUIRED' });
+      return;
+    }
+    const rawBody = rawBodyBuffer.toString('utf8');
+
+    // Verify the provider signature against the exact request bytes.
     const isSignatureValid = vtuNgAdapter.verifyWebhookSignature(rawBody, rawSignature);
     if (!isSignatureValid) {
       console.warn('[VTU.ng Webhook] Rejected incoming webhook with invalid signature');
