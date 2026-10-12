@@ -285,6 +285,7 @@ export class EducationRepository {
     discount?: number;
     scholarship?: number;
     tax?: number;
+    currency?: string;
   }): {
     subtotal: number;
     compulsoryFees: number;
@@ -294,19 +295,23 @@ export class EducationRepository {
     tax: number;
     totalAmount: number;
   } {
-    const round2 = (num: number) => Math.round((num + Number.EPSILON) * 100) / 100;
-    const subtotal = Math.max(0, round2(params.subtotal || 0));
-    const compulsoryFees = Math.max(0, round2(params.compulsoryFees || 0));
-    const optionalFees = Math.max(0, round2(params.optionalFees || 0));
-    const discount = Math.max(0, round2(params.discount || 0));
-    const scholarship = Math.max(0, round2(params.scholarship || 0));
-    const tax = Math.max(0, round2(params.tax || 0));
+    // Education invoices are Pi-native. Preserve pico-Pi (12 decimal places)
+    // instead of applying fiat's 2-decimal rounding to Pi values.
+    const decimals = String(params.currency || 'USD').trim().toUpperCase() === 'PI' ? 12 : 2;
+    const scale = 10 ** decimals;
+    const roundAmount = (num: number) => Math.round((num + Number.EPSILON) * scale) / scale;
+    const subtotal = Math.max(0, roundAmount(params.subtotal || 0));
+    const compulsoryFees = Math.max(0, roundAmount(params.compulsoryFees || 0));
+    const optionalFees = Math.max(0, roundAmount(params.optionalFees || 0));
+    const discount = Math.max(0, roundAmount(params.discount || 0));
+    const scholarship = Math.max(0, roundAmount(params.scholarship || 0));
+    const tax = Math.max(0, roundAmount(params.tax || 0));
 
-    const totalBeforeDeductions = round2(subtotal + compulsoryFees + optionalFees);
+    const totalBeforeDeductions = roundAmount(subtotal + compulsoryFees + optionalFees);
     const cappedDiscount = Math.min(discount, totalBeforeDeductions);
     const cappedScholarship = Math.min(scholarship, Math.max(0, totalBeforeDeductions - cappedDiscount));
-    const totalDeductions = round2(cappedDiscount + cappedScholarship);
-    const totalAmount = Math.max(0, round2(totalBeforeDeductions - totalDeductions + tax));
+    const totalDeductions = roundAmount(cappedDiscount + cappedScholarship);
+    const totalAmount = Math.max(0, roundAmount(totalBeforeDeductions - totalDeductions + tax));
 
     return {
       subtotal,
@@ -321,16 +326,17 @@ export class EducationRepository {
 
   public createInvoice(invoiceData: EducationInvoice): EducationInvoice {
     // Recompute authoritative totals server-side
-    const totals = EducationRepository.calculateInvoiceTotals({
-      subtotal: invoiceData.subtotal,
-      discount: invoiceData.discountAmount,
-      tax: invoiceData.taxAmount
-    });
-
     const invoiceCurrency = String(invoiceData.currency || '').trim().toUpperCase();
     if (invoiceCurrency !== 'PI') {
       throw new Error('PI_NATIVE_INVOICE_REQUIRED');
     }
+
+    const totals = EducationRepository.calculateInvoiceTotals({
+      subtotal: invoiceData.subtotal,
+      discount: invoiceData.discountAmount,
+      tax: invoiceData.taxAmount,
+      currency: invoiceCurrency
+    });
 
     const invoice: EducationInvoice = {
       ...invoiceData,
