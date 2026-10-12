@@ -447,7 +447,7 @@ export class EducationRepository {
 
       const sameInvoice = existingPayment.invoiceId === params.invoiceId;
       const sameCurrency = existingPayment.currency.trim().toUpperCase() === String(params.currency || '').trim().toUpperCase();
-      const sameAmount = sameCurrency && sameCurrency === 'PI'
+      const sameAmount = String(params.currency || '').trim().toUpperCase() === 'PI'
         ? piAmountToPico(existingPayment.amountPaid) !== null &&
           piAmountToPico(existingPayment.amountPaid) === piAmountToPico(params.amountPaid)
         : Math.abs(existingPayment.amountPaid - params.amountPaid) <= 0.00000001;
