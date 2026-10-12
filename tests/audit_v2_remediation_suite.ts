@@ -345,7 +345,7 @@ async function runTestSuite() {
       }
     });
   } catch (err: any) {
-    if (err.message.includes('exceeds outstanding balance')) {
+    if (err.message.includes('outstanding balance') && err.message.includes('Overpayment rejected')) {
       overpaymentBlocked = true;
     }
   }
