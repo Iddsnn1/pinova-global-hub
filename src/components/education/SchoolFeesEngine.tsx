@@ -145,7 +145,7 @@ export const SchoolFeesEngine: React.FC<SchoolFeesEngineProps> = ({
       setErrorMessage('Please enter a valid payment amount greater than zero.');
       return;
     }
-    if (customAmount > selectedInvoice.outstandingBalance + 0.01) {
+    if (customAmount > selectedInvoice.outstandingBalance) {
       setErrorMessage(`Payment amount cannot exceed the remaining Pi balance of ${selectedInvoice.outstandingBalance.toFixed(12)} π.`);
       return;
     }
