@@ -3014,14 +3014,18 @@ app.get('/api/v2/utility/vtu/variations/tv', async (req, res) => {
   res.json(variationsResult);
 });
 
-app.post('/api/v2/utility/vtu/requery', async (req, res) => {
-  const { requestId } = req.body || {};
-  if (!requestId) {
-    res.status(400).json({ success: false, error: 'Missing requestId parameter' });
-    return;
-  }
-  const requeryResult = await vtuNgAdapter.requeryOrder(requestId);
-  res.json(requeryResult);
+// Public requery is intentionally disabled until provider request IDs are resolved
+// through a persistent, owner-bound invoice/fulfillment record. Accepting arbitrary
+// request IDs here could expose provider transaction status across users.
+app.post('/api/v2/utility/vtu/requery', paymentRateLimiter, async (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('Retry-After', '300');
+  return res.status(503).json({
+    success: false,
+    status: 'UTILITY_REQUERY_OWNER_BINDING_REQUIRED',
+    error: 'UTILITY_REQUERY_DISABLED',
+    message: 'Utility status lookup is paused until request IDs are bound to an authenticated owner and persistent fulfillment attempt.'
+  });
 });
 
 // VTU.ng Webhook / Status Callback Endpoint with Signature Verification
