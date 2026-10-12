@@ -3455,6 +3455,39 @@ app.post('/api/education/invoices/pay', paymentRateLimiter, authenticate, async 
       return;
     }
 
+    // Enforce invoice ownership in production and for authenticated callers
+    const currentUser = req.user?.username;
+    const currentUserId = req.user?.id;
+    const userRoles = req.user?.roles || [];
+    const isPlatformAdmin = userRoles.includes('PLATFORM_ADMIN');
+    const isInstitutionStaff = Boolean(
+      userRoles.some((role: string) => ['INSTITUTION_ADMIN', 'BURSAR', 'FINANCE_ADMIN'].includes(role)) &&
+      req.user?.institutionId &&
+      req.user.institutionId === invoice.institutionId
+    );
+    const isGuardianOwner = Boolean(
+      (currentUser && invoice.guardianId && invoice.guardianId.toLowerCase() === currentUser.toLowerCase()) ||
+      (currentUserId && invoice.guardianId && invoice.guardianId === currentUserId) ||
+      (req.user?.guardianId && invoice.guardianId && req.user.guardianId.toLowerCase() === invoice.guardianId.toLowerCase())
+    );
+    const isStudentOwner = Boolean(
+      (currentUser && invoice.studentId && invoice.studentId.toLowerCase() === currentUser.toLowerCase()) ||
+      (currentUserId && invoice.studentId && invoice.studentId === currentUserId) ||
+      (currentUser && invoice.studentName && invoice.studentName.toLowerCase() === currentUser.toLowerCase()) ||
+      ((req.user as any)?.studentId && invoice.studentId && (req.user as any).studentId.toLowerCase() === invoice.studentId.toLowerCase())
+    );
+    const isInvoiceOwner = isGuardianOwner || isStudentOwner;
+
+    if (!isPlatformAdmin && !isInstitutionStaff && !isInvoiceOwner) {
+      res.status(403).json({
+        success: false,
+        error: 'FORBIDDEN',
+        message: 'Access denied: You are not authorized to settle or pay this invoice.'
+      });
+      return;
+    }
+
+    // Do not disclose invoice payment state or balance until access is authorized.
     if (invoice.status === 'PAID') {
       res.status(400).json({ success: false, error: 'INVOICE_ALREADY_PAID', message: 'This invoice is already fully paid.' });
       return;
@@ -3470,35 +3503,9 @@ app.post('/api/education/invoices/pay', paymentRateLimiter, authenticate, async 
       res.status(400).json({
         success: false,
         error: 'AMOUNT_EXCEEDS_BALANCE',
-        message: `Amount $${numericAmount} exceeds current outstanding balance of $${invoice.outstandingBalance.toFixed(2)}`
-      });
-      return;
-    }
-
-    // Enforce invoice ownership in production and for authenticated callers
-    const currentUser = req.user?.username;
-    const currentUserId = req.user?.id;
-    const userRoles = req.user?.roles || [];
-    const isPlatformAdmin = userRoles.includes('PLATFORM_ADMIN') || userRoles.includes('BURSAR') || userRoles.includes('FINANCE_ADMIN');
-    const isInstitutionStaff = Boolean(req.user?.institutionId && req.user.institutionId === invoice.institutionId);
-    const isGuardianOwner = Boolean(
-      (currentUser && invoice.guardianId && invoice.guardianId.toLowerCase() === currentUser.toLowerCase()) ||
-      (currentUserId && invoice.guardianId && invoice.guardianId === currentUserId) ||
-      (req.user?.guardianId && invoice.guardianId && req.user.guardianId.toLowerCase() === invoice.guardianId.toLowerCase())
-    );
-    const isStudentOwner = Boolean(
-      (currentUser && invoice.studentId && invoice.studentId.toLowerCase() === currentUser.toLowerCase()) ||
-      (currentUserId && invoice.studentId && invoice.studentId === currentUserId) ||
-      (currentUser && invoice.studentName && invoice.studentName.toLowerCase() === currentUser.toLowerCase()) ||
-      ((req.user as any)?.studentId && invoice.studentId && (req.user as any).studentId.toLowerCase() === invoice.studentId.toLowerCase())
-    );
-    const isInvoiceOwner = isGuardianOwner || isStudentOwner;
-
-    if (isProduction && !isPlatformAdmin && !isInstitutionStaff && !isInvoiceOwner) {
-      res.status(403).json({
-        success: false,
-        error: 'FORBIDDEN',
-        message: 'Access denied: You are not authorized to settle or pay this invoice.'
+        message: invoiceCurrency === 'PI'
+          ? 'Payment amount exceeds the outstanding Pi balance.'
+          : 'Payment amount exceeds the outstanding invoice balance.'
       });
       return;
     }
