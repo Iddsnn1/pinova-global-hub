@@ -3473,7 +3473,6 @@ app.post('/api/education/invoices/pay', paymentRateLimiter, authenticate, async 
     const isStudentOwner = Boolean(
       (currentUser && invoice.studentId && invoice.studentId.toLowerCase() === currentUser.toLowerCase()) ||
       (currentUserId && invoice.studentId && invoice.studentId === currentUserId) ||
-      (currentUser && invoice.studentName && invoice.studentName.toLowerCase() === currentUser.toLowerCase()) ||
       ((req.user as any)?.studentId && invoice.studentId && (req.user as any).studentId.toLowerCase() === invoice.studentId.toLowerCase())
     );
     const isInvoiceOwner = isGuardianOwner || isStudentOwner;
