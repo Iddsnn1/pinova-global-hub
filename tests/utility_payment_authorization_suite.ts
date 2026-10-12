@@ -22,6 +22,11 @@ const payment = {
 };
 
 assert.equal(piAmountToPico('0.000002069016'), 2069016n);
+assert.equal(piAmountToPico(0.000000000001), 1n);
+assert.equal(piAmountToPico(1e-7), 100000n);
+assert.equal(piAmountToPico(1.2e-7), 120000n);
+assert.equal(piAmountToPico(1e-13), null);
+assert.equal(piAmountToPico('0.0000000000010'), 1n);
 assert.equal(normalizePiAmount('2.5'), '2.500000000000');
 assert.equal(normalizePiAmount('0.000002069016'), '0.000002069016');
 assert.equal(piAmountToPico('0.0000000000001'), null);
