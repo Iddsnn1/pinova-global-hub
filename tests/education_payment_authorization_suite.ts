@@ -73,6 +73,63 @@ async function run() {
   ok(first.invoice.status === 'PAID', 'invoice becomes PAID only after authoritative settlement');
   ok(first.receipt.verificationHash === first.payment.auditHash, 'receipt digest is bound to payment audit hash');
 
+  const precisionInvoice = repo.createInvoice({
+    id: 'inv-edu-security-precision-001',
+    invoiceNumber: 'INV/EDU/SEC/PRECISION/001',
+    institutionId: 'inst-001',
+    institutionName: 'Authorized Institution Test Fixture',
+    studentId: 'student-001',
+    studentName: 'Test Student',
+    studentMatricOrReg: 'MAT-001',
+    guardianId: 'guardian-001',
+    educationTier: 'tertiary',
+    educationLevel: 'Undergraduate',
+    programmeOrClass: '100 Level',
+    academicSession: '2026/2027',
+    termOrSemester: 'Semester 1',
+    items: [{ id: 'fee-precision', category: 'tuition', description: 'Tuition', amount: 3.5, isCompulsory: true }],
+    subtotal: 3.5,
+    discountAmount: 0,
+    taxAmount: 0,
+    totalAmount: 3.5,
+    amountPaid: 0,
+    outstandingBalance: 3.5,
+    currency: 'PI',
+    dueDate: '2026-10-31T00:00:00.000Z',
+    status: 'UNPAID',
+    allowedInstallments: 1,
+    installmentsPaidCount: 0,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  });
+  let picoOverpaymentRejected = false;
+  try {
+    repo.recordPayment({
+      invoiceId: precisionInvoice.id,
+      amountPaid: 3.500000000001,
+      currency: 'PI',
+      piAmount: 3.500000000001,
+      piPaymentId: 'pi-pay-security-precision-001',
+      piTxid: 'tx-security-precision-001',
+      paymentMethod: 'PI_NETWORK',
+      payerUsername: 'guardian-001',
+      idempotencyKey: 'edu-idem-precision-001',
+      authoritativePiSettlement: {
+        verified: true,
+        source: 'sandbox_dev',
+        paymentId: 'pi-pay-security-precision-001',
+        amount: 3.500000000001,
+        txid: 'tx-security-precision-001',
+        userUid: 'sandbox-user-001',
+        network: 'Pi Testnet',
+        direction: 'user_to_app'
+      }
+    });
+  } catch (error: any) {
+    picoOverpaymentRejected = String(error?.message || '').includes('Overpayment rejected');
+  }
+  ok(picoOverpaymentRejected, 'overpayment of exactly one pico-Pi is rejected');
+
   const replay = repo.recordPayment({
     invoiceId: invoice.id,
     amountPaid: 3.5,
