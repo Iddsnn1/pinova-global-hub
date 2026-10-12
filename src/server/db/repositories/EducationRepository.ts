@@ -338,14 +338,25 @@ export class EducationRepository {
       currency: invoiceCurrency
     });
 
+    const totalAmountPico = piAmountToPico(totals.totalAmount);
+    const amountPaidPico = piAmountToPico(invoiceData.amountPaid || 0);
+    if (
+      totalAmountPico === null ||
+      amountPaidPico === null ||
+      amountPaidPico > totalAmountPico
+    ) {
+      throw new Error('EDUCATION_INVOICE_AMOUNT_INVALID');
+    }
+
     const invoice: EducationInvoice = {
       ...invoiceData,
       currency: 'PI',
       subtotal: totals.subtotal,
       discountAmount: totals.discount,
       taxAmount: totals.tax,
-      totalAmount: totals.totalAmount,
-      outstandingBalance: Math.max(0, totals.totalAmount - (invoiceData.amountPaid || 0))
+      totalAmount: Number(totalAmountPico) / 1e12,
+      amountPaid: Number(amountPaidPico) / 1e12,
+      outstandingBalance: Number(totalAmountPico - amountPaidPico) / 1e12
     };
 
     this.invoicesEngine.set(invoice.id, invoice);
