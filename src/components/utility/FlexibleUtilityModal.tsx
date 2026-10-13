@@ -168,7 +168,7 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
   const [purchaseMode, setPurchaseMode] = useState<'custom' | 'package'>('custom');
   const [customAmountInput, setCustomAmountInput] = useState<string>('');
   const [selectedPackage, setSelectedPackage] = useState<UtilityProviderPackage | null>(null);
-  const [fxQuote, setFxQuote] = useState<{ currency: string; amount: number; amountUsd: number; referencePiAmount: number } | null>(null);
+  const [fxQuote, setFxQuote] = useState<{ currency: string; amount: number; amountUsd: number; referencePiAmount: number; token: string; expiresAt: string } | null>(null);
   const [fxQuoteLoading, setFxQuoteLoading] = useState(false);
   const [fxQuoteError, setFxQuoteError] = useState<string | null>(null);
 
@@ -511,7 +511,7 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
           signal: controller.signal
         });
         const payload = await response.json();
-        if (!response.ok || payload?.success !== true || !payload?.quote) {
+        if (!response.ok || payload?.success !== true || !payload?.quote || typeof payload?.fxQuoteToken !== 'string' || !payload.fxQuoteToken || typeof payload?.fxQuoteExpiresAt !== 'string') {
           throw new Error(payload?.message || 'Live currency conversion is unavailable.');
         }
         if (!cancelled) {
@@ -519,7 +519,9 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
             currency: String(payload.quote.currency || '').toUpperCase(),
             amount: Number(payload.quote.amount),
             amountUsd: Number(payload.quote.amountUsd),
-            referencePiAmount: Number(payload.quote.referencePiAmount)
+            referencePiAmount: Number(payload.quote.referencePiAmount),
+            token: payload.fxQuoteToken,
+            expiresAt: payload.fxQuoteExpiresAt
           });
         }
       } catch (error: any) {
@@ -536,7 +538,7 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
     };
   }, [activeFiatAmount, activeFiatCurrency]);
 
-  const hasCurrentFxQuote = !!fxQuote && fxQuote.currency === activeFiatCurrency && fxQuote.amount === activeFiatAmount && Number.isFinite(fxQuote.referencePiAmount) && fxQuote.referencePiAmount > 0;
+  const hasCurrentFxQuote = !!fxQuote && !!fxQuote.token && Date.parse(fxQuote.expiresAt) > Date.now() && fxQuote.currency === activeFiatCurrency && fxQuote.amount === activeFiatAmount && Number.isFinite(fxQuote.referencePiAmount) && fxQuote.referencePiAmount > 0;
   const calculatedPiAmount = hasCurrentFxQuote ? fxQuote!.referencePiAmount : 0;
   const minPiThreshold = piConversionConfig.minPurchasePi || 0.00000001;
   const isWithinLimits =
@@ -586,14 +588,14 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
         body: JSON.stringify({ amount: activeFiat, currency: activeFiatCurrency })
       });
       const quotePayload = await quoteResponse.json();
-      if (!quoteResponse.ok || quotePayload?.success !== true || !quotePayload?.quote || String(quotePayload.quote.currency || '').toUpperCase() !== activeFiatCurrency) {
+      if (!quoteResponse.ok || quotePayload?.success !== true || !quotePayload?.quote || typeof quotePayload?.fxQuoteToken !== 'string' || !quotePayload.fxQuoteToken || typeof quotePayload?.fxQuoteExpiresAt !== 'string' || String(quotePayload.quote.currency || '').toUpperCase() !== activeFiatCurrency) {
         throw new Error(quotePayload?.message || 'Could not refresh the currency quote. No payment was started.');
       }
       finalPiAmount = Number(quotePayload.quote.referencePiAmount);
       if (!Number.isFinite(finalPiAmount) || finalPiAmount < minPiThreshold || finalPiAmount > (piConversionConfig.maxPurchasePi || 1000.00)) {
         throw new Error('The refreshed Pi reference amount is outside allowable limits. No payment was started.');
       }
-      setFxQuote({ currency: activeFiatCurrency, amount: activeFiat, amountUsd: Number(quotePayload.quote.amountUsd), referencePiAmount: finalPiAmount });
+      setFxQuote({ currency: activeFiatCurrency, amount: activeFiat, amountUsd: Number(quotePayload.quote.amountUsd), referencePiAmount: finalPiAmount, token: quotePayload.fxQuoteToken, expiresAt: quotePayload.fxQuoteExpiresAt });
 
       const paymentResult = await createPiPayment({
         amountPi: finalPiAmount,
@@ -609,6 +611,8 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
           accountName: accountValidationResult?.name || 'Verified Customer',
           fiatAmount: activeFiat,
           fiatCurrency: activeFiatCurrency,
+          fxQuoteToken: quotePayload.fxQuoteToken,
+          fxQuoteExpiresAt: quotePayload.fxQuoteExpiresAt,
           piRateApplied: piConversionConfig.piRateUsd,
           packageName: selectedPackage?.name || 'Custom Purchase'
         }
