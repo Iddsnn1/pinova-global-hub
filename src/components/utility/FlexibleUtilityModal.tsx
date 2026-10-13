@@ -224,6 +224,8 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
     return Array.from(map.values());
   }, []);
 
+  const selectedCountryCurrency = ALL_GLOBAL_COUNTRIES.find((country) => country.code === selectedCountryCode)?.currency;
+
   const selectedCountryObj = useMemo(() => {
     return allGlobalCountries.find((c) => c.code === selectedCountryCode) || {
       code: selectedCountryCode,
@@ -484,7 +486,9 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
   };
 
   const activeFiatAmount = getActiveFiatPrice();
-  const activeFiatCurrency = (purchaseMode === 'package' && selectedPackage ? selectedPackage.currency : selectedProvider?.currency || '').trim().toUpperCase();
+  const activeFiatCurrency = (purchaseMode === 'package' && selectedPackage ? selectedPackage.currency : selectedCountryCurrency?.code || selectedProvider?.currency || '').trim().toUpperCase();
+  const activeFiatSymbol = purchaseMode === 'package' && selectedPackage ? (selectedPackage.currency === 'USD' ? '$' : selectedPackage.currency) : (selectedCountryCurrency?.symbol || (activeFiatCurrency === 'USD' ? '$' : activeFiatCurrency));
+  const presetAmounts = selectedCountryCode === 'NG' ? [500, 1000, 2000, 5000, 10000] : [5, 10, 25, 50, 100];
 
   useEffect(() => {
     let cancelled = false;
@@ -1243,11 +1247,11 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                     <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-3">
                       <div className="flex justify-between text-xs">
                         <span className="font-bold text-slate-700 dark:text-slate-300">Enter Purchase Amount</span>
-                        <span className="text-slate-400 font-medium">USD ($)</span>
+                        <span className="text-slate-400 font-medium">{activeFiatCurrency || 'Local currency'} ({activeFiatSymbol})</span>
                       </div>
 
                       <div className="relative">
-                        <span className="absolute left-3.5 top-2.5 text-base font-black text-slate-400">$</span>
+                        <span className="absolute left-3.5 top-2.5 text-base font-black text-slate-400">{activeFiatSymbol}</span>
                         <input
                           type="text"
                           inputMode="decimal"
@@ -1259,7 +1263,7 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                       </div>
 
                       <div className="flex flex-wrap gap-2 pt-1">
-                        {[5, 10, 25, 50, 100].map((amt) => (
+                        {presetAmounts.map((amt) => (
                           <button
                             key={amt}
                             type="button"
@@ -1270,7 +1274,7 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                                 : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-purple-500'
                             }`}
                           >
-                            ${amt}.00
+                            {activeFiatSymbol}{amt.toLocaleString()}.00
                           </button>
                         ))}
                       </div>
@@ -1363,7 +1367,7 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                     <span className="font-bold text-white">
                       {purchaseMode === 'package' 
                         ? (selectedPackage ? `${selectedPackage.name} (${selectedPackage.fiatPrice.toFixed(2)} ${selectedPackage.currency})` : 'Package') 
-                        : (getActiveFiatPrice() > 0 ? `${getActiveFiatPrice().toFixed(2)} ${activeFiatCurrency}` : `0.00 ${activeFiatCurrency || ''}`)}
+                        : (getActiveFiatPrice() > 0 ? `${activeFiatSymbol}${getActiveFiatPrice().toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${activeFiatCurrency}` : 'Choose amount')}
                     </span>
                   </div>
 
@@ -1384,7 +1388,7 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                 <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-1 text-center">
                   <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Total Pi Cost</span>
                   <div className="text-2xl sm:text-3xl font-black text-amber-400 tracking-tight">
-                    {formatPiAmount(calculatedPiAmount)} π
+                    {hasCurrentFxQuote ? `${formatPiAmount(calculatedPiAmount)} π` : '—'}
                   </div>
                 </div>
 
@@ -1430,7 +1434,7 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                   ) : (
                     <>
                       <Lock className="w-4 h-4 text-amber-300" />
-                      <span>Pay {formatPiAmount(calculatedPiAmount)} π with Pi Wallet</span>
+                      <span>{getActiveFiatPrice() <= 0 ? 'Enter amount to continue' : !hasCurrentFxQuote ? 'Waiting for verified quote' : `Pay ${formatPiAmount(calculatedPiAmount)} π with Pi Wallet`}</span>
                     </>
                   )}
                 </button>
