@@ -2798,7 +2798,8 @@ app.get(['/api/v2/payments/config', '/api/pi-payment/config', '/api/v2/pi/config
 
 // Server-side Utility Fulfillment & Verification Endpoint
 app.post('/api/v2/utility/fulfill', paymentRateLimiter, async (req, res) => {
-  const { paymentId, txid, category, country, countryCode, providerId, accountNumber, fiatAmount, fiatCurrency, piAmount, packageName, idempotencyKey, fxQuoteToken } = req.body;
+  const { paymentId, txid, category, country, countryCode, providerId, accountNumber, fiatAmount, fiatCurrency, piAmount, packageName, idempotencyKey } = req.body;
+  const fxQuoteToken = req.body?.fxQuoteToken ?? req.body?.metadata?.fxQuoteToken;
 
   if (!paymentId) {
     res.status(400).json({ success: false, error: 'Missing paymentId parameter' });
@@ -2886,7 +2887,11 @@ app.post('/api/v2/utility/fulfill', paymentRateLimiter, async (req, res) => {
 
   // Pi amounts are compared as integer pico-Pi units to avoid floating-point rounding.
   const parsePicoPi = (value: unknown): bigint | null => {
-    const normalized = String(value ?? '').trim();
+    // Pi SDK values arrive as JS numbers; normalize those to 12 decimal places
+    // before strict parsing so small values rendered in exponent notation remain valid.
+    const normalized = typeof value === 'number'
+      ? (Number.isFinite(value) && value > 0 ? value.toFixed(12) : '')
+      : String(value ?? '').trim();
     if (!/^\d+(?:\.\d{1,12})?$/.test(normalized)) return null;
     const [whole, fraction = ''] = normalized.split('.');
     try {
