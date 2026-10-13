@@ -1227,7 +1227,16 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                           type="button"
                           onClick={() => {
                             setPurchaseMode('package');
-                            if (!selectedPackage && selectedProvider.packages.length > 0) {
+                            if (selectedCategory === 'airtime' && selectedCountryCode === 'NG') {
+                              setSelectedPackage({
+                                id: 'ng-airtime-500',
+                                name: '₦500',
+                                description: 'Nigerian airtime top-up',
+                                fiatPrice: 500,
+                                currency: 'NGN',
+                                validity: 'Instant'
+                              });
+                            } else if (!selectedPackage && selectedProvider.packages.length > 0) {
                               setSelectedPackage(selectedProvider.packages[0]);
                             }
                           }}
