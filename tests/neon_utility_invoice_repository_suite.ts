@@ -24,13 +24,13 @@ const invoiceRow = {
   created_at: now.toISOString(),
 };
 
-function mockPoolForReservation(options: { amount?: number; updateRows?: number; invoiceStatus?: string; priorRecord?: Record<string, unknown> } = {}) {
+function mockPoolForReservation(options: { amount?: number; updateRows?: number; invoiceStatus?: string; expiresAt?: string; priorRecord?: Record<string, unknown> } = {}) {
   const statements: string[] = [];
   const client = {
     query: async (sql: string) => {
       statements.push(sql.trim().replace(/\s+/g, ' '));
       if (sql.includes('FROM public.utility_invoices') && sql.includes('FOR UPDATE')) {
-        return { rows: [{ ...invoiceRow, status: options.invoiceStatus ?? 'OPEN' }], rowCount: 1 };
+        return { rows: [{ ...invoiceRow, status: options.invoiceStatus ?? 'OPEN', expires_at: options.expiresAt ?? invoiceRow.expires_at }], rowCount: 1 };
       }
       if (sql.includes('FROM public.utility_payment_idempotency') && sql.includes('FOR UPDATE')) {
         return { rows: options.priorRecord ? [options.priorRecord] : [], rowCount: options.priorRecord ? 1 : 0 };
@@ -110,6 +110,18 @@ async function run() {
   assert.ok(!replay.statements.some((statement) => statement.includes('INSERT INTO public.utility_payment_idempotency')));
   assert.ok(!replay.statements.some((statement) => statement.includes('INSERT INTO public.utility_fulfillment_attempts')));
 
+  const expired = mockPoolForReservation({ expiresAt: new Date(Date.now() - 60_000).toISOString() });
+  const expiredRepo = new NeonUtilityInvoiceRepository(expired.pool);
+  const expiredResult = await expiredRepo.authorizeAndReserve('UTIL-INV-TEST', 'buyer-01', 'pi-payment-01', {
+    identifier: 'pi-payment-01',
+    amount: 0.000002069016,
+    status: { developer_completed: true },
+    transaction: { verified: true, txid: 'pi-tx-expired' },
+  });
+  assert.deepEqual(expiredResult, { status: 'REJECTED', error: 'UTILITY_INVOICE_EXPIRED' });
+  assert.ok(expired.statements.includes('ROLLBACK'));
+  assert.ok(!expired.statements.some((statement) => statement.includes('INSERT INTO public.utility_payment_idempotency')));
+
   const race = mockPoolForReservation({ updateRows: 0 });
   const raceRepo = new NeonUtilityInvoiceRepository(race.pool);
   const raceResult = await raceRepo.authorizeAndReserve('UTIL-INV-TEST', 'buyer-01', 'pi-payment-01', {
@@ -170,6 +182,14 @@ async function run() {
       /UTILITY_PI_AMOUNT_MISMATCH/,
     );
     assert.equal(creationStatements.length, 0, 'mismatched client Pi amount must not be persisted');
+
+    // A changed/tampered FX rate cannot retain the Pi amount computed from the original quote.
+    creationStatements.length = 0;
+    await assert.rejects(
+      () => createRepo.createInvoice({ ...createInput, fxUsdPerFiatUnit: '0.00066' }),
+      /UTILITY_PI_AMOUNT_MISMATCH/,
+    );
+    assert.equal(creationStatements.length, 0, 'changed FX quote must not be persisted with the old Pi amount');
   } finally {
     if (previousFxSource === undefined) delete process.env.PINOVA_FX_PROVIDER_SOURCE;
     else process.env.PINOVA_FX_PROVIDER_SOURCE = previousFxSource;
