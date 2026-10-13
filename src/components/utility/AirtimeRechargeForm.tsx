@@ -13,7 +13,7 @@ import {
 import { UtilityServiceProvider, UtilityProviderPackage, PiConversionConfig } from '../../types/utility';
 import { AIRTIME_COUNTRIES, validateAirtimePhoneNumber, PhoneValidationStatus } from '../../data/airtimeData';
 import { SAMPLE_UTILITY_PROVIDERS } from '../../data/utilityData';
-import { formatPiAmount, calculateAuthoritativePiAmount } from '../../utils/formatters';
+import { formatPiAmount } from '../../utils/formatters';
 
 interface AirtimeRechargeFormProps {
   piConversionConfig: PiConversionConfig;
