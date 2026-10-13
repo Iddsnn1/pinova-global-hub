@@ -60,6 +60,15 @@ export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
   const activeCountry = AIRTIME_COUNTRIES.find((c) => c.code === selectedCountryCode);
   // Nigeria top-ups use NGN; other countries use the selected provider's currency.
   const activeCurrencyCode = selectedCountryCode === 'NG' ? 'NGN' : (selectedProvider?.currency || 'USD');
+  const activeCurrencySymbol = (() => {
+    try {
+      return new Intl.NumberFormat('en', { style: 'currency', currency: activeCurrencyCode })
+        .formatToParts(0)
+        .find((part) => part.type === 'currency')?.value || activeCurrencyCode;
+    } catch {
+      return activeCurrencyCode;
+    }
+  })();
   const formatFiatAmount = (amount: number): string => {
     try {
       return new Intl.NumberFormat('en', { style: 'currency', currency: activeCurrencyCode, maximumFractionDigits: 2 }).format(amount);
@@ -451,7 +460,7 @@ export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
           {purchaseMode === 'custom' ? (
             <div className="space-y-3">
               <div className="relative">
-                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">$</span>
+                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">{activeCurrencySymbol}</span>
                 <input
                   type="text"
                   inputMode="decimal"
