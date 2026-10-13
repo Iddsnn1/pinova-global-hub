@@ -136,7 +136,16 @@ async function run() {
 
   // Invoice creation must recompute the canonical Pi amount from fiat + trusted FX.
   const previousFxSource = process.env.PINOVA_FX_PROVIDER_SOURCE;
+  const previousFxUrl = process.env.PINOVA_FX_PROVIDER_URL;
+  const previousFxKey = process.env.PINOVA_FX_PROVIDER_API_KEY;
+  const previousFetch = globalThis.fetch;
   process.env.PINOVA_FX_PROVIDER_SOURCE = 'currencyapi.com';
+  process.env.PINOVA_FX_PROVIDER_URL = 'https://api.currencyapi.com/v3/latest';
+  process.env.PINOVA_FX_PROVIDER_API_KEY = 'test-only-key';
+  globalThis.fetch = (async () => new Response(JSON.stringify({
+    meta: { last_updated_at: new Date().toISOString() },
+    data: { NGN: { code: 'NGN', value: 1538.4615384615383 } },
+  }), { status: 200, headers: { 'content-type': 'application/json' } })) as typeof fetch;
   const creationStatements: Array<{ sql: string; values?: unknown[] }> = [];
   const createPool = {
     query: async (sql: string, values?: unknown[]) => {
@@ -183,16 +192,26 @@ async function run() {
     );
     assert.equal(creationStatements.length, 0, 'mismatched client Pi amount must not be persisted');
 
-    // A changed/tampered FX rate cannot retain the Pi amount computed from the original quote.
+    // Client-supplied FX fields are untrusted and must never be persisted.
     creationStatements.length = 0;
-    await assert.rejects(
-      () => createRepo.createInvoice({ ...createInput, fxUsdPerFiatUnit: '0.00066' }),
-      /UTILITY_PI_AMOUNT_MISMATCH/,
-    );
-    assert.equal(creationStatements.length, 0, 'changed FX quote must not be persisted with the old Pi amount');
+    const clientQuoteTampered = await createRepo.createInvoice({
+      ...createInput,
+      fxSource: 'attacker-controlled-source',
+      fxAsOf: new Date(Date.now() - 60 * 60_000).toISOString(),
+      fxUsdPerFiatUnit: '0.00066',
+    });
+    assert.equal(clientQuoteTampered.fxSource, 'currencyapi.com');
+    assert.equal(creationStatements[0].values?.[9], 'currencyapi.com');
+    assert.notEqual(creationStatements[0].values?.[11], '0.00066',
+      'persisted FX rate must come from the server-side provider, not the client');
   } finally {
     if (previousFxSource === undefined) delete process.env.PINOVA_FX_PROVIDER_SOURCE;
     else process.env.PINOVA_FX_PROVIDER_SOURCE = previousFxSource;
+    if (previousFxUrl === undefined) delete process.env.PINOVA_FX_PROVIDER_URL;
+    else process.env.PINOVA_FX_PROVIDER_URL = previousFxUrl;
+    if (previousFxKey === undefined) delete process.env.PINOVA_FX_PROVIDER_API_KEY;
+    else process.env.PINOVA_FX_PROVIDER_API_KEY = previousFxKey;
+    globalThis.fetch = previousFetch;
   }
 
   console.log('Neon utility invoice repository tests passed.');
