@@ -47,7 +47,7 @@ import { AIRTIME_COUNTRIES } from '../../data/airtimeData';
 import { ALL_GLOBAL_COUNTRIES } from '../../data/countriesData';
 import { createPiPayment } from '../../lib/piSdk';
 import { DigitalReceiptModal } from './DigitalReceiptModal';
-import { formatPiAmount, calculateAuthoritativePiAmount } from '../../utils/formatters';
+import { formatPiAmount } from '../../utils/formatters';
 import { ProviderValidationFactory } from '../../modules/utility/providerValidation';
 import { supportsServiceDiscovery } from '../../lib/utility/serviceDiscovery';
 import { resolveElectricityProviders } from '../../lib/utility/electricityDiscovery';
@@ -1300,10 +1300,8 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                             <h5 className="font-bold text-xs text-slate-900 dark:text-slate-100">{pkg.name}</h5>
                             <p className="text-[10px] text-slate-400 line-clamp-1">{pkg.description}</p>
                             <div className="pt-2 flex items-center justify-between text-xs border-t border-slate-100 dark:border-slate-800">
-                              <span className="font-bold text-slate-500">${pkg.fiatPrice.toFixed(2)} USD</span>
-                              <span className="font-black text-amber-500 dark:text-amber-400">
-                                {formatPiAmount(calculateAuthoritativePiAmount(pkg.fiatPrice, piConversionConfig.piRateUsd))} π
-                              </span>
+                              <span className="font-bold text-slate-500">{pkg.fiatPrice.toFixed(2)} {pkg.currency}</span>
+                              <span className="text-[10px] font-semibold text-slate-400">Pi equivalent calculated live at review</span>
                             </div>
                           </div>
                         );
