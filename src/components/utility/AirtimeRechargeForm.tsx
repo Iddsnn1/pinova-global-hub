@@ -245,17 +245,6 @@ export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
       piAmount: finalPiAmount
     });
 
-    if (!canProceed || !selectedProvider || !activeCountry) return;
-    console.log('[PI PAYMENT] button clicked (AirtimeRechargeForm)', {
-      country: activeCountry?.name,
-      provider: selectedProvider?.name,
-      phoneNumber,
-      fiatAmount: getActiveFiatPrice(),
-      piAmount: finalPiAmount
-    });
-
-    if (!canProceed || !selectedProvider || !activeCountry) return;
-
     await onExecutePayment({
       country: activeCountry.name,
       countryCode: activeCountry.code,
