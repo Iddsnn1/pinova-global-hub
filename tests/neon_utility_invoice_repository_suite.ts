@@ -141,7 +141,6 @@ async function run() {
         rowCount: 1,
       };
     },
-    connect: async () => client,
     end: async () => undefined,
   };
   const createRepo = new NeonUtilityInvoiceRepository(createPool as unknown as Pool);
