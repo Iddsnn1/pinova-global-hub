@@ -146,7 +146,7 @@ export class NeonUtilityInvoiceRepository {
       fiatAmount: Number(input.fiatAmount),
       currency,
       quote: trustedQuote,
-      trustedSource: expectedFxSource,
+      trustedSource: fxConfig.source,
     });
     const canonicalPiPico = piAmountToPico(canonicalConversion.piAmount);
     const suppliedPiPico = piAmountToPico(input.piAmount);
