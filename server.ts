@@ -2885,7 +2885,9 @@ app.post('/api/v2/utility/fulfill', paymentRateLimiter, async (req, res) => {
 
   // Pi amounts are compared as integer pico-Pi units to avoid floating-point rounding.
   const parsePicoPi = (value: unknown): bigint | null => {
-    const normalized = String(value ?? '').trim();
+    const normalized = typeof value === 'number' && Number.isFinite(value)
+      ? value.toFixed(12).replace(/0+$/, '').replace(/\.$/, '')
+      : String(value ?? '').trim();
     if (!/^\d+(?:\.\d{1,12})?$/.test(normalized)) return null;
     const [whole, fraction = ''] = normalized.split('.');
     try {
