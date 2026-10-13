@@ -1222,7 +1222,7 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                         </button>
                       )}
 
-                      {selectedProvider.supportsFixedPackages && selectedProvider.packages.length > 0 && (
+                      {((selectedProvider.supportsFixedPackages && selectedProvider.packages.length > 0) || (selectedCategory === 'airtime' && selectedCountryCode === 'NG')) && (
                         <button
                           type="button"
                           onClick={() => {
@@ -1262,28 +1262,26 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                         />
                       </div>
 
-                      <div className="flex flex-wrap gap-2 pt-1">
-                        {presetAmounts.map((amt) => (
-                          <button
-                            key={amt}
-                            type="button"
-                            onClick={() => handleSelectPresetAmount(amt)}
-                            className={`px-3 py-1 rounded-lg text-xs font-bold border transition-colors ${
-                              customAmountInput === amt.toString()
-                                ? 'bg-purple-600 text-white border-purple-600 shadow-sm'
-                                : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-purple-500'
-                            }`}
-                          >
-                            {activeFiatSymbol}{amt.toLocaleString()}.00
-                          </button>
-                        ))}
-                      </div>
                     </div>
                   )}
 
-                  {purchaseMode === 'package' && selectedProvider.packages.length > 0 && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                      {selectedProvider.packages.map((pkg) => {
+                  {purchaseMode === 'package' && (((selectedCategory === 'airtime' && selectedCountryCode === 'NG') || selectedProvider.packages.length > 0)) && (
+                    <div className="space-y-2.5">
+                      {selectedCategory === 'airtime' && selectedCountryCode === 'NG' && (
+                        <p className="text-xs text-slate-500 dark:text-slate-400">Choose a fixed airtime amount.</p>
+                      )}
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                      {(selectedCategory === 'airtime' && selectedCountryCode === 'NG'
+                        ? presetAmounts.map((amt) => ({
+                            id: `ng-airtime-${amt}`,
+                            name: `₦${amt.toLocaleString()}`,
+                            description: 'Nigerian airtime top-up',
+                            fiatPrice: amt,
+                            currency: 'NGN',
+                            validity: 'Instant'
+                          }))
+                        : selectedProvider.packages
+                      ).map((pkg) => {
                         const isSelected = selectedPackage?.id === pkg.id;
                         return (
                           <div
@@ -1310,6 +1308,7 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                           </div>
                         );
                       })}
+                      </div>
                     </div>
                   )}
                 </div>
