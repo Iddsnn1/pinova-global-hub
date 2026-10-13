@@ -2890,7 +2890,7 @@ app.post('/api/v2/utility/fulfill', paymentRateLimiter, async (req, res) => {
     // Pi SDK values arrive as JS numbers; normalize those to 12 decimal places
     // before strict parsing so small values rendered in exponent notation remain valid.
     const normalized = typeof value === 'number'
-      ? (Number.isFinite(value) && value > 0 ? value.toFixed(12) : '')
+      ? (Number.isFinite(value) && value > 0 && Number(value.toFixed(12)) === value ? value.toFixed(12) : '')
       : String(value ?? '').trim();
     if (!/^\d+(?:\.\d{1,12})?$/.test(normalized)) return null;
     const [whole, fraction = ''] = normalized.split('.');
