@@ -7,6 +7,7 @@ import {
   type PiPaymentVerificationData,
 } from '../../services/UtilityPaymentAuthorizationService';
 import { validateTrustedFxQuote } from '../../services/TrustedFxQuoteService';
+import { calculateTrustedFiatToPi } from '../../services/TrustedFiatToPiService';
 
 export interface NewUtilityInvoice {
   ownerUserId: string;
@@ -133,16 +134,34 @@ export class NeonUtilityInvoiceRepository {
     const currency = String(input.fiatCurrency || '').trim().toUpperCase();
     if (!/^[A-Z]{3}$/.test(currency)) throw new Error('UTILITY_FIAT_CURRENCY_INVALID');
     if (!isPositiveDecimal(input.fiatAmount, 8)) throw new Error('UTILITY_FIAT_AMOUNT_INVALID');
-    const piPico = piAmountToPico(input.piAmount);
-    if (piPico === null || piPico <= 0n) throw new Error('UTILITY_PI_AMOUNT_INVALID');
     if (!isPositiveDecimal(input.fxUsdPerFiatUnit, 16)) throw new Error('UTILITY_FX_RATE_INVALID');
     const expectedFxSource = process.env.PINOVA_FX_PROVIDER_SOURCE?.trim() || '';
-    validateTrustedFxQuote({
+    const trustedQuote = validateTrustedFxQuote({
       currency,
       usdPerFiatUnit: Number(input.fxUsdPerFiatUnit),
       asOf: input.fxAsOf,
       source: input.fxSource,
     }, currency, expectedFxSource);
+
+    // The caller's Pi amount is only a consistency check. The canonical invoice
+    // amount is recomputed server-side from the fiat amount and validated FX quote.
+    const canonicalConversion = calculateTrustedFiatToPi({
+      fiatAmount: Number(input.fiatAmount),
+      currency,
+      quote: trustedQuote,
+      trustedSource: expectedFxSource,
+    });
+    const canonicalPiPico = piAmountToPico(canonicalConversion.piAmount);
+    const suppliedPiPico = piAmountToPico(input.piAmount);
+    if (canonicalPiPico === null || canonicalPiPico <= 0n) {
+      throw new Error('UTILITY_PI_AMOUNT_INVALID');
+    }
+    if (suppliedPiPico === null || suppliedPiPico <= 0n) {
+      throw new Error('UTILITY_PI_AMOUNT_INVALID');
+    }
+    if (canonicalPiPico !== suppliedPiPico) {
+      throw new Error('UTILITY_PI_AMOUNT_MISMATCH');
+    }
     if (!input.ownerUserId || !input.serviceCategory || !input.providerId || !input.accountNumber) {
       throw new Error('UTILITY_INVOICE_FIELDS_REQUIRED');
     }
@@ -161,7 +180,7 @@ export class NeonUtilityInvoiceRepository {
          account_number, package_name, fiat_amount::text, fiat_currency, pi_amount::text,
          fx_source, fx_as_of, fx_usd_per_fiat_unit::text, status, payment_txid, expires_at, created_at`,
       [invoiceId, input.ownerUserId, input.serviceCategory, input.providerId, input.accountNumber,
-       input.packageName, input.fiatAmount, currency, input.piAmount, input.fxSource,
+       input.packageName, input.fiatAmount, currency, canonicalConversion.piAmount, input.fxSource,
        new Date(fxAsOf).toISOString(), input.fxUsdPerFiatUnit, new Date(expiresAt).toISOString()],
     );
     return mapInvoice(result.rows[0]);
