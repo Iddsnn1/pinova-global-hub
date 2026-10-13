@@ -122,6 +122,61 @@ async function run() {
   assert.deepEqual(raceResult, { status: 'REJECTED', error: 'UTILITY_INVOICE_STATE_CONFLICT' });
   assert.ok(race.statements.includes('ROLLBACK'));
 
+
+  // Invoice creation must recompute the canonical Pi amount from fiat + trusted FX.
+  const previousFxSource = process.env.PINOVA_FX_PROVIDER_SOURCE;
+  process.env.PINOVA_FX_PROVIDER_SOURCE = 'currencyapi.com';
+  const creationStatements: Array<{ sql: string; values?: unknown[] }> = [];
+  const createPool = {
+    query: async (sql: string, values?: unknown[]) => {
+      creationStatements.push({ sql, values });
+      return {
+        rows: [{
+          ...invoiceRow,
+          invoice_id: 'UTIL-INV-CREATE',
+          payment_id: null,
+          fiat_amount: '1000.00',
+          pi_amount: '0.000002069016',
+          status: 'OPEN',
+        }],
+        rowCount: 1,
+      };
+    },
+    connect: async () => client,
+    end: async () => undefined,
+  };
+  const createRepo = new NeonUtilityInvoiceRepository(createPool as unknown as Pool);
+  const createInput = {
+    ownerUserId: 'buyer-01',
+    serviceCategory: 'airtime',
+    providerId: 'provider-mtn',
+    accountNumber: '08000000000',
+    packageName: 'NGN 1000 airtime',
+    fiatAmount: '1000.00',
+    fiatCurrency: 'NGN',
+    piAmount: '0.000002069016',
+    fxSource: 'currencyapi.com',
+    fxAsOf: new Date(Date.now() - 60_000).toISOString(),
+    fxUsdPerFiatUnit: '0.00065',
+    expiresAt: new Date(Date.now() + 5 * 60_000).toISOString(),
+  };
+  try {
+    const created = await createRepo.createInvoice(createInput);
+    assert.equal(created.piAmount, '0.000002069016');
+    assert.ok(creationStatements[0].sql.includes('INSERT INTO public.utility_invoices'));
+    assert.equal(creationStatements[0].values?.[8], '0.000002069016');
+
+    creationStatements.length = 0;
+    await assert.rejects(
+      () => createRepo.createInvoice({ ...createInput, piAmount: '0.000002069017' }),
+      /UTILITY_PI_AMOUNT_MISMATCH/,
+    );
+    assert.equal(creationStatements.length, 0, 'mismatched client Pi amount must not be persisted');
+  } finally {
+    if (previousFxSource === undefined) delete process.env.PINOVA_FX_PROVIDER_SOURCE;
+    else process.env.PINOVA_FX_PROVIDER_SOURCE = previousFxSource;
+  }
+
   console.log('Neon utility invoice repository tests passed.');
 }
 
