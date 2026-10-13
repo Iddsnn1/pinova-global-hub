@@ -46,7 +46,6 @@ function mockPoolForReservation(options: { amount?: number; updateRows?: number;
     release: () => undefined,
   };
   const pool = {
-    connect: async () => client,
     query: async () => ({ rows: [], rowCount: 0 }),
     end: async () => undefined,
   };
