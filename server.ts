@@ -2866,11 +2866,40 @@ app.post('/api/v2/utility/fulfill', paymentRateLimiter, async (req, res) => {
   const existingKey = idempotencyKey || paymentId;
   const existingTransaction = utilityFulfillmentRepo.findByKey(existingKey);
   if (existingTransaction) {
+    if (String(existingTransaction.paymentId || '') !== String(paymentId)) {
+      res.status(409).json({
+        success: false,
+        error: 'IDEMPOTENCY_KEY_CONFLICT',
+        message: 'This idempotency key is already associated with a different payment.'
+      });
+      return;
+    }
     console.log(`[Utility Fulfillment] Idempotent replay for Payment ID: ${existingKey}`);
     res.json({
       success: true,
       idempotent: true,
       data: existingTransaction
+    });
+    return;
+  }
+
+  // Pi amounts are compared as integer pico-Pi units to avoid floating-point rounding.
+  const parsePicoPi = (value: unknown): bigint | null => {
+    const normalized = String(value ?? '').trim();
+    if (!/^\\d+(?:\\.\\d{1,12})?$/.test(normalized)) return null;
+    const [whole, fraction = ''] = normalized.split('.');
+    try {
+      return BigInt(whole) * 1_000_000_000_000n + BigInt((fraction + '0'.repeat(12)).slice(0, 12));
+    } catch {
+      return null;
+    }
+  };
+  const requestedPicoPi = parsePicoPi(piAmount);
+  if (requestedPicoPi === null || requestedPicoPi <= 0n) {
+    res.status(400).json({
+      success: false,
+      error: 'INVALID_PI_AMOUNT',
+      message: 'A valid positive Pi amount with no more than 12 decimal places is required.'
     });
     return;
   }
@@ -2884,6 +2913,18 @@ app.post('/api/v2/utility/fulfill', paymentRateLimiter, async (req, res) => {
       success: false,
       status: 'VERIFICATION_FAILED',
       message: 'Server verification failed. Payment is not confirmed on Pi Platform.'
+    });
+    return;
+  }
+
+  const verifiedPiAmount = verification.paymentData?.amount;
+  const verifiedPicoPi = parsePicoPi(verifiedPiAmount);
+  if (verifiedPicoPi === null || verifiedPicoPi <= 0n || verifiedPicoPi !== requestedPicoPi) {
+    console.warn(`[Utility Fulfillment] Verified Pi amount mismatch or unavailable for Payment ID: ${paymentId}`);
+    res.status(400).json({
+      success: false,
+      error: 'PI_AMOUNT_MISMATCH',
+      message: 'The Pi Platform-verified amount does not match the requested utility payment amount.'
     });
     return;
   }
@@ -2997,7 +3038,8 @@ app.post('/api/v2/utility/fulfill', paymentRateLimiter, async (req, res) => {
     providerId: providerId || 'unknown',
     accountNumber: accountNumber || '',
     fiatAmount: Number(numericFiatAmount.toFixed(2)),
-    piAmount: Number(Number(piAmount || 0).toFixed(4)),
+    // Persist the authoritative verified amount without truncating precision to four decimals.
+    piAmount: Number((Number(verifiedPiAmount)).toFixed(12)),
     packageName: packageName || 'Utility Payment',
     timestamp: new Date().toISOString(),
     providerReference: providerRef,
