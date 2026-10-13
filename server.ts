@@ -45,7 +45,7 @@ import { durableOrderStorageEnabled, getDurableOrder, listDurableOrders, saveDur
 import { durableVendorStorageEnabled, getDurableVendorApplication, getDurableVendorApplicationByIdentity, listDurableVendorApplications, saveDurableVendorApplication } from './src/server/services/DurableVendorApplicationStore';
 import { objectStorageEnabled, putObject, getObject, deleteObject, publicObjectUrl } from './src/server/services/ObjectStorage';
 import { saveEducationAdmissionDocument, listEducationAdmissionDocuments, educationDocumentStorageEnabled, EDUCATION_DOCUMENT_MAX_BYTES, EDUCATION_DOCUMENT_TYPES } from './src/server/services/EducationDocumentStorage';
-import { quoteFiatToPiReference, FxConfigurationError, FxProviderError } from './src/server/services/PiNovaFxService';
+import { quoteFiatToPiReference, signPiNovaFxQuote, verifyPiNovaFxQuoteToken, FxConfigurationError, FxProviderError } from './src/server/services/PiNovaFxService';
 
 dotenv.config();
 
@@ -439,8 +439,9 @@ app.post('/api/fx/quote-to-pi', fxQuoteRateLimiter, async (req, res) => {
 
   try {
     const quote = await quoteFiatToPiReference(amount, currency);
+    const signedQuote = signPiNovaFxQuote(quote);
     res.setHeader('Cache-Control', 'no-store');
-    res.status(200).json({ success: true, quote });
+    res.status(200).json({ success: true, quote, fxQuoteToken: signedQuote.token, fxQuoteExpiresAt: signedQuote.expiresAt });
   } catch (error: any) {
     if (error instanceof RangeError || error instanceof TypeError) {
       res.status(400).json({
@@ -2797,7 +2798,7 @@ app.get(['/api/v2/payments/config', '/api/pi-payment/config', '/api/v2/pi/config
 
 // Server-side Utility Fulfillment & Verification Endpoint
 app.post('/api/v2/utility/fulfill', paymentRateLimiter, async (req, res) => {
-  const { paymentId, txid, category, country, countryCode, providerId, accountNumber, fiatAmount, piAmount, packageName, idempotencyKey } = req.body;
+  const { paymentId, txid, category, country, countryCode, providerId, accountNumber, fiatAmount, fiatCurrency, piAmount, packageName, idempotencyKey, fxQuoteToken } = req.body;
 
   if (!paymentId) {
     res.status(400).json({ success: false, error: 'Missing paymentId parameter' });
@@ -2902,6 +2903,38 @@ app.post('/api/v2/utility/fulfill', paymentRateLimiter, async (req, res) => {
       message: 'A valid positive Pi amount with no more than 12 decimal places is required.'
     });
     return;
+  }
+
+  // Airtime/data fulfillment must be bound to a signed, short-lived server FX quote.
+  // The token binds fiat amount + currency + exact pico-Pi amount; never re-price at fulfillment.
+  const normalizedCategoryForFx = String(category || '').trim().toLowerCase();
+  if (['airtime', 'mobile_data', 'data'].includes(normalizedCategoryForFx)) {
+    let signedQuote;
+    try {
+      signedQuote = verifyPiNovaFxQuoteToken(fxQuoteToken);
+    } catch (error) {
+      if (error instanceof FxConfigurationError) {
+        res.status(503).json({ success: false, error: 'FX_QUOTE_SIGNING_NOT_CONFIGURED', message: 'Secure currency quote verification is not configured. Utility fulfillment is paused.' });
+        return;
+      }
+      throw error;
+    }
+    const quotePicoPi = signedQuote ? parsePicoPi(signedQuote.referencePiAmount) : null;
+    const normalizedCurrency = String(fiatCurrency || '').trim().toUpperCase();
+    if (
+      !signedQuote ||
+      signedQuote.currency !== normalizedCurrency ||
+      signedQuote.amount !== numericFiatAmount ||
+      quotePicoPi === null ||
+      quotePicoPi !== requestedPicoPi
+    ) {
+      res.status(400).json({
+        success: false,
+        error: 'FX_QUOTE_INVALID_OR_MISMATCHED',
+        message: 'A valid, unexpired server-signed FX quote matching the fiat amount, currency, and Pi amount is required. No utility fulfillment was started.'
+      });
+      return;
+    }
   }
 
   // Authoritative Pi Payment Verification
