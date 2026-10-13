@@ -1362,13 +1362,20 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                     <span>Package / Value:</span>
                     <span className="font-bold text-white">
                       {purchaseMode === 'package' 
-                        ? (selectedPackage ? `${selectedPackage.name} ($${selectedPackage.fiatPrice.toFixed(2)} USD)` : 'Package') 
-                        : (getActiveFiatPrice() > 0 ? `$${getActiveFiatPrice().toFixed(2)} USD` : '$0.00 USD')}
+                        ? (selectedPackage ? `${selectedPackage.name} (${selectedPackage.fiatPrice.toFixed(2)} ${selectedPackage.currency})` : 'Package') 
+                        : (getActiveFiatPrice() > 0 ? `${getActiveFiatPrice().toFixed(2)} ${activeFiatCurrency}` : `0.00 ${activeFiatCurrency || ''}`)}
                     </span>
                   </div>
 
+                  {hasCurrentFxQuote && (
+                    <div className="flex justify-between items-center text-slate-300">
+                      <span>USD equivalent:</span>
+                      <span className="font-mono font-bold text-white">${fxQuote!.amountUsd.toFixed(2)} USD</span>
+                    </div>
+                  )}
+
                   <div className="flex justify-between items-center text-slate-300 pt-2 border-t border-slate-800">
-                    <span>Configured Rate:</span>
+                    <span>PiNova reference:</span>
                     <span className="font-mono font-bold text-purple-400">1 π = ${piConversionConfig.piRateUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD</span>
                   </div>
                 </div>
@@ -1407,7 +1414,7 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                 <button
                   type="button"
                   onClick={handleExecutePayment}
-                  disabled={isProcessingPayment || !selectedProvider || selectedProvider.enabled === false || !accountNumber.trim() || !isWithinLimits || getActiveFiatPrice() <= 0}
+                  disabled={isProcessingPayment || fxQuoteLoading || !hasCurrentFxQuote || !selectedProvider || selectedProvider.enabled === false || !accountNumber.trim() || !isWithinLimits || getActiveFiatPrice() <= 0}
                   className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-purple-600 via-indigo-600 to-amber-500 hover:opacity-95 disabled:opacity-50 text-white font-extrabold text-xs sm:text-sm shadow-xl shadow-purple-600/30 transition-all flex items-center justify-center gap-2"
                 >
                   {selectedProvider?.enabled === false ? (
