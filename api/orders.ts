@@ -406,8 +406,8 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         });
       }
 
-      const allOrders = await listDurableOrders();
-      const byId = new Map(allOrders.map((order) => [order.id, order]));
+      const allOrders = (await listDurableOrders()) as Array<Record<string, any>>;
+      const byId = new Map<string, Record<string, any>>(allOrders.map((order) => [String(order.id), order]));
       const missing: string[] = [];
       const protectedOrders: string[] = [];
       const deleted: string[] = [];
