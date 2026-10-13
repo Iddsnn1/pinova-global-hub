@@ -6,7 +6,7 @@ import {
   type CanonicalUtilityInvoice,
   type PiPaymentVerificationData,
 } from '../../services/UtilityPaymentAuthorizationService';
-import { validateTrustedFxQuote } from '../../services/TrustedFxQuoteService';
+import { fetchTrustedFxQuote, getTrustedFxProviderConfig } from '../../services/TrustedFxProviderService';
 import { calculateTrustedFiatToPi } from '../../services/TrustedFiatToPiService';
 
 export interface NewUtilityInvoice {
@@ -134,17 +134,14 @@ export class NeonUtilityInvoiceRepository {
     const currency = String(input.fiatCurrency || '').trim().toUpperCase();
     if (!/^[A-Z]{3}$/.test(currency)) throw new Error('UTILITY_FIAT_CURRENCY_INVALID');
     if (!isPositiveDecimal(input.fiatAmount, 8)) throw new Error('UTILITY_FIAT_AMOUNT_INVALID');
-    if (!isPositiveDecimal(input.fxUsdPerFiatUnit, 16)) throw new Error('UTILITY_FX_RATE_INVALID');
-    const expectedFxSource = process.env.PINOVA_FX_PROVIDER_SOURCE?.trim() || '';
-    const trustedQuote = validateTrustedFxQuote({
-      currency,
-      usdPerFiatUnit: Number(input.fxUsdPerFiatUnit),
-      asOf: input.fxAsOf,
-      source: input.fxSource,
-    }, currency, expectedFxSource);
+    // Never trust FX rate, source, or timestamp supplied by the client. Fetch the
+    // canonical quote from the server-configured provider; fail closed if it is
+    // unavailable, stale, or invalid.
+    const fxConfig = getTrustedFxProviderConfig();
+    const trustedQuote = await fetchTrustedFxQuote(currency, fxConfig);
 
     // The caller's Pi amount is only a consistency check. The canonical invoice
-    // amount is recomputed server-side from the fiat amount and validated FX quote.
+    // amount and stored FX provenance are recomputed server-side from the provider quote.
     const canonicalConversion = calculateTrustedFiatToPi({
       fiatAmount: Number(input.fiatAmount),
       currency,
@@ -166,9 +163,7 @@ export class NeonUtilityInvoiceRepository {
       throw new Error('UTILITY_INVOICE_FIELDS_REQUIRED');
     }
     const expiresAt = Date.parse(input.expiresAt);
-    const fxAsOf = Date.parse(input.fxAsOf);
     if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) throw new Error('UTILITY_INVOICE_EXPIRY_INVALID');
-    if (!Number.isFinite(fxAsOf)) throw new Error('UTILITY_FX_TIMESTAMP_INVALID');
     const invoiceId = `UTIL-${randomUUID()}`;
     const result = await this.pool.query<InvoiceRow>(
       `INSERT INTO public.utility_invoices
@@ -180,8 +175,8 @@ export class NeonUtilityInvoiceRepository {
          account_number, package_name, fiat_amount::text, fiat_currency, pi_amount::text,
          fx_source, fx_as_of, fx_usd_per_fiat_unit::text, status, payment_txid, expires_at, created_at`,
       [invoiceId, input.ownerUserId, input.serviceCategory, input.providerId, input.accountNumber,
-       input.packageName, input.fiatAmount, currency, canonicalConversion.piAmount, input.fxSource,
-       new Date(fxAsOf).toISOString(), input.fxUsdPerFiatUnit, new Date(expiresAt).toISOString()],
+       input.packageName, input.fiatAmount, currency, canonicalConversion.piAmount, trustedQuote.source,
+       trustedQuote.asOf, String(trustedQuote.usdPerFiatUnit), new Date(expiresAt).toISOString()],
     );
     return mapInvoice(result.rows[0]);
   }
