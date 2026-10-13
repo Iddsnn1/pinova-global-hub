@@ -45,6 +45,7 @@ import { durableOrderStorageEnabled, getDurableOrder, listDurableOrders, saveDur
 import { durableVendorStorageEnabled, getDurableVendorApplication, getDurableVendorApplicationByIdentity, listDurableVendorApplications, saveDurableVendorApplication } from './src/server/services/DurableVendorApplicationStore';
 import { objectStorageEnabled, putObject, getObject, deleteObject, publicObjectUrl } from './src/server/services/ObjectStorage';
 import { saveEducationAdmissionDocument, listEducationAdmissionDocuments, educationDocumentStorageEnabled, EDUCATION_DOCUMENT_MAX_BYTES, EDUCATION_DOCUMENT_TYPES } from './src/server/services/EducationDocumentStorage';
+import { quoteFiatToPiReference, FxConfigurationError, FxProviderError } from './src/server/services/PiNovaFxService';
 
 dotenv.config();
 
@@ -57,6 +58,12 @@ process.on('warning', (warning) => {
 });
 
 const app = express();
+
+const fxQuoteRateLimiter = createRateLimiter({
+  windowMs: 60_000,
+  maxRequests: 30,
+  message: 'Too many currency quote requests. Please retry shortly.'
+});
 
 export async function authenticateVendorRequest(req: any): Promise<any | null> {
   const header = req.headers?.authorization || req.headers?.Authorization;
@@ -423,6 +430,50 @@ function getGeminiClient(): GoogleGenAI | null {
     }
   });
 }
+
+// Server-side FX quote endpoint. It returns a display/reference quote only;
+// checkout must still use the canonical server-side invoice amount.
+app.post('/api/fx/quote-to-pi', fxQuoteRateLimiter, async (req, res) => {
+  const amount = typeof req.body?.amount === 'number' ? req.body.amount : Number(req.body?.amount);
+  const currency = typeof req.body?.currency === 'string' ? req.body.currency : '';
+
+  try {
+    const quote = await quoteFiatToPiReference(amount, currency);
+    res.setHeader('Cache-Control', 'no-store');
+    res.status(200).json({ success: true, quote });
+  } catch (error: any) {
+    if (error instanceof RangeError || error instanceof TypeError) {
+      res.status(400).json({
+        success: false,
+        error: 'INVALID_FX_QUOTE_REQUEST',
+        message: error.message
+      });
+      return;
+    }
+    if (error instanceof FxConfigurationError) {
+      res.status(503).json({
+        success: false,
+        error: 'FX_CONVERSION_NOT_CONFIGURED',
+        message: error.message
+      });
+      return;
+    }
+    if (error instanceof FxProviderError) {
+      res.status(502).json({
+        success: false,
+        error: 'FX_PROVIDER_UNAVAILABLE',
+        message: error.message
+      });
+      return;
+    }
+    console.error('[FX quote] Unexpected server-side conversion failure.');
+    res.status(500).json({
+      success: false,
+      error: 'FX_QUOTE_FAILED',
+      message: 'Currency conversion could not be completed.'
+    });
+  }
+});
 
 // System health check - minimal, safe public response without internal metrics
 app.get(['/api/health', '/health'], (req, res) => {
