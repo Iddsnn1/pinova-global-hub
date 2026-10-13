@@ -137,3 +137,74 @@ export async function quoteFiatToPiReference(
     retrievedAt: new Date().toISOString()
   };
 }
+
+export interface SignedPiNovaFxQuote {
+  token: string;
+  expiresAt: string;
+}
+
+function getFxQuoteSecret(): string {
+  const secret = process.env.PINOVA_FX_QUOTE_SECRET?.trim();
+  if (!secret || Buffer.byteLength(secret, 'utf8') < 32) {
+    throw new FxConfigurationError('Signed FX quotes are not configured on the server.');
+  }
+  return secret;
+}
+
+function stableQuotePayload(quote: PiNovaFxQuote, expiresAt: number): string {
+  return JSON.stringify({
+    version: 1,
+    currency: quote.currency,
+    amount: quote.amount,
+    amountUsd: quote.amountUsd,
+    referencePiAmount: quote.referencePiAmount,
+    retrievedAt: quote.retrievedAt,
+    expiresAt
+  });
+}
+
+export function signPiNovaFxQuote(quote: PiNovaFxQuote, nowMs = Date.now()): SignedPiNovaFxQuote {
+  const crypto = require('node:crypto') as typeof import('node:crypto');
+  const expiresAtMs = nowMs + 5 * 60 * 1000;
+  const payload = stableQuotePayload(quote, expiresAtMs);
+  const encoded = Buffer.from(payload, 'utf8').toString('base64url');
+  const signature = crypto.createHmac('sha256', getFxQuoteSecret()).update(encoded).digest('base64url');
+  return { token: encoded + '.' + signature, expiresAt: new Date(expiresAtMs).toISOString() };
+}
+
+export interface VerifiedPiNovaFxQuote {
+  currency: string;
+  amount: number;
+  amountUsd: number;
+  referencePiAmount: number;
+  retrievedAt: string;
+  expiresAt: number;
+}
+
+export function verifyPiNovaFxQuoteToken(token: unknown, nowMs = Date.now()): VerifiedPiNovaFxQuote | null {
+  if (typeof token !== 'string' || token.length > 4096) return null;
+  const parts = token.split('.');
+  if (parts.length !== 2 || !parts[0] || !parts[1]) return null;
+  try {
+    const crypto = require('node:crypto') as typeof import('node:crypto');
+    const expected = crypto.createHmac('sha256', getFxQuoteSecret()).update(parts[0]).digest();
+    const actual = Buffer.from(parts[1], 'base64url');
+    if (actual.length !== expected.length || !crypto.timingSafeEqual(actual, expected)) return null;
+    const payload = JSON.parse(Buffer.from(parts[0], 'base64url').toString('utf8'));
+    if (payload?.version !== 1 || !Number.isFinite(payload.expiresAt) || payload.expiresAt <= nowMs) return null;
+    if (typeof payload.currency !== 'string' || !/^[A-Z]{3}$/.test(payload.currency)) return null;
+    if (![payload.amount, payload.amountUsd, payload.referencePiAmount].every((v: unknown) => typeof v === 'number' && Number.isFinite(v) && v > 0)) return null;
+    if (typeof payload.retrievedAt !== 'string' || !Number.isFinite(Date.parse(payload.retrievedAt))) return null;
+    return {
+      currency: payload.currency,
+      amount: payload.amount,
+      amountUsd: payload.amountUsd,
+      referencePiAmount: payload.referencePiAmount,
+      retrievedAt: payload.retrievedAt,
+      expiresAt: payload.expiresAt
+    };
+  } catch (error) {
+    if (error instanceof FxConfigurationError) throw error;
+    return null;
+  }
+}
