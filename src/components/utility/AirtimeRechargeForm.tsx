@@ -58,6 +58,24 @@ export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
 
   // Active Country details
   const activeCountry = AIRTIME_COUNTRIES.find((c) => c.code === selectedCountryCode);
+  // Nigeria top-ups use NGN; other countries use the selected provider's currency.
+  const activeCurrencyCode = selectedCountryCode === 'NG' ? 'NGN' : (selectedProvider?.currency || 'USD');
+  const formatFiatAmount = (amount: number): string => {
+    try {
+      return new Intl.NumberFormat('en', { style: 'currency', currency: activeCurrencyCode, maximumFractionDigits: 2 }).format(amount);
+    } catch {
+      return `${activeCurrencyCode} ${amount.toFixed(2)}`;
+    }
+  };
+  const nigerianAirtimePackages: UtilityProviderPackage[] = [
+    { id: 'ng-airtime-500', name: '₦500 Airtime', description: 'Nigeria airtime top-up', fiatPrice: 500, currency: 'NGN' },
+    { id: 'ng-airtime-1000', name: '₦1,000 Airtime', description: 'Nigeria airtime top-up', fiatPrice: 1000, currency: 'NGN' },
+    { id: 'ng-airtime-2000', name: '₦2,000 Airtime', description: 'Nigeria airtime top-up', fiatPrice: 2000, currency: 'NGN', badge: 'Popular' },
+    { id: 'ng-airtime-5000', name: '₦5,000 Airtime', description: 'Nigeria airtime top-up', fiatPrice: 5000, currency: 'NGN' },
+    { id: 'ng-airtime-10000', name: '₦10,000 Airtime', description: 'Nigeria airtime top-up', fiatPrice: 10000, currency: 'NGN' }
+  ];
+  const packageOptions = selectedCountryCode === 'NG' && selectedProvider?.category === 'airtime' ? nigerianAirtimePackages : (selectedProvider?.packages || []);
+  const supportsPackageSelection = packageOptions.length > 0 && (!!selectedProvider?.supportsFixedPackages || (selectedCountryCode === 'NG' && selectedProvider?.category === 'airtime'));
 
   // Dynamically query available networks for selected country
   const availableNetworks = selectedCountryCode ? SAMPLE_UTILITY_PROVIDERS.filter((p) => {
@@ -413,10 +431,10 @@ export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
                 </button>
               )}
 
-              {selectedProvider.supportsFixedPackages && selectedProvider.packages.length > 0 && (
+              {supportsPackageSelection && (
                 <button
                   type="button"
-                  onClick={() => setPurchaseMode('package')}
+                  onClick={() => { setPurchaseMode('package'); setSelectedPackage(packageOptions[0] || null); }}
                   className={`px-3 py-1 rounded-lg text-[11px] font-bold transition-all ${
                     purchaseMode === 'package'
                       ? 'bg-purple-600 text-white shadow-sm'
@@ -432,26 +450,6 @@ export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
           {/* Custom Amount Inputs */}
           {purchaseMode === 'custom' ? (
             <div className="space-y-3">
-              <div className="grid grid-cols-4 gap-2">
-                {[2, 5, 10, 25].map((amt) => (
-                  <button
-                    key={amt}
-                    type="button"
-                    onClick={() => {
-                      setPurchaseMode('custom');
-                      setCustomAmountInput(amt.toString());
-                    }}
-                    className={`py-2 rounded-xl text-xs font-bold border transition-all ${
-                      customAmountInput === amt.toString()
-                        ? 'bg-purple-600 text-white border-purple-500 shadow-md'
-                        : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300'
-                    }`}
-                  >
-                    ${amt}.00 USD
-                  </button>
-                ))}
-              </div>
-
               <div className="relative">
                 <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">$</span>
                 <input
@@ -459,7 +457,7 @@ export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
                   inputMode="decimal"
                   value={customAmountInput}
                   onChange={(e) => handleCustomAmountChange(e.target.value)}
-                  placeholder="Enter custom USD value (e.g. 5.00)"
+                  placeholder={`Enter amount in ${activeCurrencyCode} (e.g. ${selectedCountryCode === 'NG' ? '500' : '5.00'})`}
                   className="w-full pl-8 pr-3 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-xs font-bold text-slate-900 dark:text-slate-100"
                 />
               </div>
@@ -467,7 +465,7 @@ export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
           ) : (
             /* Fixed Packages List */
             <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-              {selectedProvider.packages.map((pkg) => {
+              {packageOptions.map((pkg) => {
                 const isSelected = selectedPackage?.id === pkg.id;
                 return (
                   <div
@@ -492,7 +490,7 @@ export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
                     </div>
 
                     <div className="text-right shrink-0">
-                      <span className="font-black text-xs text-purple-600 dark:text-purple-400">${pkg.fiatPrice.toFixed(2)} USD</span>
+                      <span className="font-black text-xs text-purple-600 dark:text-purple-400">{formatFiatAmount(pkg.fiatPrice)}</span>
                     </div>
                   </div>
                 );
@@ -515,7 +513,7 @@ export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
           </div>
           <div className="flex justify-between text-xs">
             <span className="text-slate-400">Target Airtime Value:</span>
-            <span className="font-bold text-white">${getActiveFiatPrice() < 0.01 ? getActiveFiatPrice().toString() : getActiveFiatPrice().toFixed(2)} USD</span>
+            <span className="font-bold text-white">{formatFiatAmount(getActiveFiatPrice())}</span>
           </div>
           <div className="flex justify-between text-xs">
             <span className="text-slate-400">Pi Platform Exchange Rate:</span>
