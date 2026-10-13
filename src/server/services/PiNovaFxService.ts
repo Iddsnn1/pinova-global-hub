@@ -6,6 +6,7 @@
  * application's configured Pi reference amount. The Pi reference is not an
  * official Pi Network market price and must not replace a canonical invoice.
  */
+import { createHmac, timingSafeEqual } from 'node:crypto';
 import { calculatePiReferenceFromUsd, PI_REFERENCE_RATE_USD } from '../../config/piReference';
 
 export interface PiNovaFxQuote {
@@ -164,11 +165,10 @@ function stableQuotePayload(quote: PiNovaFxQuote, expiresAt: number): string {
 }
 
 export function signPiNovaFxQuote(quote: PiNovaFxQuote, nowMs = Date.now()): SignedPiNovaFxQuote {
-  const crypto = require('node:crypto') as typeof import('node:crypto');
   const expiresAtMs = nowMs + 5 * 60 * 1000;
   const payload = stableQuotePayload(quote, expiresAtMs);
   const encoded = Buffer.from(payload, 'utf8').toString('base64url');
-  const signature = crypto.createHmac('sha256', getFxQuoteSecret()).update(encoded).digest('base64url');
+  const signature = createHmac('sha256', getFxQuoteSecret()).update(encoded).digest('base64url');
   return { token: encoded + '.' + signature, expiresAt: new Date(expiresAtMs).toISOString() };
 }
 
@@ -186,10 +186,9 @@ export function verifyPiNovaFxQuoteToken(token: unknown, nowMs = Date.now()): Ve
   const parts = token.split('.');
   if (parts.length !== 2 || !parts[0] || !parts[1]) return null;
   try {
-    const crypto = require('node:crypto') as typeof import('node:crypto');
-    const expected = crypto.createHmac('sha256', getFxQuoteSecret()).update(parts[0]).digest();
+    const expected = createHmac('sha256', getFxQuoteSecret()).update(parts[0]).digest();
     const actual = Buffer.from(parts[1], 'base64url');
-    if (actual.length !== expected.length || !crypto.timingSafeEqual(actual, expected)) return null;
+    if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) return null;
     const payload = JSON.parse(Buffer.from(parts[0], 'base64url').toString('utf8'));
     if (payload?.version !== 1 || !Number.isFinite(payload.expiresAt) || payload.expiresAt <= nowMs) return null;
     if (typeof payload.currency !== 'string' || !/^[A-Z]{3}$/.test(payload.currency)) return null;
