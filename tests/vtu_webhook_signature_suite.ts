@@ -5,6 +5,8 @@ import { VtuNgAdapter } from '../src/server/integrations/vtuNgAdapter';
 const previousPin = process.env.VTU_USER_PIN;
 const previousUsername = process.env.VTU_USERNAME;
 const previousPassword = process.env.VTU_PASSWORD;
+const previousBaseUrl = process.env.VTU_API_BASE_URL;
+const previousFetch = globalThis.fetch;
 
 function signature(secret: string, body: string): string {
   return crypto.createHmac('sha256', secret).update(body).digest('hex');
@@ -82,6 +84,40 @@ try {
   assert.equal(configured.verifyWebhookSignature(validBody, '  ' + validSignature + '  '), true,
     'surrounding header whitespace is trimmed');
 
+
+  // Mock the provider boundary to verify international Nigerian numbers are
+  // normalized before the outbound airtime request. This never contacts VTU.ng.
+  process.env.VTU_USERNAME = 'test-user';
+  process.env.VTU_PASSWORD = 'test-password';
+  process.env.VTU_API_BASE_URL = 'https://vtu.test.invalid/wp-json';
+  const outboundBodies: Array<{ url: string; body: any }> = [];
+  globalThis.fetch = (async (input: any, init?: any) => {
+    const url = String(input);
+    const body = init?.body ? JSON.parse(String(init.body)) : undefined;
+    outboundBodies.push({ url, body });
+    if (url.endsWith('/jwt-auth/v1/token')) {
+      return new Response(JSON.stringify({ token: 'mock-jwt-token' }), { status: 200 });
+    }
+    if (url.endsWith('/api/v2/airtime')) {
+      return new Response(JSON.stringify({ code: 'success', data: { order_id: 'mock-order-01' } }), { status: 200 });
+    }
+    return new Response(JSON.stringify({ message: 'unexpected mock URL' }), { status: 500 });
+  }) as typeof fetch;
+  const normalizedAdapter = new VtuNgAdapter();
+  const normalizedResult = await normalizedAdapter.purchaseAirtime({
+    paymentId: 'pi-payment-normalization-test',
+    phone: '+234 803 123 4567',
+    serviceId: 'mtn-ng',
+    amount: 500,
+  });
+  assert.equal(normalizedResult.status, 'FULFILLED');
+  const airtimeRequest = outboundBodies.find((entry) => entry.url.endsWith('/api/v2/airtime'));
+  assert.ok(airtimeRequest, 'airtime provider request should be made only to the mocked endpoint');
+  assert.equal(airtimeRequest?.body.phone, '08031234567',
+    'international +234 phone numbers must be normalized to Nigerian 11-digit format');
+  assert.equal(airtimeRequest?.body.amount, 500);
+  assert.equal(airtimeRequest?.body.service_id, 'mtn');
+
   console.log('VTU webhook signature tests passed.');
 } finally {
   if (previousPin === undefined) delete process.env.VTU_USER_PIN;
@@ -90,4 +126,7 @@ try {
   else process.env.VTU_USERNAME = previousUsername;
   if (previousPassword === undefined) delete process.env.VTU_PASSWORD;
   else process.env.VTU_PASSWORD = previousPassword;
+  if (previousBaseUrl === undefined) delete process.env.VTU_API_BASE_URL;
+  else process.env.VTU_API_BASE_URL = previousBaseUrl;
+  globalThis.fetch = previousFetch;
 }
