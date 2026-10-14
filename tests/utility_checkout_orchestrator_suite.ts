@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { processUtilityCheckout, type UtilityCheckoutDependencies } from '../src/server/services/UtilityCheckoutOrchestrator';
 
 const invoice = {
-  invoiceId: 'UTIL-INV-TEST', ownerUserId: 'buyer-01', paymentId: 'pi-payment-01',
+  invoiceId: 'UTIL-INV-TEST', ownerUserId: 'buyer-01', ownerPiUid: 'buyer-uid-01', paymentId: 'pi-payment-01',
   fiatAmount: '100.00', fiatCurrency: 'NGN', piAmount: '0.000002069016', status: 'OPEN' as const,
   serviceCategory: 'airtime', providerId: 'provider-mtn', accountNumber: '08000000000',
   packageName: 'NGN 100 airtime', fxSource: 'currencyapi.com',
@@ -67,6 +67,30 @@ async function run() {
     invoiceId: invoice.invoiceId, ownerUserId: invoice.ownerUserId, paymentId: invoice.paymentId,
   }), { status: 'REJECTED', error: 'PI_PAYMENT_NOT_VERIFIED' });
   assert.equal(notVerified.calls.reserve, 0);
+
+  const ownerMismatch = setup({
+    verifyPayment: async () => ({
+      ...verifiedPayment,
+      paymentData: { ...verifiedPayment.paymentData, user_uid: 'different-pi-uid' },
+    }),
+  });
+  assert.deepEqual(await processUtilityCheckout(ownerMismatch.deps, {
+    invoiceId: invoice.invoiceId, ownerUserId: invoice.ownerUserId, paymentId: invoice.paymentId,
+  }), { status: 'REJECTED', error: 'PI_PAYMENT_OWNER_MISMATCH' });
+  assert.equal(ownerMismatch.calls.reserve, 0);
+  assert.equal(ownerMismatch.calls.fulfill, 0);
+
+  const missingInvoiceUid = setup({
+    repository: {
+      ...setup().repository,
+      findOwnedInvoice: async () => ({ ...invoice, ownerPiUid: '' }),
+    } as unknown as UtilityCheckoutDependencies['repository'],
+  });
+  assert.deepEqual(await processUtilityCheckout(missingInvoiceUid.deps, {
+    invoiceId: invoice.invoiceId, ownerUserId: invoice.ownerUserId, paymentId: invoice.paymentId,
+  }), { status: 'REJECTED', error: 'PI_PAYMENT_OWNER_MISMATCH' });
+  assert.equal(missingInvoiceUid.calls.reserve, 0);
+  assert.equal(missingInvoiceUid.calls.fulfill, 0);
 
   const success = setup();
   assert.deepEqual(await processUtilityCheckout(success.deps, {
