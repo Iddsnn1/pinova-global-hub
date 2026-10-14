@@ -58,6 +58,9 @@ async function run() {
   const repository = new NeonUtilityInvoiceRepository(good.pool);
   const result = await repository.authorizeAndReserve('UTIL-INV-TEST', 'buyer-01', 'pi-payment-01', {
     identifier: 'pi-payment-01',
+    user_uid: 'buyer-uid-01',
+    direction: 'user_to_app',
+    network: 'Pi Testnet',
     amount: 0.000002069016,
     status: { developer_completed: true },
     transaction: { verified: true, txid: 'pi-tx-01' },
