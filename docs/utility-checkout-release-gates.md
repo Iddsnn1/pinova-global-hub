@@ -25,6 +25,7 @@ This checklist describes the Neon-backed utility invoice flow. It does not enabl
 ## Remaining release gates
 
 - [ ] Integrate the UI with the canonical invoice lifecycle: create invoice from server-validated form values, invoke the Pi SDK payment flow for the server-issued Pi amount, bind the resulting payment ID, then call the authenticated checkout endpoint only after the SDK flow completes. Preserve server-side verification as the authority; client callbacks are not proof of payment.
+- [ ] Separate **Pi payment completion** from **utility fulfillment success** in the UI. The existing shared Pi SDK completion callback uses the generic `/api/v2/payments/complete` endpoint; a completed Pi payment must never be presented as a successful airtime recharge until the utility checkout response confirms fulfillment, or show a pending/reconciliation state for ambiguous provider outcomes.
 - [ ] Add and run a mocked HTTP-route integration test for the feature-flag guard, authentication/owner mismatch, malformed invoice/payment ID, and proof that disabled checkout makes no DB/provider calls.
 - [ ] Run route-level tests for wrong payment ID, unverified payment, wrong Pi UID, unsupported provider/service, expired invoice, replay, and concurrent checkout; unit tests for the orchestrator/repository are not a substitute for this HTTP coverage.
 - [ ] Confirm the actual VTU.ng contract for duplicate request IDs, status reconciliation, request timeouts, and provider-specific airtime limits/denominations. Do not assume stable request IDs alone prevent duplicate recharges.
@@ -35,8 +36,8 @@ This checklist describes the Neon-backed utility invoice flow. It does not enabl
 
 ## Validation snapshot — 2026-10-14
 
-- GitHub Actions on PR head commit `639b7c6f84a7289cf1416e4e96505f6922cf1e20`: PiNova Global Hub CI, PiNova CI Verify, PiNova CI, and Currency Engine Validation all completed successfully.
-- Vercel status for that PR head: success; the linked Preview deployment is Ready at https://pinova-global-hub-git-feat-global-curr-587eaa-iddsnn1s-projects.vercel.app.
+- GitHub Actions on PR head commit `845c30534ad3a9c4a04d37b94bc590a461cb35c7`: PiNova Global Hub CI, PiNova CI Verify, PiNova CI, and Currency Engine Validation all completed successfully.
+- Vercel reports the Preview deployment for this commit as **Ready**: https://vercel.com/iddsnn1s-projects/pinova-global-hub/8uenuSoKuWfB61bpqLkLMmMqgB24. Automated URL fetch was blocked by deployment authentication, so the preview health endpoint was not independently verified in that check.
 - A prior GET request to the checkout path returned a method-not-found response because the route is POST-only. This is **not** an end-to-end checkout test. A real authenticated POST integration test remains outstanding.
 - Unit suites exercise authorization, repository reservations/replay, and orchestrator outcomes. They do not yet prove the complete HTTP route works end-to-end with auth and mocked provider dependencies, and the frontend is not yet wired to that route.
 
