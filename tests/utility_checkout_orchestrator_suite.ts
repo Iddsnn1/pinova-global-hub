@@ -12,7 +12,7 @@ const invoice = {
 const verifiedPayment = {
   verified: true, status: 'VERIFIED' as const, source: 'pi_platform' as const,
   message: 'verified', paymentData: {
-    identifier: 'pi-payment-01', amount: 0.000002069016,
+    identifier: 'pi-payment-01', user_uid: 'buyer-uid-01', direction: 'user_to_app', network: 'Pi Testnet', amount: 0.000002069016,
     status: { developer_completed: true }, transaction: { verified: true, txid: 'pi-tx-01' },
   },
 };
