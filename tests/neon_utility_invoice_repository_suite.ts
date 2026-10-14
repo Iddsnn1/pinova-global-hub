@@ -235,6 +235,31 @@ async function run() {
     globalThis.fetch = previousFetch;
   }
 
+  // Durable invoice lookup is owner-scoped and preserves the verified Pi UID
+  // used by the HTTP layer to prevent cross-identity invoice disclosure.
+  const lookupCalls: Array<{ sql: string; values?: unknown[] }> = [];
+  const lookupPool = {
+    query: async (sql: string, values?: unknown[]) => {
+      lookupCalls.push({ sql, values });
+      return { rows: [{ ...invoiceRow, invoice_id: 'UTIL-INV-LOOKUP' }], rowCount: 1 };
+    },
+    end: async () => undefined,
+  };
+  const lookupRepo = new NeonUtilityInvoiceRepository(lookupPool as unknown as Pool);
+  const owned = await lookupRepo.findOwnedInvoice('UTIL-INV-LOOKUP', 'buyer-01');
+  assert.equal(owned?.invoiceId, 'UTIL-INV-LOOKUP');
+  assert.equal(owned?.ownerUserId, 'buyer-01');
+  assert.equal(owned?.ownerPiUid, 'buyer-uid-01');
+  assert.ok(lookupCalls[0].sql.includes('WHERE invoice_id = $1 AND owner_user_id = $2'));
+  assert.deepEqual(lookupCalls[0].values, ['UTIL-INV-LOOKUP', 'buyer-01']);
+
+  const absentPool = {
+    query: async () => ({ rows: [], rowCount: 0 }),
+    end: async () => undefined,
+  };
+  const absentRepo = new NeonUtilityInvoiceRepository(absentPool as unknown as Pool);
+  assert.equal(await absentRepo.findOwnedInvoice('UTIL-INV-ABSENT', 'buyer-01'), null);
+
   console.log('Neon utility invoice repository tests passed.');
 }
 
