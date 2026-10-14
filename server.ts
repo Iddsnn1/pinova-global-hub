@@ -3096,6 +3096,52 @@ app.post('/api/v2/utility/invoices/:invoiceId/payment', paymentRateLimiter, auth
   }
 });
 
+// Read a durable utility invoice/receipt status without exposing account details.
+// The authenticated Pi UID must still match the UID recorded when the invoice was created.
+app.get('/api/v2/utility/invoices/:invoiceId', paymentRateLimiter, authenticate, requireAuthenticatedUser, async (req: AuthenticatedRequest, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  const ownerUserId = String(req.user?.id || '').trim();
+  const ownerPiUid = String(req.user?.piUid || '').trim();
+  const invoiceId = typeof req.params.invoiceId === 'string' ? req.params.invoiceId.trim() : '';
+  if (!ownerUserId || !ownerPiUid) {
+    return res.status(403).json({ success: false, error: 'PI_IDENTITY_REQUIRED' });
+  }
+  if (!/^UTIL-[0-9a-f-]{36}$/i.test(invoiceId)) {
+    return res.status(400).json({ success: false, error: 'UTILITY_INVOICE_ID_INVALID' });
+  }
+  try {
+    const { NeonUtilityInvoiceRepository } = await import('./src/server/db/repositories/NeonUtilityInvoiceRepository');
+    const repository = new NeonUtilityInvoiceRepository();
+    const invoice = await repository.findOwnedInvoice(invoiceId, ownerUserId);
+    // Avoid disclosing whether an invoice exists for a different account or Pi identity.
+    if (!invoice || invoice.ownerPiUid !== ownerPiUid) {
+      return res.status(404).json({ success: false, error: 'UTILITY_INVOICE_NOT_FOUND' });
+    }
+    return res.status(200).json({
+      success: true,
+      invoice: {
+        invoiceId: invoice.invoiceId,
+        serviceCategory: invoice.serviceCategory,
+        providerId: invoice.providerId,
+        packageName: invoice.packageName,
+        fiatAmount: invoice.fiatAmount,
+        fiatCurrency: invoice.fiatCurrency,
+        piAmount: invoice.piAmount,
+        status: invoice.status,
+        paymentBound: Boolean(invoice.paymentId),
+        fxSource: invoice.fxSource,
+        fxAsOf: invoice.fxAsOf,
+        expiresAt: invoice.expiresAt,
+        createdAt: invoice.createdAt,
+      },
+    });
+  } catch (error) {
+    const code = error instanceof Error ? error.message : 'UTILITY_INVOICE_READ_FAILED';
+    console.error('[UTILITY INVOICE READ]', code);
+    return res.status(503).json({ success: false, error: 'UTILITY_INVOICE_STATUS_UNAVAILABLE' });
+  }
+});
+
 // Server-side Utility Fulfillment & Verification Endpoint
 // Server-side Utility Fulfillment & Verification Endpoint
 // Fail closed until a canonical, server-owned utility invoice is created and
