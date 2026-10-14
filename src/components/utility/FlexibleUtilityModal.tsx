@@ -1243,9 +1243,12 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                         />
                       </div>
 
-                      {activeFiatCurrency === 'USD' ? (
+                      {(activeFiatCurrency === 'USD' || (selectedCategory === 'airtime' && selectedCountryCode === 'NG' && activeFiatCurrency === 'NGN')) ? (
                         <div className="flex flex-wrap gap-2 pt-1">
-                          {[5, 10, 25, 50, 100].map((amt) => (
+                          {(selectedCategory === 'airtime' && selectedCountryCode === 'NG' && activeFiatCurrency === 'NGN'
+                            ? [500, 1000, 2000, 5000, 10000]
+                            : [5, 10, 25, 50, 100]
+                          ).map((amt) => (
                             <button
                               key={amt}
                               type="button"
@@ -1256,7 +1259,7 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                                   : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-purple-500'
                               }`}
                             >
-                              {formatFiat(amt, 'USD')}
+                              {formatFiat(amt, activeFiatCurrency)}
                             </button>
                           ))}
                         </div>
