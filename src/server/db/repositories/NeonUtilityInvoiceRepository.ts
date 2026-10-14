@@ -421,6 +421,11 @@ export class NeonUtilityInvoiceRepository {
   }
 
   async close(): Promise<void> {
+    // If the shared runtime pool is explicitly closed (for shutdown/tests),
+    // clear the singleton so a later repository can create a fresh pool.
+    if (this.pool === NeonUtilityInvoiceRepository.sharedPool) {
+      NeonUtilityInvoiceRepository.sharedPool = undefined;
+    }
     await this.pool.end();
   }
 }
