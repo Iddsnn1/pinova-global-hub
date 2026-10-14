@@ -486,14 +486,18 @@ export class VtuNgAdapter {
         message: 'Airtime amount must be a positive whole-number NGN amount.'
       };
     }
-    if (!normalizedService) {
+    // Airtime fulfillment is limited to explicitly supported Nigerian mobile
+    // networks. mapServiceId() intentionally preserves unknown IDs for other
+    // utility types, so do not treat any non-empty string as a valid airtime ID.
+    const supportedAirtimeServices = new Set(['mtn', 'airtel', 'glo', '9mobile']);
+    if (!supportedAirtimeServices.has(normalizedService)) {
       return {
         success: false,
         fulfilled: false,
         status: 'FAILED',
         requestId,
         errorCode: 'VTU_SERVICE_NOT_CONFIGURED',
-        message: 'A supported airtime network is required.'
+        message: 'A supported Nigerian airtime network is required.'
       };
     }
 
