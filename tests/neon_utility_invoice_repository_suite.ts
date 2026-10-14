@@ -76,6 +76,9 @@ async function run() {
   const mismatchRepo = new NeonUtilityInvoiceRepository(mismatch.pool);
   const rejected = await mismatchRepo.authorizeAndReserve('UTIL-INV-TEST', 'buyer-01', 'pi-payment-01', {
     identifier: 'pi-payment-01',
+    user_uid: 'buyer-uid-01',
+    direction: 'user_to_app',
+    network: 'Pi Testnet',
     amount: 0.000002069017,
     status: { developer_completed: true },
     transaction: { verified: true, txid: 'pi-tx-02' },
@@ -100,6 +103,9 @@ async function run() {
   const replayRepo = new NeonUtilityInvoiceRepository(replay.pool);
   const replayResult = await replayRepo.authorizeAndReserve('UTIL-INV-TEST', 'buyer-01', 'pi-payment-01', {
     identifier: 'pi-payment-01',
+    user_uid: 'buyer-uid-01',
+    direction: 'user_to_app',
+    network: 'Pi Testnet',
     amount: 0.000002069016,
     status: { developer_completed: true },
     transaction: { verified: true, txid: 'pi-tx-01' },
@@ -118,6 +124,9 @@ async function run() {
   const expiredRepo = new NeonUtilityInvoiceRepository(expired.pool);
   const expiredResult = await expiredRepo.authorizeAndReserve('UTIL-INV-TEST', 'buyer-01', 'pi-payment-01', {
     identifier: 'pi-payment-01',
+    user_uid: 'buyer-uid-01',
+    direction: 'user_to_app',
+    network: 'Pi Testnet',
     amount: 0.000002069016,
     status: { developer_completed: true },
     transaction: { verified: true, txid: 'pi-tx-expired' },
@@ -130,6 +139,9 @@ async function run() {
   const raceRepo = new NeonUtilityInvoiceRepository(race.pool);
   const raceResult = await raceRepo.authorizeAndReserve('UTIL-INV-TEST', 'buyer-01', 'pi-payment-01', {
     identifier: 'pi-payment-01',
+    user_uid: 'buyer-uid-01',
+    direction: 'user_to_app',
+    network: 'Pi Testnet',
     amount: 0.000002069016,
     status: { developer_completed: true },
     transaction: { verified: true, txid: 'pi-tx-03' },
