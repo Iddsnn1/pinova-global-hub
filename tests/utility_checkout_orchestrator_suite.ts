@@ -98,6 +98,38 @@ async function run() {
   })).status, 'FULFILLMENT_PENDING');
   assert.equal(unknown.calls.outcome, 'UNKNOWN');
 
+  // If the provider may have acted but outcome persistence fails, checkout must
+  // return pending and must not silently claim success or dispatch a second time.
+  const recordFailure = setup({
+    repository: {
+      ...setup().repository,
+      recordFulfillmentOutcome: async () => false,
+    } as unknown as UtilityCheckoutDependencies['repository'],
+  });
+  assert.equal((await processUtilityCheckout(recordFailure.deps, {
+    invoiceId: invoice.invoiceId, ownerUserId: invoice.ownerUserId, paymentId: invoice.paymentId,
+  })).status, 'FULFILLMENT_PENDING');
+  assert.equal(recordFailure.calls.fulfill, 1);
+
+  // A previously resolved idempotency reservation returns its recorded result
+  // without calling the external provider again.
+  const resolved = setup({
+    repository: {
+      ...setup().repository,
+      authorizeAndReserve: async () => ({
+        status: 'RESOLVED' as const, invoiceId: invoice.invoiceId,
+        paymentId: invoice.paymentId, txid: 'pi-tx-01', response: { receipt: 'cached' },
+      }),
+    } as unknown as UtilityCheckoutDependencies['repository'],
+  });
+  assert.deepEqual(await processUtilityCheckout(resolved.deps, {
+    invoiceId: invoice.invoiceId, ownerUserId: invoice.ownerUserId, paymentId: invoice.paymentId,
+  }), {
+    status: 'RESOLVED', invoiceId: invoice.invoiceId, paymentId: invoice.paymentId,
+    response: { receipt: 'cached' },
+  });
+  assert.equal(resolved.calls.fulfill, 0);
+
   console.log('Utility checkout orchestrator tests passed.');
 }
 
