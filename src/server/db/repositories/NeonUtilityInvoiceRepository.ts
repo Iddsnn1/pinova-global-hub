@@ -20,9 +20,10 @@ export interface NewUtilityInvoice {
   fiatCurrency: string;
   /** Deprecated client estimate; ignored. The repository derives the canonical amount from its trusted quote. */
   piAmount?: string;
-  fxSource: string;
-  fxAsOf: string;
-  fxUsdPerFiatUnit: string;
+  /** Client FX metadata is ignored; the repository persists its trusted quote. */
+  fxSource?: string;
+  fxAsOf?: string;
+  fxUsdPerFiatUnit?: string;
   expiresAt: string;
 }
 
