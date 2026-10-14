@@ -73,12 +73,29 @@ type InvoiceRow = {
 function isPositiveDecimal(value: string, maxDecimals: number): boolean {
   if (typeof value !== 'string' || !/^(?:0|[1-9]\d*)(?:\.\d+)?$/.test(value)) return false;
   const [whole, fraction = ''] = value.split('.');
-  if (fraction.length > maxDecimals) return false;
+  // Matches numeric(30, 8): at most 22 integer digits and 8 fractional digits.
+  if (whole.length > 22 || fraction.length > maxDecimals) return false;
   try {
     return BigInt(whole) > 0n || /[1-9]/.test(fraction);
   } catch {
     return false;
   }
+}
+
+/**
+ * Conversion math uses JavaScript numbers for the trusted FX rate. Reject fiat
+ * strings whose significant digits exceed the reliable input precision instead
+ * of silently changing the buyer's requested amount before Pi pricing.
+ */
+function hasSupportedFiatPrecision(value: string): boolean {
+  if (typeof value !== 'string') return false;
+  const [whole, fraction = ''] = value.split('.');
+  const significantWhole = whole.replace(/^0+/, '');
+  const significantFraction = fraction.replace(/0+$/, '');
+  const significantDigits = significantWhole.length > 0
+    ? significantWhole.length + significantFraction.length
+    : significantFraction.replace(/^0+/, '').length;
+  return significantDigits > 0 && significantDigits <= 15;
 }
 
 function iso(value: Date | string): string {
@@ -151,6 +168,9 @@ export class NeonUtilityInvoiceRepository {
     const currency = String(input.fiatCurrency || '').trim().toUpperCase();
     if (!/^[A-Z]{3}$/.test(currency)) throw new Error('UTILITY_FIAT_CURRENCY_INVALID');
     if (!isPositiveDecimal(input.fiatAmount, 8)) throw new Error('UTILITY_FIAT_AMOUNT_INVALID');
+    if (!hasSupportedFiatPrecision(input.fiatAmount)) {
+      throw new Error('UTILITY_FIAT_AMOUNT_PRECISION_UNSUPPORTED');
+    }
     // Never trust FX rate, source, or timestamp supplied by the client. Fetch the
     // canonical quote from the server-configured provider; fail closed if it is
     // unavailable, stale, or invalid.
