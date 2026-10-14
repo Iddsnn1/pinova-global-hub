@@ -3050,7 +3050,7 @@ app.post('/api/v2/utility/invoices', paymentRateLimiter, authenticate, requireAu
     const code = error instanceof Error ? error.message : 'UTILITY_INVOICE_CREATE_FAILED';
     const status = code.startsWith('FX_') ? 503 :
       code === 'UTILITY_DATABASE_URL_REQUIRED' ? 503 :
-      code === 'UTILITY_FIAT_AMOUNT_INVALID' || code === 'UTILITY_FIAT_CURRENCY_INVALID' ? 400 : 500;
+      code === 'UTILITY_FIAT_AMOUNT_INVALID' || code === 'UTILITY_FIAT_AMOUNT_PRECISION_UNSUPPORTED' || code === 'UTILITY_FIAT_CURRENCY_INVALID' ? 400 : 500;
     console.error('[UTILITY INVOICE CREATE]', code);
     return res.status(status).json({
       success: false,
@@ -3058,7 +3058,7 @@ app.post('/api/v2/utility/invoices', paymentRateLimiter, authenticate, requireAu
       message: status === 503
         ? 'Trusted FX or durable invoice storage is unavailable; no invoice was created.'
         : status === 400
-          ? 'The fiat amount or currency is invalid.'
+          ? 'The fiat amount, currency, or supported decimal precision is invalid.'
           : 'The utility invoice could not be created.'
     });
   }
