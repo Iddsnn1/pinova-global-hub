@@ -35,6 +35,8 @@ import {
 } from './src/server/auth';
 import { createRateLimiter } from './src/server/auth/rateLimit';
 import { calculateFiatToPiWithConfiguredFx } from './src/server/services/TrustedFxProviderService';
+import { processUtilityCheckout } from './src/server/services/UtilityCheckoutOrchestrator';
+import { verifyPiPaymentAuthoritative as verifyUtilityPiPaymentAuthoritative } from './src/server/services/PiPaymentVerificationService';
 import { AuditService } from './src/server/services/AuditService';
 import { EducationClassificationEngine } from './src/server/services/EducationClassificationEngine';
 import { StudentVerificationService } from './src/server/services/StudentVerificationService';
@@ -3139,6 +3141,121 @@ app.get('/api/v2/utility/invoices/:invoiceId', paymentRateLimiter, authenticate,
     const code = error instanceof Error ? error.message : 'UTILITY_INVOICE_READ_FAILED';
     console.error('[UTILITY INVOICE READ]', code);
     return res.status(503).json({ success: false, error: 'UTILITY_INVOICE_STATUS_UNAVAILABLE' });
+  }
+});
+
+// Authenticated canonical checkout. The feature flag is deliberately OFF by default;
+// no Vercel environment variable is changed by this commit. The legacy fulfill route
+// below remains disabled. Only validated Nigerian Airtime invoices are dispatchable.
+app.post('/api/v2/utility/invoices/:invoiceId/checkout', paymentRateLimiter, authenticate, requireAuthenticatedUser, async (req: AuthenticatedRequest, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('Retry-After', '300');
+  if (process.env.PINOVA_UTILITY_CHECKOUT_ENABLED !== 'true') {
+    return res.status(503).json({
+      success: false,
+      error: 'UTILITY_CHECKOUT_DISABLED',
+      message: 'Utility checkout is not enabled. No provider request was sent.'
+    });
+  }
+
+  const ownerUserId = String(req.user?.id || '').trim();
+  const ownerPiUid = String(req.user?.piUid || '').trim();
+  const invoiceId = typeof req.params.invoiceId === 'string' ? req.params.invoiceId.trim() : '';
+  const paymentId = typeof req.body?.paymentId === 'string' ? req.body.paymentId.trim() : '';
+  if (!ownerUserId || !ownerPiUid) {
+    return res.status(403).json({ success: false, error: 'PI_IDENTITY_REQUIRED' });
+  }
+  if (!/^UTIL-[0-9a-f-]{36}$/i.test(invoiceId) || !paymentId || paymentId.length > 200 || /[\x00-\x1F]/.test(paymentId)) {
+    return res.status(400).json({ success: false, error: 'UTILITY_CHECKOUT_INPUT_INVALID' });
+  }
+
+  try {
+    const { NeonUtilityInvoiceRepository } = await import('./src/server/db/repositories/NeonUtilityInvoiceRepository');
+    const repository = new NeonUtilityInvoiceRepository();
+    const invoice = await repository.findOwnedInvoice(invoiceId, ownerUserId);
+    if (!invoice || invoice.ownerPiUid !== ownerPiUid) {
+      return res.status(404).json({ success: false, error: 'UTILITY_INVOICE_NOT_FOUND' });
+    }
+    if (invoice.paymentId !== paymentId) {
+      return res.status(409).json({ success: false, error: 'PI_PAYMENT_ID_MISMATCH' });
+    }
+
+    // Until additional provider-specific fulfillment adapters are audited, this
+    // route deliberately supports only NGN Airtime with an explicit network ID.
+    const networkAliases: Record<string, string> = {
+      'mtn': 'mtn', 'mtn-ng': 'mtn', 'mtn-nigeria': 'mtn',
+      'airtel': 'airtel', 'airtel-ng': 'airtel', 'airtel-nigeria': 'airtel',
+      'glo': 'glo', 'glo-ng': 'glo', 'glo-nigeria': 'glo',
+      '9mobile': '9mobile', '9mobile-ng': '9mobile', '9mobile-nigeria': '9mobile',
+      'etisalat': '9mobile'
+    };
+    const normalizedProviderId = invoice.providerId.toLowerCase().trim().replace(/\s+/g, '-');
+    const network = networkAliases[normalizedProviderId];
+    const amount = Number(invoice.fiatAmount);
+    const normalizedPhone = invoice.accountNumber.replace(/[^0-9]/g, '');
+    const phone = normalizedPhone.startsWith('234') && normalizedPhone.length === 13
+      ? '0' + normalizedPhone.slice(3)
+      : normalizedPhone;
+    if (invoice.serviceCategory !== 'airtime' || invoice.fiatCurrency !== 'NGN' ||
+        !network || !Number.isSafeInteger(amount) || amount <= 0 ||
+        !/^0[0-9]{10}$/.test(phone)) {
+      return res.status(422).json({
+        success: false,
+        error: 'UTILITY_SERVICE_NOT_SUPPORTED',
+        message: 'Only configured Nigerian Airtime invoices with a valid network, phone, and whole-NGN amount are supported.'
+      });
+    }
+
+    const result = await processUtilityCheckout({
+      repository,
+      verifyPayment: verifyUtilityPiPaymentAuthoritative,
+      fulfill: async (canonicalInvoice, verifiedPaymentId) => {
+        const providerResult = await vtuNgAdapter.purchaseAirtime({
+          paymentId: verifiedPaymentId,
+          phone: canonicalInvoice.accountNumber,
+          serviceId: network,
+          amount
+        });
+        if (providerResult.status === 'FULFILLED' && providerResult.fulfilled === true) {
+          return {
+            status: 'SUCCEEDED' as const,
+            providerReference: providerResult.providerReference || providerResult.orderId || providerResult.requestId,
+            response: { status: providerResult.status, message: providerResult.message, requestId: providerResult.requestId }
+          };
+        }
+        if (providerResult.status === 'FAILED') {
+          return {
+            status: 'FAILED' as const,
+            providerReference: providerResult.providerReference || providerResult.requestId,
+            response: { status: providerResult.status, errorCode: providerResult.errorCode, message: providerResult.message }
+          };
+        }
+        // A pending/unconfigured/ambiguous response is not safe to retry blindly.
+        return {
+          status: 'UNKNOWN' as const,
+          providerReference: providerResult.providerReference || providerResult.requestId,
+          response: { status: providerResult.status, errorCode: providerResult.errorCode, message: providerResult.message }
+        };
+      }
+    }, { invoiceId, ownerUserId, paymentId });
+
+    if (result.status === 'REJECTED') {
+      const status = result.error === 'UTILITY_INVOICE_NOT_FOUND' ? 404 :
+        result.error === 'PI_PAYMENT_ID_MISMATCH' ? 409 :
+        result.error === 'PI_PAYMENT_NOT_VERIFIED' || result.error === 'PI_PAYMENT_OWNER_MISMATCH' ? 403 : 503;
+      return res.status(status).json({ success: false, error: result.error });
+    }
+    if (result.status === 'FULFILLED' || result.status === 'RESOLVED') {
+      return res.status(200).json({ success: true, checkout: result });
+    }
+    if (result.status === 'FULFILLMENT_FAILED') {
+      return res.status(502).json({ success: false, checkout: result });
+    }
+    return res.status(202).json({ success: false, checkout: result, message: 'The provider outcome is pending reconciliation; do not submit a new payment.' });
+  } catch (error) {
+    const code = error instanceof Error ? error.message : 'UTILITY_CHECKOUT_FAILED';
+    console.error('[UTILITY CHECKOUT]', code);
+    return res.status(503).json({ success: false, error: 'UTILITY_CHECKOUT_UNAVAILABLE' });
   }
 });
 
