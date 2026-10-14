@@ -116,16 +116,25 @@ function mapInvoice(row: InvoiceRow): CreatedUtilityInvoice {
  * separate provider action; callers must reconcile UNKNOWN outcomes before retry.
  */
 export class NeonUtilityInvoiceRepository {
+  private static sharedPool: Pool | undefined;
   private readonly pool: Pool;
 
   constructor(pool?: Pool) {
+    // Tests may inject an isolated pool. Runtime instances created by API
+    // handlers must share one process-level pool rather than opening a new
+    // PostgreSQL pool for every request.
     if (pool) {
       this.pool = pool;
       return;
     }
+    if (NeonUtilityInvoiceRepository.sharedPool) {
+      this.pool = NeonUtilityInvoiceRepository.sharedPool;
+      return;
+    }
+
     const connectionString = process.env.DATABASE_URL?.trim();
     if (!connectionString) throw new Error('UTILITY_DATABASE_URL_REQUIRED');
-    this.pool = new Pool({
+    const sharedPool = new Pool({
       connectionString,
       max: 3,
       idleTimeoutMillis: 10_000,
@@ -134,6 +143,8 @@ export class NeonUtilityInvoiceRepository {
         ? { ssl: { rejectUnauthorized: false } }
         : {}),
     });
+    NeonUtilityInvoiceRepository.sharedPool = sharedPool;
+    this.pool = sharedPool;
   }
 
   async createInvoice(input: NewUtilityInvoice): Promise<CreatedUtilityInvoice> {
