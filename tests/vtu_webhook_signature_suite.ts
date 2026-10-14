@@ -41,6 +41,13 @@ try {
   });
   assert.equal(unsupportedService.errorCode, 'VTU_SERVICE_NOT_CONFIGURED');
 
+  // Fuzzy substring matches are unsafe at an irreversible provider boundary:
+  // "notmtn" must not be normalized to the MTN network.
+  const fuzzyService = await noSecret.purchaseAirtime({
+    paymentId: 'pi-payment-test', phone: '08031234567', serviceId: 'notmtn', amount: 500,
+  });
+  assert.equal(fuzzyService.errorCode, 'VTU_SERVICE_NOT_CONFIGURED');
+
   const unconfiguredCustomer = await noSecret.verifyCustomer('mtn', '08000000000');
   assert.equal(unconfiguredCustomer.success, false,
     'missing provider credentials must not report a successful customer verification');
