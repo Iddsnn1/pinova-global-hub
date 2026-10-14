@@ -38,3 +38,11 @@ This document is a release checklist for the Neon-backed utility invoice flow. I
 - Do not treat a client FX estimate as payment authorization.
 - Do not call VTU.ng or another fulfillment provider before authoritative payment verification and durable idempotency reservation.
 - Do not automatically retry an UNKNOWN provider outcome.
+
+## Audit findings — 2026-10-14
+
+- The latest checked commit has successful results for Currency Engine Validation, PiNova CI, PiNova CI Verify, PiNova Global Hub CI, and the Vercel check.
+- The HTTP checkout route is still absent: the existing orchestrator is not yet called by a checkout endpoint. Do not treat passing unit suites as proof of end-to-end checkout readiness.
+- The VTU.ng airtime adapter sends `Math.round(params.amount)`. Before integrating it, the server must enforce the allowed airtime service, NGN currency, whole-naira amount, phone/account format, and provider-specific limits from trusted configuration. Do not silently round a persisted invoice amount during dispatch.
+- The compatibility migration leaves `owner_pi_uid` nullable for legacy rows on purpose. Such rows must remain ineligible for payment until a verified owner UID is established; never backfill it from the internal user ID.
+- Existing orchestrator/repository tests cover core authorization, replay, expiry, and pending outcomes, but a mocked HTTP-route integration test is still required before a checkout route can be considered release-ready.
