@@ -7,6 +7,7 @@ const now = new Date();
 const invoiceRow = {
   invoice_id: 'UTIL-INV-TEST',
   owner_user_id: 'buyer-01',
+  owner_pi_uid: 'buyer-uid-01',
   payment_id: 'pi-payment-01',
   service_category: 'airtime',
   provider_id: 'provider-mtn',
@@ -183,6 +184,7 @@ async function run() {
   const createRepo = new NeonUtilityInvoiceRepository(createPool as unknown as Pool);
   const createInput = {
     ownerUserId: 'buyer-01',
+    ownerPiUid: 'buyer-uid-01',
     serviceCategory: 'airtime',
     providerId: 'provider-mtn',
     accountNumber: '08000000000',
@@ -199,7 +201,7 @@ async function run() {
     const created = await createRepo.createInvoice(createInput);
     assert.equal(created.piAmount, '0.000002069016');
     assert.ok(creationStatements[0].sql.includes('INSERT INTO public.utility_invoices'));
-    assert.equal(creationStatements[0].values?.[8], '0.000002069016');
+    assert.equal(creationStatements[0].values?.[9], '0.000002069016');
 
     creationStatements.length = 0;
     await assert.rejects(
@@ -217,8 +219,8 @@ async function run() {
       fxUsdPerFiatUnit: '0.00066',
     });
     assert.equal(clientQuoteTampered.fxSource, 'currencyapi.com');
-    assert.equal(creationStatements[0].values?.[9], 'currencyapi.com');
-    assert.notEqual(creationStatements[0].values?.[11], '0.00066',
+    assert.equal(creationStatements[0].values?.[10], 'currencyapi.com');
+    assert.notEqual(creationStatements[0].values?.[12], '0.00066',
       'persisted FX rate must come from the server-side provider, not the client');
   } finally {
     if (previousFxSource === undefined) delete process.env.PINOVA_FX_PROVIDER_SOURCE;
