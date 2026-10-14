@@ -159,10 +159,14 @@ async function run() {
   process.env.PINOVA_FX_PROVIDER_SOURCE = 'currencyapi.com';
   process.env.PINOVA_FX_PROVIDER_URL = 'https://api.currencyapi.com/v3/latest';
   process.env.PINOVA_FX_PROVIDER_API_KEY = 'test-only-key';
-  globalThis.fetch = (async () => new Response(JSON.stringify({
+  let fxFetchCalls = 0;
+  globalThis.fetch = (async () => {
+    fxFetchCalls++;
+    return new Response(JSON.stringify({
     meta: { last_updated_at: new Date().toISOString() },
     data: { NGN: { code: 'NGN', value: 1538.4615384615383 } },
-  }), { status: 200, headers: { 'content-type': 'application/json' } })) as typeof fetch;
+  }), { status: 200, headers: { 'content-type': 'application/json' } });
+  }) as typeof fetch;
   const creationStatements: Array<{ sql: string; values?: unknown[] }> = [];
   const createPool = {
     query: async (sql: string, values?: unknown[]) => {
@@ -198,6 +202,15 @@ async function run() {
     expiresAt: new Date(Date.now() + 5 * 60_000).toISOString(),
   };
   try {
+    const callsBeforeUnsafeAmount = fxFetchCalls;
+    await assert.rejects(
+      () => createRepo.createInvoice({ ...createInput, fiatAmount: '1234567890123456.00' }),
+      /UTILITY_FIAT_AMOUNT_PRECISION_UNSUPPORTED/,
+      'amounts with more than 15 significant digits must be rejected rather than silently rounded by JavaScript Number',
+    );
+    assert.equal(fxFetchCalls, callsBeforeUnsafeAmount,
+      'unsafe fiat precision must be rejected before making an FX provider request');
+
     const created = await createRepo.createInvoice(createInput);
     assert.equal(created.piAmount, '0.000002069016');
     assert.ok(creationStatements[0].sql.includes('INSERT INTO public.utility_invoices'));
