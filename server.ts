@@ -3212,7 +3212,7 @@ app.post('/api/v2/utility/invoices/:invoiceId/checkout', paymentRateLimiter, aut
       fulfill: async (canonicalInvoice, verifiedPaymentId) => {
         const providerResult = await vtuNgAdapter.purchaseAirtime({
           paymentId: verifiedPaymentId,
-          phone: canonicalInvoice.accountNumber,
+          phone,
           serviceId: network,
           amount
         });
