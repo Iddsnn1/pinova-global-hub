@@ -45,6 +45,11 @@ export class AuthorizationService {
     let user = this.userRepo.findByUsername(username);
     if (!user) {
       user = this.userRepo.upsertUser({ username, piUid: uid, roles: safeRoles, institutionId });
+    } else if (uid && uid.trim() && uid.trim() !== user.piUid) {
+      // Pi UID is supplied by the server only after authoritative Pi identity
+      // verification. Persist it even when this existing user has no role update;
+      // utility invoice ownership must not depend on whether roles changed.
+      user = this.userRepo.upsertUser({ username, piUid: uid.trim(), institutionId: institutionId || user.institutionId });
     } else if (isAuthorizedAdmin && safeRoles && safeRoles.length > 0) {
       user = this.userRepo.upsertUser({ username, piUid: uid || user.piUid, roles: safeRoles, institutionId: institutionId || user.institutionId });
     }
