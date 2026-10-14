@@ -204,11 +204,14 @@ async function run() {
     assert.equal(creationStatements[0].values?.[9], '0.000002069016');
 
     creationStatements.length = 0;
-    await assert.rejects(
-      () => createRepo.createInvoice({ ...createInput, piAmount: '0.000002069017' }),
-      /UTILITY_PI_AMOUNT_MISMATCH/,
-    );
-    assert.equal(creationStatements.length, 0, 'mismatched client Pi amount must not be persisted');
+    const staleClientEstimate = await createRepo.createInvoice({
+      ...createInput,
+      piAmount: '999999.999999999999',
+    });
+    assert.equal(staleClientEstimate.piAmount, '0.000002069016',
+      'stale or tampered browser Pi estimate must be ignored in favor of the same trusted quote used for persistence');
+    assert.equal(creationStatements[0].values?.[9], '0.000002069016',
+      'canonical Pi amount, not the client estimate, must be persisted');
 
     // Client-supplied FX fields are untrusted and must never be persisted.
     creationStatements.length = 0;
