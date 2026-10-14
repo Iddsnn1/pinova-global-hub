@@ -39,6 +39,14 @@ assert.equal(piAmountToPico('1,000'), null);
 
 assert.equal(authorizeUtilityPayment(invoice, 'pi-payment-001', payment, 'buyer-uid-001').authorized, true);
 assert.equal(
+  authorizeUtilityPayment(invoice, 'pi-payment-001', { ...payment, user_uid: 'attacker-uid' }, 'buyer-uid-001').error,
+  'PI_PAYMENT_OWNER_MISMATCH',
+);
+assert.equal(
+  authorizeUtilityPayment(invoice, 'pi-payment-001', payment, undefined).error,
+  'PI_PAYMENT_OWNER_MISMATCH',
+);
+assert.equal(
   authorizeUtilityPayment(invoice, 'pi-payment-001', { ...payment, direction: 'app_to_user' }, 'buyer-uid-001').error,
   'PI_PAYMENT_DIRECTION_INVALID',
 );
@@ -52,7 +60,7 @@ assert.equal(
   'PI_PAYMENT_AMOUNT_MISMATCH',
 );
 assert.equal(
-  authorizeUtilityPayment(invoice, 'different-payment', payment).error,
+  authorizeUtilityPayment(invoice, 'different-payment', payment, 'buyer-uid-001').error,
   'PI_PAYMENT_ID_MISMATCH',
 );
 assert.equal(
@@ -68,15 +76,15 @@ assert.equal(
   'PI_PAYMENT_NOT_COMPLETED',
 );
 assert.equal(
-  authorizeUtilityPayment({ ...invoice, status: 'PAID' }, 'pi-payment-001', payment).error,
+  authorizeUtilityPayment({ ...invoice, status: 'PAID' }, 'pi-payment-001', payment, 'buyer-uid-001').error,
   'UTILITY_INVOICE_NOT_PAYABLE',
 );
 assert.equal(
-  authorizeUtilityPayment(null, 'pi-payment-001', payment).error,
+  authorizeUtilityPayment(null, 'pi-payment-001', payment, 'buyer-uid-001').error,
   'UTILITY_INVOICE_REQUIRED',
 );
 assert.equal(
-  authorizeUtilityPayment({ ...invoice, piAmount: 'not-an-amount' }, 'pi-payment-001', payment).error,
+  authorizeUtilityPayment({ ...invoice, piAmount: 'not-an-amount' }, 'pi-payment-001', payment, 'buyer-uid-001').error,
   'UTILITY_INVOICE_AMOUNT_INVALID',
 );
 
