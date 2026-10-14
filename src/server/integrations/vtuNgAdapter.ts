@@ -461,7 +461,8 @@ export class VtuNgAdapter {
       ? `0${rawPhone.slice(3)}`
       : rawPhone;
     const cleanPhone = this.formatPhoneNumber(params.phone);
-    const normalizedService = this.mapServiceId(params.serviceId);
+    const rawServiceId = String(params.serviceId || '').toLowerCase().trim();
+    const normalizedService = this.mapServiceId(rawServiceId);
 
     // Never fall back to a dummy phone number or silently round a client amount
     // at the provider boundary. Canonical invoice/payment checks happen upstream;
@@ -490,7 +491,16 @@ export class VtuNgAdapter {
     // networks. mapServiceId() intentionally preserves unknown IDs for other
     // utility types, so do not treat any non-empty string as a valid airtime ID.
     const supportedAirtimeServices = new Set(['mtn', 'airtel', 'glo', '9mobile']);
-    if (!supportedAirtimeServices.has(normalizedService)) {
+    // mapServiceId() also supports fuzzy matching for legacy non-airtime catalog
+    // labels. For irreversible airtime purchases, require a whole-token match so
+    // arbitrary IDs such as "notmtn" cannot be normalized into a real network.
+    const hasSupportedNetworkToken =
+      /(^|[^a-z0-9])mtn([^a-z0-9]|$)/.test(rawServiceId) ||
+      /(^|[^a-z0-9])airtel([^a-z0-9]|$)/.test(rawServiceId) ||
+      /(^|[^a-z0-9])glo([^a-z0-9]|$)/.test(rawServiceId) ||
+      /(^|[^a-z0-9])9mobile([^a-z0-9]|$)/.test(rawServiceId) ||
+      /(^|[^a-z0-9])etisalat([^a-z0-9]|$)/.test(rawServiceId);
+    if (!supportedAirtimeServices.has(normalizedService) || !hasSupportedNetworkToken) {
       return {
         success: false,
         fulfilled: false,
