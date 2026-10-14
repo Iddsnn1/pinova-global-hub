@@ -1,69 +1,56 @@
 # Utility checkout release gates
 
-This document is a release checklist for the Neon-backed utility invoice flow. It does not enable provider fulfillment or apply database migrations.
+This checklist describes the Neon-backed utility invoice flow. It does not enable provider fulfillment, apply database migrations, merge the pull request, or deploy production.
 
 ## Current safe state
 
 - `POST /api/v2/utility/invoices` creates a server-priced invoice for the authenticated user.
 - `POST /api/v2/utility/invoices/:invoiceId/payment` binds a Pi payment identifier to that user's open invoice.
 - `GET /api/v2/utility/invoices/:invoiceId` exposes status only to the authenticated owner and matching Pi UID.
-- `POST /api/v2/utility/fulfill` intentionally returns HTTP 503. Keep it disabled until all gates below pass.
-- The orchestrator exists, but it is not wired into a live HTTP checkout route.
+- `POST /api/v2/utility/invoices/:invoiceId/checkout` is implemented for a narrow Nigerian Airtime (NGN) path and is guarded by `PINOVA_UTILITY_CHECKOUT_ENABLED === "true"`.
+- The feature flag has not been enabled in Vercel. With the flag unset, checkout returns `503 UTILITY_CHECKOUT_DISABLED` before opening the invoice repository or contacting a provider.
+- The legacy `POST /api/v2/utility/fulfill` endpoint remains intentionally disabled with HTTP 503.
+- Neon migrations have not been applied by this work. Legacy Blob stores and data remain untouched.
 
-## Required before any live checkout route
+## Implemented safeguards
 
-1. **Identity:** use the server-authenticated user ID and Pi UID; compare the authoritative Pi Platform `user_uid` with the invoice's persisted owner Pi UID.
-2. **Payment:** fetch the payment from Pi Platform on the server; require the exact payment identifier, `user_to_app` direction, expected Pi network, `developer_completed === true`, `transaction.verified === true`, transaction ID, and exact invoice amount in pico-Pi units.
-3. **Invoice state:** reject expired, cancelled, failed, or already-claimed invoices. A payment ID must not be reusable across invoices.
-4. **Atomic reservation:** reserve invoice, payment idempotency key, transaction ID, and fulfillment attempt in one database transaction before calling any provider.
-5. **Provider allowlist:** derive provider operation, service identifier, and amount from server-side catalog/configuration. Never use a client-supplied provider URL, operation, amount, or package ID as authority.
-6. **Airtime amount:** validate Nigerian custom amounts and server-resolved provider minimum/maximum/denomination rules. UI preset chips are convenience only, not provider authorization.
-7. **Outcome handling:** persist provider reference and result. Treat timeouts or database write failures after dispatch as UNKNOWN/PENDING and reconcile before retrying; never blindly dispatch again.
-8. **Receipt/status:** provide an owner-bound status endpoint and safe receipt fields; do not expose full account numbers, provider credentials, or raw provider payloads.
-9. **Operational controls:** require server-only credentials, rate limits, redacted logs, bounded provider timeouts, monitoring, and a documented manual reconciliation path.
-10. **Verification:** add/maintain tests for wrong owner, wrong payment ID, wrong network, wrong direction, wrong amount, unverified/incomplete payment, expired invoice, replay, concurrent checkout, provider timeout, and persistence failure after provider dispatch.
+1. **Identity and ownership:** checkout uses the authenticated internal user ID and Pi UID, and compares the Pi Platform payment's `user_uid` with the invoice owner Pi UID.
+2. **Authoritative payment verification:** the server-side Pi verifier requires the exact payment identifier, `user_to_app` direction, expected Pi network, `developer_completed === true`, `transaction.verified === true`, transaction ID, and exact amount at pico-Pi precision.
+3. **Invoice binding and reservation:** payment IDs are bound to open owner-scoped invoices; the repository reserves invoice/payment idempotency and fulfillment attempt state transactionally before provider dispatch.
+4. **Fail-closed service scope:** the checkout route currently accepts only Nigerian Airtime invoices in NGN with an explicit supported network ID, a valid Nigerian mobile number, and a positive whole-naira amount. Unsupported categories/providers are rejected before reservation.
+5. **Ambiguous outcomes:** provider timeouts, ambiguous responses, and outcome-persistence failures remain UNKNOWN/PENDING for reconciliation. Do not blindly retry a purchase. The stable provider `request_id` helps correlation but is not proof that the provider guarantees idempotency.
+6. **Server-only secrets:** Pi and VTU.ng credentials must stay server-side; no live secrets belong in source control or browser variables.
+
+## Remaining release gates
+
+- [ ] Add and run a mocked HTTP-route integration test for the feature-flag guard, authentication/owner mismatch, malformed invoice/payment ID, and proof that disabled checkout makes no DB/provider calls.
+- [ ] Run route-level tests for wrong payment ID, unverified payment, wrong Pi UID, unsupported provider/service, expired invoice, replay, and concurrent checkout; unit tests for the orchestrator/repository are not a substitute for this HTTP coverage.
+- [ ] Confirm the actual VTU.ng contract for duplicate request IDs, status reconciliation, request timeouts, and provider-specific airtime limits/denominations. Do not assume stable request IDs alone prevent duplicate recharges.
+- [ ] Confirm the provider response and webhook signature contract against the provider's documentation and test successful, failed, pending, and ambiguous outcomes.
+- [ ] Verify the production FX provider's account plan meets the configured quote-freshness policy. The daily free CurrencyAPI plan does not satisfy a 15-minute freshness requirement; do not loosen freshness or substitute a fabricated rate.
+- [ ] Apply the reviewed Neon migrations only through an explicitly approved procedure, then verify schema, constraints, health, and rollback/recovery.
+- [ ] Complete sandbox checkout with a mocked provider and demonstrate owner-bound receipts/status and reconciliation behavior.
+
+## Validation snapshot — 2026-10-14
+
+- GitHub Actions on PR head commit `639b7c6f84a7289cf1416e4e96505f6922cf1e20`: PiNova Global Hub CI, PiNova CI Verify, PiNova CI, and Currency Engine Validation all completed successfully.
+- Vercel status for that PR head: success; the linked Preview deployment is Ready at https://pinova-global-hub-git-feat-global-curr-587eaa-iddsnn1s-projects.vercel.app.
+- A prior GET request to the checkout path returned a method-not-found response because the route is POST-only. This is **not** an end-to-end checkout test. A real authenticated POST integration test remains outstanding.
+- Unit suites exercise authorization, repository reservations/replay, and orchestrator outcomes. They do not yet prove the complete HTTP route works end-to-end with auth and mocked provider dependencies.
 
 ## Release sequence
 
-- Run CI and inspect the Vercel preview check.
-- Review the code diff and confirm the checkout feature remains disabled by default.
-- Obtain explicit operator approval before applying Neon migrations or enabling live provider fulfillment.
-- Apply the migration only through an approved deployment procedure, then run schema/health checks.
-- Exercise the complete flow in a sandbox with a mocked provider; verify replay/concurrency behavior and reconciliation.
-- Enable live fulfillment only after all tests pass and an explicit production go-ahead.
+1. Finish route-level tests and review the PR diff.
+2. Keep `PINOVA_UTILITY_CHECKOUT_ENABLED` unset while validating the feature.
+3. Obtain explicit operator approval before applying Neon migrations or enabling live provider fulfillment.
+4. Apply migrations through the approved process and run schema/health checks.
+5. Run sandbox tests with a mocked provider, including replay/concurrency and reconciliation.
+6. Enable live fulfillment only after all gates pass and explicit production approval.
 
 ## Do not do
 
-- Do not delete or rewrite legacy Blob stores or their existing data.
+- Do not delete or rewrite legacy Blob stores or existing `marketplace-orders`, `product-catalog`, or `vendor-applications` data.
+- Do not merge the PR, deploy production, apply Neon migrations, or enable live VTU/recharge fulfillment without explicit approval.
 - Do not treat a client FX estimate as payment authorization.
-- Do not call VTU.ng or another fulfillment provider before authoritative payment verification and durable idempotency reservation.
+- Do not call a fulfillment provider before authoritative Pi verification and durable idempotency reservation.
 - Do not automatically retry an UNKNOWN provider outcome.
-
-## Audit findings — 2026-10-14
-
-- The latest checked commit has successful results for Currency Engine Validation, PiNova CI, PiNova CI Verify, PiNova Global Hub CI, and the Vercel check.
-- The HTTP checkout route is still absent: the existing orchestrator is not yet called by a checkout endpoint. Do not treat passing unit suites as proof of end-to-end checkout readiness.
-- The VTU.ng airtime adapter sends `Math.round(params.amount)`. Before integrating it, the server must enforce the allowed airtime service, NGN currency, whole-naira amount, phone/account format, and provider-specific limits from trusted configuration. Do not silently round a persisted invoice amount during dispatch.
-- The compatibility migration leaves `owner_pi_uid` nullable for legacy rows on purpose. Such rows must remain ineligible for payment until a verified owner UID is established; never backfill it from the internal user ID.
-- Existing orchestrator/repository tests cover core authorization, replay, expiry, and pending outcomes, but a mocked HTTP-route integration test is still required before a checkout route can be considered release-ready.
-
-
-## Authenticated checkout route status (2026-10-14)
-
-- `POST /api/v2/utility/invoices/:invoiceId/checkout` is wired to the canonical invoice repository, authoritative Pi verification, reservation/idempotency, and the VTU.ng Airtime adapter.
-- It is guarded by `PINOVA_UTILITY_CHECKOUT_ENABLED === "true"`; the flag has **not** been set in Vercel and must remain unset pending explicit release approval.
-- When disabled, the route returns `503 UTILITY_CHECKOUT_DISABLED` before opening a database connection or contacting any provider.
-- Current adapter scope is only Nigerian Airtime (NGN) with a supported network ID, valid Nigerian mobile number, and whole-number NGN amount. Other utility categories are rejected before reservation.
-- Provider responses that are pending or ambiguous are stored as `UNKNOWN`/pending reconciliation; do not retry a purchase until the original provider request is reconciled. The stable `request_id` is not proof of provider-side idempotency by itself.
-- This route addition does not apply migrations, enable the feature flag, merge the PR, or deploy production. CI and Vercel Preview checks must complete before considering the code ready for review.
-
-
-## CI status follow-up — 2026-10-14
-
-The GitHub Actions runs associated with commit `87ee3d38e4edd42bc829b44d045f183e28b2cee5` completed successfully:
-- PiNova Global Hub CI
-- PiNova CI
-- PiNova CI Verify
-- Currency Engine Validation
-
-The Vercel status check for that exact commit was still reported as `pending` at the last status poll. Therefore, a successful GitHub CI result is not being represented as a successful Vercel Preview deployment. Keep the checkout feature flag unset and do not perform live provider tests until Preview is confirmed and the reviewed Neon migration has been applied through an approved process.
