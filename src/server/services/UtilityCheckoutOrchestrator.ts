@@ -61,6 +61,16 @@ export async function processUtilityCheckout(
     return { status: 'REJECTED', error: 'PI_PAYMENT_NOT_VERIFIED' };
   }
 
+  // Defense in depth: the Pi identity returned by the authoritative platform
+  // must match the UID persisted on this invoice before attempting reservation.
+  // The repository repeats this check transactionally; this guard also prevents
+  // accidental fulfillment if a future repository adapter omits that invariant.
+  const invoicePiUid = String(invoice.ownerPiUid || '').trim();
+  const paymentPiUid = String(verification.paymentData.user_uid || '').trim();
+  if (!invoicePiUid || !paymentPiUid || invoicePiUid !== paymentPiUid) {
+    return { status: 'REJECTED', error: 'PI_PAYMENT_OWNER_MISMATCH' };
+  }
+
   let reservation;
   try {
     reservation = await deps.repository.authorizeAndReserve(
