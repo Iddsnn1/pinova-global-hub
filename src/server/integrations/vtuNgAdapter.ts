@@ -25,6 +25,7 @@ export type VtuErrorCode =
   | 'VTU_API_UNAVAILABLE'
   | 'VTU_PROVIDER_REJECTED'
   | 'VTU_INVALID_CUSTOMER'
+  | 'VTU_INVALID_AMOUNT'
   | 'VTU_TRANSACTION_PENDING'
   | 'VTU_TRANSACTION_FAILED'
   | 'VTU_SERVICE_NOT_CONFIGURED'
@@ -455,8 +456,46 @@ export class VtuNgAdapter {
     amount: number;
   }): Promise<VtuFulfillmentResult> {
     const requestId = this.generateRequestId(params.paymentId, 'AIR');
-    const normalizedService = this.mapServiceId(params.serviceId);
+    const rawPhone = String(params.phone || '').replace(/[^0-9]/g, '');
+    const normalizedInputPhone = rawPhone.startsWith('234') && rawPhone.length === 13
+      ? `0${rawPhone.slice(3)}`
+      : rawPhone;
     const cleanPhone = this.formatPhoneNumber(params.phone);
+    const normalizedService = this.mapServiceId(params.serviceId);
+
+    // Never fall back to a dummy phone number or silently round a client amount
+    // at the provider boundary. Canonical invoice/payment checks happen upstream;
+    // these checks are defense in depth before any irreversible VTU request.
+    if (!String(params.paymentId || '').trim() || !/^0[0-9]{10}$/.test(normalizedInputPhone)) {
+      return {
+        success: false,
+        fulfilled: false,
+        status: 'FAILED',
+        requestId,
+        errorCode: 'VTU_INVALID_CUSTOMER',
+        message: 'A valid Nigerian mobile number and verified payment reference are required.'
+      };
+    }
+    if (!Number.isSafeInteger(params.amount) || params.amount <= 0) {
+      return {
+        success: false,
+        fulfilled: false,
+        status: 'FAILED',
+        requestId,
+        errorCode: 'VTU_INVALID_AMOUNT',
+        message: 'Airtime amount must be a positive whole-number NGN amount.'
+      };
+    }
+    if (!normalizedService) {
+      return {
+        success: false,
+        fulfilled: false,
+        status: 'FAILED',
+        requestId,
+        errorCode: 'VTU_SERVICE_NOT_CONFIGURED',
+        message: 'A supported airtime network is required.'
+      };
+    }
 
     if (!this.isConfigured()) {
       return {
@@ -475,7 +514,7 @@ export class VtuNgAdapter {
         request_id: requestId,
         phone: cleanPhone,
         service_id: normalizedService,
-        amount: Math.round(params.amount)
+        amount: params.amount
       })
     });
 
