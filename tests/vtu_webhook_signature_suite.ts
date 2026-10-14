@@ -15,6 +15,33 @@ try {
   delete process.env.VTU_USERNAME;
   delete process.env.VTU_PASSWORD;
   const noSecret = new VtuNgAdapter();
+
+  // Airtime input guards must reject invalid requests before provider credentials
+  // or network access are considered. These tests intentionally never call VTU.ng.
+  const invalidPhone = await noSecret.purchaseAirtime({
+    paymentId: 'pi-payment-test', phone: 'not-a-phone', serviceId: 'mtn', amount: 500,
+  });
+  assert.equal(invalidPhone.errorCode, 'VTU_INVALID_CUSTOMER');
+
+  const missingPayment = await noSecret.purchaseAirtime({
+    paymentId: '', phone: '+2348031234567', serviceId: 'mtn', amount: 500,
+  });
+  assert.equal(missingPayment.errorCode, 'VTU_INVALID_CUSTOMER');
+
+  for (const amount of [0, -500, 500.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+    const invalidAmount = await noSecret.purchaseAirtime({
+      paymentId: 'pi-payment-test', phone: '08031234567', serviceId: 'mtn', amount,
+    });
+    assert.equal(invalidAmount.errorCode, 'VTU_INVALID_AMOUNT',
+      `invalid NGN amount ${String(amount)} must fail before provider dispatch`);
+  }
+
+  const unsupportedService = await noSecret.purchaseAirtime({
+    paymentId: 'pi-payment-test', phone: '08031234567', serviceId: 'unsupported-network', amount: 500,
+  });
+  assert.equal(unsupportedService.errorCode, 'VTU_SERVICE_NOT_CONFIGURED');
+
+  const unconfiguredCustomer = await noSecret.verifyCustomer('mtn', '08000000000');
   const unconfiguredCustomer = await noSecret.verifyCustomer('mtn', '08000000000');
   assert.equal(unconfiguredCustomer.success, false,
     'missing provider credentials must not report a successful customer verification');
