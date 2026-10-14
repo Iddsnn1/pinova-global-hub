@@ -16,6 +16,9 @@ export interface CanonicalUtilityInvoice {
 
 export interface PiPaymentVerificationData {
   identifier?: unknown;
+  user_uid?: unknown;
+  direction?: unknown;
+  network?: unknown;
   amount?: unknown;
   status?: { developer_completed?: unknown };
   transaction?: { verified?: unknown; txid?: unknown };
@@ -25,6 +28,8 @@ export type UtilityPaymentAuthorizationFailure =
   | 'UTILITY_INVOICE_REQUIRED'
   | 'UTILITY_INVOICE_NOT_PAYABLE'
   | 'PI_PAYMENT_ID_MISMATCH'
+  | 'PI_PAYMENT_DIRECTION_INVALID'
+  | 'PI_PAYMENT_NETWORK_MISMATCH'
   | 'PI_PAYMENT_NOT_COMPLETED'
   | 'PI_PAYMENT_AMOUNT_INVALID'
   | 'UTILITY_INVOICE_AMOUNT_INVALID'
@@ -110,6 +115,15 @@ export function authorizeUtilityPayment(
     typeof paymentData?.identifier === 'string' ? paymentData.identifier : '';
   if (!paymentId || invoice.paymentId !== paymentId || verifiedPaymentId !== paymentId) {
     return { authorized: false, error: 'PI_PAYMENT_ID_MISMATCH' };
+  }
+  if (paymentData?.direction !== 'user_to_app') {
+    return { authorized: false, error: 'PI_PAYMENT_DIRECTION_INVALID' };
+  }
+  const expectedNetwork = process.env.VITE_PI_ENV === 'production' || process.env.PI_SANDBOX_MODE === 'false'
+    ? 'Pi Network'
+    : 'Pi Testnet';
+  if (paymentData?.network !== expectedNetwork) {
+    return { authorized: false, error: 'PI_PAYMENT_NETWORK_MISMATCH' };
   }
   if (paymentData?.status?.developer_completed !== true || paymentData?.transaction?.verified !== true) {
     return { authorized: false, error: 'PI_PAYMENT_NOT_COMPLETED' };
