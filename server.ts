@@ -3003,10 +3003,10 @@ app.post('/api/v2/utility/invoices', paymentRateLimiter, authenticate, requireAu
 
     if (!/^[a-z][a-z0-9_-]{1,39}$/.test(serviceCategory) ||
         !/^[a-zA-Z0-9._:-]{1,120}$/.test(providerId) ||
-        !/^[^\\u0000-\\u001f]{1,160}$/.test(accountNumber) ||
-        !/^[^\\u0000-\\u001f]{1,120}$/.test(packageName) ||
+        !/^[^\x00-\x1F]{1,160}$/.test(accountNumber) ||
+        !/^[^\x00-\x1F]{1,120}$/.test(packageName) ||
         !/^[A-Z]{3}$/.test(fiatCurrency) ||
-        !/^(?:0|[1-9]\\d*)(?:\\.\\d{1,8})?$/.test(fiatAmount) ||
+        !/^(?:0|[1-9][0-9]*)(?:\.[0-9]{1,8})?$/.test(fiatAmount) ||
         !/[1-9]/.test(fiatAmount)) {
       return res.status(400).json({
         success: false,
