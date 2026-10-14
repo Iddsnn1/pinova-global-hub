@@ -18,7 +18,8 @@ export interface NewUtilityInvoice {
   packageName: string;
   fiatAmount: string;
   fiatCurrency: string;
-  piAmount: string;
+  /** Deprecated client estimate; ignored. The repository derives the canonical amount from its trusted quote. */
+  piAmount?: string;
   fxSource: string;
   fxAsOf: string;
   fxUsdPerFiatUnit: string;
@@ -144,8 +145,9 @@ export class NeonUtilityInvoiceRepository {
     const fxConfig = getTrustedFxProviderConfig();
     const trustedQuote = await fetchTrustedFxQuote(currency, fxConfig);
 
-    // The caller's Pi amount is only a consistency check. The canonical invoice
-    // amount and stored FX provenance are recomputed server-side from the provider quote.
+    // The browser's displayed Pi estimate can become stale between quote and
+    // invoice creation. Ignore it entirely: amount, FX source, timestamp and
+    // rate must all come from this single validated server-side quote.
     const canonicalConversion = calculateTrustedFiatToPi({
       fiatAmount: Number(input.fiatAmount),
       currency,
@@ -153,15 +155,8 @@ export class NeonUtilityInvoiceRepository {
       trustedSource: fxConfig.source,
     });
     const canonicalPiPico = piAmountToPico(canonicalConversion.piAmount);
-    const suppliedPiPico = piAmountToPico(input.piAmount);
     if (canonicalPiPico === null || canonicalPiPico <= 0n) {
       throw new Error('UTILITY_PI_AMOUNT_INVALID');
-    }
-    if (suppliedPiPico === null || suppliedPiPico <= 0n) {
-      throw new Error('UTILITY_PI_AMOUNT_INVALID');
-    }
-    if (canonicalPiPico !== suppliedPiPico) {
-      throw new Error('UTILITY_PI_AMOUNT_MISMATCH');
     }
     if (!input.ownerUserId || !input.ownerPiUid?.trim() || !input.serviceCategory || !input.providerId || !input.accountNumber) {
       throw new Error('UTILITY_INVOICE_FIELDS_REQUIRED');
