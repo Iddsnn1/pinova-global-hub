@@ -3,6 +3,7 @@
 CREATE TABLE IF NOT EXISTS public.utility_invoices (
   invoice_id text PRIMARY KEY,
   owner_user_id text NOT NULL,
+  owner_pi_uid text NOT NULL CHECK (length(trim(owner_pi_uid)) > 0),
   payment_id text UNIQUE,
   service_category text NOT NULL,
   provider_id text NOT NULL,
