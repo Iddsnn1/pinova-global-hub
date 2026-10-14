@@ -46,3 +46,13 @@ This document is a release checklist for the Neon-backed utility invoice flow. I
 - The VTU.ng airtime adapter sends `Math.round(params.amount)`. Before integrating it, the server must enforce the allowed airtime service, NGN currency, whole-naira amount, phone/account format, and provider-specific limits from trusted configuration. Do not silently round a persisted invoice amount during dispatch.
 - The compatibility migration leaves `owner_pi_uid` nullable for legacy rows on purpose. Such rows must remain ineligible for payment until a verified owner UID is established; never backfill it from the internal user ID.
 - Existing orchestrator/repository tests cover core authorization, replay, expiry, and pending outcomes, but a mocked HTTP-route integration test is still required before a checkout route can be considered release-ready.
+
+
+## Authenticated checkout route status (2026-10-14)
+
+- `POST /api/v2/utility/invoices/:invoiceId/checkout` is wired to the canonical invoice repository, authoritative Pi verification, reservation/idempotency, and the VTU.ng Airtime adapter.
+- It is guarded by `PINOVA_UTILITY_CHECKOUT_ENABLED === "true"`; the flag has **not** been set in Vercel and must remain unset pending explicit release approval.
+- When disabled, the route returns `503 UTILITY_CHECKOUT_DISABLED` before opening a database connection or contacting any provider.
+- Current adapter scope is only Nigerian Airtime (NGN) with a supported network ID, valid Nigerian mobile number, and whole-number NGN amount. Other utility categories are rejected before reservation.
+- Provider responses that are pending or ambiguous are stored as `UNKNOWN`/pending reconciliation; do not retry a purchase until the original provider request is reconciled. The stable `request_id` is not proof of provider-side idempotency by itself.
+- This route addition does not apply migrations, enable the feature flag, merge the PR, or deploy production. CI and Vercel Preview checks must complete before considering the code ready for review.
