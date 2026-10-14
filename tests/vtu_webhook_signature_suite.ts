@@ -36,6 +36,14 @@ try {
       `invalid NGN amount ${String(amount)} must fail before provider dispatch`);
   }
 
+  const stableRequestId1 = noSecret.generateRequestId('pi-payment-repeat-123', 'AIR');
+  const stableRequestId2 = noSecret.generateRequestId('pi-payment-repeat-123', 'AIR');
+  assert.equal(stableRequestId1, stableRequestId2,
+    'retries for one Pi payment must reuse the same provider idempotency/request ID');
+  assert.notEqual(stableRequestId1, noSecret.generateRequestId('different-pi-payment', 'AIR'),
+    'different Pi payments must use different provider request IDs');
+  assert.ok(stableRequestId1.length <= 50, 'provider request ID must respect the provider length limit');
+
   const unsupportedService = await noSecret.purchaseAirtime({
     paymentId: 'pi-payment-test', phone: '08031234567', serviceId: 'unsupported-network', amount: 500,
   });
