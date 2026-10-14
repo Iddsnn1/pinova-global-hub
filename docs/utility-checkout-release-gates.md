@@ -56,3 +56,14 @@ This document is a release checklist for the Neon-backed utility invoice flow. I
 - Current adapter scope is only Nigerian Airtime (NGN) with a supported network ID, valid Nigerian mobile number, and whole-number NGN amount. Other utility categories are rejected before reservation.
 - Provider responses that are pending or ambiguous are stored as `UNKNOWN`/pending reconciliation; do not retry a purchase until the original provider request is reconciled. The stable `request_id` is not proof of provider-side idempotency by itself.
 - This route addition does not apply migrations, enable the feature flag, merge the PR, or deploy production. CI and Vercel Preview checks must complete before considering the code ready for review.
+
+
+## CI status follow-up — 2026-10-14
+
+The GitHub Actions runs associated with commit `87ee3d38e4edd42bc829b44d045f183e28b2cee5` completed successfully:
+- PiNova Global Hub CI
+- PiNova CI
+- PiNova CI Verify
+- Currency Engine Validation
+
+The Vercel status check for that exact commit was still reported as `pending` at the last status poll. Therefore, a successful GitHub CI result is not being represented as a successful Vercel Preview deployment. Keep the checkout feature flag unset and do not perform live provider tests until Preview is confirmed and the reviewed Neon migration has been applied through an approved process.
