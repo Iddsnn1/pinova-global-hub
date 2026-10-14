@@ -42,7 +42,6 @@ try {
   assert.equal(unsupportedService.errorCode, 'VTU_SERVICE_NOT_CONFIGURED');
 
   const unconfiguredCustomer = await noSecret.verifyCustomer('mtn', '08000000000');
-  const unconfiguredCustomer = await noSecret.verifyCustomer('mtn', '08000000000');
   assert.equal(unconfiguredCustomer.success, false,
     'missing provider credentials must not report a successful customer verification');
   assert.equal(unconfiguredCustomer.valid, false,
