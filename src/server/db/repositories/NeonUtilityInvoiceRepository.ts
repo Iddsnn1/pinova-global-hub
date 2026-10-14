@@ -11,6 +11,7 @@ import { calculateTrustedFiatToPi } from '../../services/TrustedFiatToPiService'
 
 export interface NewUtilityInvoice {
   ownerUserId: string;
+  ownerPiUid: string;
   serviceCategory: string;
   providerId: string;
   accountNumber: string;
@@ -26,6 +27,7 @@ export interface NewUtilityInvoice {
 
 export interface CreatedUtilityInvoice extends CanonicalUtilityInvoice {
   ownerUserId: string;
+  ownerPiUid: string;
   serviceCategory: string;
   providerId: string;
   accountNumber: string;
@@ -47,6 +49,7 @@ export type UtilityReservationResult =
 type InvoiceRow = {
   invoice_id: string;
   owner_user_id: string;
+  owner_pi_uid: string | null;
   payment_id: string | null;
   service_category: string;
   provider_id: string;
@@ -84,6 +87,7 @@ function mapInvoice(row: InvoiceRow): CreatedUtilityInvoice {
   return {
     invoiceId: row.invoice_id,
     ownerUserId: row.owner_user_id,
+    ownerPiUid: row.owner_pi_uid || '',
     paymentId: row.payment_id || '',
     fiatAmount: String(row.fiat_amount),
     fiatCurrency: row.fiat_currency.trim().toUpperCase(),
@@ -159,7 +163,7 @@ export class NeonUtilityInvoiceRepository {
     if (canonicalPiPico !== suppliedPiPico) {
       throw new Error('UTILITY_PI_AMOUNT_MISMATCH');
     }
-    if (!input.ownerUserId || !input.serviceCategory || !input.providerId || !input.accountNumber) {
+    if (!input.ownerUserId || !input.ownerPiUid?.trim() || !input.serviceCategory || !input.providerId || !input.accountNumber) {
       throw new Error('UTILITY_INVOICE_FIELDS_REQUIRED');
     }
     const expiresAt = Date.parse(input.expiresAt);
@@ -167,14 +171,14 @@ export class NeonUtilityInvoiceRepository {
     const invoiceId = `UTIL-${randomUUID()}`;
     const result = await this.pool.query<InvoiceRow>(
       `INSERT INTO public.utility_invoices
-       (invoice_id, owner_user_id, payment_id, service_category, provider_id, account_number,
+       (invoice_id, owner_user_id, owner_pi_uid, payment_id, service_category, provider_id, account_number,
         package_name, fiat_amount, fiat_currency, pi_amount, fx_source, fx_as_of,
         fx_usd_per_fiat_unit, status, expires_at)
-       VALUES ($1,$2,NULL,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'OPEN',$13)
-       RETURNING invoice_id, owner_user_id, payment_id, service_category, provider_id,
+       VALUES ($1,$2,$3,NULL,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'OPEN',$14)
+       RETURNING invoice_id, owner_user_id, owner_pi_uid, payment_id, service_category, provider_id,
          account_number, package_name, fiat_amount::text, fiat_currency, pi_amount::text,
          fx_source, fx_as_of, fx_usd_per_fiat_unit::text, status, payment_txid, expires_at, created_at`,
-      [invoiceId, input.ownerUserId, input.serviceCategory, input.providerId, input.accountNumber,
+      [invoiceId, input.ownerUserId, input.ownerPiUid.trim(), input.serviceCategory, input.providerId, input.accountNumber,
        input.packageName, input.fiatAmount, currency, canonicalConversion.piAmount, trustedQuote.source,
        trustedQuote.asOf, String(trustedQuote.usdPerFiatUnit), new Date(expiresAt).toISOString()],
     );
@@ -202,7 +206,7 @@ export class NeonUtilityInvoiceRepository {
 
   async findOwnedInvoice(invoiceId: string, ownerUserId: string): Promise<CreatedUtilityInvoice | null> {
     const result = await this.pool.query<InvoiceRow>(
-      `SELECT invoice_id, owner_user_id, payment_id, service_category, provider_id,
+      `SELECT invoice_id, owner_user_id, owner_pi_uid, payment_id, service_category, provider_id,
         account_number, package_name, fiat_amount::text, fiat_currency, pi_amount::text,
         fx_source, fx_as_of, fx_usd_per_fiat_unit::text, status, payment_txid, expires_at, created_at
        FROM public.utility_invoices WHERE invoice_id = $1 AND owner_user_id = $2 LIMIT 1`,
@@ -227,7 +231,7 @@ export class NeonUtilityInvoiceRepository {
       await client.query('BEGIN');
       inTransaction = true;
       const found = await client.query<InvoiceRow>(
-        `SELECT invoice_id, owner_user_id, payment_id, service_category, provider_id,
+        `SELECT invoice_id, owner_user_id, owner_pi_uid, payment_id, service_category, provider_id,
           account_number, package_name, fiat_amount::text, fiat_currency, pi_amount::text,
           fx_source, fx_as_of, fx_usd_per_fiat_unit::text, status, payment_txid, expires_at, created_at
          FROM public.utility_invoices
@@ -244,7 +248,7 @@ export class NeonUtilityInvoiceRepository {
       const invoice = mapInvoice(row);
       // Validate the Pi payload independently of lifecycle state so a legitimate
       // retry can retrieve its recorded result after the invoice is no longer OPEN.
-      const authorization = authorizeUtilityPayment({ ...invoice, status: 'OPEN' }, paymentId, paymentData);
+      const authorization = authorizeUtilityPayment({ ...invoice, status: 'OPEN' }, paymentId, paymentData, invoice.ownerPiUid);
       if (!authorization.authorized) {
         await client.query('ROLLBACK');
         inTransaction = false;
