@@ -16,6 +16,9 @@ const invoice: CanonicalUtilityInvoice = {
 };
 const payment = {
   identifier: 'pi-payment-001',
+  user_uid: 'buyer-uid-001',
+  direction: 'user_to_app',
+  network: 'Pi Testnet',
   amount: 0.000002069016,
   status: { developer_completed: true },
   transaction: { verified: true, txid: 'pi-tx-001' },
@@ -35,6 +38,15 @@ assert.equal(piAmountToPico('-1'), null);
 assert.equal(piAmountToPico('1,000'), null);
 
 assert.equal(authorizeUtilityPayment(invoice, 'pi-payment-001', payment).authorized, true);
+assert.equal(
+  authorizeUtilityPayment(invoice, 'pi-payment-001', { ...payment, direction: 'app_to_user' }).error,
+  'PI_PAYMENT_DIRECTION_INVALID',
+);
+assert.equal(
+  authorizeUtilityPayment(invoice, 'pi-payment-001', { ...payment, network: 'Pi Network' }).error,
+  'PI_PAYMENT_NETWORK_MISMATCH',
+);
+
 assert.equal(
   authorizeUtilityPayment(invoice, 'pi-payment-001', { ...payment, amount: 0.000002069017 }).error,
   'PI_PAYMENT_AMOUNT_MISMATCH',
