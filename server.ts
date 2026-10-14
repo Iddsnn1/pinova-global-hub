@@ -2977,6 +2977,93 @@ app.post(['/api/v2/payments/cancel', '/api/pi-payment/cancel', '/api/v1/pi-payme
 app.get(['/api/v2/payments/verify/:paymentId', '/api/pi-payment/verify/:paymentId', '/api/v2/pi/payments/verify', '/api/v2/payments/verify', '/api/pi-payment/verify'], paymentRateLimiter, handleVerifyPayment);
 app.get(['/api/v2/payments/config', '/api/pi-payment/config', '/api/v2/pi/config', '/api/v2/pi/diagnostic', '/api/pi/diagnostic'], handleGetPaymentConfig);
 
+// Create canonical utility invoices only from an authenticated Pi session.
+// Ownership comes from req.user; all amount/FX fields are recomputed by Neon repository.
+app.post('/api/v2/utility/invoices', paymentRateLimiter, authenticate, requireAuthenticatedUser, async (req: AuthenticatedRequest, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  try {
+    const user = req.user;
+    const ownerUserId = String(user?.id || '').trim();
+    const ownerPiUid = String(user?.piUid || '').trim();
+    if (!ownerUserId || !ownerPiUid) {
+      return res.status(403).json({
+        success: false,
+        error: 'PI_IDENTITY_REQUIRED',
+        message: 'A verified Pi identity is required before creating a utility invoice.'
+      });
+    }
+
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const serviceCategory = typeof body.serviceCategory === 'string' ? body.serviceCategory.trim().toLowerCase() : '';
+    const providerId = typeof body.providerId === 'string' ? body.providerId.trim() : '';
+    const accountNumber = typeof body.accountNumber === 'string' ? body.accountNumber.trim() : '';
+    const packageName = typeof body.packageName === 'string' ? body.packageName.trim() : '';
+    const fiatAmount = typeof body.fiatAmount === 'string' ? body.fiatAmount.trim() : '';
+    const fiatCurrency = typeof body.fiatCurrency === 'string' ? body.fiatCurrency.trim().toUpperCase() : '';
+
+    if (!/^[a-z][a-z0-9_-]{1,39}$/.test(serviceCategory) ||
+        !/^[a-zA-Z0-9._:-]{1,120}$/.test(providerId) ||
+        !/^[^\\u0000-\\u001f]{1,160}$/.test(accountNumber) ||
+        !/^[^\\u0000-\\u001f]{1,120}$/.test(packageName) ||
+        !/^[A-Z]{3}$/.test(fiatCurrency) ||
+        !/^(?:0|[1-9]\\d*)(?:\\.\\d{1,8})?$/.test(fiatAmount) ||
+        !/[1-9]/.test(fiatAmount)) {
+      return res.status(400).json({
+        success: false,
+        error: 'UTILITY_INVOICE_INPUT_INVALID',
+        message: 'Provide a valid service, provider, account, package, positive fiat amount and ISO currency.'
+      });
+    }
+
+    // piAmount, owner IDs, FX source/rate/timestamp, invoice ID and expiry from
+    // the request are deliberately ignored. The server creates expiry and IDs.
+    const { NeonUtilityInvoiceRepository } = await import('./src/server/db/repositories/NeonUtilityInvoiceRepository');
+    const repository = new NeonUtilityInvoiceRepository();
+    const invoice = await repository.createInvoice({
+      ownerUserId,
+      ownerPiUid,
+      serviceCategory,
+      providerId,
+      accountNumber,
+      packageName,
+      fiatAmount,
+      fiatCurrency,
+      expiresAt: new Date(Date.now() + 5 * 60_000).toISOString()
+    });
+    return res.status(201).json({
+      success: true,
+      invoice: {
+        invoiceId: invoice.invoiceId,
+        serviceCategory: invoice.serviceCategory,
+        providerId: invoice.providerId,
+        packageName: invoice.packageName,
+        fiatAmount: invoice.fiatAmount,
+        fiatCurrency: invoice.fiatCurrency,
+        piAmount: invoice.piAmount,
+        fxSource: invoice.fxSource,
+        fxAsOf: invoice.fxAsOf,
+        expiresAt: invoice.expiresAt,
+        status: invoice.status
+      }
+    });
+  } catch (error) {
+    const code = error instanceof Error ? error.message : 'UTILITY_INVOICE_CREATE_FAILED';
+    const status = code.startsWith('FX_') ? 503 :
+      code === 'UTILITY_DATABASE_URL_REQUIRED' ? 503 :
+      code === 'UTILITY_FIAT_AMOUNT_INVALID' || code === 'UTILITY_FIAT_CURRENCY_INVALID' ? 400 : 500;
+    console.error('[UTILITY INVOICE CREATE]', code);
+    return res.status(status).json({
+      success: false,
+      error: status === 500 ? 'UTILITY_INVOICE_CREATE_FAILED' : code,
+      message: status === 503
+        ? 'Trusted FX or durable invoice storage is unavailable; no invoice was created.'
+        : status === 400
+          ? 'The fiat amount or currency is invalid.'
+          : 'The utility invoice could not be created.'
+    });
+  }
+});
+
 // Server-side Utility Fulfillment & Verification Endpoint
 // Server-side Utility Fulfillment & Verification Endpoint
 // Fail closed until a canonical, server-owned utility invoice is created and
