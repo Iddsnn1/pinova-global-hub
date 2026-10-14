@@ -53,6 +53,14 @@ async function runTestSuite() {
   assert(pioneerSession.user.username === 'pioneer_alice', 'Scenario 1.2: Authenticated user profile bound to session');
   assert(pioneerSession.user.roles.includes('PIONEER'), 'Scenario 1.3: User possesses assigned role');
 
+  // Existing users must persist a newly verified Pi UID even if their roles do not change.
+  const existingUserSession = await authService.createSession({
+    username: 'school_bursar',
+    uid: 'pi-uid-bursar-verified'
+  });
+  assert(existingUserSession.user.piUid === 'pi-uid-bursar-verified', 'Scenario 1.3a: Existing user receives verified Pi UID without role update');
+  assert(userRepo.findByUsername('school_bursar')?.piUid === 'pi-uid-bursar-verified', 'Scenario 1.3b: Verified Pi UID persisted to identity repository');
+
   // 1.2 Role Checking
   const isAliceAdmin = authService.hasRole(pioneerSession.user, 'PLATFORM_ADMIN');
   assert(!isAliceAdmin, 'Scenario 1.4: Regular Pioneer lacks PLATFORM_ADMIN role');
