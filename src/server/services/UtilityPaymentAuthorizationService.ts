@@ -28,6 +28,7 @@ export type UtilityPaymentAuthorizationFailure =
   | 'UTILITY_INVOICE_REQUIRED'
   | 'UTILITY_INVOICE_NOT_PAYABLE'
   | 'PI_PAYMENT_ID_MISMATCH'
+  | 'PI_PAYMENT_OWNER_MISMATCH'
   | 'PI_PAYMENT_DIRECTION_INVALID'
   | 'PI_PAYMENT_NETWORK_MISMATCH'
   | 'PI_PAYMENT_NOT_COMPLETED'
@@ -102,6 +103,7 @@ export function authorizeUtilityPayment(
   invoice: CanonicalUtilityInvoice | null | undefined,
   paymentId: string,
   paymentData: PiPaymentVerificationData | null | undefined,
+  expectedPiUid: string | null | undefined,
 ): UtilityPaymentAuthorizationResult {
   if (!invoice || !invoice.invoiceId || !invoice.paymentId) {
     return { authorized: false, error: 'UTILITY_INVOICE_REQUIRED' };
@@ -115,6 +117,12 @@ export function authorizeUtilityPayment(
     typeof paymentData?.identifier === 'string' ? paymentData.identifier : '';
   if (!paymentId || invoice.paymentId !== paymentId || verifiedPaymentId !== paymentId) {
     return { authorized: false, error: 'PI_PAYMENT_ID_MISMATCH' };
+  }
+  // Bind the verified Pi payment to the invoice owner's server-authenticated Pi UID.
+  // Missing identity on either side is a hard failure; internal user IDs are not Pi UIDs.
+  const verifiedPiUid = typeof paymentData?.user_uid === 'string' ? paymentData.user_uid.trim() : '';
+  if (!expectedPiUid || !expectedPiUid.trim() || !verifiedPiUid || verifiedPiUid !== expectedPiUid.trim()) {
+    return { authorized: false, error: 'PI_PAYMENT_OWNER_MISMATCH' };
   }
   if (paymentData?.direction !== 'user_to_app') {
     return { authorized: false, error: 'PI_PAYMENT_DIRECTION_INVALID' };
