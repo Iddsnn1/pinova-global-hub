@@ -3074,7 +3074,7 @@ app.post('/api/v2/utility/invoices/:invoiceId/payment', paymentRateLimiter, auth
   if (!ownerUserId || !String(req.user?.piUid || '').trim()) {
     return res.status(403).json({ success: false, error: 'PI_IDENTITY_REQUIRED' });
   }
-  if (!/^UTIL-[0-9a-f-]{36}$/i.test(invoiceId) || !paymentId || paymentId.length > 200 || /[\\u0000-\\u001f]/.test(paymentId)) {
+  if (!/^UTIL-[0-9a-f-]{36}$/i.test(invoiceId) || !paymentId || paymentId.length > 200 || /[\x00-\x1F]/.test(paymentId)) {
     return res.status(400).json({ success: false, error: 'UTILITY_PAYMENT_BINDING_INPUT_INVALID' });
   }
   try {
