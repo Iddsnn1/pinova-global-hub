@@ -3064,6 +3064,38 @@ app.post('/api/v2/utility/invoices', paymentRateLimiter, authenticate, requireAu
   }
 });
 
+// Bind a Pi SDK payment ID to an open invoice owned by the authenticated user.
+// This only binds the identifier; authoritative verification still happens server-side.
+app.post('/api/v2/utility/invoices/:invoiceId/payment', paymentRateLimiter, authenticate, requireAuthenticatedUser, async (req: AuthenticatedRequest, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  const ownerUserId = String(req.user?.id || '').trim();
+  const invoiceId = typeof req.params.invoiceId === 'string' ? req.params.invoiceId.trim() : '';
+  const paymentId = typeof req.body?.paymentId === 'string' ? req.body.paymentId.trim() : '';
+  if (!ownerUserId || !String(req.user?.piUid || '').trim()) {
+    return res.status(403).json({ success: false, error: 'PI_IDENTITY_REQUIRED' });
+  }
+  if (!/^UTIL-[0-9a-f-]{36}$/i.test(invoiceId) || !paymentId || paymentId.length > 200 || /[\\u0000-\\u001f]/.test(paymentId)) {
+    return res.status(400).json({ success: false, error: 'UTILITY_PAYMENT_BINDING_INPUT_INVALID' });
+  }
+  try {
+    const { NeonUtilityInvoiceRepository } = await import('./src/server/db/repositories/NeonUtilityInvoiceRepository');
+    const repository = new NeonUtilityInvoiceRepository();
+    const bound = await repository.bindPaymentId(invoiceId, ownerUserId, paymentId);
+    if (!bound) {
+      return res.status(409).json({
+        success: false,
+        error: 'UTILITY_PAYMENT_BINDING_REJECTED',
+        message: 'The invoice may be expired, already bound, unavailable, or not owned by this account.'
+      });
+    }
+    return res.status(200).json({ success: true, invoiceId, paymentId, status: 'PAYMENT_ID_BOUND' });
+  } catch (error) {
+    const code = error instanceof Error ? error.message : 'UTILITY_PAYMENT_BINDING_FAILED';
+    console.error('[UTILITY PAYMENT BIND]', code);
+    return res.status(503).json({ success: false, error: 'UTILITY_PAYMENT_BINDING_UNAVAILABLE' });
+  }
+});
+
 // Server-side Utility Fulfillment & Verification Endpoint
 // Server-side Utility Fulfillment & Verification Endpoint
 // Fail closed until a canonical, server-owned utility invoice is created and
