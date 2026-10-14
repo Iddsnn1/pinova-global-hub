@@ -37,18 +37,18 @@ assert.equal(piAmountToPico('1e-7'), null);
 assert.equal(piAmountToPico('-1'), null);
 assert.equal(piAmountToPico('1,000'), null);
 
-assert.equal(authorizeUtilityPayment(invoice, 'pi-payment-001', payment).authorized, true);
+assert.equal(authorizeUtilityPayment(invoice, 'pi-payment-001', payment, 'buyer-uid-001').authorized, true);
 assert.equal(
-  authorizeUtilityPayment(invoice, 'pi-payment-001', { ...payment, direction: 'app_to_user' }).error,
+  authorizeUtilityPayment(invoice, 'pi-payment-001', { ...payment, direction: 'app_to_user' }, 'buyer-uid-001').error,
   'PI_PAYMENT_DIRECTION_INVALID',
 );
 assert.equal(
-  authorizeUtilityPayment(invoice, 'pi-payment-001', { ...payment, network: 'Pi Network' }).error,
+  authorizeUtilityPayment(invoice, 'pi-payment-001', { ...payment, network: 'Pi Network' }, 'buyer-uid-001').error,
   'PI_PAYMENT_NETWORK_MISMATCH',
 );
 
 assert.equal(
-  authorizeUtilityPayment(invoice, 'pi-payment-001', { ...payment, amount: 0.000002069017 }).error,
+  authorizeUtilityPayment(invoice, 'pi-payment-001', { ...payment, amount: 0.000002069017 }, 'buyer-uid-001').error,
   'PI_PAYMENT_AMOUNT_MISMATCH',
 );
 assert.equal(
@@ -56,15 +56,15 @@ assert.equal(
   'PI_PAYMENT_ID_MISMATCH',
 );
 assert.equal(
-  authorizeUtilityPayment(invoice, 'pi-payment-001', { ...payment, identifier: undefined }).error,
+  authorizeUtilityPayment(invoice, 'pi-payment-001', { ...payment, identifier: undefined }, 'buyer-uid-001').error,
   'PI_PAYMENT_ID_MISMATCH',
 );
 assert.equal(
-  authorizeUtilityPayment(invoice, 'pi-payment-001', { ...payment, identifier: 123 }).error,
+  authorizeUtilityPayment(invoice, 'pi-payment-001', { ...payment, identifier: 123 }, 'buyer-uid-001').error,
   'PI_PAYMENT_ID_MISMATCH',
 );
 assert.equal(
-  authorizeUtilityPayment(invoice, 'pi-payment-001', { ...payment, status: { developer_completed: false } }).error,
+  authorizeUtilityPayment(invoice, 'pi-payment-001', { ...payment, status: { developer_completed: false } }, 'buyer-uid-001').error,
   'PI_PAYMENT_NOT_COMPLETED',
 );
 assert.equal(
