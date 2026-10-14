@@ -122,15 +122,16 @@ export class VtuNgAdapter {
   }
 
   /**
-   * Generates a deterministic but unique VTU request ID (<= 50 characters)
+   * Generates a stable provider request ID for a payment (<= 50 characters).
+   * Repeated attempts for the same Pi payment must reuse the same provider key;
+   * time/random suffixes would defeat provider-side duplicate detection after a
+   * timeout or lost response.
    */
   public generateRequestId(paymentId: string, prefix: string = 'UTIL'): string {
-    const cleanId = String(paymentId || 'GEN').replace(/[^a-zA-Z0-9]/g, '');
-    const shortPay = cleanId.slice(-14) || 'PSTP';
-    const timestamp = Date.now().toString(36);
-    const rand = Math.random().toString(36).substring(2, 6);
-    const reqId = `PNV-${prefix}-${shortPay}-${timestamp}-${rand}`;
-    return reqId.slice(0, 50);
+    const normalizedPaymentId = String(paymentId || '').trim();
+    const safePrefix = String(prefix || 'UTIL').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8) || 'UTIL';
+    const digest = crypto.createHash('sha256').update(normalizedPaymentId || 'GEN').digest('hex').slice(0, 24);
+    return `PNV-${safePrefix}-${digest}`.slice(0, 50);
   }
 
   /**
