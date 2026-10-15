@@ -33,9 +33,11 @@ const output = resolve(
 
 const blobOptions = { token: readWriteToken };
 
-async function readJson(pathname: string): Promise<{ value: unknown; raw: string } | null> {
+async function readJson(blobUrl: string, pathname: string): Promise<{ value: unknown; raw: string } | null> {
   try {
-    const result = await get(pathname, { access: 'private', ...blobOptions });
+    // `get()` requires the Blob URL returned by `list()`, not its pathname.
+    // Keep pathname separately for the manifest and diagnostics.
+    const result = await get(blobUrl, { access: 'private', ...blobOptions });
     if (!result || result.statusCode !== 200 || !result.stream) return null;
 
     // ReadableStream is not typed as AsyncIterable in the CI TypeScript lib set.
@@ -103,7 +105,10 @@ for (const bucket of Object.keys(prefixes) as Bucket[]) {
   const blobs = await listPrefix(prefixes[bucket]);
 
   for (const blob of blobs) {
-    const value = await readJson(blob.pathname);
+    if (!blob.url) {
+      throw new Error(`LEGACY_BLOB_URL_MISSING: list() returned no URL for ${blob.pathname}`);
+    }
+    const value = await readJson(blob.url, blob.pathname);
     if (value === null) {
       manifest.push({
         bucket,
