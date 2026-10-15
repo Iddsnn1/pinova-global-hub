@@ -4103,6 +4103,8 @@ export async function createPiPayment(
     ) => void;
 
     idempotencyKey?: string;
+    /** Utility checkout separates Pi payment verification from provider fulfillment. */
+    fulfillmentMode?: 'payment-only' | 'server-fulfilled';
   }
 ): Promise<{
   paymentId: string;
