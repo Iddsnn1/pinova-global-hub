@@ -34,8 +34,8 @@ interface AirtimeRechargeFormProps {
 
 export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
   piConversionConfig,
-  userBalancePi = 1250.00,
-  buyerUsername = 'Pioneer_User',
+  userBalancePi = 0,
+  buyerUsername = '',
   onExecutePayment,
   isProcessingPayment,
   errorMessage
