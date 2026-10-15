@@ -160,11 +160,12 @@ async function run() {
   process.env.PINOVA_FX_PROVIDER_URL = 'https://api.currencyapi.com/v3/latest';
   process.env.PINOVA_FX_PROVIDER_API_KEY = 'test-only-key';
   let fxFetchCalls = 0;
+  let providerRate = 1538.4615384615383;
   globalThis.fetch = (async () => {
     fxFetchCalls++;
     return new Response(JSON.stringify({
     meta: { last_updated_at: new Date().toISOString() },
-    data: { NGN: { code: 'NGN', value: 1538.4615384615383 } },
+    data: { NGN: { code: 'NGN', value: providerRate } },
   }), { status: 200, headers: { 'content-type': 'application/json' } });
   }) as typeof fetch;
   const creationStatements: Array<{ sql: string; values?: unknown[] }> = [];
@@ -177,7 +178,7 @@ async function run() {
           invoice_id: 'UTIL-INV-CREATE',
           payment_id: null,
           fiat_amount: '1000.00',
-          pi_amount: '0.000002069016',
+          pi_amount: String(values?.[9] ?? '0.000002069016'),
           status: 'OPEN',
         }],
         rowCount: 1,
@@ -225,6 +226,21 @@ async function run() {
       'stale or tampered browser Pi estimate must be ignored in favor of the same trusted quote used for persistence');
     assert.equal(creationStatements[0].values?.[9], '0.000002069016',
       'canonical Pi amount, not the client estimate, must be persisted');
+
+    // If the trusted provider quote changes after the browser estimate, the
+    // server must recompute the canonical Pi amount from the new quote.
+    providerRate = 1600;
+    creationStatements.length = 0;
+    const changedProviderQuote = await createRepo.createInvoice({
+      ...createInput,
+      piAmount: '0.000002069016',
+      fxUsdPerFiatUnit: '0.00065',
+    });
+    assert.equal(changedProviderQuote.piAmount, '0.000001989438');
+    assert.equal(creationStatements[0].values?.[9], '0.000001989438');
+    assert.ok(Math.abs(Number(creationStatements[0].values?.[12]) - (1 / 1600)) < 1e-15,
+      'the persisted FX rate must match the changed provider quote');
+    providerRate = 1538.4615384615383;
 
     // Client-supplied FX fields are untrusted and must never be persisted.
     creationStatements.length = 0;
