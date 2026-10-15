@@ -2979,6 +2979,33 @@ app.post(['/api/v2/payments/cancel', '/api/pi-payment/cancel', '/api/v1/pi-payme
 app.get(['/api/v2/payments/verify/:paymentId', '/api/pi-payment/verify/:paymentId', '/api/v2/pi/payments/verify', '/api/v2/payments/verify', '/api/pi-payment/verify'], paymentRateLimiter, handleVerifyPayment);
 app.get(['/api/v2/payments/config', '/api/pi-payment/config', '/api/v2/pi/config', '/api/v2/pi/diagnostic', '/api/pi/diagnostic'], handleGetPaymentConfig);
 
+// Read-only readiness gate for the utility UI. Never exposes secret values and
+// prevents collecting a Pi payment when durable storage, trusted FX, or the
+// provider integration is unavailable. Checkout stays opt-in via the server flag.
+app.get('/api/v2/utility/checkout-status', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  const checks = {
+    featureEnabled: process.env.PINOVA_UTILITY_CHECKOUT_ENABLED === 'true',
+    databaseConfigured: Boolean(process.env.DATABASE_URL?.trim()),
+    trustedFxConfigured: Boolean(
+      process.env.PINOVA_FX_PROVIDER_API_KEY?.trim() &&
+      process.env.PINOVA_FX_PROVIDER_URL?.trim() &&
+      process.env.PINOVA_FX_PROVIDER_SOURCE?.trim()
+    ),
+    piServerKeyConfigured: Boolean((process.env.PI_API_KEY || process.env.PI_SERVER_KEY || '').trim()),
+    providerConfigured: vtuNgAdapter.isConfigured(),
+  };
+  const ready = Object.values(checks).every(Boolean);
+  return res.status(200).json({
+    success: true,
+    ready,
+    checks,
+    message: ready
+      ? 'Utility checkout prerequisites are configured.'
+      : 'Checkout is paused until the server feature flag, Neon, trusted FX, Pi server credentials, and VTU.ng provider are configured.'
+  });
+});
+
 // Create canonical utility invoices only from an authenticated Pi session.
 // Ownership comes from req.user; all amount/FX fields are recomputed by Neon repository.
 app.post('/api/v2/utility/invoices', paymentRateLimiter, authenticate, requireAuthenticatedUser, async (req: AuthenticatedRequest, res) => {
