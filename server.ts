@@ -3082,6 +3082,17 @@ app.post('/api/v2/utility/invoices/:invoiceId/payment', paymentRateLimiter, auth
   try {
     const { NeonUtilityInvoiceRepository } = await import('./src/server/db/repositories/NeonUtilityInvoiceRepository');
     const repository = new NeonUtilityInvoiceRepository();
+    const authenticatedPiUid = String(req.user?.piUid || '').trim();
+    const invoice = await repository.findOwnedInvoice(invoiceId, ownerUserId);
+    // The application account ID alone is not enough: the Pi identity must still
+    // match the identity captured when this invoice was created.
+    if (!invoice || !authenticatedPiUid || invoice.ownerPiUid !== authenticatedPiUid) {
+      return res.status(409).json({
+        success: false,
+        error: 'UTILITY_PAYMENT_BINDING_REJECTED',
+        message: 'The invoice may be expired, unavailable, or not owned by this Pi identity.'
+      });
+    }
     const bound = await repository.bindPaymentId(invoiceId, ownerUserId, paymentId);
     if (!bound) {
       return res.status(409).json({
