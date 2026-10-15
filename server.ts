@@ -3194,6 +3194,13 @@ app.post('/api/v2/utility/invoices/:invoiceId/checkout', paymentRateLimiter, aut
     // Until additional provider-specific fulfillment adapters are audited, this
     // route deliberately supports only NGN Airtime with an explicit network ID.
     const networkAliases: Record<string, string> = {
+      // Canonical provider IDs from src/data/utilityData.ts must be accepted;
+      // the UI submits provider.id, not the display name or short network alias.
+      'prov-airtime-ng-mtn-nigeria': 'mtn',
+      'prov-airtime-ng-airtel-nigeria': 'airtel',
+      'prov-airtime-ng-glo-nigeria': 'glo',
+      'prov-airtime-ng-9mobile-nigeria': '9mobile',
+      // Backward-compatible aliases for explicitly configured integrations.
       'mtn': 'mtn', 'mtn-ng': 'mtn', 'mtn-nigeria': 'mtn',
       'airtel': 'airtel', 'airtel-ng': 'airtel', 'airtel-nigeria': 'airtel',
       'glo': 'glo', 'glo-ng': 'glo', 'glo-nigeria': 'glo',
