@@ -387,20 +387,21 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
     }
   };
 
-  // Handle Custom Amount changes preserving raw user strings (e.g. "0", "0.", "0.1", "1", "1.5", "10.25")
+  // Preserve the user's literal decimal input. Reject malformed pasted values
+  // rather than sanitizing them into a different amount (for example, "1e3" -> "13").
+  // Keep up to 8 fractional digits to match the server invoice input contract.
   const handleCustomAmountChange = (raw: string) => {
     if (raw === '') {
       setCustomAmountInput('');
+      setErrorMessage(null);
       return;
     }
-    // Allow only numeric digits and at most one decimal point
-    const sanitized = raw.replace(/[^0-9.]/g, '');
-    const parts = sanitized.split('.');
-    let cleaned = sanitized;
-    if (parts.length > 2) {
-      cleaned = parts[0] + '.' + parts.slice(1).join('');
+    if (!/^\\d*(?:\\.\\d{0,8})?$/.test(raw)) {
+      setErrorMessage('Enter a plain decimal amount with no more than 8 digits after the decimal point.');
+      return;
     }
-    setCustomAmountInput(cleaned);
+    setCustomAmountInput(raw);
+    setErrorMessage(null);
     if (purchaseMode !== 'custom') {
       setPurchaseMode('custom');
     }
@@ -532,8 +533,11 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
     if (!customAmountInput || customAmountInput.trim() === '') {
       return 0;
     }
-    const parsed = parseFloat(customAmountInput);
-    return !isNaN(parsed) && isFinite(parsed) && parsed > 0 ? parsed : 0;
+    if (!/^\\d+(?:\\.\\d{1,8})?$/.test(customAmountInput)) {
+      return 0;
+    }
+    const parsed = Number(customAmountInput);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
   };
 
   // In Global Services mode, a country-specific provider (e.g. MTN Nigeria)
