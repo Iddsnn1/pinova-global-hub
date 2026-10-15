@@ -3634,6 +3634,33 @@ export class PiSdkManagerService {
                       this.notifyDiagnosticStateChange();
 
                       try {
+                        // Utility invoices must be bound to the Pi SDK payment ID
+                        // before server approval. Fail closed if the owner-bound invoice
+                        // cannot be bound; never approve an unbound utility payment.
+                        const utilityInvoiceId = typeof params.metadata?.utilityInvoiceId === 'string'
+                          ? params.metadata.utilityInvoiceId.trim()
+                          : '';
+                        if (utilityInvoiceId) {
+                          const bindingResponse = await safeFetchJson(
+                            `/api/v2/utility/invoices/${encodeURIComponent(utilityInvoiceId)}/payment`,
+                            {
+                              method: 'POST',
+                              headers: {
+                                'Content-Type': 'application/json',
+                                'Idempotency-Key': idempotencyKey
+                              },
+                              body: JSON.stringify({ paymentId })
+                            }
+                          );
+                          if (!bindingResponse.ok || bindingResponse.data?.success !== true) {
+                            throw new Error(
+                              typeof bindingResponse.data?.message === 'string'
+                                ? bindingResponse.data.message
+                                : 'Utility invoice could not be bound to this Pi payment. Payment approval was stopped.'
+                            );
+                          }
+                        }
+
                         const response =
                           await safeFetchJson(
                             '/api/v2/payments/approve',
