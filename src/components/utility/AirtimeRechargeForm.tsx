@@ -129,19 +129,16 @@ export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
     }
   };
 
-  // Handle custom amount input preserving user keystrokes
+  // Accept only a plain decimal amount (up to two fractional digits).
+  // Do not strip arbitrary characters: e.g. "1e3" must not silently become "13".
   const handleCustomAmountChange = (raw: string) => {
     if (raw === '') {
       setCustomAmountInput('');
+      if (purchaseMode !== 'custom') setPurchaseMode('custom');
       return;
     }
-    const sanitized = raw.replace(/[^0-9.]/g, '');
-    const parts = sanitized.split('.');
-    let cleaned = sanitized;
-    if (parts.length > 2) {
-      cleaned = parts[0] + '.' + parts.slice(1).join('');
-    }
-    setCustomAmountInput(cleaned);
+    if (!/^\\d*(?:\\.\\d{0,2})?$/.test(raw)) return;
+    setCustomAmountInput(raw);
     if (purchaseMode !== 'custom') {
       setPurchaseMode('custom');
     }
@@ -155,8 +152,9 @@ export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
     if (!customAmountInput || customAmountInput.trim() === '') {
       return 0;
     }
-    const parsed = parseFloat(customAmountInput);
-    return !isNaN(parsed) && isFinite(parsed) && parsed > 0 ? parsed : 0;
+    if (!/^\\d+(?:\\.\\d{1,2})?$/.test(customAmountInput)) return 0;
+    const parsed = Number(customAmountInput);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
   };
 
   const activeFiatPrice = getActiveFiatPrice();
