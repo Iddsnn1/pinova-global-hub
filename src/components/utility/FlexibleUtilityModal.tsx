@@ -760,6 +760,22 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
           'Pi payment was not confirmed by the server. Check your Pi Wallet activity before attempting another payment.');
       }
 
+      // Persist the Pi payment ID against the canonical invoice before checkout.
+      // The server checkout route rejects unbound payment IDs; binding does not
+      // replace the authoritative Pi verification performed by the checkout service.
+      const bindingResponse = await fetch('/api/v2/utility/invoices/' + encodeURIComponent(invoice.invoiceId) + '/payment', {
+        method: 'POST',
+        credentials: 'same-origin',
+        cache: 'no-store',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({ paymentId })
+      });
+      const bindingPayload = await bindingResponse.json().catch(() => null);
+      if (!bindingResponse.ok || bindingPayload?.success !== true ||
+          bindingPayload?.paymentId !== paymentId || bindingPayload?.invoiceId !== invoice.invoiceId) {
+        throw new Error('Pi payment was verified, but the server could not bind it to the invoice. Do not pay again; keep invoice ' + invoice.invoiceId + ' and payment ' + paymentId + ' for reconciliation.');
+      }
+
       // This endpoint independently verifies Pi platform payment data and
       // idempotently dispatches provider fulfillment. Never mark success on payment alone.
       const checkoutResponse = await fetch('/api/v2/utility/invoices/' + encodeURIComponent(invoice.invoiceId) + '/checkout', {
