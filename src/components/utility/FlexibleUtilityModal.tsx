@@ -46,6 +46,7 @@ import { UTILITY_CATEGORY_META, SAMPLE_UTILITY_PROVIDERS } from '../../data/util
 import { AIRTIME_COUNTRIES } from '../../data/airtimeData';
 import { ALL_GLOBAL_COUNTRIES } from '../../data/countriesData';
 import { DigitalReceiptModal } from './DigitalReceiptModal';
+import { createPiPayment } from '../../lib/piSdk';
 import { formatPiAmount } from '../../utils/formatters';
 import { ProviderValidationFactory } from '../../modules/utility/providerValidation';
 import { supportsServiceDiscovery } from '../../lib/utility/serviceDiscovery';
@@ -237,6 +238,8 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
   } | null>(null);
   const [isLoadingTrustedConversion, setIsLoadingTrustedConversion] = useState(false);
   const [trustedConversionError, setTrustedConversionError] = useState<string | null>(null);
+  const [checkoutReadiness, setCheckoutReadiness] = useState<{ ready: boolean; message: string } | null>(null);
+  const [isProcessingUtilityPayment, setIsProcessingUtilityPayment] = useState(false);
 
   // Review & Processing State
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -525,6 +528,30 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
     }
   };
 
+  // Fail-closed server readiness check. The UI must not collect a Pi payment
+  // while checkout, trusted FX, durable storage, or the provider is unavailable.
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/v2/utility/checkout-status', { method: 'GET', cache: 'no-store', credentials: 'same-origin' })
+      .then(async (response) => {
+        const payload = await response.json().catch(() => null);
+        if (!response.ok || payload?.success !== true || typeof payload?.ready !== 'boolean') {
+          throw new Error('Server checkout readiness could not be confirmed.');
+        }
+        if (!cancelled) setCheckoutReadiness({
+          ready: payload.ready,
+          message: typeof payload.message === 'string' ? payload.message : 'Checkout readiness is unavailable.'
+        });
+      })
+      .catch((error) => {
+        if (!cancelled) setCheckoutReadiness({
+          ready: false,
+          message: error instanceof Error ? error.message : 'Server checkout readiness could not be confirmed.'
+        });
+      });
+    return () => { cancelled = true; };
+  }, []);
+
   // Dynamic Pi Calculation
   const getActiveFiatPrice = (): number => {
     if (purchaseMode === 'package' && selectedPackage) {
@@ -638,10 +665,153 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
     calculatedPiAmount >= minPiThreshold &&
     calculatedPiAmount <= (piConversionConfig.maxPurchasePi || 1000.00);
 
-  // Quote-only estimate. Checkout stays blocked until the server independently
-  // validates the canonical utility invoice and authorizes the payment.
+  // Canonical invoice → Pi payment verification → server-side provider fulfillment.
+  // Only the explicitly supported Nigerian Airtime flow may use this checkout.
   const handleExecutePayment = async () => {
-    setErrorMessage('Checkout is paused: the FX endpoint currently returns an estimate only, not payment authorization. Server-side invoice validation must be integrated before this utility can be paid.');
+    if (isProcessingUtilityPayment) return;
+    setErrorMessage(null);
+    const allowedProviderIds = new Set([
+      'prov-airtime-ng-mtn-nigeria',
+      'prov-airtime-ng-airtel-nigeria',
+      'prov-airtime-ng-glo-nigeria',
+      'prov-airtime-ng-9mobile-nigeria'
+    ]);
+    const normalizedPhone = accountNumber.replace(/[^0-9]/g, '');
+    const phone = normalizedPhone.startsWith('234') && normalizedPhone.length === 13
+      ? '0' + normalizedPhone.slice(3)
+      : normalizedPhone;
+    if (!checkoutReadiness?.ready) {
+      setErrorMessage(checkoutReadiness?.message || 'Checkout readiness has not been confirmed. No payment was started.');
+      return;
+    }
+    if (selectedCategory !== 'airtime' || activeFiatCurrency !== 'NGN' ||
+        !selectedProvider || !allowedProviderIds.has(selectedProvider.id) ||
+        selectedProvider.enabled === false || !/^0[0-9]{10}$/.test(phone)) {
+      setErrorMessage('Only configured Nigerian Airtime networks and a valid Nigerian phone number are supported for checkout.');
+      return;
+    }
+    if (!Number.isFinite(activeFiatAmount) || activeFiatAmount <= 0 ||
+        !trustedConversion || trustedConversion.fiatAmount !== activeFiatAmount ||
+        trustedConversion.fiatCurrency !== activeFiatCurrency) {
+      setErrorMessage('A matching trusted FX estimate is required before requesting a server invoice.');
+      return;
+    }
+
+    setIsProcessingUtilityPayment(true);
+    let invoiceId = '';
+    let paymentId = '';
+    try {
+      const requestedFiatAmount = purchaseMode === 'package'
+        ? String(selectedPackage?.fiatPrice ?? '')
+        : customAmountInput.trim();
+      const packageName = purchaseMode === 'package'
+        ? String(selectedPackage?.name || '')
+        : (selectedDesignation || 'Custom Airtime Top-up');
+      if (!requestedFiatAmount || !packageName) {
+        throw new Error('Choose a valid amount or package before checkout.');
+      }
+
+      const invoiceResponse = await fetch('/api/v2/utility/invoices', {
+        method: 'POST',
+        credentials: 'same-origin',
+        cache: 'no-store',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({
+          serviceCategory: 'airtime',
+          providerId: selectedProvider.id,
+          accountNumber: phone,
+          packageName,
+          fiatAmount: requestedFiatAmount,
+          fiatCurrency: 'NGN'
+        })
+      });
+      const invoicePayload = await invoiceResponse.json().catch(() => null);
+      const invoice = invoicePayload?.invoice;
+      if (!invoiceResponse.ok || invoicePayload?.success !== true || !invoice ||
+          typeof invoice.invoiceId !== 'string' ||
+          invoice.providerId !== selectedProvider.id ||
+          invoice.fiatCurrency !== 'NGN' ||
+          Number(invoice.fiatAmount) !== Number(requestedFiatAmount) ||
+          !Number.isFinite(Number(invoice.piAmount)) || Number(invoice.piAmount) <= 0 ||
+          !Number.isFinite(Date.parse(invoice.expiresAt)) || Date.parse(invoice.expiresAt) <= Date.now()) {
+        throw new Error(typeof invoicePayload?.message === 'string'
+          ? invoicePayload.message
+          : 'The server did not return a valid canonical utility invoice. No Pi payment was started.');
+      }
+      invoiceId = invoice.invoiceId;
+
+      const paymentResult = await createPiPayment({
+        amountPi: Number(invoice.piAmount),
+        memo: 'PiNova Nigerian Airtime — ' + selectedProvider.name,
+        metadata: {
+          category: 'airtime',
+          utilityInvoiceId: invoice.invoiceId,
+          providerId: invoice.providerId,
+          fiatAmount: invoice.fiatAmount,
+          fiatCurrency: invoice.fiatCurrency
+        },
+        idempotencyKey: 'utility-' + invoice.invoiceId,
+        fulfillmentMode: 'payment-only'
+      });
+      paymentId = paymentResult.paymentId || '';
+      if (!paymentResult.success || !paymentId ||
+          paymentResult.fulfillmentStatus !== 'PAYMENT_VERIFIED') {
+        throw new Error(paymentResult.message ||
+          'Pi payment was not confirmed by the server. Check your Pi Wallet activity before attempting another payment.');
+      }
+
+      // This endpoint independently verifies Pi platform payment data and
+      // idempotently dispatches provider fulfillment. Never mark success on payment alone.
+      const checkoutResponse = await fetch('/api/v2/utility/invoices/' + encodeURIComponent(invoice.invoiceId) + '/checkout', {
+        method: 'POST',
+        credentials: 'same-origin',
+        cache: 'no-store',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({ paymentId })
+      });
+      const checkoutPayload = await checkoutResponse.json().catch(() => null);
+      const checkout = checkoutPayload?.checkout;
+      const fulfilled = checkoutResponse.ok && checkoutPayload?.success === true &&
+        (checkout?.status === 'FULFILLED' || checkout?.status === 'RESOLVED');
+      const definiteFailure = checkout?.status === 'FULFILLMENT_FAILED';
+
+      const receipt: UtilityTransactionReceipt = {
+        transactionId: paymentId,
+        piPaymentId: paymentId,
+        piTxid: paymentResult.txid || undefined,
+        category: 'airtime',
+        providerId: invoice.providerId,
+        providerName: selectedProvider.name,
+        accountNumber: phone,
+        fiatAmount: Number(invoice.fiatAmount),
+        fiatCurrency: invoice.fiatCurrency,
+        appliedPiRateUsd: piConversionConfig.piRateUsd,
+        piAmount: Number(invoice.piAmount),
+        packageName: invoice.packageName || packageName,
+        status: fulfilled ? 'SUCCESS' : definiteFailure ? 'FAILED' : 'PROCESSING',
+        timestamp: new Date().toISOString(),
+        orderProtectionGuaranteed: false,
+        buyerUsername
+      };
+
+      if (fulfilled) {
+        setGeneratedReceipt(receipt);
+        onTransactionSuccess?.(receipt);
+      } else if (definiteFailure) {
+        setGeneratedReceipt(receipt);
+        setErrorMessage('Pi payment was verified, but the provider reported a fulfillment failure. Keep invoice ' + invoiceId + ' and payment ' + paymentId + ' for reconciliation; do not pay again.');
+      } else {
+        setGeneratedReceipt(receipt);
+        setErrorMessage('Pi payment was verified, but airtime fulfillment is still pending. Invoice: ' + invoiceId + '; payment: ' + paymentId + '. Do not submit another payment while this is reconciled.');
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Utility checkout failed.';
+      setErrorMessage(invoiceId && paymentId
+        ? message + ' Invoice: ' + invoiceId + '; payment: ' + paymentId + '. Check status before retrying.'
+        : message);
+    } finally {
+      setIsProcessingUtilityPayment(false);
+    }
   };
 
 
@@ -1407,17 +1577,24 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
 
                 <div className="p-3 rounded-xl bg-amber-950/60 border border-amber-800/80 flex items-start gap-2.5 text-[11px] text-amber-200">
                   <ShieldCheck className="w-4 h-4 text-amber-300 shrink-0" />
-                  <span>FX quote is an estimate only. Checkout remains paused until server-side invoice verification and payment authorization are connected.</span>
+                  <span>{checkoutReadiness?.ready
+                    ? 'The displayed FX is an estimate. Final Pi pricing comes from a server-created invoice; service success is shown only after server-side payment verification and provider fulfillment.'
+                    : checkoutReadiness?.message || 'Checking server checkout readiness. No payment can start until readiness is confirmed.'}</span>
                 </div>
 
                 {/* PAY WITH PI WALLET BUTTON */}
                 <button
                   type="button"
                   onClick={handleExecutePayment}
-                  disabled={true}
+                  disabled={!checkoutReadiness?.ready || isProcessingUtilityPayment || selectedCategory !== 'airtime' || activeFiatCurrency !== 'NGN'}
                   className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-purple-600 via-indigo-600 to-amber-500 hover:opacity-95 disabled:opacity-50 text-white font-extrabold text-xs sm:text-sm shadow-xl shadow-purple-600/30 transition-all flex items-center justify-center gap-2"
                 >
-                  {selectedProvider?.enabled === false ? (
+                  {isProcessingUtilityPayment ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>Verifying Pi Payment & Airtime…</span>
+                    </>
+                  ) : selectedProvider?.enabled === false ? (
                     <>
                       <AlertCircle className="w-4 h-4 text-amber-300" />
                       <span>Gateway Onboarding Pending — Direct Vending Paused</span>
@@ -1425,7 +1602,7 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                   ) : (
                     <>
                       <Lock className="w-4 h-4 text-amber-300" />
-                      <span>Checkout Paused — Verification Required</span>
+                      <span>{checkoutReadiness?.ready ? 'Pay with Pi Wallet' : 'Checkout Paused — Verification Required'}</span>
                     </>
                   )}
                 </button>
