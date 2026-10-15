@@ -3435,6 +3435,8 @@ export class PiSdkManagerService {
       payment: PiPayment
     ) => void;
     idempotencyKey?: string;
+    /** Use payment-only semantics when a separate service fulfillment step follows verification. */
+    fulfillmentMode?: 'payment-only' | 'server-fulfilled';
   }): Promise<{
     paymentId: string;
     txid: string;
@@ -3801,8 +3803,15 @@ export class PiSdkManagerService {
                           paymentId,
                           txid,
                           success: true,
-                          fulfillmentStatus: 'FULFILLED',
-                          message: 'Pi payment verified and completed successfully.',
+                          // Pi verification and downstream service fulfillment are distinct.
+                          // Preserve the legacy default, while allowing utility checkout to
+                          // wait for its provider before reporting fulfillment.
+                          fulfillmentStatus: params.fulfillmentMode === 'payment-only'
+                            ? 'PAYMENT_VERIFIED'
+                            : 'FULFILLED',
+                          message: params.fulfillmentMode === 'payment-only'
+                            ? 'Pi payment verified; service fulfillment is still pending.'
+                            : 'Pi payment verified and completed successfully.',
                           data
                         });
 
