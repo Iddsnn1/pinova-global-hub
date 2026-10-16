@@ -138,6 +138,53 @@ async function run() {
     assert.equal(missingPiIdentity.status, 403);
     assert.equal((await missingPiIdentity.json()).error, 'PI_IDENTITY_REQUIRED');
 
+    // FX estimate endpoint rejects malformed amounts/currencies before provider access.
+    const invalidFxAmount = await fetch(`${baseUrl}/api/currency/fiat-to-pi`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fiatAmount: 0, currency: 'NGN' }),
+    });
+    assert.equal(invalidFxAmount.status, 400);
+    assert.equal((await invalidFxAmount.json()).code, 'FIAT_AMOUNT_INVALID');
+
+    const invalidFxCurrency = await fetch(`${baseUrl}/api/currency/fiat-to-pi`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fiatAmount: 1000, currency: 'Naira' }),
+    });
+    assert.equal(invalidFxCurrency.status, 400);
+    assert.equal((await invalidFxCurrency.json()).code, 'FIAT_CURRENCY_INVALID');
+
+    // A valid estimate request with no trusted provider configured must fail closed.
+    // Remove only process-local test values; restore the original environment afterwards.
+    const fxEnvKeys = [
+      'PINOVA_FX_PROVIDER_URL',
+      'PINOVA_FX_PROVIDER_SOURCE',
+      'PINOVA_FX_PROVIDER_API_KEY',
+    ] as const;
+    const originalFxEnv = Object.fromEntries(fxEnvKeys.map((key) => [key, process.env[key]]));
+    try {
+      for (const key of fxEnvKeys) delete process.env[key];
+      const unavailableFx = await fetch(`${baseUrl}/api/currency/fiat-to-pi`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fiatAmount: 1000, currency: 'NGN' }),
+      });
+      assert.equal(unavailableFx.status, 503);
+      const unavailableFxBody = await unavailableFx.json();
+      assert.equal(unavailableFxBody.success, false);
+      assert.equal(unavailableFxBody.code, 'FX_PROVIDER_ENDPOINT_NOT_CONFIGURED');
+      assert.equal(unavailableFxBody.estimateOnly, true);
+      assert.equal(unavailableFxBody.paymentAuthorized, false);
+      assert.equal(JSON.stringify(unavailableFxBody).includes('fixture-only-not-a-real-secret'), false);
+    } finally {
+      for (const key of fxEnvKeys) {
+        const value = originalFxEnv[key];
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    }
+
     console.log('Utility checkout HTTP route integration suite passed (no DB/provider calls intended).');
   } finally {
     process.env.PINOVA_UTILITY_CHECKOUT_ENABLED = 'false';
