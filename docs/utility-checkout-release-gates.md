@@ -41,7 +41,7 @@ This checklist describes the Neon-backed utility invoice flow. It does not enabl
 - PR #11 remains open and Draft on `feat/global-currency-pi-engine`; current head commit `3b32bc86d2d3abcb266fe1fe50b15dc5643e0059`.
 - GitHub Actions passed on this commit: PiNova CI run #1030, PiNova CI Verify #1029, PiNova Global Hub CI #1031, and Currency Engine Validation #217. The quality jobs report TypeScript lint, production build, and test suite success.
 - Vercel Preview check for this commit reports **success**: https://vercel.com/iddsnn1s-projects/pinova-global-hub/6FbLStgwhdp31cyY3DXKKKb4fSX7.
-- The new HTTP route suite is part of `npm test`; it exercises unauthenticated access (401), feature flag OFF (503), and malformed invoice ID (400). This is not a full payment/fulfillment end-to-end test.
+- The new HTTP route suite is part of `npm test`; it exercises unauthenticated access (401), feature flag OFF (503), malformed invoice ID (400), and missing payment ID (400). This is not a full payment/fulfillment end-to-end test.
 - Read-only SQL against the isolated Neon utility-checkout test branch previously showed `utility_invoices`, `utility_payment_idempotency`, and `utility_fulfillment_attempts` are not present. No migrations were applied.
 - CI success does not prove real Pi wallet payment or VTU.ng fulfillment. Owner mismatch, repository/provider call counters, replay/concurrency at HTTP level, and provider sandbox contract checks remain outstanding.
 
