@@ -10,7 +10,7 @@ import { validateTrustedFxQuote } from '../src/server/services/TrustedFxQuoteSer
 import { calculateTrustedFiatToPi } from '../src/server/services/TrustedFiatToPiService';
 import { pricingEngine } from '../src/modules/pricing';
 import type { PiConversionConfig } from '../src/types/utility';
-import { parseTrustedFxProviderPayload, parseCurrencyApiPayload, getTrustedFxProviderConfig } from '../src/server/services/TrustedFxProviderService';
+import { parseTrustedFxProviderPayload, parseCurrencyApiPayload, getTrustedFxProviderConfig, fetchTrustedFxQuote } from '../src/server/services/TrustedFxProviderService';
 
 // Keep the shared quote timestamp fresh regardless of runner timezone/date.
 const fxAsOf = new Date(Date.now() - 60_000).toISOString();
@@ -232,5 +232,46 @@ assert.throws(
   () => validateTrustedFxQuote({ ...validNgnQuote, usdPerFiatUnit: 0 }, 'NGN', 'configured-test-provider', trustedFxNow),
   /FX_RATE_INVALID/,
 );
+
+// Transport failures fail closed. Mock fetch so these tests never call a live provider.
+const originalFetch = globalThis.fetch;
+try {
+  globalThis.fetch = (async () => new Response('provider unavailable', {
+    status: 503,
+    headers: { 'content-type': 'text/plain' },
+  })) as typeof fetch;
+  await assert.rejects(
+    fetchTrustedFxQuote('NGN', {
+      endpoint: 'https://fx.example.test/latest',
+      source: 'fixture-fx-provider',
+    }),
+    /FX_PROVIDER_HTTP_ERROR/,
+  );
+
+  globalThis.fetch = (async () => new Response('<html>not json</html>', {
+    status: 200,
+    headers: { 'content-type': 'text/html' },
+  })) as typeof fetch;
+  await assert.rejects(
+    fetchTrustedFxQuote('NGN', {
+      endpoint: 'https://fx.example.test/latest',
+      source: 'fixture-fx-provider',
+    }),
+    /FX_PROVIDER_CONTENT_TYPE_INVALID/,
+  );
+
+  globalThis.fetch = (async () => {
+    throw new TypeError('redirect rejected by fetch');
+  }) as typeof fetch;
+  await assert.rejects(
+    fetchTrustedFxQuote('NGN', {
+      endpoint: 'https://fx.example.test/latest',
+      source: 'fixture-fx-provider',
+    }),
+    /FX_PROVIDER_REQUEST_FAILED/,
+  );
+} finally {
+  globalThis.fetch = originalFetch;
+}
 
 console.log('Global currency-to-Pi conversion suite: all assertions passed.');
