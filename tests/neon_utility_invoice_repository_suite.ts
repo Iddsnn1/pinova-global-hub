@@ -88,6 +88,59 @@ async function run() {
   assert.ok(mismatch.statements.includes('ROLLBACK'));
   assert.ok(!mismatch.statements.some((statement) => statement.includes('INSERT INTO public.utility_payment_idempotency')));
 
+  // Defense in depth: the transactional repository independently rejects
+  // a payment UID that does not match the invoice owner, even if the route
+  // already performed the same check before calling this repository.
+  const wrongOwner = mockPoolForReservation();
+  const wrongOwnerRepo = new NeonUtilityInvoiceRepository(wrongOwner.pool);
+  const wrongOwnerResult = await wrongOwnerRepo.authorizeAndReserve('UTIL-INV-TEST', 'buyer-01', 'pi-payment-01', {
+    identifier: 'pi-payment-01',
+    user_uid: 'different-pi-uid',
+    direction: 'user_to_app',
+    network: 'Pi Testnet',
+    amount: 0.000002069016,
+    status: { developer_completed: true },
+    transaction: { verified: true, txid: 'pi-tx-wrong-owner' },
+  });
+  assert.deepEqual(wrongOwnerResult, { status: 'REJECTED', error: 'PI_PAYMENT_OWNER_MISMATCH' });
+  assert.ok(wrongOwner.statements.includes('ROLLBACK'));
+  assert.ok(!wrongOwner.statements.some((statement) => statement.includes('INSERT INTO public.utility_payment_idempotency')));
+  assert.ok(!wrongOwner.statements.some((statement) => statement.includes('INSERT INTO public.utility_fulfillment_attempts')));
+
+  // A payment in the wrong direction cannot reserve the invoice or dispatch
+  // fulfillment, even if its amount and identifier otherwise match.
+  const wrongDirection = mockPoolForReservation();
+  const wrongDirectionRepo = new NeonUtilityInvoiceRepository(wrongDirection.pool);
+  const wrongDirectionResult = await wrongDirectionRepo.authorizeAndReserve('UTIL-INV-TEST', 'buyer-01', 'pi-payment-01', {
+    identifier: 'pi-payment-01',
+    user_uid: 'buyer-uid-01',
+    direction: 'app_to_user',
+    network: 'Pi Testnet',
+    amount: 0.000002069016,
+    status: { developer_completed: true },
+    transaction: { verified: true, txid: 'pi-tx-wrong-direction' },
+  });
+  assert.deepEqual(wrongDirectionResult, { status: 'REJECTED', error: 'PI_PAYMENT_DIRECTION_INVALID' });
+  assert.ok(wrongDirection.statements.includes('ROLLBACK'));
+  assert.ok(!wrongDirection.statements.some((statement) => statement.includes('INSERT INTO public.utility_payment_idempotency')));
+
+  // Payment identity must come from a completed and transaction-verified Pi
+  // payment, not merely from a matching ID and amount.
+  const incomplete = mockPoolForReservation();
+  const incompleteRepo = new NeonUtilityInvoiceRepository(incomplete.pool);
+  const incompleteResult = await incompleteRepo.authorizeAndReserve('UTIL-INV-TEST', 'buyer-01', 'pi-payment-01', {
+    identifier: 'pi-payment-01',
+    user_uid: 'buyer-uid-01',
+    direction: 'user_to_app',
+    network: 'Pi Testnet',
+    amount: 0.000002069016,
+    status: { developer_completed: false },
+    transaction: { verified: true, txid: 'pi-tx-incomplete' },
+  });
+  assert.deepEqual(incompleteResult, { status: 'REJECTED', error: 'PI_PAYMENT_NOT_COMPLETED' });
+  assert.ok(incomplete.statements.includes('ROLLBACK'));
+  assert.ok(!incomplete.statements.some((statement) => statement.includes('INSERT INTO public.utility_payment_idempotency')));
+
   const fingerprint = createHash('sha256')
     .update(['UTIL-INV-TEST', 'pi-payment-01', 'pi-tx-01', '0.000002069016'].join('|'))
     .digest('hex');
