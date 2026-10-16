@@ -110,7 +110,7 @@ async function run() {
           Authorization: `Bearer ${session.token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ paymentId: 'test-payment\\u0000id' }),
+        body: JSON.stringify({ paymentId: 'test-payment\u0000id' }),
       },
     );
     assert.equal(controlCharacterPayment.status, 400);
