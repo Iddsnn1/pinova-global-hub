@@ -38,12 +38,13 @@ This checklist describes the Neon-backed utility invoice flow. It does not enabl
 
 ## Validation snapshot — 2026-10-16
 
-- PR #11 remains open and Draft on `feat/global-currency-pi-engine`; current head commit `3b32bc86d2d3abcb266fe1fe50b15dc5643e0059`.
-- GitHub Actions passed on this commit: PiNova CI run #1030, PiNova CI Verify #1029, PiNova Global Hub CI #1031, and Currency Engine Validation #217. The quality jobs report TypeScript lint, production build, and test suite success.
-- Vercel Preview check for this commit reports **success**: https://vercel.com/iddsnn1s-projects/pinova-global-hub/6FbLStgwhdp31cyY3DXKKKb4fSX7.
-- The new HTTP route suite is part of `npm test`; it exercises unauthenticated access (401), feature flag OFF (503), malformed invoice ID (400), and missing payment ID (400). This is not a full payment/fulfillment end-to-end test.
+- PR #11 remains open and Draft on `feat/global-currency-pi-engine`; do not merge as part of this validation. The latest inspected commit is `0ba9d341baaeb9bb67cd2679bd6d6da961013755`.
+- GitHub Actions passed on that commit: PiNova CI #1036, PiNova CI Verify #1035, PiNova Global Hub CI #1037, and Currency Engine Validation #223.
+- Vercel Preview for the latest commit was still **pending** at the last status check; do not treat the earlier successful Preview for an older commit as validation of this head.
+- The HTTP route suite covers unauthenticated access (401), feature flag OFF (503), malformed invoice ID (400), missing payment ID (400), oversized payment ID (400), and control-character payment ID (400). It does not yet instrument repository/provider constructor calls or exercise owner mismatch through the real HTTP route.
+- The latest orchestrator test change adds counter assertions that rejected cases (missing/foreign-owned invoice, mismatched payment ID, unverified payment, mismatched Pi UID, and missing invoice Pi UID) do not reserve payment, dispatch fulfillment, or persist fulfillment outcomes. These are orchestrator-level tests, not proof of complete HTTP or provider behavior.
 - Read-only SQL against the isolated Neon utility-checkout test branch previously showed `utility_invoices`, `utility_payment_idempotency`, and `utility_fulfillment_attempts` are not present. No migrations were applied.
-- CI success does not prove real Pi wallet payment or VTU.ng fulfillment. Owner mismatch, repository/provider call counters, replay/concurrency at HTTP level, and provider sandbox contract checks remain outstanding.
+- CI success does not prove real Pi wallet payment or VTU.ng fulfillment. HTTP owner mismatch with explicit repository/provider counters, replay/concurrency at HTTP level, Pi SDK cancellation/error paths, and provider sandbox contract checks remain outstanding.
 
 ## Release sequence
 
