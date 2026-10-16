@@ -163,6 +163,48 @@ async function run() {
   });
   assert.equal(resolved.calls.fulfill, 0);
 
+  // A transient failure of the authoritative Pi verifier must fail closed
+  // before reserving an invoice or contacting the utility provider.
+  const verificationUnavailable = setup({
+    verifyPayment: async () => { throw new Error('Pi Platform temporarily unavailable'); },
+  });
+  assert.deepEqual(await processUtilityCheckout(verificationUnavailable.deps, {
+    invoiceId: invoice.invoiceId, ownerUserId: invoice.ownerUserId, paymentId: invoice.paymentId,
+  }), { status: 'REJECTED', error: 'PI_PAYMENT_VERIFICATION_UNAVAILABLE' });
+  assert.equal(verificationUnavailable.calls.reserve, 0);
+  assert.equal(verificationUnavailable.calls.fulfill, 0);
+  assert.equal(verificationUnavailable.calls.record, 0);
+
+  // A definite provider rejection must be recorded and surfaced as a failed
+  // fulfillment, never as a successful receipt.
+  const providerRejected = setup({
+    fulfill: async () => ({ status: 'FAILED' as const, providerReference: 'vtu-decline-01', response: { code: 'DECLINED' } }),
+  });
+  assert.deepEqual(await processUtilityCheckout(providerRejected.deps, {
+    invoiceId: invoice.invoiceId, ownerUserId: invoice.ownerUserId, paymentId: invoice.paymentId,
+  }), {
+    status: 'FULFILLMENT_FAILED', invoiceId: invoice.invoiceId, paymentId: invoice.paymentId,
+    txid: 'pi-tx-01', error: 'UTILITY_PROVIDER_REJECTED',
+  });
+  assert.equal(providerRejected.calls.outcome, 'FAILED');
+  assert.equal(providerRejected.calls.record, 1);
+
+  // If recording throws after the provider call, report pending for reconciliation
+  // and do not misrepresent the outcome as success.
+  const recordThrows = setup({
+    repository: {
+      ...setup().repository,
+      recordFulfillmentOutcome: async () => { throw new Error('database write failed'); },
+    } as unknown as UtilityCheckoutDependencies['repository'],
+  });
+  assert.deepEqual(await processUtilityCheckout(recordThrows.deps, {
+    invoiceId: invoice.invoiceId, ownerUserId: invoice.ownerUserId, paymentId: invoice.paymentId,
+  }), {
+    status: 'FULFILLMENT_PENDING', invoiceId: invoice.invoiceId,
+    paymentId: invoice.paymentId, txid: 'pi-tx-01',
+  });
+  assert.equal(recordThrows.calls.fulfill, 1);
+
   console.log('Utility checkout orchestrator tests passed.');
 }
 
