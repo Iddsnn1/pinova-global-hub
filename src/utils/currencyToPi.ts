@@ -10,8 +10,8 @@
  */
 export const PI_REFERENCE_RATE_USD = 314159;
 export const PI_AMOUNT_DECIMALS = 12;
-/** FX quotes older than this are rejected unless a stricter limit is supplied. */
-export const DEFAULT_MAX_FX_AGE_MS = 24 * 60 * 60 * 1000;
+/** Match the shared trusted-provider freshness policy; callers may choose a stricter limit. */
+export const DEFAULT_MAX_FX_AGE_MS = 15 * 60 * 1000;
 const ALLOWED_FX_CLOCK_SKEW_MS = 60 * 1000;
 
 export interface FiatToPiQuote {
