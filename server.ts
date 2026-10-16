@@ -6287,6 +6287,8 @@ const fxQuoteRateLimiter = createRateLimiter({
 });
 
 const handleFiatToPiEstimate = async (req: express.Request, res: express.Response) => {
+  // Quote responses must not be cached beyond the provider freshness window.
+  res.setHeader('Cache-Control', 'no-store');
   const fiatAmount = Number(req.body?.fiatAmount);
   const currency = String(req.body?.currency || '').trim().toUpperCase();
   if (!Number.isFinite(fiatAmount) || fiatAmount <= 0 || fiatAmount > 1_000_000_000_000) {
