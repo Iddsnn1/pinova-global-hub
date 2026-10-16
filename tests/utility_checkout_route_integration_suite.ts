@@ -51,6 +51,8 @@ async function run() {
       },
     );
     assert.equal(disabled.status, 503);
+    assert.equal(disabled.headers.get('cache-control'), 'no-store');
+    assert.equal(disabled.headers.get('retry-after'), '300');
     assert.equal((await disabled.json()).error, 'UTILITY_CHECKOUT_DISABLED');
 
     // With the gate enabled only inside this isolated test process, malformed
