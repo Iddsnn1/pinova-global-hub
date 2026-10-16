@@ -69,6 +69,17 @@ do not relabel or fabricate its source, rate, or timestamp.
    show that the estimate is unavailable. Do not fall back to 1:1 FX or treat a
    client-provided amount as authoritative.
 
+## Cross-module integration audit — 2026-10-16
+
+The shared FX service must not be considered fully rolled out across the product yet:
+
+- **Global Utilities / Airtime:** the form requests `POST /api/currency/fiat-to-pi` for an estimate and checks the response shape, timestamp, and estimate-only flags. The server-priced utility invoice and checkout remain authoritative; the estimate response itself does not authorize payment.
+- **Travel & Transport / Flights:** the current booking modal explicitly accepts USD-denominated offers only. Non-USD fares are rejected until a trusted server quote and server-authorized canonical amount are integrated into that booking path.
+- **Education:** school-fee invoices are explicitly Pi-native; checkout rejects invoices whose currency is not `PI`. Fiat-to-Pi invoice creation/conversion is not implemented by this native-Pi settlement path.
+- **Marketplace:** the multi-currency reference calculator displays the PiNova community reference in USD only. It returns “estimate unavailable” for other fiat currencies rather than applying hard-coded FX rates. That is safe, but it is not yet a complete multi-currency quote flow.
+
+These are integration boundaries, not production-readiness claims. Keep checkout disabled and do not enable non-USD payment paths until each relevant server quote/invoice flow has its own validation, ownership/idempotency checks, integration tests, and Preview verification.
+
 ## Rollout checklist
 
 - [ ] Select an FX provider and verify its provenance, terms, supported currencies,
