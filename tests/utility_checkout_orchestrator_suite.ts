@@ -54,19 +54,26 @@ async function run() {
     invoiceId: invoice.invoiceId, ownerUserId: 'attacker', paymentId: invoice.paymentId,
   }), { status: 'REJECTED', error: 'UTILITY_INVOICE_NOT_FOUND' });
   assert.equal(missing.calls.verify, 0);
+  assert.equal(missing.calls.reserve, 0);
   assert.equal(missing.calls.fulfill, 0);
+  assert.equal(missing.calls.record, 0);
 
   const mismatch = setup();
   assert.deepEqual(await processUtilityCheckout(mismatch.deps, {
     invoiceId: invoice.invoiceId, ownerUserId: invoice.ownerUserId, paymentId: 'different-payment',
   }), { status: 'REJECTED', error: 'PI_PAYMENT_ID_MISMATCH' });
+  assert.equal(mismatch.calls.verify, 0);
+  assert.equal(mismatch.calls.reserve, 0);
   assert.equal(mismatch.calls.fulfill, 0);
+  assert.equal(mismatch.calls.record, 0);
 
   const notVerified = setup({ verifyPayment: async () => ({ ...verifiedPayment, verified: false }) });
   assert.deepEqual(await processUtilityCheckout(notVerified.deps, {
     invoiceId: invoice.invoiceId, ownerUserId: invoice.ownerUserId, paymentId: invoice.paymentId,
   }), { status: 'REJECTED', error: 'PI_PAYMENT_NOT_VERIFIED' });
   assert.equal(notVerified.calls.reserve, 0);
+  assert.equal(notVerified.calls.fulfill, 0);
+  assert.equal(notVerified.calls.record, 0);
 
   const ownerMismatch = setup({
     verifyPayment: async () => ({
@@ -79,6 +86,7 @@ async function run() {
   }), { status: 'REJECTED', error: 'PI_PAYMENT_OWNER_MISMATCH' });
   assert.equal(ownerMismatch.calls.reserve, 0);
   assert.equal(ownerMismatch.calls.fulfill, 0);
+  assert.equal(ownerMismatch.calls.record, 0);
 
   const missingInvoiceUid = setup({
     repository: {
@@ -91,6 +99,7 @@ async function run() {
   }), { status: 'REJECTED', error: 'PI_PAYMENT_OWNER_MISMATCH' });
   assert.equal(missingInvoiceUid.calls.reserve, 0);
   assert.equal(missingInvoiceUid.calls.fulfill, 0);
+  assert.equal(missingInvoiceUid.calls.record, 0);
 
   const success = setup();
   assert.deepEqual(await processUtilityCheckout(success.deps, {
