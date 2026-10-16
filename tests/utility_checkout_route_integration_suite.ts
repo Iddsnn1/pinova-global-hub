@@ -171,6 +171,7 @@ async function run() {
         body: JSON.stringify({ fiatAmount: 1000, currency: 'NGN' }),
       });
       assert.equal(unavailableFx.status, 503);
+      assert.equal(unavailableFx.headers.get('cache-control'), 'no-store');
       const unavailableFxBody = await unavailableFx.json();
       assert.equal(unavailableFxBody.success, false);
       assert.equal(unavailableFxBody.code, 'FX_PROVIDER_ENDPOINT_NOT_CONFIGURED');
