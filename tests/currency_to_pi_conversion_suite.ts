@@ -274,4 +274,47 @@ try {
   globalThis.fetch = originalFetch;
 }
 
+  // A successful native CurrencyAPI response must use the server-side apikey header,
+  // request USD-base data, and reject redirects/cache reuse.
+  let capturedUrl = '';
+  let capturedInit: RequestInit | undefined;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    capturedUrl = String(input);
+    capturedInit = init;
+    return new Response(JSON.stringify({
+      meta: { last_updated_at: new Date(Date.now() - 30_000).toISOString() },
+      data: { NGN: { code: 'NGN', value: 1500 } },
+    }), {
+      status: 200,
+      headers: { 'content-type': 'application/json; charset=utf-8' },
+    });
+  }) as typeof fetch;
+  const fetchedQuote = await fetchTrustedFxQuote('NGN', {
+    endpoint: 'https://api.currencyapi.com/v3/latest',
+    source: 'currencyapi.com',
+    apiKey: 'fixture-only-not-a-real-secret',
+  });
+  const requestedUrl = new URL(capturedUrl);
+  assert.equal(requestedUrl.searchParams.get('base_currency'), 'USD');
+  assert.equal(requestedUrl.searchParams.get('currencies'), 'NGN');
+  assert.equal(requestedUrl.searchParams.has('apikey'), false);
+  assert.equal((capturedInit?.headers as Record<string, string>).apikey, 'fixture-only-not-a-real-secret');
+  assert.equal(capturedInit?.redirect, 'error');
+  assert.equal(capturedInit?.cache, 'no-store');
+  assert.equal(fetchedQuote.source, 'currencyapi.com');
+  assert.equal(fetchedQuote.currency, 'NGN');
+
+  // Timeout is normalized to a stable fail-closed error code.
+  globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
+    init?.signal?.addEventListener('abort', () => reject(new Error('mock request aborted')), { once: true });
+  })) as typeof fetch;
+  await assert.rejects(
+    fetchTrustedFxQuote('NGN', {
+      endpoint: 'https://fx.example.test/latest',
+      source: 'fixture-fx-provider',
+      timeoutMs: 5,
+    }),
+    /FX_PROVIDER_TIMEOUT/,
+  );
+
 console.log('Global currency-to-Pi conversion suite: all assertions passed.');
