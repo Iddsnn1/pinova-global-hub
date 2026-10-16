@@ -205,6 +205,45 @@ async function run() {
   });
   assert.equal(recordThrows.calls.fulfill, 1);
 
+  // Concurrent requests must rely on the repository's atomic reservation:
+  // only one request receives RESERVED; the competing request receives IN_PROGRESS.
+  // Even when both requests have valid authoritative payment data, the provider
+  // must be dispatched exactly once.
+  let reservationCalls = 0;
+  let providerCalls = 0;
+  let releaseProvider!: () => void;
+  const providerGate = new Promise<void>((resolve) => { releaseProvider = resolve; });
+  const concurrent = setup({
+    repository: {
+      ...setup().repository,
+      authorizeAndReserve: async () => {
+        reservationCalls++;
+        if (reservationCalls === 1) {
+          return { status: 'RESERVED' as const, invoiceId: invoice.invoiceId, paymentId: invoice.paymentId, txid: 'pi-tx-concurrent', attemptId: 'attempt-concurrent' };
+        }
+        return { status: 'IN_PROGRESS' as const, invoiceId: invoice.invoiceId, paymentId: invoice.paymentId, txid: 'pi-tx-concurrent' };
+      },
+    } as unknown as UtilityCheckoutDependencies['repository'],
+    fulfill: async () => {
+      providerCalls++;
+      await providerGate;
+      return { status: 'SUCCEEDED' as const, providerReference: 'provider-concurrent-01', response: { ok: true } };
+    },
+  });
+  const concurrentInput = {
+    invoiceId: invoice.invoiceId, ownerUserId: invoice.ownerUserId, paymentId: invoice.paymentId,
+  };
+  const firstCheckout = processUtilityCheckout(concurrent.deps, concurrentInput);
+  const secondCheckout = processUtilityCheckout(concurrent.deps, concurrentInput);
+  const secondResult = await secondCheckout;
+  assert.equal(secondResult.status, 'IN_PROGRESS');
+  assert.equal(providerCalls, 1, 'the competing request must not dispatch provider fulfillment');
+  releaseProvider();
+  const firstResult = await firstCheckout;
+  assert.equal(firstResult.status, 'FULFILLED');
+  assert.equal(providerCalls, 1, 'only the reservation winner may call the provider');
+  assert.equal(reservationCalls, 2);
+
   console.log('Utility checkout orchestrator tests passed.');
 }
 
