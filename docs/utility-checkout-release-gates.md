@@ -36,15 +36,20 @@ This checklist describes the Neon-backed utility invoice flow. It does not enabl
 - [ ] Apply the reviewed Neon migrations only through an explicitly approved procedure, then verify schema, constraints, health, and rollback/recovery.
 - [ ] Complete sandbox checkout with a mocked provider and demonstrate owner-bound receipts/status and reconciliation behavior.
 
-## Validation snapshot — 2026-10-16
+## Validation snapshot — 2026-10-16 (latest inspected commit)
 
-- PR #11 remains open and Draft on `feat/global-currency-pi-engine`; do not merge as part of this validation. The latest inspected commit is `5ad8e7a2643105f5d4aeab5924b8d79ca839a183`.
-- GitHub Actions passed on that commit: Currency Engine Validation #226, PiNova CI Verify #1038, PiNova CI #1039, and PiNova Global Hub CI #1040.
-- Vercel Preview check for that commit reports **success**: https://vercel.com/iddsnn1s-projects/pinova-global-hub/CYqSH6i8hpqoUs2vnqs2kuGzgVN8. This confirms the Preview deployment check; it does not prove live payment or provider fulfillment.
-- The HTTP route suite covers unauthenticated access (401), feature flag OFF (503), malformed invoice ID (400), missing payment ID (400), oversized payment ID (400), control-character payment ID (400), and a signed session without a Pi UID (403 `PI_IDENTITY_REQUIRED`). The latest added Pi-identity test has passed the CI workflow, but the route suite still does not instrument repository/provider constructor calls or exercise owner mismatch through the real HTTP route.
+- Latest inspected PR head: `ac352720a7f62800a946e375118360117622768f` (`docs(fx): record cross-module integration gaps`). PR #11 remains open and Draft; it has not been merged.
+- All four GitHub Actions workflows passed on this exact commit:
+  - [Currency Engine Validation](https://github.com/Iddsnn1/pinova-global-hub/actions/runs/38964470458)
+  - [PiNova Global Hub CI](https://github.com/Iddsnn1/pinova-global-hub/actions/runs/38964470460)
+  - [PiNova CI](https://github.com/Iddsnn1/pinova-global-hub/actions/runs/38964470507)
+  - [PiNova CI Verify](https://github.com/Iddsnn1/pinova-global-hub/actions/runs/38964470547)
+- Vercel Preview for this exact commit is **READY**: https://vercel.com/iddsnn1s-projects/pinova-global-hub/GhkDyBHojvxg4YWT3rfLK57mZUGk. Preview readiness does not prove live Pi payment or provider fulfillment.
+- The HTTP route suite covers unauthenticated access (401), feature flag OFF (503), malformed invoice ID (400), missing/oversized/control-character payment ID (400), and a signed session without a Pi UID (403 `PI_IDENTITY_REQUIRED`). It still does not instrument repository/provider constructor calls or exercise owner mismatch through the real HTTP route.
 - The orchestrator suite has counter assertions that rejected cases (missing/foreign-owned invoice, mismatched payment ID, unverified payment, mismatched Pi UID, and missing invoice Pi UID) do not reserve payment, dispatch fulfillment, or persist fulfillment outcomes. These are orchestrator-level tests, not proof of complete HTTP or provider behavior.
 - Read-only SQL against the isolated Neon utility-checkout test branch previously showed `utility_invoices`, `utility_payment_idempotency`, and `utility_fulfillment_attempts` are not present. No migrations were applied.
-- CI success does not prove real Pi wallet payment or VTU.ng fulfillment. HTTP owner mismatch with explicit repository/provider counters, replay/concurrency at HTTP level, Pi SDK cancellation/error paths, and provider sandbox contract checks remain outstanding.
+- Cross-module audit documented in [currency-engine-configuration.md](./currency-engine-configuration.md): Airtime's client estimate is not payment authorization; flights currently accept USD-denominated offers only; Education invoices are Pi-native without a fiat-to-Pi invoice path; marketplace conversion outside the USD reference is unavailable rather than guessed.
+- CI and Preview checks do not prove live Pi wallet payment or VTU.ng fulfillment. HTTP owner mismatch with explicit repository/provider counters, replay/concurrency at HTTP level, Pi SDK cancellation/error paths, and provider sandbox contract checks remain outstanding.
 
 ## Release sequence
 
