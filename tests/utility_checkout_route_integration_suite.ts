@@ -116,6 +116,26 @@ async function run() {
     assert.equal(controlCharacterPayment.status, 400);
     assert.equal((await controlCharacterPayment.json()).error, 'UTILITY_CHECKOUT_INPUT_INVALID');
 
+    // A valid signed session without an authoritative Pi UID must fail closed
+    // before repository construction, payment verification, or provider fulfillment.
+    const missingPiIdentitySession = authService.createSession({
+      username: 'utility-route-test-no-pi-identity',
+      roles: ['BUYER'],
+    });
+    const missingPiIdentity = await fetch(
+      `${baseUrl}/api/v2/utility/invoices/${invoiceId}/checkout`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${missingPiIdentitySession.token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ paymentId: 'test-payment-id' }),
+      },
+    );
+    assert.equal(missingPiIdentity.status, 403);
+    assert.equal((await missingPiIdentity.json()).error, 'PI_IDENTITY_REQUIRED');
+
     console.log('Utility checkout HTTP route integration suite passed (no DB/provider calls intended).');
   } finally {
     process.env.PINOVA_UTILITY_CHECKOUT_ENABLED = 'false';
