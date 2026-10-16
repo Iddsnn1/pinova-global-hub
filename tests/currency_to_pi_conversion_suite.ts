@@ -117,6 +117,27 @@ assert.equal(currencyApiQuote.asOf, '2026-10-09T11:55:00.000Z');
 assert.ok(Math.abs(currencyApiQuote.usdPerFiatUnit - (1 / 1538.4615384615383)) < 1e-15);
 assert.throws(
   () => parseCurrencyApiPayload({
+    meta: { last_updated_at: '2026-10-09T12:02:00.000Z' },
+    data: { NGN: { code: 'NGN', value: 1538.4615384615383 } },
+  }, 'NGN', 'currencyapi.com', providerNow),
+  /FX_TIMESTAMP_IN_FUTURE/,
+);
+assert.throws(
+  () => parseCurrencyApiPayload({
+    meta: { last_updated_at: '2026-10-09T11:55:00.000Z' },
+    data: { NGN: { code: 'EUR', value: 1538.4615384615383 } },
+  }, 'NGN', 'currencyapi.com', providerNow),
+  /FX_PROVIDER_RATE_MISSING_OR_INVALID/,
+);
+assert.throws(
+  () => parseCurrencyApiPayload({
+    meta: {},
+    data: { NGN: { code: 'NGN', value: 1538.4615384615383 } },
+  }, 'NGN', 'currencyapi.com', providerNow),
+  /FX_TIMESTAMP_INVALID/,
+);
+assert.throws(
+  () => parseCurrencyApiPayload({
     meta: { last_updated_at: '2026-10-09T10:00:00.000Z' },
     data: { NGN: { code: 'NGN', value: 1500 } },
   }, 'NGN', 'currencyapi.com', providerNow),
