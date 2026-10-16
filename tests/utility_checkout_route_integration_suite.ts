@@ -4,7 +4,7 @@ import type { AddressInfo } from 'node:net';
 // Exercise the real Express middleware/route stack without enabling provider
 // fulfillment or contacting Neon. This test must run in its own tsx process.
 process.env.VERCEL = '1';
-process.env.SESSION_SECRET = 'utility-route-integration-test-secret-only';
+process.env.SESSION_SECRET = 'route-test-signing-key-local';
 process.env.PINOVA_UTILITY_CHECKOUT_ENABLED = 'false';
 process.env.DATABASE_URL = 'postgres://127.0.0.1:1/utility_route_test_must_not_connect';
 
@@ -23,7 +23,6 @@ async function run() {
       username: 'utility-route-test-user',
       uid: 'pi-utility-route-test-uid',
       roles: ['BUYER'],
-      isAuthorizedAdmin: false,
     });
 
     // Authentication middleware runs before the route guard.
