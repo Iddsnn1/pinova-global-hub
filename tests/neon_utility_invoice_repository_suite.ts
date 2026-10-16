@@ -161,10 +161,11 @@ async function run() {
   process.env.PINOVA_FX_PROVIDER_API_KEY = 'test-only-key';
   let fxFetchCalls = 0;
   let providerRate = 1538.4615384615383;
+  let providerAsOf = new Date().toISOString();
   globalThis.fetch = (async () => {
     fxFetchCalls++;
     return new Response(JSON.stringify({
-    meta: { last_updated_at: new Date().toISOString() },
+    meta: { last_updated_at: providerAsOf },
     data: { NGN: { code: 'NGN', value: providerRate } },
   }), { status: 200, headers: { 'content-type': 'application/json' } });
   }) as typeof fetch;
@@ -216,6 +217,18 @@ async function run() {
     assert.equal(created.piAmount, '0.000002069016');
     assert.ok(creationStatements[0].sql.includes('INSERT INTO public.utility_invoices'));
     assert.equal(creationStatements[0].values?.[9], '0.000002069016');
+
+    // A provider quote older than the configured freshness window must fail closed
+    // before any invoice is written; do not silently reuse stale FX data.
+    providerAsOf = new Date(Date.now() - 16 * 60_000).toISOString();
+    creationStatements.length = 0;
+    await assert.rejects(
+      () => createRepo.createInvoice(createInput),
+      /FX_QUOTE_STALE/,
+      'quotes older than the 15-minute policy must be rejected',
+    );
+    assert.equal(creationStatements.length, 0, 'stale FX must never create a durable invoice');
+    providerAsOf = new Date().toISOString();
 
     creationStatements.length = 0;
     const staleClientEstimate = await createRepo.createInvoice({
