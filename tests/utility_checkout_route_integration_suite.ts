@@ -70,6 +70,22 @@ async function run() {
     assert.equal(malformed.status, 400);
     assert.equal((await malformed.json()).error, 'UTILITY_CHECKOUT_INPUT_INVALID');
 
+    // A valid invoice-shaped ID with a missing payment ID must also be rejected
+    // before the route constructs a repository or attempts provider fulfillment.
+    const malformedPayment = await fetch(
+      `${baseUrl}/api/v2/utility/invoices/${invoiceId}/checkout`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ paymentId: '' }),
+      },
+    );
+    assert.equal(malformedPayment.status, 400);
+    assert.equal((await malformedPayment.json()).error, 'UTILITY_CHECKOUT_INPUT_INVALID');
+
     console.log('Utility checkout HTTP route integration suite passed (no DB/provider calls intended).');
   } finally {
     process.env.PINOVA_UTILITY_CHECKOUT_ENABLED = 'false';
