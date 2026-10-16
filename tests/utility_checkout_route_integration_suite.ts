@@ -86,6 +86,36 @@ async function run() {
     assert.equal(malformedPayment.status, 400);
     assert.equal((await malformedPayment.json()).error, 'UTILITY_CHECKOUT_INPUT_INVALID');
 
+    // Payment identifiers above the documented limit must be rejected before database/provider work.
+    const oversizedPayment = await fetch(
+      `${baseUrl}/api/v2/utility/invoices/${invoiceId}/checkout`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ paymentId: 'x'.repeat(201) }),
+      },
+    );
+    assert.equal(oversizedPayment.status, 400);
+    assert.equal((await oversizedPayment.json()).error, 'UTILITY_CHECKOUT_INPUT_INVALID');
+
+    // Control characters are not valid payment identifiers.
+    const controlCharacterPayment = await fetch(
+      `${baseUrl}/api/v2/utility/invoices/${invoiceId}/checkout`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ paymentId: 'test-payment\\u0000id' }),
+      },
+    );
+    assert.equal(controlCharacterPayment.status, 400);
+    assert.equal((await controlCharacterPayment.json()).error, 'UTILITY_CHECKOUT_INPUT_INVALID');
+
     console.log('Utility checkout HTTP route integration suite passed (no DB/provider calls intended).');
   } finally {
     process.env.PINOVA_UTILITY_CHECKOUT_ENABLED = 'false';
