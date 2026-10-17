@@ -174,6 +174,64 @@ async function run() {
   assert.ok(!replay.statements.some((statement) => statement.includes('INSERT INTO public.utility_payment_idempotency')));
   assert.ok(!replay.statements.some((statement) => statement.includes('INSERT INTO public.utility_fulfillment_attempts')));
 
+
+  // A replay with the same Pi payment ID but a different invoice/fingerprint
+  // must be rejected as an idempotency conflict, not treated as a successful retry.
+  const conflictingReplay = mockPoolForReservation({
+    invoiceStatus: 'FULFILLED',
+    priorRecord: {
+      invoice_id: 'UTIL-INV-OTHER',
+      payment_id: 'pi-payment-01',
+      request_fingerprint: fingerprint,
+      status: 'RESOLVED',
+      response: { success: true, providerReference: 'must-not-be-returned' },
+    },
+  });
+  const conflictingReplayRepo = new NeonUtilityInvoiceRepository(conflictingReplay.pool);
+  const conflictingReplayResult = await conflictingReplayRepo.authorizeAndReserve('UTIL-INV-TEST', 'buyer-01', 'pi-payment-01', {
+    identifier: 'pi-payment-01',
+    user_uid: 'buyer-uid-01',
+    direction: 'user_to_app',
+    network: 'Pi Testnet',
+    amount: 0.000002069016,
+    status: { developer_completed: true },
+    transaction: { verified: true, txid: 'pi-tx-01' },
+  });
+  assert.deepEqual(conflictingReplayResult, { status: 'REJECTED', error: 'UTILITY_IDEMPOTENCY_CONFLICT' });
+  assert.ok(conflictingReplay.statements.includes('ROLLBACK'));
+  assert.ok(!conflictingReplay.statements.some((statement) => statement.includes('INSERT INTO public.utility_fulfillment_attempts')));
+
+  // An unresolved reservation returns IN_PROGRESS on retry; it must not create
+  // another idempotency row or another provider fulfillment attempt.
+  const pendingReplay = mockPoolForReservation({
+    invoiceStatus: 'FULFILLMENT_PENDING',
+    priorRecord: {
+      invoice_id: 'UTIL-INV-TEST',
+      payment_id: 'pi-payment-01',
+      request_fingerprint: fingerprint,
+      status: 'PENDING',
+      response: null,
+    },
+  });
+  const pendingReplayRepo = new NeonUtilityInvoiceRepository(pendingReplay.pool);
+  const pendingReplayResult = await pendingReplayRepo.authorizeAndReserve('UTIL-INV-TEST', 'buyer-01', 'pi-payment-01', {
+    identifier: 'pi-payment-01',
+    user_uid: 'buyer-uid-01',
+    direction: 'user_to_app',
+    network: 'Pi Testnet',
+    amount: 0.000002069016,
+    status: { developer_completed: true },
+    transaction: { verified: true, txid: 'pi-tx-01' },
+  });
+  assert.deepEqual(pendingReplayResult, {
+    status: 'IN_PROGRESS',
+    invoiceId: 'UTIL-INV-TEST',
+    paymentId: 'pi-payment-01',
+    txid: 'pi-tx-01',
+  });
+  assert.ok(!pendingReplay.statements.some((statement) => statement.includes('INSERT INTO public.utility_payment_idempotency')));
+  assert.ok(!pendingReplay.statements.some((statement) => statement.includes('INSERT INTO public.utility_fulfillment_attempts')));
+
   const expired = mockPoolForReservation({ expiresAt: new Date(Date.now() - 60_000).toISOString() });
   const expiredRepo = new NeonUtilityInvoiceRepository(expired.pool);
   const expiredResult = await expiredRepo.authorizeAndReserve('UTIL-INV-TEST', 'buyer-01', 'pi-payment-01', {
