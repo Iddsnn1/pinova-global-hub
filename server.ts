@@ -2864,15 +2864,30 @@ app.post('/api/v2/utility/fulfill', paymentRateLimiter, async (req, res) => {
     }
   }
 
-  // Idempotency check: If this paymentId or idempotencyKey was already fulfilled, return cached record
-  const existingKey = idempotencyKey || paymentId;
+  // Idempotency replay must match the original operation payload, not merely its key.
+  const existingKey = String(idempotencyKey || paymentId).trim();
   const existingTransaction = utilityFulfillmentRepo.findByKey(existingKey);
   if (existingTransaction) {
-    if (String(existingTransaction.paymentId || '') !== String(paymentId)) {
+    const incomingPi = Number(piAmount);
+    const storedPi = Number(existingTransaction.piAmount);
+    const incomingTxid = String(txid || '').trim();
+    const storedTxid = String(existingTransaction.txid || '').trim();
+    const payloadMismatch =
+      String(existingTransaction.paymentId || '') !== String(paymentId) ||
+      (incomingTxid !== '' && storedTxid !== '' && incomingTxid !== storedTxid) ||
+      String(existingTransaction.category || '').trim().toLowerCase() !== String(category || '').trim().toLowerCase() ||
+      String(existingTransaction.providerId || '').trim() !== String(providerId || '').trim() ||
+      String(existingTransaction.accountNumber || '').trim() !== String(accountNumber || '').trim() ||
+      String(existingTransaction.packageName || '').trim() !== String(packageName || '').trim() ||
+      Number(existingTransaction.fiatAmount) !== numericFiatAmount ||
+      String(existingTransaction.metadata?.fiatCurrency || '').trim().toUpperCase() !== String(fiatCurrency || '').trim().toUpperCase() ||
+      !Number.isFinite(incomingPi) || !Number.isFinite(storedPi) ||
+      incomingPi.toFixed(12) !== storedPi.toFixed(12);
+    if (payloadMismatch) {
       res.status(409).json({
         success: false,
         error: 'IDEMPOTENCY_KEY_CONFLICT',
-        message: 'This idempotency key is already associated with a different payment.'
+        message: 'This idempotency key or payment has already been used with different fulfillment details.'
       });
       return;
     }
