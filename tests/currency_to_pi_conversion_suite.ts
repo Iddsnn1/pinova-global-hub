@@ -97,6 +97,35 @@ const parsedProviderQuote = parseTrustedFxProviderPayload(
   providerNow,
 );
 assert.equal(parsedProviderQuote.currency, 'NGN');
+
+// Boundary coverage for the documented quote-age policy: exactly the configured
+// maximum age is accepted, and a timestamp exactly 60 seconds ahead is within
+// the allowed clock-skew tolerance. Values beyond either boundary are rejected.
+const maxAgeBoundaryQuote = parseTrustedFxProviderPayload({
+  ...providerPayload,
+  asOf: new Date(providerNow - 15 * 60 * 1000).toISOString(),
+}, 'NGN', 'fixture-fx-provider', providerNow);
+assert.equal(maxAgeBoundaryQuote.asOf, new Date(providerNow - 15 * 60 * 1000).toISOString());
+const futureSkewBoundaryQuote = parseTrustedFxProviderPayload({
+  ...providerPayload,
+  asOf: new Date(providerNow + 60 * 1000).toISOString(),
+}, 'NGN', 'fixture-fx-provider', providerNow);
+assert.equal(futureSkewBoundaryQuote.asOf, new Date(providerNow + 60 * 1000).toISOString());
+assert.throws(
+  () => parseTrustedFxProviderPayload({
+    ...providerPayload,
+    asOf: new Date(providerNow - 15 * 60 * 1000 - 1).toISOString(),
+  }, 'NGN', 'fixture-fx-provider', providerNow),
+  /FX_QUOTE_STALE/,
+);
+assert.throws(
+  () => parseTrustedFxProviderPayload({
+    ...providerPayload,
+    asOf: new Date(providerNow + 60 * 1000 + 1).toISOString(),
+  }, 'NGN', 'fixture-fx-provider', providerNow),
+  /FX_TIMESTAMP_IN_FUTURE/,
+);
+
 assert.ok(Math.abs(parsedProviderQuote.usdPerFiatUnit - (1 / 1538.4615384615383)) < 1e-15);
 assert.throws(
   () => parseTrustedFxProviderPayload(providerPayload, 'NGN', 'different-provider', providerNow),
