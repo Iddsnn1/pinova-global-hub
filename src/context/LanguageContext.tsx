@@ -169,19 +169,28 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   };
 
-  // Regional Currency & Pi Formatting
+  // Regional Currency & Pi Formatting. Fiat values are estimates only; never payment authority.
   const formatCurrency = (piAmount: number, piRateUsd = 314159.00, showEstimatedFiat = true) => {
     const piFormatted = `${formatPiAmount(piAmount, { minDecimals: 2 })} π`;
-    
-    // Calculate local fiat estimation
-    const totalUsd = piAmount * piRateUsd;
-    const localFiatValue = totalUsd * (currentLanguage.exchangeRateToUsd || 1.0);
-    const fiatFormatted = `${currentLanguage.localCurrencySymbol}${localFiatValue.toLocaleString(undefined, {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    })} ${currentLanguage.localCurrencyCode}`;
+    const localPerUsd = currentLanguage.exchangeRateToUsd;
+    const validInputs = Number.isFinite(piAmount) && piAmount >= 0 &&
+      Number.isFinite(piRateUsd) && piRateUsd > 0 &&
+      Number.isFinite(localPerUsd) && localPerUsd > 0;
 
-    const combined = showEstimatedFiat ? `${piFormatted} (~${fiatFormatted})` : piFormatted;
+    let fiatFormatted = 'Local estimate unavailable';
+    if (validInputs) {
+      const localFiatValue = piAmount * piRateUsd * localPerUsd;
+      if (Number.isFinite(localFiatValue)) {
+        fiatFormatted = `${currentLanguage.localCurrencySymbol}${localFiatValue.toLocaleString(undefined, {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2
+        })} ${currentLanguage.localCurrencyCode}`;
+      }
+    }
+
+    const combined = showEstimatedFiat
+      ? (fiatFormatted === 'Local estimate unavailable' ? `${piFormatted} (local estimate unavailable)` : `${piFormatted} (~${fiatFormatted})`)
+      : piFormatted;
 
     return {
       piFormatted,

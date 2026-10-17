@@ -403,24 +403,25 @@ export class SearchDiscoveryEngine {
 }
 
 export class MultiCurrencyReferenceCalculator {
-  // Administrator controlled reference rates for user estimation convenience (1 Pi = X Currency)
-  private referenceRates: Record<string, { symbol: string; rate: number }> = {
-    // PiNova fixed reference: 1 π = $314,159 USD. Display/reference only.
-    USD: { symbol: '
-    NGN: { symbol: '₦', rate: 450000.0 },
-    KES: { symbol: 'KSh', rate: 40500.0 },
-    VND: { symbol: '₫', rate: 7800000.0 },
-    PHP: { symbol: '₱', rate: 17800.0 },
-    INR: { symbol: '₹', rate: 26000.0 }
+  // Display-only community reference. Non-USD display rates must come from a
+  // fresh trusted FX quote; hard-coded fiat rates are not settlement inputs.
+  private readonly referenceRates: Record<string, { symbol: string; rate: number }> = {
+    USD: { symbol: '$', rate: 314159 }
   };
 
   getEstimatedValue(amountPi: number, currencyCode: string = 'USD'): string {
-    const config = this.referenceRates[currencyCode] || this.referenceRates.USD;
+    const normalizedCurrencyCode = String(currencyCode || '').trim().toUpperCase();
+    const config = this.referenceRates[normalizedCurrencyCode];
+    if (!config || !Number.isFinite(amountPi) || amountPi < 0) {
+      return `Estimate unavailable (${normalizedCurrencyCode || 'unknown currency'}; trusted FX quote required)`;
+    }
     const value = amountPi * config.rate;
+    if (!Number.isFinite(value)) return `Estimate unavailable (${normalizedCurrencyCode})`;
     return `${config.symbol}${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   }
 
   getAvailableCurrencies() {
+    // Only currencies with a conversion source wired into this legacy calculator.
     return Object.keys(this.referenceRates);
   }
 }

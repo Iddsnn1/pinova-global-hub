@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   Globe, 
   Smartphone, 
@@ -13,7 +13,7 @@ import {
 import { UtilityServiceProvider, UtilityProviderPackage, PiConversionConfig } from '../../types/utility';
 import { AIRTIME_COUNTRIES, validateAirtimePhoneNumber, PhoneValidationStatus } from '../../data/airtimeData';
 import { SAMPLE_UTILITY_PROVIDERS } from '../../data/utilityData';
-import { formatPiAmount, calculateAuthoritativePiAmount } from '../../utils/formatters';
+import { formatPiAmount } from '../../utils/formatters';
 
 interface AirtimeRechargeFormProps {
   piConversionConfig: PiConversionConfig;
@@ -34,8 +34,8 @@ interface AirtimeRechargeFormProps {
 
 export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
   piConversionConfig,
-  userBalancePi = 1250.00,
-  buyerUsername = 'Pioneer_User',
+  userBalancePi = 0,
+  buyerUsername = '',
   onExecutePayment,
   isProcessingPayment,
   errorMessage
@@ -55,9 +55,39 @@ export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
   const [purchaseMode, setPurchaseMode] = useState<'custom' | 'package'>('custom');
   const [customAmountInput, setCustomAmountInput] = useState<string>('');
   const [selectedPackage, setSelectedPackage] = useState<UtilityProviderPackage | null>(null);
+  const [fxEstimate, setFxEstimate] = useState<{ fiatAmount: number; fiatCurrency: string; piAmount: string; fxAsOf: string } | null>(null);
+  const [fxEstimateLoading, setFxEstimateLoading] = useState(false);
+  const [fxEstimateError, setFxEstimateError] = useState<string | null>(null);
 
   // Active Country details
   const activeCountry = AIRTIME_COUNTRIES.find((c) => c.code === selectedCountryCode);
+  // Nigeria top-ups use NGN; other countries use the selected provider's currency.
+  const activeCurrencyCode = selectedCountryCode === 'NG' ? 'NGN' : (selectedProvider?.currency || 'USD');
+  const activeCurrencySymbol = (() => {
+    try {
+      return new Intl.NumberFormat('en', { style: 'currency', currency: activeCurrencyCode })
+        .formatToParts(0)
+        .find((part) => part.type === 'currency')?.value || activeCurrencyCode;
+    } catch {
+      return activeCurrencyCode;
+    }
+  })();
+  const formatFiatAmount = (amount: number): string => {
+    try {
+      return new Intl.NumberFormat('en', { style: 'currency', currency: activeCurrencyCode, maximumFractionDigits: 2 }).format(amount);
+    } catch {
+      return `${activeCurrencyCode} ${amount.toFixed(2)}`;
+    }
+  };
+  const nigerianAirtimePackages: UtilityProviderPackage[] = [
+    { id: 'ng-airtime-500', name: '₦500 Airtime', description: 'Nigeria airtime top-up', fiatPrice: 500, currency: 'NGN' },
+    { id: 'ng-airtime-1000', name: '₦1,000 Airtime', description: 'Nigeria airtime top-up', fiatPrice: 1000, currency: 'NGN' },
+    { id: 'ng-airtime-2000', name: '₦2,000 Airtime', description: 'Nigeria airtime top-up', fiatPrice: 2000, currency: 'NGN', badge: 'Popular' },
+    { id: 'ng-airtime-5000', name: '₦5,000 Airtime', description: 'Nigeria airtime top-up', fiatPrice: 5000, currency: 'NGN' },
+    { id: 'ng-airtime-10000', name: '₦10,000 Airtime', description: 'Nigeria airtime top-up', fiatPrice: 10000, currency: 'NGN' }
+  ];
+  const packageOptions = selectedCountryCode === 'NG' && selectedProvider?.category === 'airtime' ? nigerianAirtimePackages : (selectedProvider?.packages || []);
+  const supportsPackageSelection = packageOptions.length > 0 && (!!selectedProvider?.supportsFixedPackages || (selectedCountryCode === 'NG' && selectedProvider?.category === 'airtime'));
 
   // Dynamically query available networks for selected country
   const availableNetworks = selectedCountryCode ? SAMPLE_UTILITY_PROVIDERS.filter((p) => {
@@ -99,19 +129,16 @@ export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
     }
   };
 
-  // Handle custom amount input preserving user keystrokes
+  // Accept only a plain decimal amount (up to two fractional digits).
+  // Do not strip arbitrary characters: e.g. "1e3" must not silently become "13".
   const handleCustomAmountChange = (raw: string) => {
     if (raw === '') {
       setCustomAmountInput('');
+      if (purchaseMode !== 'custom') setPurchaseMode('custom');
       return;
     }
-    const sanitized = raw.replace(/[^0-9.]/g, '');
-    const parts = sanitized.split('.');
-    let cleaned = sanitized;
-    if (parts.length > 2) {
-      cleaned = parts[0] + '.' + parts.slice(1).join('');
-    }
-    setCustomAmountInput(cleaned);
+    if (!/^\\d*(?:\\.\\d{0,2})?$/.test(raw)) return;
+    setCustomAmountInput(raw);
     if (purchaseMode !== 'custom') {
       setPurchaseMode('custom');
     }
@@ -125,12 +152,56 @@ export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
     if (!customAmountInput || customAmountInput.trim() === '') {
       return 0;
     }
-    const parsed = parseFloat(customAmountInput);
-    return !isNaN(parsed) && isFinite(parsed) && parsed > 0 ? parsed : 0;
+    if (!/^\\d+(?:\\.\\d{1,2})?$/.test(customAmountInput)) return 0;
+    const parsed = Number(customAmountInput);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
   };
 
   const activeFiatPrice = getActiveFiatPrice();
-  const calculatedPiAmount = calculateAuthoritativePiAmount(activeFiatPrice, piConversionConfig.piRateUsd);
+  useEffect(() => {
+    if (!Number.isFinite(activeFiatPrice) || activeFiatPrice <= 0 || !/^[A-Z]{3}$/.test(activeCurrencyCode)) {
+      setFxEstimate(null);
+      setFxEstimateError(null);
+      setFxEstimateLoading(false);
+      return;
+    }
+    const controller = new AbortController();
+    setFxEstimate(null);
+    setFxEstimateError(null);
+    setFxEstimateLoading(true);
+    const timer = setTimeout(async () => {
+      try {
+        const response = await fetch('/api/currency/fiat-to-pi', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fiatAmount: activeFiatPrice, currency: activeCurrencyCode }),
+          signal: controller.signal,
+          cache: 'no-store'
+        });
+        const payload = await response.json();
+        if (!response.ok || payload?.success !== true || payload?.estimateOnly !== true || payload?.paymentAuthorized !== false) {
+          throw new Error('TRUSTED_FX_ESTIMATE_UNAVAILABLE');
+        }
+        const conversion = payload.conversion;
+        if (!conversion || conversion.fiatCurrency !== activeCurrencyCode || Number(conversion.fiatAmount) !== activeFiatPrice ||
+            typeof conversion.piAmount !== 'string' || !Number.isFinite(Number(conversion.piAmount)) || Number(conversion.piAmount) <= 0 ||
+            typeof conversion.fxAsOf !== 'string' || !Number.isFinite(Date.parse(conversion.fxAsOf))) {
+          throw new Error('TRUSTED_FX_ESTIMATE_INVALID');
+        }
+        if (!controller.signal.aborted) setFxEstimate({ fiatAmount: activeFiatPrice, fiatCurrency: activeCurrencyCode, piAmount: conversion.piAmount, fxAsOf: conversion.fxAsOf });
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          setFxEstimate(null);
+          setFxEstimateError(error instanceof Error && error.message.startsWith('TRUSTED_FX_') ? error.message : 'TRUSTED_FX_ESTIMATE_UNAVAILABLE');
+        }
+      } finally {
+        if (!controller.signal.aborted) setFxEstimateLoading(false);
+      }
+    }, 400);
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [activeFiatPrice, activeCurrencyCode]);
+  const hasCurrentFxEstimate = !!fxEstimate && fxEstimate.fiatAmount === activeFiatPrice && fxEstimate.fiatCurrency === activeCurrencyCode;
+  const calculatedPiAmount = hasCurrentFxEstimate ? Number(fxEstimate!.piAmount) : 0;
   const isValidPositiveAmount = typeof activeFiatPrice === 'number' && !isNaN(activeFiatPrice) && isFinite(activeFiatPrice) && activeFiatPrice > 0;
   const minPiThreshold = piConversionConfig.minPurchasePi || 0.00000001;
   const isWithinLimits =
@@ -144,6 +215,7 @@ export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
     !!phoneNumber.trim() &&
     !!phoneValidation?.isValid &&
     isValidPositiveAmount &&
+    hasCurrentFxEstimate &&
     isWithinLimits &&
     !isProcessingPayment;
 
@@ -157,7 +229,8 @@ export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const finalPiAmount = calculateAuthoritativePiAmount(getActiveFiatPrice(), piConversionConfig.piRateUsd);
+    if (!fxEstimate || fxEstimate.fiatAmount !== getActiveFiatPrice() || fxEstimate.fiatCurrency !== activeCurrencyCode) return;
+    const finalPiAmount = Number(fxEstimate.piAmount);
     console.log('[PI PAYMENT] button clicked (AirtimeRechargeForm)', {
       country: activeCountry?.name,
       provider: selectedProvider?.name,
@@ -413,10 +486,10 @@ export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
                 </button>
               )}
 
-              {selectedProvider.supportsFixedPackages && selectedProvider.packages.length > 0 && (
+              {supportsPackageSelection && (
                 <button
                   type="button"
-                  onClick={() => setPurchaseMode('package')}
+                  onClick={() => { setPurchaseMode('package'); setSelectedPackage(packageOptions[0] || null); }}
                   className={`px-3 py-1 rounded-lg text-[11px] font-bold transition-all ${
                     purchaseMode === 'package'
                       ? 'bg-purple-600 text-white shadow-sm'
@@ -432,34 +505,14 @@ export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
           {/* Custom Amount Inputs */}
           {purchaseMode === 'custom' ? (
             <div className="space-y-3">
-              <div className="grid grid-cols-4 gap-2">
-                {[2, 5, 10, 25].map((amt) => (
-                  <button
-                    key={amt}
-                    type="button"
-                    onClick={() => {
-                      setPurchaseMode('custom');
-                      setCustomAmountInput(amt.toString());
-                    }}
-                    className={`py-2 rounded-xl text-xs font-bold border transition-all ${
-                      customAmountInput === amt.toString()
-                        ? 'bg-purple-600 text-white border-purple-500 shadow-md'
-                        : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300'
-                    }`}
-                  >
-                    ${amt}.00 USD
-                  </button>
-                ))}
-              </div>
-
               <div className="relative">
-                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">$</span>
+                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">{activeCurrencySymbol}</span>
                 <input
                   type="text"
                   inputMode="decimal"
                   value={customAmountInput}
                   onChange={(e) => handleCustomAmountChange(e.target.value)}
-                  placeholder="Enter custom USD value (e.g. 5.00)"
+                  placeholder={`Enter amount in ${activeCurrencyCode} (e.g. ${selectedCountryCode === 'NG' ? '500' : '5.00'})`}
                   className="w-full pl-8 pr-3 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-xs font-bold text-slate-900 dark:text-slate-100"
                 />
               </div>
@@ -467,7 +520,7 @@ export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
           ) : (
             /* Fixed Packages List */
             <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-              {selectedProvider.packages.map((pkg) => {
+              {packageOptions.map((pkg) => {
                 const isSelected = selectedPackage?.id === pkg.id;
                 return (
                   <div
@@ -492,7 +545,7 @@ export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
                     </div>
 
                     <div className="text-right shrink-0">
-                      <span className="font-black text-xs text-purple-600 dark:text-purple-400">${pkg.fiatPrice.toFixed(2)} USD</span>
+                      <span className="font-black text-xs text-purple-600 dark:text-purple-400">{formatFiatAmount(pkg.fiatPrice)}</span>
                     </div>
                   </div>
                 );
@@ -515,12 +568,13 @@ export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
           </div>
           <div className="flex justify-between text-xs">
             <span className="text-slate-400">Target Airtime Value:</span>
-            <span className="font-bold text-white">${getActiveFiatPrice() < 0.01 ? getActiveFiatPrice().toString() : getActiveFiatPrice().toFixed(2)} USD</span>
+            <span className="font-bold text-white">{formatFiatAmount(getActiveFiatPrice())}</span>
           </div>
-          <div className="flex justify-between text-xs">
-            <span className="text-slate-400">Pi Platform Exchange Rate:</span>
-            <span className="text-amber-400 font-bold">1 π = ${piConversionConfig.piRateUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD</span>
+          <div className="flex justify-between text-xs gap-4">
+            <span className="text-slate-400">Trusted FX estimate:</span>
+            <span className="text-right text-amber-400 font-bold">{fxEstimateLoading ? 'Fetching current rate…' : hasCurrentFxEstimate ? `1 π reference = ${piConversionConfig.piRateUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD` : 'Rate unavailable'}</span>
           </div>
+          {fxEstimateError && <p role="alert" className="text-[11px] text-rose-400">Trusted currency quote unavailable. Payment is disabled until a fresh server quote is available.</p>}
           <div className="flex justify-between items-center pt-2 border-t border-slate-800">
             <span className="text-xs font-black uppercase tracking-wider text-slate-200">Required Pi Amount:</span>
             <span className="text-xl font-black text-amber-400">{formatPiAmount(calculatedPiAmount)} π</span>

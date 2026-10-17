@@ -3435,6 +3435,8 @@ export class PiSdkManagerService {
       payment: PiPayment
     ) => void;
     idempotencyKey?: string;
+    /** Use payment-only semantics when a separate service fulfillment step follows verification. */
+    fulfillmentMode?: 'payment-only' | 'server-fulfilled';
   }): Promise<{
     paymentId: string;
     txid: string;
@@ -3632,6 +3634,33 @@ export class PiSdkManagerService {
                       this.notifyDiagnosticStateChange();
 
                       try {
+                        // Utility invoices must be bound to the Pi SDK payment ID
+                        // before server approval. Fail closed if the owner-bound invoice
+                        // cannot be bound; never approve an unbound utility payment.
+                        const utilityInvoiceId = typeof params.metadata?.utilityInvoiceId === 'string'
+                          ? params.metadata.utilityInvoiceId.trim()
+                          : '';
+                        if (utilityInvoiceId) {
+                          const bindingResponse = await safeFetchJson(
+                            `/api/v2/utility/invoices/${encodeURIComponent(utilityInvoiceId)}/payment`,
+                            {
+                              method: 'POST',
+                              headers: {
+                                'Content-Type': 'application/json',
+                                'Idempotency-Key': idempotencyKey
+                              },
+                              body: JSON.stringify({ paymentId })
+                            }
+                          );
+                          if (!bindingResponse.ok || bindingResponse.data?.success !== true) {
+                            throw new Error(
+                              typeof bindingResponse.data?.message === 'string'
+                                ? bindingResponse.data.message
+                                : 'Utility invoice could not be bound to this Pi payment. Payment approval was stopped.'
+                            );
+                          }
+                        }
+
                         const response =
                           await safeFetchJson(
                             '/api/v2/payments/approve',
@@ -3801,8 +3830,15 @@ export class PiSdkManagerService {
                           paymentId,
                           txid,
                           success: true,
-                          fulfillmentStatus: 'FULFILLED',
-                          message: 'Pi payment verified and completed successfully.',
+                          // Pi verification and downstream service fulfillment are distinct.
+                          // Preserve the legacy default, while allowing utility checkout to
+                          // wait for its provider before reporting fulfillment.
+                          fulfillmentStatus: params.fulfillmentMode === 'payment-only'
+                            ? 'PAYMENT_VERIFIED'
+                            : 'FULFILLED',
+                          message: params.fulfillmentMode === 'payment-only'
+                            ? 'Pi payment verified; service fulfillment is still pending.'
+                            : 'Pi payment verified and completed successfully.',
                           data
                         });
 
@@ -4067,6 +4103,8 @@ export async function createPiPayment(
     ) => void;
 
     idempotencyKey?: string;
+    /** Utility checkout separates Pi payment verification from provider fulfillment. */
+    fulfillmentMode?: 'payment-only' | 'server-fulfilled';
   }
 ): Promise<{
   paymentId: string;

@@ -756,7 +756,6 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
               <BulkCsvToolsTab
                 products={products}
                 onAddProduct={onAddProduct}
-                onProductCreated={onProductCreated}
               />
             )}
 
