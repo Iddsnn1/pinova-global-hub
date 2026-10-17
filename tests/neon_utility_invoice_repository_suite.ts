@@ -413,6 +413,39 @@ async function run() {
   const absentRepo = new NeonUtilityInvoiceRepository(absentPool as unknown as Pool);
   assert.equal(await absentRepo.findOwnedInvoice('UTIL-INV-ABSENT', 'buyer-01'), null);
 
+  // Payment binding must remain owner-scoped, unexpired, OPEN-only, and
+  // idempotent for the same payment ID. Invalid input must not reach the DB.
+  const bindingCalls: Array<{ sql: string; values?: unknown[] }> = [];
+  let bindingRowCount = 1;
+  const bindingPool = {
+    query: async (sql: string, values?: unknown[]) => {
+      bindingCalls.push({ sql, values });
+      return { rows: [], rowCount: bindingRowCount };
+    },
+    end: async () => undefined,
+  };
+  const bindingRepo = new NeonUtilityInvoiceRepository(bindingPool as unknown as Pool);
+  assert.equal(await bindingRepo.bindPaymentId('UTIL-INV-LOOKUP', 'buyer-01', 'pi-payment-bound'), true);
+  assert.equal(bindingCalls.length, 1);
+  assert.ok(bindingCalls[0].sql.includes('WHERE invoice_id = $1 AND owner_user_id = $2'));
+  assert.ok(bindingCalls[0].sql.includes("status = 'OPEN' AND expires_at > now()"));
+  assert.ok(bindingCalls[0].sql.includes('(payment_id IS NULL OR payment_id = $3)'));
+  assert.deepEqual(bindingCalls[0].values, ['UTIL-INV-LOOKUP', 'buyer-01', 'pi-payment-bound']);
+
+  // A different user, expired/closed invoice, or competing payment ID is a
+  // non-match and must not be treated as a successful binding.
+  bindingRowCount = 0;
+  assert.equal(await bindingRepo.bindPaymentId('UTIL-INV-LOOKUP', 'attacker-user', 'pi-payment-bound'), false);
+  assert.equal(await bindingRepo.bindPaymentId('UTIL-INV-LOOKUP', 'buyer-01', 'different-payment'), false);
+  assert.equal(bindingCalls.length, 3);
+
+  const callsBeforeInvalidBinding = bindingCalls.length;
+  assert.equal(await bindingRepo.bindPaymentId('UTIL-INV-LOOKUP', 'buyer-01', ''), false);
+  assert.equal(await bindingRepo.bindPaymentId('UTIL-INV-LOOKUP', '', 'pi-payment-bound'), false);
+  assert.equal(await bindingRepo.bindPaymentId('UTIL-INV-LOOKUP', 'buyer-01', 'x'.repeat(201)), false);
+  assert.equal(bindingCalls.length, callsBeforeInvalidBinding,
+    'invalid payment binding inputs must be rejected before any database query');
+
   console.log('Neon utility invoice repository tests passed.');
 }
 
