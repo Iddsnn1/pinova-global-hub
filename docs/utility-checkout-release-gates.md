@@ -36,23 +36,23 @@ This checklist describes the Neon-backed utility invoice flow. It does not enabl
 - [ ] Apply the reviewed Neon migrations only through an explicitly approved procedure, then verify schema, constraints, health, and rollback/recovery.
 - [ ] Complete sandbox checkout with a mocked provider and demonstrate owner-bound receipts/status and reconciliation behavior.
 
-## Validation snapshot — 2026-10-17 (latest verified commit)
+## Validation snapshot — 2026-10-17 (latest verified code commit)
 
-- Latest inspected PR head: `15bfbde37781d6968d29abab3beeaca247fa8e5c` (`test(utility): cover checkout repository outage`). PR #11 remains open and Draft; it has not been merged.
+- Latest inspected PR head: `eeede44c1c94bb95617b5a4c5b871e879f857d0c` (`test(currency): cover trusted FX transport and credential handling`). PR #11 remains open and Draft; it has not been merged.
 - All four GitHub Actions workflows passed on this exact commit:
-  - [PiNova CI](https://github.com/Iddsnn1/pinova-global-hub/actions/runs/39040512297)
-  - [Currency Engine Validation](https://github.com/Iddsnn1/pinova-global-hub/actions/runs/39040512249)
-  - [PiNova CI Verify](https://github.com/Iddsnn1/pinova-global-hub/actions/runs/39040512227)
-  - [PiNova Global Hub CI](https://github.com/Iddsnn1/pinova-global-hub/actions/runs/39040512219)
-- Vercel Preview for this exact commit is **READY**: https://pinova-global-25izzz6zh-iddsnn1s-projects.vercel.app. Preview readiness does not prove live Pi payment or provider fulfillment.
-- The HTTP route integration suite now also sends a valid authenticated checkout request with the feature gate enabled only in the isolated test process while its database URL points to loopback port 1. It asserts HTTP 503, `Cache-Control: no-store`, and `UTILITY_CHECKOUT_UNAVAILABLE` when repository access fails. This verifies fail-closed behavior for repository outage; it does not exercise a successful database lookup or provider dispatch.
-- The route suite also covers unauthenticated access (401), feature flag OFF (503), malformed invoice ID/payment IDs (400), and a signed session without a Pi UID (403). It still does not instrument repository/provider constructor calls or exercise owner mismatch through the real HTTP route.
+  - [Currency Engine Validation](https://github.com/Iddsnn1/pinova-global-hub/actions/runs/39054668626)
+  - [PiNova CI Verify](https://github.com/Iddsnn1/pinova-global-hub/actions/runs/39054668602)
+  - [PiNova Global Hub CI](https://github.com/Iddsnn1/pinova-global-hub/actions/runs/39054668587)
+  - [PiNova CI](https://github.com/Iddsnn1/pinova-global-hub/actions/runs/39054668550)
+- Vercel Preview for this exact code commit is **READY**: https://pinova-global-8kz11hopq-iddsnn1s-projects.vercel.app. Preview readiness does not prove live Pi payment or provider fulfillment.
+- The trusted FX transport tests now explicitly check that credentials embedded in provider URLs are rejected, the configured API key is sent in the Authorization header rather than URL query parameters, redirects are rejected, cache is disabled, source metadata is checked, and malformed successful HTTP responses fail closed without local/fabricated rate fallback.
+- The HTTP checkout route integration suite covers unauthenticated access (401), feature flag OFF (503), malformed invoice ID/payment IDs (400), missing Pi UID (403), and repository outage (503 with `Cache-Control: no-store`). It still does not instrument repository/provider constructor calls or exercise owner mismatch through the real HTTP route.
 - Repository and orchestrator suites cover owner-scoped invoice lookup/payment binding, stale quote rejection, exact Pi amount, idempotency, conflicting/pending replays, and concurrent reservation. These unit-level tests are not a substitute for full HTTP owner-mismatch, replay/concurrency, or real provider contract validation.
 - Remaining gates include Pi SDK cancellation/error-path review, HTTP owner mismatch and payment-verification scenarios, VTU.ng idempotency/reconciliation/webhook contract confirmation, compliant trusted FX quote freshness, and mocked-provider sandbox checkout.
 - Read-only SQL against the isolated Neon utility-checkout test branch previously showed `utility_invoices`, `utility_payment_idempotency`, and `utility_fulfillment_attempts` are not present. No migrations were applied.
 - Cross-module audit documented in [currency-engine-configuration.md](./currency-engine-configuration.md): Airtime's client estimate is not payment authorization; flights currently accept USD-denominated offers only; Education invoices are Pi-native without a fiat-to-Pi invoice path; marketplace conversion outside the USD reference is unavailable rather than guessed.
 - The configured 15-minute FX freshness policy remains incompatible with CurrencyAPI's daily free-plan updates; verify the provider plan or use a compliant trusted feed rather than loosening freshness or inventing a rate.
- 
+
 ## Release sequence
 
 1. Finish route-level tests and review the PR diff.
