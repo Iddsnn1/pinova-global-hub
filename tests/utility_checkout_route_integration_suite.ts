@@ -138,6 +138,24 @@ async function run() {
     assert.equal(missingPiIdentity.status, 403);
     assert.equal((await missingPiIdentity.json()).error, 'PI_IDENTITY_REQUIRED');
 
+    // A syntactically valid checkout with the feature gate enabled must fail closed
+    // when the invoice repository is unavailable. The test DATABASE_URL points at
+    // loopback port 1, so no invoice can be loaded/reserved and no provider can run.
+    const unavailableRepository = await fetch(
+      `${baseUrl}/api/v2/utility/invoices/${invoiceId}/checkout`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ paymentId: 'test-payment-id' }),
+      },
+    );
+    assert.equal(unavailableRepository.status, 503);
+    assert.equal(unavailableRepository.headers.get('cache-control'), 'no-store');
+    assert.equal((await unavailableRepository.json()).error, 'UTILITY_CHECKOUT_UNAVAILABLE');
+
     // FX estimate endpoint rejects malformed amounts/currencies before provider access.
     const invalidFxAmount = await fetch(`${baseUrl}/api/currency/fiat-to-pi`, {
       method: 'POST',
