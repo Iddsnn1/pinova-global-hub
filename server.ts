@@ -3090,13 +3090,18 @@ app.post('/api/v2/utility/fulfill', paymentRateLimiter, async (req, res) => {
     category: category || 'utility',
     providerId: providerId || 'unknown',
     accountNumber: accountNumber || '',
-    fiatAmount: Number(numericFiatAmount.toFixed(2)),
+    // Preserve the exact fiat amount used by the signed FX quote for idempotent replay checks.
+    fiatAmount: numericFiatAmount,
     // Persist the authoritative verified amount without truncating precision to four decimals.
     piAmount: Number((Number(verifiedPiAmount)).toFixed(12)),
     packageName: packageName || 'Utility Payment',
     timestamp: new Date().toISOString(),
     providerReference: providerRef,
-    metadata: fulfillmentMetadata
+    metadata: {
+      ...(fulfillmentMetadata || {}),
+      fiatCurrency: String(fiatCurrency || '').trim().toUpperCase(),
+      countryCode: String(countryCode || '').trim().toUpperCase()
+    }
   };
 
   utilityFulfillmentRepo.recordTransaction(existingKey, resultRecord);
