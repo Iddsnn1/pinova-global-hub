@@ -350,4 +350,62 @@ try {
     /FX_PROVIDER_TIMEOUT/,
   );
 
+// The generic trusted-provider adapter must also enforce HTTPS, keep credentials
+// out of URLs, and send configured credentials only in the Authorization header.
+assert.throws(
+  () => getTrustedFxProviderConfig({
+    PINOVA_FX_PROVIDER_URL: 'https://user:password@fx.example.test/latest',
+    PINOVA_FX_PROVIDER_SOURCE: 'fixture-fx-provider',
+  }),
+  /FX_PROVIDER_CREDENTIALS_IN_URL_FORBIDDEN/,
+);
+assert.throws(
+  () => getTrustedFxProviderConfig({
+    PINOVA_FX_PROVIDER_URL: 'https://fx.example.test/latest',
+    PINOVA_FX_PROVIDER_SOURCE: '',
+  }),
+  /FX_TRUSTED_SOURCE_NOT_CONFIGURED/,
+);
+
+let genericCapturedUrl = '';
+let genericCapturedInit: RequestInit | undefined;
+globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+  genericCapturedUrl = String(input);
+  genericCapturedInit = init;
+  return new Response(JSON.stringify({
+    source: 'fixture-fx-provider',
+    asOf: new Date(Date.now() - 30_000).toISOString(),
+    baseCurrency: 'USD',
+    rates: { NGN: 1500 },
+  }), {
+    status: 200,
+    headers: { 'content-type': 'application/json' },
+  });
+}) as typeof fetch;
+const genericFetchedQuote = await fetchTrustedFxQuote('NGN', {
+  endpoint: 'https://fx.example.test/latest',
+  source: 'fixture-fx-provider',
+  apiKey: 'fixture-only-not-a-real-secret',
+});
+assert.equal(new URL(genericCapturedUrl).searchParams.has('apikey'), false);
+assert.equal(genericCapturedInit?.headers && (genericCapturedInit.headers as Record<string, string>).Authorization, 'Bearer fixture-only-not-a-real-secret');
+assert.equal(genericCapturedInit?.redirect, 'error');
+assert.equal(genericCapturedInit?.cache, 'no-store');
+assert.equal(genericFetchedQuote.currency, 'NGN');
+assert.equal(genericFetchedQuote.source, 'fixture-fx-provider');
+
+// Malformed JSON from an otherwise successful HTTP response is a transport
+// failure, not a quote and must never fall back to an untrusted/local rate.
+globalThis.fetch = (async () => new Response('{invalid json', {
+  status: 200,
+  headers: { 'content-type': 'application/json' },
+})) as typeof fetch;
+await assert.rejects(
+  fetchTrustedFxQuote('NGN', {
+    endpoint: 'https://fx.example.test/latest',
+    source: 'fixture-fx-provider',
+  }),
+  /FX_PROVIDER_REQUEST_FAILED/,
+);
+
 console.log('Global currency-to-Pi conversion suite: all assertions passed.');
