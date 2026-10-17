@@ -36,20 +36,21 @@ This checklist describes the Neon-backed utility invoice flow. It does not enabl
 - [ ] Apply the reviewed Neon migrations only through an explicitly approved procedure, then verify schema, constraints, health, and rollback/recovery.
 - [ ] Complete sandbox checkout with a mocked provider and demonstrate owner-bound receipts/status and reconciliation behavior.
 
-## Validation snapshot — 2026-10-16 (latest inspected commit)
+## Validation snapshot — 2026-10-17 (latest inspected commit)
 
-- Latest inspected PR head: `ac352720a7f62800a946e375118360117622768f` (`docs(fx): record cross-module integration gaps`). PR #11 remains open and Draft; it has not been merged.
+- Latest inspected PR head: `5882a5496e73dbd1f23e27971fc7ec755bf0fa1d` (`test(utility): cover conflicting and pending payment replays`). PR #11 remains open and Draft; it has not been merged.
 - All four GitHub Actions workflows passed on this exact commit:
-  - [Currency Engine Validation](https://github.com/Iddsnn1/pinova-global-hub/actions/runs/38964470458)
-  - [PiNova Global Hub CI](https://github.com/Iddsnn1/pinova-global-hub/actions/runs/38964470460)
-  - [PiNova CI](https://github.com/Iddsnn1/pinova-global-hub/actions/runs/38964470507)
-  - [PiNova CI Verify](https://github.com/Iddsnn1/pinova-global-hub/actions/runs/38964470547)
-- Vercel Preview for this exact commit is **READY**: https://vercel.com/iddsnn1s-projects/pinova-global-hub/GhkDyBHojvxg4YWT3rfLK57mZUGk. Preview readiness does not prove live Pi payment or provider fulfillment.
+  - [PiNova CI](https://github.com/Iddsnn1/pinova-global-hub/actions/runs/39025479423)
+  - [PiNova Global Hub CI](https://github.com/Iddsnn1/pinova-global-hub/actions/runs/39025479419)
+  - [PiNova CI Verify](https://github.com/Iddsnn1/pinova-global-hub/actions/runs/39025479413)
+  - [Currency Engine Validation](https://github.com/Iddsnn1/pinova-global-hub/actions/runs/39025479409)
+- Vercel Preview for this exact commit is **READY**: https://vercel.com/iddsnn1s-projects/pinova-global-hub/3Ma2qQGggBoDiuRcBKoFy5FL1EeW. Preview readiness does not prove live Pi payment or provider fulfillment.
+- The repository reservation suite now explicitly covers a conflicting replay (same payment ID associated with a different invoice/fingerprint is rejected with `UTILITY_IDEMPOTENCY_CONFLICT`) and a pending replay (returns `IN_PROGRESS` without inserting another idempotency row or fulfillment attempt). The orchestrator suite also tests concurrent reservation behavior, expecting one `RESERVED`, one `IN_PROGRESS`, and exactly one provider dispatch.
 - The HTTP route suite covers unauthenticated access (401), feature flag OFF (503), malformed invoice ID (400), missing/oversized/control-character payment ID (400), and a signed session without a Pi UID (403 `PI_IDENTITY_REQUIRED`). It still does not instrument repository/provider constructor calls or exercise owner mismatch through the real HTTP route.
-- The orchestrator suite has counter assertions that rejected cases (missing/foreign-owned invoice, mismatched payment ID, unverified payment, mismatched Pi UID, and missing invoice Pi UID) do not reserve payment, dispatch fulfillment, or persist fulfillment outcomes. These are orchestrator-level tests, not proof of complete HTTP or provider behavior.
+- The orchestrator/repository tests are not proof of complete HTTP or real provider behavior. HTTP owner mismatch with explicit repository/provider counters, replay/concurrency at HTTP level, Pi SDK cancellation/error paths, and provider sandbox contract checks remain outstanding.
 - Read-only SQL against the isolated Neon utility-checkout test branch previously showed `utility_invoices`, `utility_payment_idempotency`, and `utility_fulfillment_attempts` are not present. No migrations were applied.
 - Cross-module audit documented in [currency-engine-configuration.md](./currency-engine-configuration.md): Airtime's client estimate is not payment authorization; flights currently accept USD-denominated offers only; Education invoices are Pi-native without a fiat-to-Pi invoice path; marketplace conversion outside the USD reference is unavailable rather than guessed.
-- CI and Preview checks do not prove live Pi wallet payment or VTU.ng fulfillment. HTTP owner mismatch with explicit repository/provider counters, replay/concurrency at HTTP level, Pi SDK cancellation/error paths, and provider sandbox contract checks remain outstanding.
+- CI and Preview checks do not prove live Pi wallet payment or VTU.ng fulfillment. The configured 15-minute FX freshness policy also remains incompatible with CurrencyAPI's daily free-plan updates; verify the provider plan or use a compliant trusted feed rather than loosening freshness or inventing a rate.
 
 ## Release sequence
 
