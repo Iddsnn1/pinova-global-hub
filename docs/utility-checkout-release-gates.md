@@ -38,13 +38,13 @@ This checklist describes the Neon-backed utility invoice flow. It does not enabl
 
 ## Validation snapshot — 2026-10-18 (latest inspected PR head)
 
-- PR #11 head at the time of this snapshot: `7673126ac1e6222b0995ff0d12504946e04dcfc2`. PR #11 remains open and Draft; it has not been merged.
+- PR #11 head at the time of this snapshot: `bb81e9b421852aae99b23805965b1140cbeb4e25`. PR #11 remains open and Draft; it has not been merged.
 - All four GitHub Actions workflows passed on this exact commit:
-  - [PiNova Global Hub CI](https://github.com/Iddsnn1/pinova-global-hub/actions/runs/39122209130)
-  - [Currency Engine Validation](https://github.com/Iddsnn1/pinova-global-hub/actions/runs/39122209058)
-  - [PiNova CI](https://github.com/Iddsnn1/pinova-global-hub/actions/runs/39122208908)
-  - [PiNova CI Verify](https://github.com/Iddsnn1/pinova-global-hub/actions/runs/39122208918)
-- Vercel status was still pending when this snapshot was updated; it does not prove live Pi payment or VTU.ng fulfillment.
+  - [Currency Engine Validation](https://github.com/Iddsnn1/pinova-global-hub/actions/runs/39122325065)
+  - [PiNova CI Verify](https://github.com/Iddsnn1/pinova-global-hub/actions/runs/39122325024)
+  - [PiNova CI](https://github.com/Iddsnn1/pinova-global-hub/actions/runs/39122325036)
+  - [PiNova Global Hub CI](https://github.com/Iddsnn1/pinova-global-hub/actions/runs/39122325050)
+- Vercel Preview deployment for this exact commit reached `READY` and its combined Vercel status is `success`. This does not prove live Pi payment or VTU.ng fulfillment.
 - The HTTP checkout route integration suite covers unauthenticated access (401), checkout flag OFF (503), malformed invoice ID/payment IDs (400), missing Pi UID (403), repository outage (503), and malformed FX amount/currency plus unconfigured trusted FX provider failure.
 - Repository/orchestrator suites cover exact Pi amount, owner UID checks, invoice expiry, idempotency/replay, and concurrent reservation at unit/repository level. Full HTTP owner-mismatch and payment-verification scenarios, plus explicit provider-call counters, remain open.
 - The 15-minute FX quote freshness policy remains a blocker until the actual CurrencyAPI plan provides sufficiently fresh timestamps or a different trusted feed is configured. Do not loosen freshness or fabricate rates.
