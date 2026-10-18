@@ -11,7 +11,7 @@ This checklist describes the Neon-backed utility invoice flow. It does not enabl
 - `FlexibleUtilityModal.tsx` now contains the client-side canonical flow for the narrow supported path: request a server-priced invoice, call the Pi SDK with the invoice's Pi amount in `payment-only` mode, bind the returned payment ID, then call the authenticated checkout endpoint. It only creates a `SUCCESS` receipt when checkout returns `FULFILLED` or `RESOLVED`; provider failures and ambiguous outcomes are shown as failed/pending with invoice/payment identifiers. This client flow still requires route-level integration tests and sandbox validation before release.
 - The feature flag has not been enabled in Vercel. With the flag unset, checkout returns `503 UTILITY_CHECKOUT_DISABLED` before opening the invoice repository or contacting a provider.
 - The legacy `POST /api/v2/utility/fulfill` endpoint remains intentionally disabled with HTTP 503.
-- Neon migrations have not been applied by this work. Legacy Blob stores and data remain untouched.
+- The three utility checkout tables (`utility_invoices`, `utility_payment_idempotency`, `utility_fulfillment_attempts`) were created and checked on the isolated Neon test branch only; production branch migrations have not been applied. Legacy Blob stores and data remain untouched.
 
 ## Implemented safeguards
 
@@ -38,13 +38,13 @@ This checklist describes the Neon-backed utility invoice flow. It does not enabl
 
 ## Validation snapshot — 2026-10-18 (latest inspected PR head)
 
-- PR #11 head: `fa4d2009fb777e16d16a5ecce33cd89d8e1fe7f1`. PR #11 remains open and Draft; it has not been merged.
+- PR #11 head at the time of this snapshot: `7673126ac1e6222b0995ff0d12504946e04dcfc2`. PR #11 remains open and Draft; it has not been merged.
 - All four GitHub Actions workflows passed on this exact commit:
-  - [PiNova Global Hub CI](https://github.com/Iddsnn1/pinova-global-hub/actions/runs/39067518055)
-  - [Currency Engine Validation](https://github.com/Iddsnn1/pinova-global-hub/actions/runs/39067518010)
-  - [PiNova CI](https://github.com/Iddsnn1/pinova-global-hub/actions/runs/39067518022)
-  - [PiNova CI Verify](https://github.com/Iddsnn1/pinova-global-hub/actions/runs/39067518018)
-- Vercel status for this commit is successful; this does not prove live Pi payment or VTU.ng fulfillment.
+  - [PiNova Global Hub CI](https://github.com/Iddsnn1/pinova-global-hub/actions/runs/39122209130)
+  - [Currency Engine Validation](https://github.com/Iddsnn1/pinova-global-hub/actions/runs/39122209058)
+  - [PiNova CI](https://github.com/Iddsnn1/pinova-global-hub/actions/runs/39122208908)
+  - [PiNova CI Verify](https://github.com/Iddsnn1/pinova-global-hub/actions/runs/39122208918)
+- Vercel status was still pending when this snapshot was updated; it does not prove live Pi payment or VTU.ng fulfillment.
 - The HTTP checkout route integration suite covers unauthenticated access (401), checkout flag OFF (503), malformed invoice ID/payment IDs (400), missing Pi UID (403), repository outage (503), and malformed FX amount/currency plus unconfigured trusted FX provider failure.
 - Repository/orchestrator suites cover exact Pi amount, owner UID checks, invoice expiry, idempotency/replay, and concurrent reservation at unit/repository level. Full HTTP owner-mismatch and payment-verification scenarios, plus explicit provider-call counters, remain open.
 - The 15-minute FX quote freshness policy remains a blocker until the actual CurrencyAPI plan provides sufficiently fresh timestamps or a different trusted feed is configured. Do not loosen freshness or fabricate rates.
