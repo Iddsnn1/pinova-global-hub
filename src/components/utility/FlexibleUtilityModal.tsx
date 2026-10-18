@@ -410,12 +410,6 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
     }
   };
 
-  // Handle preset dollar clicks
-  const handleSelectPresetAmount = (amt: number) => {
-    setPurchaseMode('custom');
-    setCustomAmountInput(amt.toString());
-  };
-
   // Handle Package Selection
   const handleSelectPackage = (pkg: UtilityProviderPackage) => {
     setPurchaseMode('package');
