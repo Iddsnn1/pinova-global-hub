@@ -1409,7 +1409,7 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                           type="button"
                           onClick={() => {
                             setPurchaseMode('package');
-                            if (!selectedPackage && compatiblePackages.length > 0) {
+                            if (compatiblePackages.length > 0 && !compatiblePackages.some((pkg) => pkg.id === selectedPackage?.id)) {
                               setSelectedPackage(compatiblePackages[0]);
                             }
                           }}
