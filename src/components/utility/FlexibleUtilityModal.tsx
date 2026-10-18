@@ -578,14 +578,25 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
     ? selectedCountryCode
     : providerCountryCode;
   const activeFiatCurrency = currencyForUtility(effectiveCurrencyCountryCode, selectedProvider?.currency);
+  const supportsNigeriaAirtimePackages = selectedCategory === 'airtime' &&
+    selectedCountryCode === 'NG' && activeFiatCurrency === 'NGN';
+  const nigeriaAirtimePackages: UtilityProviderPackage[] = [
+    { id: 'ng-airtime-500', name: '₦500 Airtime', description: 'Nigeria airtime top-up', fiatPrice: 500, currency: 'NGN' },
+    { id: 'ng-airtime-1000', name: '₦1,000 Airtime', description: 'Nigeria airtime top-up', fiatPrice: 1000, currency: 'NGN' },
+    { id: 'ng-airtime-2000', name: '₦2,000 Airtime', description: 'Nigeria airtime top-up', fiatPrice: 2000, currency: 'NGN', badge: 'Popular' },
+    { id: 'ng-airtime-5000', name: '₦5,000 Airtime', description: 'Nigeria airtime top-up', fiatPrice: 5000, currency: 'NGN' },
+    { id: 'ng-airtime-10000', name: '₦10,000 Airtime', description: 'Nigeria airtime top-up', fiatPrice: 10000, currency: 'NGN' }
+  ];
   const selectedPackageCurrency = String(selectedPackage?.currency || selectedProvider?.currency || '').toUpperCase();
   const selectedPackageMatchesCountry = Boolean(
     selectedPackage && activeFiatCurrency && selectedPackageCurrency === activeFiatCurrency
   );
-  const compatiblePackages = (selectedProvider?.packages || []).filter((pkg) => {
-    const packageCurrency = String(pkg.currency || selectedProvider?.currency || '').toUpperCase();
-    return Boolean(activeFiatCurrency && packageCurrency === activeFiatCurrency);
-  });
+  const compatiblePackages = supportsNigeriaAirtimePackages
+    ? nigeriaAirtimePackages
+    : (selectedProvider?.packages || []).filter((pkg) => {
+        const packageCurrency = String(pkg.currency || selectedProvider?.currency || '').toUpperCase();
+        return Boolean(activeFiatCurrency && packageCurrency === activeFiatCurrency);
+      });
   const activeFiatAmount = purchaseMode === 'package'
     ? (selectedPackageMatchesCountry && selectedPackage ? selectedPackage.fiatPrice : 0)
     : getActiveFiatPrice();
@@ -1393,13 +1404,13 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                         </button>
                       )}
 
-                      {selectedProvider.supportsFixedPackages && selectedProvider.packages.length > 0 && (
+                      {(selectedProvider.supportsFixedPackages && selectedProvider.packages.length > 0 || supportsNigeriaAirtimePackages) && (
                         <button
                           type="button"
                           onClick={() => {
                             setPurchaseMode('package');
-                            if (!selectedPackage && selectedProvider.packages.length > 0) {
-                              setSelectedPackage(selectedProvider.packages[0]);
+                            if (!selectedPackage && compatiblePackages.length > 0) {
+                              setSelectedPackage(compatiblePackages[0]);
                             }
                           }}
                           className={`px-3 py-1 rounded-lg text-[11px] font-bold transition-all ${
@@ -1433,27 +1444,7 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                         />
                       </div>
 
-                      {(activeFiatCurrency === 'USD' || (selectedCategory === 'airtime' && selectedCountryCode === 'NG' && activeFiatCurrency === 'NGN')) ? (
-                        <div className="flex flex-wrap gap-2 pt-1">
-                          {(selectedCategory === 'airtime' && selectedCountryCode === 'NG' && activeFiatCurrency === 'NGN'
-                            ? [500, 1000, 2000, 5000, 10000]
-                            : [5, 10, 25, 50, 100]
-                          ).map((amt) => (
-                            <button
-                              key={amt}
-                              type="button"
-                              onClick={() => handleSelectPresetAmount(amt)}
-                              className={`px-3 py-1 rounded-lg text-xs font-bold border transition-colors ${
-                                customAmountInput === amt.toString()
-                                  ? 'bg-purple-600 text-white border-purple-600 shadow-sm'
-                                  : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-purple-500'
-                              }`}
-                            >
-                              {formatFiat(amt, activeFiatCurrency)}
-                            </button>
-                          ))}
-                        </div>
-                      ) : (
+                      {!(selectedCategory === 'airtime' && selectedCountryCode === 'NG' && activeFiatCurrency === 'NGN') && (
                         <p className="pt-1 text-[11px] text-amber-600 dark:text-amber-300">
                           No verified preset denominations are configured for {activeFiatCurrency || 'this currency'}. Enter only an amount confirmed by the provider. Checkout remains paused until server-side invoice verification and payment authorization are available.
                         </p>
@@ -1468,7 +1459,7 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                     </div>
                   )}
 
-                  {purchaseMode === 'package' && selectedProvider.packages.length > 0 && compatiblePackages.length > 0 && (
+                  {purchaseMode === 'package' && compatiblePackages.length > 0 && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                       {compatiblePackages.map((pkg) => {
                         const isSelected = selectedPackage?.id === pkg.id;
