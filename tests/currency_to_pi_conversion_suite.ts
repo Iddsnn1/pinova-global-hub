@@ -408,4 +408,33 @@ await assert.rejects(
   /FX_PROVIDER_REQUEST_FAILED/,
 );
 
+// Quote-change regression: a refreshed trusted rate must produce a newly
+// calculated amount, rather than silently reusing the earlier quote's Pi amount.
+const changedRateQuote = {
+  ...liveTestQuote,
+  usdPerFiatUnit: 0.0006,
+  asOf: new Date(Date.now() - 30_000).toISOString(),
+};
+const changedRateConversion = calculateTrustedFiatToPi({
+  fiatAmount: 1000,
+  currency: 'NGN',
+  quote: changedRateQuote,
+  trustedSource: 'configured-test-provider',
+});
+assert.equal(changedRateConversion.usdAmount, 0.6);
+assert.equal(changedRateConversion.piAmount, (0.6 / PI_REFERENCE_RATE_USD).toFixed(12));
+assert.notEqual(changedRateConversion.piAmount, trustedConversion.piAmount);
+
+// A changed/stale quote cannot be used as if it were a current quote. This
+// models a quote that was refreshed after the estimate was first displayed.
+assert.throws(
+  () => calculateTrustedFiatToPi({
+    fiatAmount: 1000,
+    currency: 'NGN',
+    quote: { ...liveTestQuote, asOf: new Date(Date.now() - 16 * 60 * 1000).toISOString() },
+    trustedSource: 'configured-test-provider',
+  }),
+  /FX_QUOTE_STALE/,
+);
+
 console.log('Global currency-to-Pi conversion suite: all assertions passed.');
