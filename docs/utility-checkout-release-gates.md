@@ -27,8 +27,8 @@ This checklist describes the Neon-backed utility invoice flow. It does not enabl
 - [x] Wire the UI to create a canonical server-priced invoice, invoke the Pi SDK using the invoice-issued Pi amount in `payment-only` mode, bind the resulting payment ID, and call the authenticated checkout endpoint after Pi SDK completion. Server-side verification remains authoritative; client callbacks are not proof of payment.
 - [x] Separate **Pi payment completion** from **utility fulfillment success** in the UI: a success receipt is emitted only for checkout `FULFILLED`/`RESOLVED`; definite provider failure is shown as failed, and ambiguous outcomes remain pending with invoice/payment identifiers for reconciliation.
 - [ ] Review and test all Pi SDK completion/cancellation/error paths against this utility-specific flow; do not interpret generic Pi completion as provider fulfillment.
-- [x] Add and run the initial HTTP-route integration suite for unauthenticated access (401), feature flag OFF (503), and malformed invoice ID (400). The disabled-flag branch returns before repository construction/provider dispatch by code inspection.
-- [ ] Extend HTTP-route integration coverage for owner mismatch, malformed payment ID, and explicit repository/provider call counters; current route suite does not yet prove those cases.
+- [x] Add and run HTTP-route integration coverage for unauthenticated access (401), feature flag OFF (503), malformed invoice ID/payment IDs (400), missing Pi UID (403), and repository outage (503 with `Cache-Control: no-store`).
+- [ ] Extend HTTP-route integration coverage for owner mismatch, authoritative payment verification failures, and explicit repository/provider call counters; current route suite does not yet prove those cases.
 - [ ] Run route-level tests for wrong payment ID, unverified payment, wrong Pi UID, unsupported provider/service, expired invoice, replay, and concurrent checkout; unit tests for the orchestrator/repository are not a substitute for this HTTP coverage.
 - [ ] Confirm the actual VTU.ng contract for duplicate request IDs, status reconciliation, request timeouts, and provider-specific airtime limits/denominations. Do not assume stable request IDs alone prevent duplicate recharges.
 - [ ] Confirm the provider response and webhook signature contract against the provider's documentation and test successful, failed, pending, and ambiguous outcomes.
@@ -36,23 +36,19 @@ This checklist describes the Neon-backed utility invoice flow. It does not enabl
 - [ ] Apply the reviewed Neon migrations only through an explicitly approved procedure, then verify schema, constraints, health, and rollback/recovery.
 - [ ] Complete sandbox checkout with a mocked provider and demonstrate owner-bound receipts/status and reconciliation behavior.
 
-## Validation snapshot — 2026-10-17 (latest verified code commit)
+## Validation snapshot — 2026-10-18 (latest inspected PR head)
 
-- Latest inspected PR head: `eeede44c1c94bb95617b5a4c5b871e879f857d0c` (`test(currency): cover trusted FX transport and credential handling`). PR #11 remains open and Draft; it has not been merged.
+- PR #11 head: `fa4d2009fb777e16d16a5ecce33cd89d8e1fe7f1`. PR #11 remains open and Draft; it has not been merged.
 - All four GitHub Actions workflows passed on this exact commit:
-  - [Currency Engine Validation](https://github.com/Iddsnn1/pinova-global-hub/actions/runs/39054668626)
-  - [PiNova CI Verify](https://github.com/Iddsnn1/pinova-global-hub/actions/runs/39054668602)
-  - [PiNova Global Hub CI](https://github.com/Iddsnn1/pinova-global-hub/actions/runs/39054668587)
-  - [PiNova CI](https://github.com/Iddsnn1/pinova-global-hub/actions/runs/39054668550)
-- Vercel Preview for this exact code commit is **READY**: https://pinova-global-8kz11hopq-iddsnn1s-projects.vercel.app. Preview readiness does not prove live Pi payment or provider fulfillment.
-- The trusted FX transport tests now explicitly check that credentials embedded in provider URLs are rejected, the configured API key is sent in the Authorization header rather than URL query parameters, redirects are rejected, cache is disabled, source metadata is checked, and malformed successful HTTP responses fail closed without local/fabricated rate fallback.
-- The HTTP checkout route integration suite covers unauthenticated access (401), feature flag OFF (503), malformed invoice ID/payment IDs (400), missing Pi UID (403), and repository outage (503 with `Cache-Control: no-store`). It still does not instrument repository/provider constructor calls or exercise owner mismatch through the real HTTP route.
-- Repository and orchestrator suites cover owner-scoped invoice lookup/payment binding, stale quote rejection, exact Pi amount, idempotency, conflicting/pending replays, and concurrent reservation. These unit-level tests are not a substitute for full HTTP owner-mismatch, replay/concurrency, or real provider contract validation.
-- Remaining gates include Pi SDK cancellation/error-path review, HTTP owner mismatch and payment-verification scenarios, VTU.ng idempotency/reconciliation/webhook contract confirmation, compliant trusted FX quote freshness, and mocked-provider sandbox checkout.
-- Read-only SQL against the isolated Neon utility-checkout test branch previously showed `utility_invoices`, `utility_payment_idempotency`, and `utility_fulfillment_attempts` are not present. No migrations were applied.
-- Cross-module audit documented in [currency-engine-configuration.md](./currency-engine-configuration.md): Airtime's client estimate is not payment authorization; flights currently accept USD-denominated offers only; Education invoices are Pi-native without a fiat-to-Pi invoice path; marketplace conversion outside the USD reference is unavailable rather than guessed.
-- The configured 15-minute FX freshness policy remains incompatible with CurrencyAPI's daily free-plan updates; verify the provider plan or use a compliant trusted feed rather than loosening freshness or inventing a rate.
-
+  - [PiNova Global Hub CI](https://github.com/Iddsnn1/pinova-global-hub/actions/runs/39067518055)
+  - [Currency Engine Validation](https://github.com/Iddsnn1/pinova-global-hub/actions/runs/39067518010)
+  - [PiNova CI](https://github.com/Iddsnn1/pinova-global-hub/actions/runs/39067518022)
+  - [PiNova CI Verify](https://github.com/Iddsnn1/pinova-global-hub/actions/runs/39067518018)
+- Vercel status for this commit is successful; this does not prove live Pi payment or VTU.ng fulfillment.
+- The HTTP checkout route integration suite covers unauthenticated access (401), checkout flag OFF (503), malformed invoice ID/payment IDs (400), missing Pi UID (403), repository outage (503), and malformed FX amount/currency plus unconfigured trusted FX provider failure.
+- Repository/orchestrator suites cover exact Pi amount, owner UID checks, invoice expiry, idempotency/replay, and concurrent reservation at unit/repository level. Full HTTP owner-mismatch and payment-verification scenarios, plus explicit provider-call counters, remain open.
+- The 15-minute FX quote freshness policy remains a blocker until the actual CurrencyAPI plan provides sufficiently fresh timestamps or a different trusted feed is configured. Do not loosen freshness or fabricate rates.
+- Live Pi Wallet + VTU.ng end-to-end fulfillment is not confirmed. Neon production migrations have not been applied; the utility checkout feature flag remains OFF; legacy Blob stores and production domain remain unchanged.
 ## Release sequence
 
 1. Finish route-level tests and review the PR diff.
