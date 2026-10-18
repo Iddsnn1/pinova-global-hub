@@ -180,7 +180,7 @@ async function run() {
           Authorization: `Bearer ${session.token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ paymentId: 'bad\\nidentifier' }),
+        body: JSON.stringify({ paymentId: 'bad\nidentifier' }),
       },
     );
     assert.equal(malformedBindingPayment.status, 400);
