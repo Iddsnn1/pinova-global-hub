@@ -156,6 +156,58 @@ async function run() {
     assert.equal(unavailableRepository.headers.get('cache-control'), 'no-store');
     assert.equal((await unavailableRepository.json()).error, 'UTILITY_CHECKOUT_UNAVAILABLE');
 
+    // Payment binding rejects malformed invoice IDs before repository construction.
+    const malformedBindingInvoice = await fetch(
+      `${baseUrl}/api/v2/utility/invoices/not-an-invoice-id/payment`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ paymentId: 'test-payment-id' }),
+      },
+    );
+    assert.equal(malformedBindingInvoice.status, 400);
+    assert.equal((await malformedBindingInvoice.json()).error, 'UTILITY_PAYMENT_BINDING_INPUT_INVALID');
+
+    // Payment binding rejects control characters and oversized IDs without DB/provider work.
+    const malformedBindingPayment = await fetch(
+      `${baseUrl}/api/v2/utility/invoices/${invoiceId}/payment`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ paymentId: 'bad\\nidentifier' }),
+      },
+    );
+    assert.equal(malformedBindingPayment.status, 400);
+    assert.equal((await malformedBindingPayment.json()).error, 'UTILITY_PAYMENT_BINDING_INPUT_INVALID');
+
+    const oversizedBindingPayment = await fetch(
+      `${baseUrl}/api/v2/utility/invoices/${invoiceId}/payment`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ paymentId: 'x'.repeat(201) }),
+      },
+    );
+    assert.equal(oversizedBindingPayment.status, 400);
+    assert.equal((await oversizedBindingPayment.json()).error, 'UTILITY_PAYMENT_BINDING_INPUT_INVALID');
+
+    // Invoice status lookup rejects malformed IDs before touching durable storage.
+    const malformedInvoiceStatus = await fetch(
+      `${baseUrl}/api/v2/utility/invoices/not-an-invoice-id`,
+      { headers: { Authorization: `Bearer ${session.token}` } },
+    );
+    assert.equal(malformedInvoiceStatus.status, 400);
+    assert.equal((await malformedInvoiceStatus.json()).error, 'UTILITY_INVOICE_ID_INVALID');
+
     // FX estimate endpoint rejects malformed amounts/currencies before provider access.
     const invalidFxAmount = await fetch(`${baseUrl}/api/currency/fiat-to-pi`, {
       method: 'POST',
