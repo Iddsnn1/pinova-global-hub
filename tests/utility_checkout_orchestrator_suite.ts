@@ -252,6 +252,24 @@ async function run() {
   assert.equal(providerCalls, 1, 'only the reservation winner may call the provider');
   assert.equal(reservationCalls, 2);
 
+  // An exact-Pi-amount mismatch rejected by the transactional reservation must
+  // never proceed to the utility provider or be recorded as a fulfillment.
+  const amountMismatch = setup({
+    repository: {
+      ...setup().repository,
+      authorizeAndReserve: async () => ({
+        status: 'REJECTED' as const,
+        error: 'PI_PAYMENT_AMOUNT_MISMATCH',
+      }),
+    } as unknown as UtilityCheckoutDependencies['repository'],
+  });
+  assert.deepEqual(await processUtilityCheckout(amountMismatch.deps, {
+    invoiceId: invoice.invoiceId, ownerUserId: invoice.ownerUserId, paymentId: invoice.paymentId,
+  }), { status: 'REJECTED', error: 'PI_PAYMENT_AMOUNT_MISMATCH' });
+  assert.equal(amountMismatch.calls.reserve, 1);
+  assert.equal(amountMismatch.calls.fulfill, 0, 'an amount mismatch must never call the provider');
+  assert.equal(amountMismatch.calls.record, 0, 'a rejected payment must not record fulfillment');
+
   console.log('Utility checkout orchestrator tests passed.');
 }
 
