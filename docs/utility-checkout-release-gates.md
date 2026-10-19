@@ -67,3 +67,11 @@ This checklist describes the Neon-backed utility invoice flow. It does not enabl
 - Do not treat a client FX estimate as payment authorization.
 - Do not call a fulfillment provider before authoritative Pi verification and durable idempotency reservation.
 - Do not automatically retry an UNKNOWN provider outcome.
+
+
+## Additional audit note — 2026-10-19
+
+- Rechecked current PR head `6f0dde8e9849ae0851ec7cf6c12a73345a470c73`: all four GitHub Actions workflows report success and the Vercel commit status is `success`. This is not evidence of a live payment or provider transaction.
+- Reviewed `src/server/integrations/vtuNgAdapter.ts`, `tests/vtu_webhook_signature_suite.ts`, and the `POST /api/v2/utility/vtu/webhook` handler in `server.ts`. Unit tests cover HMAC verification for the exact raw body, absent secret/signature, changed body, and malformed signature. The HTTP handler verifies the signature but deliberately does not mutate fulfillment state; its response states that reconciliation through durable Neon records is still required.
+- The webhook signature unit suite is not a substitute for a provider-documented signature contract or HTTP webhook integration tests. Keep webhook-driven state changes disabled until event/request identifiers can be matched to a durable invoice and fulfillment attempt, and duplicate/out-of-order delivery behavior is tested.
+- No production setting, Neon production schema, provider transaction, or legacy Blob data was changed during this audit.
