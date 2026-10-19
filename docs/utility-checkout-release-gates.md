@@ -36,19 +36,21 @@ This checklist describes the Neon-backed utility invoice flow. It does not enabl
 - [ ] Apply the reviewed Neon migrations only through an explicitly approved procedure, then verify schema, constraints, health, and rollback/recovery.
 - [ ] Complete sandbox checkout with a mocked provider and demonstrate owner-bound receipts/status and reconciliation behavior.
 
-## Validation snapshot — 2026-10-19 (latest inspected PR head)
+## Validation snapshot — 2026-10-19 (commit 78f9bb3be47afb2f5435cc9671006971898deb24)
 
-- Latest inspected PR #11 head: `0b4538b582aee6f5f618d723d4cc6226c6c28218`. PR #11 remains open and Draft; it has not been merged.
-- All four GitHub Actions workflows passed on this head on 2026-10-18:
-  - [Currency Engine Validation](https://github.com/Iddsnn1/pinova-global-hub/actions/runs/39165133525)
-  - [PiNova CI Verify](https://github.com/Iddsnn1/pinova-global-hub/actions/runs/39165133541)
-  - [PiNova CI](https://github.com/Iddsnn1/pinova-global-hub/actions/runs/39165133383)
-  - [PiNova Global Hub CI](https://github.com/Iddsnn1/pinova-global-hub/actions/runs/39165133392)
-- The Preview deployment was reported `READY`; `/api/health` returned HTTP 200. The checkout readiness endpoint returned HTTP 200 with `ready: false` because the feature flag is OFF. Configured booleans are not proof that live provider credentials work end-to-end.
-- The HTTP checkout route integration suite covers unauthenticated access (401), checkout flag OFF (503), malformed invoice ID/payment IDs (400), missing Pi UID (403), repository outage (503), and malformed FX amount/currency plus unconfigured trusted FX provider failure.
-- Repository/orchestrator suites cover exact Pi amount, owner UID checks, invoice expiry, idempotency/replay, and concurrent reservation at unit/repository level. Full HTTP owner-mismatch and payment-verification scenarios, plus explicit provider-call counters, remain open.
-- The 15-minute FX quote freshness policy remains a blocker until the actual CurrencyAPI plan provides sufficiently fresh timestamps or a different trusted feed is configured. Do not loosen freshness or fabricate rates.
-- Live Pi Wallet + VTU.ng end-to-end fulfillment is not confirmed. Neon production migrations have not been applied; the utility checkout feature flag remains OFF; legacy Blob stores and production domain remain unchanged.
+- Latest inspected PR #11 head: `78f9bb3be47afb2f5435cc9671006971898deb24`. PR #11 remains open and Draft; it has not been merged.
+- All four GitHub Actions workflows passed on this commit:
+  - [Currency Engine Validation](https://github.com/Iddsnn1/pinova-global-hub/actions/runs/39262360033)
+  - [PiNova CI Verify](https://github.com/Iddsnn1/pinova-global-hub/actions/runs/39262359849)
+  - [PiNova CI](https://github.com/Iddsnn1/pinova-global-hub/actions/runs/39262359421)
+  - [PiNova Global Hub CI](https://github.com/Iddsnn1/pinova-global-hub/actions/runs/39262359773)
+- TypeScript checks, production build, currency conversion tests, and all configured test suites passed in those workflows. The Vercel commit status is `success`; this is a Preview status, not a production deployment or a live checkout proof.
+- The latest test change corrected the orchestrator test harness so overridden verifier/fulfillment mocks still increment call counters. The fail-closed assertions remain in place.
+- The HTTP checkout route integration suite currently covers unauthenticated access (401), checkout flag OFF (503), malformed invoice/payment IDs (400), missing Pi UID (403), repository outage (503), and malformed FX amount/currency plus unconfigured trusted FX provider failure.
+- Full HTTP owner-mismatch and authoritative payment-verification scenarios with explicit provider-call counters remain open. The unit/orchestrator tests do not replace this HTTP coverage.
+- The 15-minute FX quote freshness policy remains a blocker until the actual CurrencyAPI plan supplies sufficiently fresh timestamps or a different trusted feed is configured. Do not loosen freshness or fabricate rates.
+- Live Pi Wallet + VTU.ng end-to-end fulfillment is not confirmed. Neon production migrations have not been applied; `PINOVA_UTILITY_CHECKOUT_ENABLED` remains OFF; legacy Blob stores and production domain remain unchanged.
+
 ## Release sequence
 
 1. Finish route-level tests and review the PR diff.
