@@ -6,6 +6,7 @@ on:
     paths:
       - "src/utils/currencyToPi.ts"
       - "src/server/services/TrustedFx*.ts"
+      - "src/server/services/TrustedFiatToPiService.ts"
       - "src/modules/pricing/**"
       - "src/modules/marketplace/**"
       - "src/modules/flight/**"
@@ -22,6 +23,7 @@ on:
     paths:
       - "src/utils/currencyToPi.ts"
       - "src/server/services/TrustedFx*.ts"
+      - "src/server/services/TrustedFiatToPiService.ts"
       - "src/modules/pricing/**"
       - "src/modules/marketplace/**"
       - "src/modules/flight/**"
