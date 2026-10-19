@@ -7,6 +7,13 @@ on:
       - "src/utils/currencyToPi.ts"
       - "src/server/services/TrustedFx*.ts"
       - "src/server/services/TrustedFiatToPiService.ts"
+      - "src/server/services/UtilityCheckoutOrchestrator.ts"
+      - "src/server/services/UtilityPaymentAuthorizationService.ts"
+      - "src/server/db/repositories/NeonUtilityInvoiceRepository.ts"
+      - "server.ts"
+      - "tests/utility_checkout_route_integration_suite.ts"
+      - "tests/utility_checkout_orchestrator_suite.ts"
+      - "tests/utility_payment_authorization_suite.ts"
       - "src/modules/pricing/**"
       - "src/modules/marketplace/**"
       - "src/modules/flight/**"
@@ -24,6 +31,13 @@ on:
       - "src/utils/currencyToPi.ts"
       - "src/server/services/TrustedFx*.ts"
       - "src/server/services/TrustedFiatToPiService.ts"
+      - "src/server/services/UtilityCheckoutOrchestrator.ts"
+      - "src/server/services/UtilityPaymentAuthorizationService.ts"
+      - "src/server/db/repositories/NeonUtilityInvoiceRepository.ts"
+      - "server.ts"
+      - "tests/utility_checkout_route_integration_suite.ts"
+      - "tests/utility_checkout_orchestrator_suite.ts"
+      - "tests/utility_payment_authorization_suite.ts"
       - "src/modules/pricing/**"
       - "src/modules/marketplace/**"
       - "src/modules/flight/**"
@@ -59,5 +73,11 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Currency conversion tests
         run: npm run test:currency
+      - name: Utility checkout HTTP route tests
+        run: npm run test:utility-routes
+      - name: Utility checkout orchestration tests
+        run: npx tsx tests/utility_checkout_orchestrator_suite.ts
+      - name: Utility payment authorization tests
+        run: npx tsx tests/utility_payment_authorization_suite.ts
       - name: TypeScript check
         run: npm run lint
