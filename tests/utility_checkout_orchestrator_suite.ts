@@ -71,8 +71,9 @@ async function run() {
   assert.deepEqual(await processUtilityCheckout(notVerified.deps, {
     invoiceId: invoice.invoiceId, ownerUserId: invoice.ownerUserId, paymentId: invoice.paymentId,
   }), { status: 'REJECTED', error: 'PI_PAYMENT_NOT_VERIFIED' });
-  assert.equal(notVerified.calls.reserve, 0);
-  assert.equal(notVerified.calls.fulfill, 0);
+  assert.equal(notVerified.calls.verify, 1, 'the payment verifier must run exactly once');
+  assert.equal(notVerified.calls.reserve, 0, 'an unverified payment must not reserve the invoice');
+  assert.equal(notVerified.calls.fulfill, 0, 'an unverified payment must never call the provider');
   assert.equal(notVerified.calls.record, 0);
 
   const ownerMismatch = setup({
@@ -84,8 +85,9 @@ async function run() {
   assert.deepEqual(await processUtilityCheckout(ownerMismatch.deps, {
     invoiceId: invoice.invoiceId, ownerUserId: invoice.ownerUserId, paymentId: invoice.paymentId,
   }), { status: 'REJECTED', error: 'PI_PAYMENT_OWNER_MISMATCH' });
-  assert.equal(ownerMismatch.calls.reserve, 0);
-  assert.equal(ownerMismatch.calls.fulfill, 0);
+  assert.equal(ownerMismatch.calls.verify, 1, 'the authoritative Pi UID is checked after verification');
+  assert.equal(ownerMismatch.calls.reserve, 0, 'a Pi UID mismatch must not reserve the invoice');
+  assert.equal(ownerMismatch.calls.fulfill, 0, 'a Pi UID mismatch must never call the provider');
   assert.equal(ownerMismatch.calls.record, 0);
 
   const missingInvoiceUid = setup({
@@ -97,8 +99,9 @@ async function run() {
   assert.deepEqual(await processUtilityCheckout(missingInvoiceUid.deps, {
     invoiceId: invoice.invoiceId, ownerUserId: invoice.ownerUserId, paymentId: invoice.paymentId,
   }), { status: 'REJECTED', error: 'PI_PAYMENT_OWNER_MISMATCH' });
-  assert.equal(missingInvoiceUid.calls.reserve, 0);
-  assert.equal(missingInvoiceUid.calls.fulfill, 0);
+  assert.equal(missingInvoiceUid.calls.verify, 1);
+  assert.equal(missingInvoiceUid.calls.reserve, 0, 'an invoice without an owner Pi UID must not be reserved');
+  assert.equal(missingInvoiceUid.calls.fulfill, 0, 'an invoice without an owner Pi UID must never call the provider');
   assert.equal(missingInvoiceUid.calls.record, 0);
 
   const success = setup();
@@ -171,8 +174,9 @@ async function run() {
   assert.deepEqual(await processUtilityCheckout(verificationUnavailable.deps, {
     invoiceId: invoice.invoiceId, ownerUserId: invoice.ownerUserId, paymentId: invoice.paymentId,
   }), { status: 'REJECTED', error: 'PI_PAYMENT_VERIFICATION_UNAVAILABLE' });
-  assert.equal(verificationUnavailable.calls.reserve, 0);
-  assert.equal(verificationUnavailable.calls.fulfill, 0);
+  assert.equal(verificationUnavailable.calls.verify, 1);
+  assert.equal(verificationUnavailable.calls.reserve, 0, 'verification outage must not reserve the invoice');
+  assert.equal(verificationUnavailable.calls.fulfill, 0, 'verification outage must never call the provider');
   assert.equal(verificationUnavailable.calls.record, 0);
 
   // A definite provider rejection must be recorded and surfaced as a failed
