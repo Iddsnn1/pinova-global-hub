@@ -32,13 +32,17 @@ function setup(overrides: Partial<UtilityCheckoutDependencies> = {}) {
     },
   };
   const deps: UtilityCheckoutDependencies = {
-    repository: repository as unknown as UtilityCheckoutDependencies['repository'],
-    verifyPayment: async () => { calls.verify++; return verifiedPayment; },
-    fulfill: async () => {
+    repository: (overrides.repository ?? repository) as unknown as UtilityCheckoutDependencies['repository'],
+    verifyPayment: async (paymentId) => {
+      calls.verify++;
+      if (overrides.verifyPayment) return overrides.verifyPayment(paymentId);
+      return verifiedPayment;
+    },
+    fulfill: async (invoice, paymentId, txid) => {
       calls.fulfill++;
+      if (overrides.fulfill) return overrides.fulfill(invoice, paymentId, txid);
       return { status: 'SUCCEEDED' as const, providerReference: 'vtu-ref-01', response: { ok: true } };
     },
-    ...overrides,
   };
   return { deps, calls, repository };
 }
