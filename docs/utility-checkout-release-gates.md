@@ -75,3 +75,13 @@ This checklist describes the Neon-backed utility invoice flow. It does not enabl
 - Reviewed `src/server/integrations/vtuNgAdapter.ts`, `tests/vtu_webhook_signature_suite.ts`, and the `POST /api/v2/utility/vtu/webhook` handler in `server.ts`. Unit tests cover HMAC verification for the exact raw body, absent secret/signature, changed body, and malformed signature. The HTTP handler verifies the signature but deliberately does not mutate fulfillment state; its response states that reconciliation through durable Neon records is still required.
 - The webhook signature unit suite is not a substitute for a provider-documented signature contract or HTTP webhook integration tests. Keep webhook-driven state changes disabled until event/request identifiers can be matched to a durable invoice and fulfillment attempt, and duplicate/out-of-order delivery behavior is tested.
 - No production setting, Neon production schema, provider transaction, or legacy Blob data was changed during this audit.
+
+## Validation snapshot — 2026-10-20 (commit 6b95a61c2629f24d07a12394ebbc6264563bf533)
+
+- Added `tests/trusted_fx_provider_validation_suite.ts` and wired it into the full `npm test` command. It covers fresh/stale/future timestamps, trusted-source and currency mismatch, invalid rates, USD-base normalization, and CurrencyAPI payload validation.
+- Vercel Preview deployment for this commit is `READY`; the commit's Vercel status is `success`. Preview URL: https://pinova-global-678n2n4m2-iddsnn1s-projects.vercel.app
+- Preview `GET /api/health` returned HTTP 200 with `{"status":"ok","runtime":"vercel"}`.
+- Preview `GET /api/v2/utility/checkout-status` returned HTTP 200 with `ready: false`; the feature flag is OFF while database, trusted FX, Pi server key, and provider configuration checks are present. This is intentionally fail-closed and is not a live checkout test.
+- The FX validation suite has been added to the test command, but its actual execution result has not yet been separately observed in this snapshot. Do not describe the new suite as independently passed until CI output confirms it.
+- Route-level owner mismatch/payment-verification tests, provider contract verification, a trusted FX feed with timestamps meeting the 15-minute policy, and mocked-provider end-to-end/reconciliation tests remain release gates.
+- Production domain, production Neon schema, checkout flag, and legacy Blob stores/data remain unchanged.
