@@ -85,3 +85,10 @@ This checklist describes the Neon-backed utility invoice flow. It does not enabl
 - The FX validation suite has been added to the test command, but its actual execution result has not yet been separately observed in this snapshot. Do not describe the new suite as independently passed until CI output confirms it.
 - Route-level owner mismatch/payment-verification tests, provider contract verification, a trusted FX feed with timestamps meeting the 15-minute policy, and mocked-provider end-to-end/reconciliation tests remain release gates.
 - Production domain, production Neon schema, checkout flag, and legacy Blob stores/data remain unchanged.
+
+## Additional audit note — 2026-10-20 (commit 0c9e4097238d9ffb728344b4b8ece08031b10936)
+
+- Rechecked the PR #11 head commit's reported checks: Currency Engine Validation, PiNova Global Hub CI, PiNova CI Verify, and PiNova CI completed successfully; Vercel reported commit status `success`. These checks do not prove that a Pi Wallet payment or VTU recharge completed in a live environment.
+- Reviewed the utility UI and Pi SDK payment callbacks. The SDK binds the invoice/payment ID during `onReadyForServerApproval`; the UI binds the same ID again after the Pi SDK returns. The repository update is explicitly idempotent for the same payment ID (`payment_id IS NULL OR payment_id = $3`), while refusing a conflicting ID. This is redundant work but does not by itself authorize checkout; server-side verification and transactional reservation remain required.
+- The utility UI's `catch` path preserves invoice and payment identifiers when available and warns the user to check status before retrying. Cancellation and SDK errors are surfaced as errors, but automated callback-level regression tests and HTTP-level owner/payment-verification tests remain outstanding.
+- No source code, production settings, Neon production schema, live provider transaction, or legacy Blob data was changed during this audit. The feature flag remains OFF; PR #11 remains open and Draft.
