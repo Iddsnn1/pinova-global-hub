@@ -137,7 +137,7 @@ export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
       if (purchaseMode !== 'custom') setPurchaseMode('custom');
       return;
     }
-    if (!/^\\d*(?:\\.\\d{0,2})?$/.test(raw)) return;
+    if (!/^\d*(?:\.\d{0,2})?$/.test(raw)) return;
     setCustomAmountInput(raw);
     if (purchaseMode !== 'custom') {
       setPurchaseMode('custom');
@@ -152,7 +152,7 @@ export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
     if (!customAmountInput || customAmountInput.trim() === '') {
       return 0;
     }
-    if (!/^\\d+(?:\\.\\d{1,2})?$/.test(customAmountInput)) return 0;
+    if (!/^\d+(?:\.\d{1,2})?$/.test(customAmountInput)) return 0;
     const parsed = Number(customAmountInput);
     return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
   };
