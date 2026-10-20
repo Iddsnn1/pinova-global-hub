@@ -96,6 +96,25 @@ assert.equal(
   authorizeUtilityPayment(invoice, 'pi-payment-001', { ...payment, transaction: undefined }, 'buyer-uid-001').error,
   'PI_PAYMENT_NOT_COMPLETED',
 );
+
+// A completed flag is not sufficient if Pi has not supplied a verified chain
+// transaction ID; no authorization result may omit this reconciliation anchor.
+assert.equal(
+  authorizeUtilityPayment(invoice, 'pi-payment-001', {
+    ...payment, transaction: { verified: true },
+  }, 'buyer-uid-001').error,
+  'PI_PAYMENT_NOT_COMPLETED',
+);
+assert.equal(
+  authorizeUtilityPayment(invoice, 'pi-payment-001', {
+    ...payment, transaction: { verified: true, txid: '   ' },
+  }, 'buyer-uid-001').error,
+  'PI_PAYMENT_NOT_COMPLETED',
+);
+assert.equal(
+  authorizeUtilityPayment(invoice, 'pi-payment-001', payment, 'buyer-uid-001').txid,
+  'pi-tx-001',
+);
 assert.equal(
   authorizeUtilityPayment(invoice, 'pi-payment-001', { ...payment, user_uid: '   ' }, 'buyer-uid-001').error,
   'PI_PAYMENT_OWNER_MISMATCH',
