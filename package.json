@@ -9,7 +9,7 @@
     "start": "node dist/server.cjs",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
-    "test": "tsx tests/trusted_fx_provider_validation_suite.ts && tsx tests/vtu_webhook_signature_suite.ts && tsx tests/utility_checkout_route_integration_suite.ts && tsx tests/utility_checkout_orchestrator_suite.ts && tsx tests/neon_utility_invoice_repository_suite.ts && tsx tests/utility_payment_authorization_suite.ts && tsx tests/currency_to_pi_conversion_suite.ts && tsx tests/education_ecosystem_verification_suite.ts && tsx tests/education_payment_authorization_suite.ts && tsx tests/education_directory_functional_suite.ts && tsx tests/education_data_integrity_suite.ts && tsx tests/education_data_integrity_edge_suite.ts && tsx tests/audit_v2_remediation_suite.ts && tsx tests/duffel_flight_audit_suite.ts && tsx tests/vendor_kyc_document_upload_suite.ts && tsx tests/vendor_branding_upload_suite.ts && tsx tests/vendor_governance_lifecycle_suite.ts",
+    "test": "tsx tests/trusted_fx_provider_validation_suite.ts && tsx tests/vtu_webhook_signature_suite.ts && tsx tests/vtu_request_id_safety_suite.ts && tsx tests/utility_checkout_route_integration_suite.ts && tsx tests/utility_checkout_orchestrator_suite.ts && tsx tests/neon_utility_invoice_repository_suite.ts && tsx tests/utility_payment_authorization_suite.ts && tsx tests/currency_to_pi_conversion_suite.ts && tsx tests/education_ecosystem_verification_suite.ts && tsx tests/education_payment_authorization_suite.ts && tsx tests/education_directory_functional_suite.ts && tsx tests/education_data_integrity_suite.ts && tsx tests/education_data_integrity_edge_suite.ts && tsx tests/audit_v2_remediation_suite.ts && tsx tests/duffel_flight_audit_suite.ts && tsx tests/vendor_kyc_document_upload_suite.ts && tsx tests/vendor_branding_upload_suite.ts && tsx tests/vendor_governance_lifecycle_suite.ts",
     "test:currency": "tsx tests/currency_to_pi_conversion_suite.ts",
     "test:edu": "tsx tests/education_ecosystem_verification_suite.ts",
     "test:edu:security": "tsx tests/education_payment_authorization_suite.ts",
@@ -21,7 +21,8 @@
     "test:kyc": "tsx tests/vendor_kyc_document_upload_suite.ts",
     "test:branding": "tsx tests/vendor_branding_upload_suite.ts",
     "test:governance": "tsx tests/vendor_governance_lifecycle_suite.ts",
-    "test:utility-routes": "tsx tests/utility_checkout_route_integration_suite.ts"
+    "test:utility-routes": "tsx tests/utility_checkout_route_integration_suite.ts",
+    "test:vtu-request-id": "tsx tests/vtu_request_id_safety_suite.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
