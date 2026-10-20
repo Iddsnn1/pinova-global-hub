@@ -274,6 +274,39 @@ async function run() {
   assert.equal(amountMismatch.calls.fulfill, 0, 'an amount mismatch must never call the provider');
   assert.equal(amountMismatch.calls.record, 0, 'a rejected payment must not record fulfillment');
 
+  // An expired invoice is rejected by the repository's transactional reservation.
+  // Even with a valid Pi payment, expiry must never dispatch a recharge or record success.
+  let expiredReservationCalls = 0;
+  const expiredInvoice = setup({
+    repository: {
+      ...setup().repository,
+      authorizeAndReserve: async () => {
+        expiredReservationCalls++;
+        return { status: 'REJECTED' as const, error: 'UTILITY_INVOICE_EXPIRED' };
+      },
+    } as unknown as UtilityCheckoutDependencies['repository'],
+  });
+  assert.deepEqual(await processUtilityCheckout(expiredInvoice.deps, {
+    invoiceId: invoice.invoiceId, ownerUserId: invoice.ownerUserId, paymentId: invoice.paymentId,
+  }), { status: 'REJECTED', error: 'UTILITY_INVOICE_EXPIRED' });
+  assert.equal(expiredInvoice.calls.verify, 1, 'authoritative payment verification precedes the atomic expiry check');
+  assert.equal(expiredReservationCalls, 1, 'the repository must enforce expiry transactionally');
+  assert.equal(expiredInvoice.calls.fulfill, 0, 'an expired invoice must never call the recharge provider');
+  assert.equal(expiredInvoice.calls.record, 0, 'an expired invoice must not record fulfillment');
+
+  // A conflicting idempotency reservation is a hard stop, not a retry signal.
+  const idempotencyConflict = setup({
+    repository: {
+      ...setup().repository,
+      authorizeAndReserve: async () => ({ status: 'REJECTED' as const, error: 'UTILITY_IDEMPOTENCY_CONFLICT' }),
+    } as unknown as UtilityCheckoutDependencies['repository'],
+  });
+  assert.deepEqual(await processUtilityCheckout(idempotencyConflict.deps, {
+    invoiceId: invoice.invoiceId, ownerUserId: invoice.ownerUserId, paymentId: invoice.paymentId,
+  }), { status: 'REJECTED', error: 'UTILITY_IDEMPOTENCY_CONFLICT' });
+  assert.equal(idempotencyConflict.calls.fulfill, 0, 'an idempotency conflict must never call the provider');
+  assert.equal(idempotencyConflict.calls.record, 0, 'an idempotency conflict must not record fulfillment');
+
   console.log('Utility checkout orchestrator tests passed.');
 }
 
