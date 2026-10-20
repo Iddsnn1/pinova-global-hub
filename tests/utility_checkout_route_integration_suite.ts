@@ -138,6 +138,31 @@ async function run() {
     assert.equal(missingPiIdentity.status, 403);
     assert.equal((await missingPiIdentity.json()).error, 'PI_IDENTITY_REQUIRED');
 
+    // Payment-ID binding also requires a verified Pi identity and must reject
+    // before attempting to load or mutate an invoice.
+    const missingPiIdentityBinding = await fetch(
+      `${baseUrl}/api/v2/utility/invoices/${invoiceId}/payment`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${missingPiIdentitySession.token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ paymentId: 'test-payment-id' }),
+      },
+    );
+    assert.equal(missingPiIdentityBinding.status, 403);
+    assert.equal((await missingPiIdentityBinding.json()).error, 'PI_IDENTITY_REQUIRED');
+
+    // Invoice status must likewise reject a session without a Pi UID before
+    // attempting any durable invoice lookup.
+    const missingPiIdentityStatus = await fetch(
+      `${baseUrl}/api/v2/utility/invoices/${invoiceId}`,
+      { headers: { Authorization: `Bearer ${missingPiIdentitySession.token}` } },
+    );
+    assert.equal(missingPiIdentityStatus.status, 403);
+    assert.equal((await missingPiIdentityStatus.json()).error, 'PI_IDENTITY_REQUIRED');
+
     // A syntactically valid checkout with the feature gate enabled must fail closed
     // when the invoice repository is unavailable. The test DATABASE_URL points at
     // loopback port 1, so no invoice can be loaded/reserved and no provider can run.
