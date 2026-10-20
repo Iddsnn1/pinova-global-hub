@@ -47,6 +47,35 @@ async function run() {
   });
   assert.equal(ambiguous.status, 'FULFILLMENT_PENDING', 'queued/unknown states must remain pending until requery confirms completion');
 
+  // Requery must accept only application-generated request IDs and must
+  // normalize provider statuses so callers never confuse HTTP success with fulfillment.
+  const requeryAdapter = new VtuNgAdapter();
+  let requeryCalls = 0;
+  let requeryPayload: unknown = { data: { status: 'processing-api' } };
+  (requeryAdapter as any).executeVtuRequest = async (_path: string, options: any) => {
+    requeryCalls++;
+    assert.equal(_path, '/api/v2/requery');
+    assert.equal(JSON.parse(options.body).request_id, 'PNV-AIR-abcdef0123456789abcdef01');
+    return { ok: true, status: 200, data: requeryPayload };
+  };
+  const invalidRequery = await requeryAdapter.requeryOrder('some-other-customer-order');
+  assert.equal(invalidRequery.success, false, 'arbitrary provider references must not be queried');
+  assert.equal(requeryCalls, 0, 'invalid request IDs must be rejected before network access');
+
+  const processingRequery = await requeryAdapter.requeryOrder('PNV-AIR-abcdef0123456789abcdef01');
+  assert.equal(processingRequery.success, true);
+  assert.equal(processingRequery.status, 'PROCESSING');
+  requeryPayload = { data: { status: 'completed-api' } };
+  const completedRequery = await requeryAdapter.requeryOrder('PNV-AIR-abcdef0123456789abcdef01');
+  assert.equal(completedRequery.status, 'COMPLETED');
+  requeryPayload = { data: { status: 'refunded' } };
+  const refundedRequery = await requeryAdapter.requeryOrder('PNV-AIR-abcdef0123456789abcdef01');
+  assert.equal(refundedRequery.status, 'FAILED');
+  requeryPayload = { data: { status: 'unrecognized-provider-state' } };
+  const unknownRequery = await requeryAdapter.requeryOrder('PNV-AIR-abcdef0123456789abcdef01');
+  assert.equal(unknownRequery.status, 'UNKNOWN', 'unknown provider statuses must never be treated as fulfilled');
+  assert.equal(requeryCalls, 4);
+
   console.log('VTU provider status interpretation suite passed.');
 }
 
