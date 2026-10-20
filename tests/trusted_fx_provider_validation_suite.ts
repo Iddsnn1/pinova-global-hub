@@ -1,0 +1,84 @@
+import assert from 'node:assert/strict';
+import {
+  DEFAULT_MAX_TRUSTED_FX_AGE_MS,
+  validateTrustedFxQuote,
+} from '../src/server/services/TrustedFxQuoteService';
+import {
+  parseCurrencyApiPayload,
+  parseTrustedFxProviderPayload,
+} from '../src/server/services/TrustedFxProviderService';
+
+const now = Date.parse('2026-10-20T12:00:00.000Z');
+const freshAsOf = new Date(now - 60_000).toISOString();
+
+function throwsCode(run: () => unknown, code: string) {
+  assert.throws(run, (error: unknown) => error instanceof Error && error.message === code, code);
+}
+
+function run() {
+  const valid = validateTrustedFxQuote({
+    currency: 'ngn', usdPerFiatUnit: 0.001, asOf: freshAsOf, source: 'trusted.test',
+  }, 'NGN', 'trusted.test', now);
+  assert.equal(valid.currency, 'NGN');
+  assert.equal(valid.usdPerFiatUnit, 0.001);
+  assert.equal(valid.asOf, freshAsOf);
+
+  throwsCode(() => validateTrustedFxQuote({
+    currency: 'NGN', usdPerFiatUnit: 0.001,
+    asOf: new Date(now - DEFAULT_MAX_TRUSTED_FX_AGE_MS - 1).toISOString(),
+    source: 'trusted.test',
+  }, 'NGN', 'trusted.test', now), 'FX_QUOTE_STALE');
+
+  throwsCode(() => validateTrustedFxQuote({
+    currency: 'NGN', usdPerFiatUnit: 0.001,
+    asOf: new Date(now + 61_000).toISOString(), source: 'trusted.test',
+  }, 'NGN', 'trusted.test', now), 'FX_TIMESTAMP_IN_FUTURE');
+
+  throwsCode(() => validateTrustedFxQuote({
+    currency: 'KES', usdPerFiatUnit: 0.001, asOf: freshAsOf, source: 'trusted.test',
+  }, 'NGN', 'trusted.test', now), 'FX_CURRENCY_MISMATCH');
+
+  throwsCode(() => validateTrustedFxQuote({
+    currency: 'NGN', usdPerFiatUnit: 0.001, asOf: freshAsOf, source: 'other.test',
+  }, 'NGN', 'trusted.test', now), 'FX_SOURCE_UNTRUSTED');
+
+  throwsCode(() => validateTrustedFxQuote({
+    currency: 'NGN', usdPerFiatUnit: 0, asOf: freshAsOf, source: 'trusted.test',
+  }, 'NGN', 'trusted.test', now), 'FX_RATE_INVALID');
+
+  const normalized = parseTrustedFxProviderPayload({
+    source: 'trusted.test',
+    asOf: freshAsOf,
+    baseCurrency: 'USD',
+    rates: { NGN: 1000 },
+  }, 'NGN', 'trusted.test', now);
+  assert.equal(normalized.usdPerFiatUnit, 0.001);
+
+  throwsCode(() => parseTrustedFxProviderPayload({
+    source: 'untrusted.test', asOf: freshAsOf, baseCurrency: 'USD', rates: { NGN: 1000 },
+  }, 'NGN', 'trusted.test', now), 'FX_SOURCE_UNTRUSTED');
+
+  throwsCode(() => parseTrustedFxProviderPayload({
+    source: 'trusted.test', asOf: freshAsOf, baseCurrency: 'EUR', rates: { NGN: 1000 },
+  }, 'NGN', 'trusted.test', now), 'FX_PROVIDER_BASE_CURRENCY_UNSUPPORTED');
+
+  const currencyApi = parseCurrencyApiPayload({
+    meta: { last_updated_at: freshAsOf },
+    data: { NGN: { code: 'NGN', value: 1000 } },
+  }, 'NGN', 'currencyapi.com', now);
+  assert.equal(currencyApi.usdPerFiatUnit, 0.001);
+
+  throwsCode(() => parseCurrencyApiPayload({
+    meta: { last_updated_at: new Date(now - DEFAULT_MAX_TRUSTED_FX_AGE_MS - 1).toISOString() },
+    data: { NGN: { code: 'NGN', value: 1000 } },
+  }, 'NGN', 'currencyapi.com', now), 'FX_QUOTE_STALE');
+
+  throwsCode(() => parseCurrencyApiPayload({
+    meta: { last_updated_at: freshAsOf },
+    data: { NGN: { code: 'USD', value: 1000 } },
+  }, 'NGN', 'currencyapi.com', now), 'FX_PROVIDER_RATE_MISSING_OR_INVALID');
+
+  console.log('Trusted FX quote/provider validation suite passed.');
+}
+
+run();
