@@ -99,7 +99,7 @@ try {
       return new Response(JSON.stringify({ token: 'mock-jwt-token' }), { status: 200 });
     }
     if (url.endsWith('/api/v2/airtime')) {
-      return new Response(JSON.stringify({ code: 'success', data: { order_id: 'mock-order-01' } }), { status: 200 });
+      return new Response(JSON.stringify({ code: 'success', message: 'ORDER COMPLETED', data: { status: 'completed-api', order_id: 'mock-order-01' } }), { status: 200 });
     }
     return new Response(JSON.stringify({ message: 'unexpected mock URL' }), { status: 500 });
   }) as typeof fetch;
