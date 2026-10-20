@@ -92,3 +92,11 @@ This checklist describes the Neon-backed utility invoice flow. It does not enabl
 - Reviewed the utility UI and Pi SDK payment callbacks. The SDK binds the invoice/payment ID during `onReadyForServerApproval`; the UI binds the same ID again after the Pi SDK returns. The repository update is explicitly idempotent for the same payment ID (`payment_id IS NULL OR payment_id = $3`), while refusing a conflicting ID. This is redundant work but does not by itself authorize checkout; server-side verification and transactional reservation remain required.
 - The utility UI's `catch` path preserves invoice and payment identifiers when available and warns the user to check status before retrying. Cancellation and SDK errors are surfaced as errors, but automated callback-level regression tests and HTTP-level owner/payment-verification tests remain outstanding.
 - No source code, production settings, Neon production schema, live provider transaction, or legacy Blob data was changed during this audit. The feature flag remains OFF; PR #11 remains open and Draft.
+
+## Additional readiness audit — 2026-10-20
+
+- Reviewed `GET /api/v2/utility/checkout-status` in `server.ts`. The current `piServerKeyConfigured` check only tests whether `PI_API_KEY` or `PI_SERVER_KEY` is non-empty. Unlike the authoritative payment verifier, this readiness check does not reject known placeholder values such as `YOUR_PI_PLATFORM_API_KEY` or `MY_PI_API_KEY`.
+- This can make the read-only readiness endpoint report the Pi key as configured when the value is only a placeholder. The endpoint still also requires the feature flag, database, trusted FX and provider checks, but its Pi-key signal is weaker than intended.
+- **Release gate:** before enabling checkout, make the readiness check use the same placeholder-aware validation as the payment verifier, add tests for missing/placeholder/real-looking key values without printing any secret, and confirm Preview reports `ready: false` for placeholders.
+- This audit note records a code-review finding; it does not change runtime behavior. Checkout remains disabled, PR #11 remains Draft, and production/Neon/legacy Blob data remain untouched.
+
