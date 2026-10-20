@@ -266,6 +266,21 @@ assert.throws(
   /FX_RATE_INVALID/,
 );
 
+// Additional direct validator boundary checks: malformed timestamps, quotes
+// beyond allowed future clock skew, and invalid age configuration all fail closed.
+assert.throws(
+  () => validateTrustedFxQuote({ ...validNgnQuote, asOf: 'not-a-timestamp' }, 'NGN', 'configured-test-provider', trustedFxNow),
+  /FX_TIMESTAMP_INVALID/,
+);
+assert.throws(
+  () => validateTrustedFxQuote({ ...validNgnQuote, asOf: new Date(trustedFxNow + 60_001).toISOString() }, 'NGN', 'configured-test-provider', trustedFxNow),
+  /FX_TIMESTAMP_IN_FUTURE/,
+);
+assert.throws(
+  () => validateTrustedFxQuote(validNgnQuote, 'NGN', 'configured-test-provider', trustedFxNow, 0),
+  /FX_VALIDATION_CONFIG_INVALID/,
+);
+
 // Transport failures fail closed. Mock fetch so these tests never call a live provider.
 const originalFetch = globalThis.fetch;
 try {
