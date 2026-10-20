@@ -78,7 +78,7 @@ export function piAmountToPico(value: unknown): bigint | null {
     raw = trimmedFraction ? `${wholePart}.${trimmedFraction}` : wholePart;
   }
   // No signs, separators, exponent notation, or more than 12 significant decimal places.
-  if (!/^(?:0|[1-9]\d*)(?:\.\d{1,12})?$/.test(raw)) return null;
+  if (!/^(?:0|[1-9]\\d*)(?:\\.\\d{1,12})?$/.test(raw)) return null;
   const [whole, fraction = ''] = raw.split('.');
   try {
     return BigInt(whole) * 1_000_000_000_000n + BigInt((fraction + '000000000000').slice(0, 12));
@@ -111,15 +111,11 @@ export function authorizeUtilityPayment(
   if (invoice.status !== 'OPEN') {
     return { authorized: false, error: 'UTILITY_INVOICE_NOT_PAYABLE' };
   }
-  // Never substitute the caller-supplied ID for the identifier returned by Pi.
-  // Missing provider identity must fail closed rather than appear verified.
   const verifiedPaymentId =
     typeof paymentData?.identifier === 'string' ? paymentData.identifier : '';
   if (!paymentId || invoice.paymentId !== paymentId || verifiedPaymentId !== paymentId) {
     return { authorized: false, error: 'PI_PAYMENT_ID_MISMATCH' };
   }
-  // Bind the verified Pi payment to the invoice owner's server-authenticated Pi UID.
-  // Missing identity on either side is a hard failure; internal user IDs are not Pi UIDs.
   const verifiedPiUid = typeof paymentData?.user_uid === 'string' ? paymentData.user_uid.trim() : '';
   if (!expectedPiUid || !expectedPiUid.trim() || !verifiedPiUid || verifiedPiUid !== expectedPiUid.trim()) {
     return { authorized: false, error: 'PI_PAYMENT_OWNER_MISMATCH' };
@@ -127,10 +123,6 @@ export function authorizeUtilityPayment(
   if (paymentData?.direction !== 'user_to_app') {
     return { authorized: false, error: 'PI_PAYMENT_DIRECTION_INVALID' };
   }
-  // Resolve the network from the server's deployment configuration. Vite's
-  // documented values include "mainnet"/"production" and "testnet"/"sandbox";
-  // compare normalized values so case/whitespace cannot silently select Testnet.
-  // Conflicting or missing production configuration fails closed.
   const rawPiEnv = String(process.env.VITE_PI_ENV || '').trim().toLowerCase();
   const rawPiSandbox = String(
     process.env.VITE_PI_SANDBOX ?? process.env.PI_SANDBOX_MODE ?? '',
@@ -148,13 +140,19 @@ export function authorizeUtilityPayment(
   } else if (!hasNetworkConflict && (envWantsTestnet || sandboxWantsTestnet)) {
     expectedNetwork = 'Pi Testnet';
   } else if (!hasNetworkConflict && process.env.NODE_ENV !== 'production') {
-    // Preserve the existing Testnet default for non-production development only.
     expectedNetwork = 'Pi Testnet';
   }
   if (!expectedNetwork || paymentData?.network !== expectedNetwork) {
     return { authorized: false, error: 'PI_PAYMENT_NETWORK_MISMATCH' };
   }
-  if (paymentData?.status?.developer_completed !== true || paymentData?.transaction?.verified !== true) {
+  const txid = typeof paymentData?.transaction?.txid === 'string'
+    ? paymentData.transaction.txid.trim()
+    : '';
+  if (
+    paymentData?.status?.developer_completed !== true ||
+    paymentData?.transaction?.verified !== true ||
+    !txid
+  ) {
     return { authorized: false, error: 'PI_PAYMENT_NOT_COMPLETED' };
   }
   const expectedPico = piAmountToPico(invoice.piAmount);
@@ -177,6 +175,6 @@ export function authorizeUtilityPayment(
     authorized: true,
     expectedPiAmount: normalizePiAmount(invoice.piAmount) || undefined,
     paidPiAmount: normalizePiAmount(paymentData.amount) || undefined,
-    txid: typeof paymentData.transaction?.txid === 'string' ? paymentData.transaction.txid : undefined,
+    txid,
   };
 }
