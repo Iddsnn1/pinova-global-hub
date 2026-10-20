@@ -535,17 +535,31 @@ export class VtuNgAdapter {
 
     if (res.ok && res.data) {
       const payload: any = res.data;
-      const isSuccess = String(payload?.code || payload?.status || '').toLowerCase() === 'success';
+      const providerStatus = String(
+        payload?.data?.status || payload?.status || payload?.data?.order_status || '',
+      ).trim().toLowerCase();
+      const orderMessage = String(payload?.message || '').trim().toLowerCase();
+      // VTU.ng can return HTTP 200 and code="success" while an order is only
+      // processing-api. Never show a paid utility as fulfilled until the provider
+      // explicitly reports completed-api (or an equivalent explicit completed state).
+      const isFulfilled = providerStatus === 'completed-api' ||
+        providerStatus === 'completed' || providerStatus === 'fulfilled';
+      const isDefinitiveFailure = ['refunded', 'failed', 'cancelled'].includes(providerStatus) ||
+        orderMessage === 'order refunded' || orderMessage === 'order failed' ||
+        orderMessage === 'order cancelled';
       const orderId = payload?.data?.order_id || payload?.order_id || payload?.data?.reference;
+      const resultStatus = isFulfilled ? 'FULFILLED'
+        : isDefinitiveFailure ? 'FAILED' : 'FULFILLMENT_PENDING';
 
       return {
-        success: isSuccess,
-        fulfilled: isSuccess,
-        status: isSuccess ? 'FULFILLED' : 'FULFILLMENT_PENDING',
+        success: isFulfilled,
+        fulfilled: isFulfilled,
+        status: resultStatus,
         orderId: String(orderId || ''),
         requestId,
         providerReference: String(orderId || requestId),
-        message: payload?.message || (isSuccess ? 'Airtime recharge successful' : 'Airtime request accepted'),
+        message: payload?.message || (isFulfilled ? 'Airtime recharge successful' : 'Airtime order status requires confirmation'),
+        errorCode: isDefinitiveFailure ? 'VTU_TRANSACTION_FAILED' : undefined,
         rawResponse: payload
       };
     }
