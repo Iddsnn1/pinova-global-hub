@@ -87,6 +87,27 @@ assert.equal(
   authorizeUtilityPayment(invoice, 'pi-payment-001', { ...payment, status: { developer_completed: false } }, 'buyer-uid-001').error,
   'PI_PAYMENT_NOT_COMPLETED',
 );
+
+assert.equal(
+  authorizeUtilityPayment(invoice, 'pi-payment-001', { ...payment, transaction: { verified: false, txid: 'pi-tx-001' } }, 'buyer-uid-001').error,
+  'PI_PAYMENT_NOT_COMPLETED',
+);
+assert.equal(
+  authorizeUtilityPayment(invoice, 'pi-payment-001', { ...payment, transaction: undefined }, 'buyer-uid-001').error,
+  'PI_PAYMENT_NOT_COMPLETED',
+);
+assert.equal(
+  authorizeUtilityPayment(invoice, 'pi-payment-001', { ...payment, user_uid: '   ' }, 'buyer-uid-001').error,
+  'PI_PAYMENT_OWNER_MISMATCH',
+);
+assert.equal(
+  authorizeUtilityPayment(invoice, 'pi-payment-001', { ...payment, amount: '0.0000020690161' }, 'buyer-uid-001').error,
+  'PI_PAYMENT_AMOUNT_INVALID',
+);
+assert.equal(
+  authorizeUtilityPayment({ ...invoice, piAmount: '0' }, 'pi-payment-001', payment, 'buyer-uid-001').error,
+  'UTILITY_INVOICE_AMOUNT_INVALID',
+);
 assert.equal(
   authorizeUtilityPayment({ ...invoice, status: 'PAID' }, 'pi-payment-001', payment, 'buyer-uid-001').error,
   'UTILITY_INVOICE_NOT_PAYABLE',
