@@ -78,7 +78,7 @@ export function piAmountToPico(value: unknown): bigint | null {
     raw = trimmedFraction ? `${wholePart}.${trimmedFraction}` : wholePart;
   }
   // No signs, separators, exponent notation, or more than 12 significant decimal places.
-  if (!/^(?:0|[1-9]\\d*)(?:\\.\\d{1,12})?$/.test(raw)) return null;
+  if (!/^(?:0|[1-9]\d*)(?:\.\d{1,12})?$/.test(raw)) return null;
   const [whole, fraction = ''] = raw.split('.');
   try {
     return BigInt(whole) * 1_000_000_000_000n + BigInt((fraction + '000000000000').slice(0, 12));
