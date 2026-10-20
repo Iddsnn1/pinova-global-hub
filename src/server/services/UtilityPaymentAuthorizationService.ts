@@ -127,10 +127,31 @@ export function authorizeUtilityPayment(
   if (paymentData?.direction !== 'user_to_app') {
     return { authorized: false, error: 'PI_PAYMENT_DIRECTION_INVALID' };
   }
-  const expectedNetwork = process.env.VITE_PI_ENV === 'production' || process.env.PI_SANDBOX_MODE === 'false'
-    ? 'Pi Network'
-    : 'Pi Testnet';
-  if (paymentData?.network !== expectedNetwork) {
+  // Resolve the network from the server's deployment configuration. Vite's
+  // documented values include "mainnet"/"production" and "testnet"/"sandbox";
+  // compare normalized values so case/whitespace cannot silently select Testnet.
+  // Conflicting or missing production configuration fails closed.
+  const rawPiEnv = String(process.env.VITE_PI_ENV || '').trim().toLowerCase();
+  const rawPiSandbox = String(
+    process.env.VITE_PI_SANDBOX ?? process.env.PI_SANDBOX_MODE ?? '',
+  ).trim().toLowerCase();
+  const envWantsMainnet = rawPiEnv === 'mainnet' || rawPiEnv === 'production';
+  const envWantsTestnet = rawPiEnv === 'testnet' || rawPiEnv === 'sandbox';
+  const sandboxWantsMainnet = rawPiSandbox === 'false' || rawPiSandbox === '0';
+  const sandboxWantsTestnet = rawPiSandbox === 'true' || rawPiSandbox === '1';
+  const hasNetworkConflict =
+    (envWantsMainnet && sandboxWantsTestnet) ||
+    (envWantsTestnet && sandboxWantsMainnet);
+  let expectedNetwork: 'Pi Network' | 'Pi Testnet' | null = null;
+  if (!hasNetworkConflict && (envWantsMainnet || sandboxWantsMainnet)) {
+    expectedNetwork = 'Pi Network';
+  } else if (!hasNetworkConflict && (envWantsTestnet || sandboxWantsTestnet)) {
+    expectedNetwork = 'Pi Testnet';
+  } else if (!hasNetworkConflict && process.env.NODE_ENV !== 'production') {
+    // Preserve the existing Testnet default for non-production development only.
+    expectedNetwork = 'Pi Testnet';
+  }
+  if (!expectedNetwork || paymentData?.network !== expectedNetwork) {
     return { authorized: false, error: 'PI_PAYMENT_NETWORK_MISMATCH' };
   }
   if (paymentData?.status?.developer_completed !== true || paymentData?.transaction?.verified !== true) {
