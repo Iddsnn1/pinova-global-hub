@@ -18,6 +18,35 @@ async function run() {
     });
     const address = server.address() as AddressInfo;
     const baseUrl = `http://127.0.0.1:${address.port}`;
+    // Readiness must not mistake known documentation placeholders for a usable Pi server key.
+    // Keep these checks local-only: they do not call Pi Platform or disclose any credential.
+    const originalPiApiKey = process.env.PI_API_KEY;
+    const originalPiServerKey = process.env.PI_SERVER_KEY;
+    try {
+      delete process.env.PI_SERVER_KEY;
+      for (const placeholder of ['YOUR_PI_PLATFORM_API_KEY', 'MY_PI_API_KEY']) {
+        process.env.PI_API_KEY = placeholder;
+        const placeholderStatus = await fetch(`${baseUrl}/api/v2/utility/checkout-status`);
+        assert.equal(placeholderStatus.status, 200);
+        const placeholderBody = await placeholderStatus.json();
+        assert.equal(placeholderBody.checks.piServerKeyConfigured, false);
+      }
+
+      process.env.PI_API_KEY = 'test-real-looking-pi-key-for-readiness-only';
+      const configuredStatus = await fetch(`${baseUrl}/api/v2/utility/checkout-status`);
+      assert.equal(configuredStatus.status, 200);
+      const configuredBody = await configuredStatus.json();
+      assert.equal(configuredBody.checks.piServerKeyConfigured, true);
+      // Other readiness gates still keep checkout paused in this test.
+      assert.equal(configuredBody.checks.featureEnabled, false);
+      assert.equal(configuredBody.ready, false);
+    } finally {
+      if (originalPiApiKey === undefined) delete process.env.PI_API_KEY;
+      else process.env.PI_API_KEY = originalPiApiKey;
+      if (originalPiServerKey === undefined) delete process.env.PI_SERVER_KEY;
+      else process.env.PI_SERVER_KEY = originalPiServerKey;
+    }
+
     const invoiceId = 'UTIL-00000000-0000-4000-8000-000000000001';
     const session = authService.createSession({
       username: 'utility-route-test-user',
