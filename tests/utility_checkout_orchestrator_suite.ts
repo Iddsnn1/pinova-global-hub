@@ -115,6 +115,22 @@ async function run() {
   assert.equal(ownerMismatch.calls.fulfill, 0, 'a Pi UID mismatch must never call the provider');
   assert.equal(ownerMismatch.calls.record, 0);
 
+  const missingPaymentUid = setup({
+    verifyPayment: async () => ({
+      ...verifiedPayment,
+      paymentData: { ...verifiedPayment.paymentData, user_uid: '   ' },
+    }),
+  });
+  assert.deepEqual(await processUtilityCheckout(missingPaymentUid.deps, {
+    invoiceId: invoice.invoiceId, ownerUserId: invoice.ownerUserId, paymentId: invoice.paymentId,
+  }), { status: 'REJECTED', error: 'PI_PAYMENT_OWNER_MISMATCH' });
+  assert.equal(missingPaymentUid.calls.verify, 1);
+  assert.equal(missingPaymentUid.calls.reserve, 0,
+    'an authoritative verification response without a usable Pi UID must not reserve the invoice');
+  assert.equal(missingPaymentUid.calls.fulfill, 0,
+    'an authoritative verification response without a usable Pi UID must never call the provider');
+  assert.equal(missingPaymentUid.calls.record, 0);
+
   const missingInvoiceUid = setup({
     repository: {
       ...setup().repository,
