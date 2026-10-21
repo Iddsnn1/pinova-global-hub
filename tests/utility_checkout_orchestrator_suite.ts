@@ -328,6 +328,54 @@ async function run() {
   assert.equal(idempotencyConflict.calls.fulfill, 0, 'an idempotency conflict must never call the provider');
   assert.equal(idempotencyConflict.calls.record, 0, 'an idempotency conflict must not record fulfillment');
 
+  // Repository lookup failures are fail-closed and must not proceed to Pi verification or fulfillment.
+  let lookupAttempts = 0;
+  let lookupFailureProviderCalls = 0;
+  const lookupFailure = setup({
+    repository: {
+      ...setup().repository,
+      findOwnedInvoice: async () => {
+        lookupAttempts++;
+        throw new Error('database unavailable');
+      },
+    } as unknown as UtilityCheckoutDependencies['repository'],
+    fulfill: async () => {
+      lookupFailureProviderCalls++;
+      return { status: 'SUCCEEDED' as const };
+    },
+  });
+  assert.deepEqual(await processUtilityCheckout(lookupFailure.deps, {
+    invoiceId: invoice.invoiceId, ownerUserId: invoice.ownerUserId, paymentId: invoice.paymentId,
+  }), { status: 'REJECTED', error: 'UTILITY_INVOICE_LOOKUP_FAILED' });
+  assert.equal(lookupAttempts, 1, 'a repository lookup failure is attempted once');
+  assert.equal(lookupFailure.calls.verify, 0, 'a failed invoice lookup must not verify a payment');
+  assert.equal(lookupFailureProviderCalls, 0, 'a failed invoice lookup must never call the provider');
+  assert.equal(lookupFailure.calls.record, 0);
+
+  // Reservation exceptions must stop after authoritative verification; provider fulfillment must not run.
+  let reservationFailureAttempts = 0;
+  let reservationFailureProviderCalls = 0;
+  const reservationFailure = setup({
+    repository: {
+      ...setup().repository,
+      authorizeAndReserve: async () => {
+        reservationFailureAttempts++;
+        throw new Error('reservation transaction unavailable');
+      },
+    } as unknown as UtilityCheckoutDependencies['repository'],
+    fulfill: async () => {
+      reservationFailureProviderCalls++;
+      return { status: 'SUCCEEDED' as const };
+    },
+  });
+  assert.deepEqual(await processUtilityCheckout(reservationFailure.deps, {
+    invoiceId: invoice.invoiceId, ownerUserId: invoice.ownerUserId, paymentId: invoice.paymentId,
+  }), { status: 'REJECTED', error: 'UTILITY_PAYMENT_RESERVATION_FAILED' });
+  assert.equal(reservationFailure.calls.verify, 1, 'reservation failure follows one authoritative verification');
+  assert.equal(reservationFailureAttempts, 1, 'the failed reservation must not be retried blindly');
+  assert.equal(reservationFailureProviderCalls, 0, 'provider fulfillment must never run without a reservation');
+  assert.equal(reservationFailure.calls.record, 0);
+
   console.log('Utility checkout orchestrator tests passed.');
 }
 
