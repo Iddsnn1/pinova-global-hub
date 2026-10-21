@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { quoteFiatToPiReference, signPiNovaFxQuote, verifyPiNovaFxQuoteToken } from '../src/server/services/PiNovaFxService';
+import { quoteFiatToPiReference, signPiNovaFxQuote, verifyPiNovaFxQuoteToken, FxConfigurationError, FxProviderError } from '../src/server/services/PiNovaFxService';
 import { PI_REFERENCE_RATE_USD } from '../src/config/piReference';
 
 async function run() {
@@ -20,6 +20,63 @@ async function run() {
   await assert.rejects(() => quoteFiatToPiReference(Number.NaN, 'USD'), RangeError);
   await assert.rejects(() => quoteFiatToPiReference(1, 'US'), TypeError);
   await assert.rejects(() => quoteFiatToPiReference(1, 'US1'), TypeError);
+
+  // All non-USD provider cases below use a stubbed fetch: no external request,
+  // CurrencyAPI quota use, payment, or utility recharge occurs.
+  const previousApiKey = process.env.PINOVA_FX_PROVIDER_API_KEY;
+  const previousProviderUrl = process.env.PINOVA_FX_PROVIDER_URL;
+  const originalFetch = globalThis.fetch;
+  process.env.PINOVA_FX_PROVIDER_API_KEY = 'test-only-currencyapi-key';
+  delete process.env.PINOVA_FX_PROVIDER_URL;
+
+  let observedUrl: URL | undefined;
+  let observedApiKey: string | null = null;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    observedUrl = new URL(String(input));
+    observedApiKey = new Headers(init?.headers).get('apikey');
+    return new Response(JSON.stringify({ data: { NGN: { code: 'NGN', value: 1500 } } }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' }
+    });
+  }) as typeof fetch;
+
+  try {
+    const ngnQuote = await quoteFiatToPiReference(3000, 'NGN');
+    assert.equal(observedUrl?.hostname, 'api.currencyapi.com');
+    assert.equal(observedUrl?.searchParams.get('base_currency'), 'USD');
+    assert.equal(observedUrl?.searchParams.get('currencies'), 'NGN');
+    assert.equal(observedApiKey, 'test-only-currencyapi-key');
+    assert.equal(ngnQuote.source, 'currencyapi.com');
+    assert.equal(ngnQuote.currency, 'NGN');
+    assert.equal(ngnQuote.usdToCurrencyRate, 1500);
+    assert.equal(ngnQuote.amount, 3000);
+    assert.equal(ngnQuote.amountUsd, 2);
+    assert.equal(ngnQuote.referencePiAmount, Number((2 / PI_REFERENCE_RATE_USD).toFixed(12)));
+
+    globalThis.fetch = (async () => new Response('provider unavailable', { status: 503 })) as typeof fetch;
+    await assert.rejects(() => quoteFiatToPiReference(3000, 'NGN'), FxProviderError);
+
+    globalThis.fetch = (async () => new Response(JSON.stringify({ data: { NGN: { code: 'NGN', value: 0 } } }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' }
+    })) as typeof fetch;
+    await assert.rejects(() => quoteFiatToPiReference(3000, 'NGN'), FxProviderError);
+
+    globalThis.fetch = (async () => new Response('{invalid-json', { status: 200 })) as typeof fetch;
+    await assert.rejects(() => quoteFiatToPiReference(3000, 'NGN'), FxProviderError);
+
+    globalThis.fetch = (async () => { throw new Error('simulated network failure'); }) as typeof fetch;
+    await assert.rejects(() => quoteFiatToPiReference(3000, 'NGN'), FxProviderError);
+
+    delete process.env.PINOVA_FX_PROVIDER_API_KEY;
+    await assert.rejects(() => quoteFiatToPiReference(3000, 'NGN'), FxConfigurationError);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (previousApiKey === undefined) delete process.env.PINOVA_FX_PROVIDER_API_KEY;
+    else process.env.PINOVA_FX_PROVIDER_API_KEY = previousApiKey;
+    if (previousProviderUrl === undefined) delete process.env.PINOVA_FX_PROVIDER_URL;
+    else process.env.PINOVA_FX_PROVIDER_URL = previousProviderUrl;
+  }
 
   const previousSecret = process.env.PINOVA_FX_QUOTE_SECRET;
   process.env.PINOVA_FX_QUOTE_SECRET = 'test-only-fx-quote-secret-which-is-long-enough';
