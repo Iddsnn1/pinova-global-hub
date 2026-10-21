@@ -554,7 +554,7 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
     if (!customAmountInput || customAmountInput.trim() === '') {
       return 0;
     }
-    if (!/^\\d+(?:\\.\\d{1,8})?$/.test(customAmountInput)) {
+    if (!/^\d+(?:\.\d{1,8})?$/.test(customAmountInput)) {
       return 0;
     }
     const parsed = Number(customAmountInput);
