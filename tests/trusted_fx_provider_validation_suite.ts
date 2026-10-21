@@ -46,6 +46,34 @@ function run() {
     currency: 'NGN', usdPerFiatUnit: 0, asOf: freshAsOf, source: 'trusted.test',
   }, 'NGN', 'trusted.test', now), 'FX_RATE_INVALID');
 
+
+  // The freshness boundary is inclusive: a quote exactly 15 minutes old is
+  // valid, but one millisecond older must fail closed.
+  const exactlyAtBoundary = validateTrustedFxQuote({
+    currency: 'NGN', usdPerFiatUnit: 0.001,
+    asOf: new Date(now - DEFAULT_MAX_TRUSTED_FX_AGE_MS).toISOString(),
+    source: 'trusted.test',
+  }, 'NGN', 'trusted.test', now);
+  assert.equal(exactlyAtBoundary.usdPerFiatUnit, 0.001);
+
+  throwsCode(() => validateTrustedFxQuote({
+    currency: 'NGN', usdPerFiatUnit: 0.001,
+    asOf: 'not-a-timestamp', source: 'trusted.test',
+  }, 'NGN', 'trusted.test', now), 'FX_TIMESTAMP_INVALID');
+
+  throwsCode(() => validateTrustedFxQuote({
+    currency: 'NGN', usdPerFiatUnit: 0.001, asOf: freshAsOf, source: '',
+  }, 'NGN', '', now), 'FX_TRUSTED_SOURCE_NOT_CONFIGURED');
+
+  throwsCode(() => validateTrustedFxQuote({
+    currency: 'NGN', usdPerFiatUnit: 0.001, asOf: freshAsOf, source: 'trusted.test',
+  }, 'Naira', 'trusted.test', now), 'FX_CURRENCY_INVALID');
+
+  throwsCode(() => validateTrustedFxQuote({
+    currency: 'NGN', usdPerFiatUnit: Number.POSITIVE_INFINITY,
+    asOf: freshAsOf, source: 'trusted.test',
+  }, 'NGN', 'trusted.test', now), 'FX_RATE_INVALID');
+
   const normalized = parseTrustedFxProviderPayload({
     source: 'trusted.test',
     asOf: freshAsOf,
