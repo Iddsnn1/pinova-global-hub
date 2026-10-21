@@ -1,0 +1,39 @@
+name: PiNova Preview FX and Invoice Security Tests
+
+on:
+  push:
+    branches:
+      - migration/neon-durable-storage
+    paths:
+      - "src/server/services/PiNovaFxService.ts"
+      - "src/server/services/PiPaymentVerificationService.ts"
+      - "tests/pinova_fx_service_suite.ts"
+      - "tests/education_payment_authorization_suite.ts"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/pinova-preview-security-tests.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preview-security-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout preview branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: FX provider mocked tests
+        run: npm run test:fx
+      - name: Education invoice authorization tests
+        run: npm run test:edu:security
