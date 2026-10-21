@@ -10,7 +10,6 @@ on:
       - "tests/pinova_fx_service_suite.ts"
       - "tests/education_payment_authorization_suite.ts"
       - "package.json"
-      - "package-lock.json"
       - ".github/workflows/pinova-preview-security-tests.yml"
   workflow_dispatch:
 
@@ -30,9 +29,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "22"
-          cache: npm
       - name: Install dependencies
-        run: npm ci --no-audit --no-fund
+        run: npm install --no-audit --no-fund
       - name: FX provider mocked tests
         run: npm run test:fx
       - name: Education invoice authorization tests
