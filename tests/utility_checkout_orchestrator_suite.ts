@@ -218,6 +218,21 @@ async function run() {
   assert.equal(providerRejected.calls.outcome, 'FAILED');
   assert.equal(providerRejected.calls.record, 1);
 
+  // An explicit ambiguous provider response is also pending; it must be recorded as
+  // UNKNOWN rather than being treated as a definite failure or successful recharge.
+  const explicitUnknown = setup({
+    fulfill: async () => ({ status: 'UNKNOWN' as const, providerReference: 'vtu-ambiguous-01', response: { code: 'PROCESSING' } }),
+  });
+  assert.deepEqual(await processUtilityCheckout(explicitUnknown.deps, {
+    invoiceId: invoice.invoiceId, ownerUserId: invoice.ownerUserId, paymentId: invoice.paymentId,
+  }), {
+    status: 'FULFILLMENT_PENDING', invoiceId: invoice.invoiceId,
+    paymentId: invoice.paymentId, txid: 'pi-tx-01',
+  });
+  assert.equal(explicitUnknown.calls.outcome, 'UNKNOWN');
+  assert.equal(explicitUnknown.calls.record, 1);
+  assert.equal(explicitUnknown.calls.fulfill, 1, 'ambiguous outcomes must not trigger an automatic second dispatch');
+
   // If recording throws after the provider call, report pending for reconciliation
   // and do not misrepresent the outcome as success.
   const recordThrows = setup({
