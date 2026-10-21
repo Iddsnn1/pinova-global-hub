@@ -2992,7 +2992,10 @@ app.get('/api/v2/utility/checkout-status', (_req, res) => {
       process.env.PINOVA_FX_PROVIDER_URL?.trim() &&
       process.env.PINOVA_FX_PROVIDER_SOURCE?.trim()
     ),
-    piServerKeyConfigured: Boolean((process.env.PI_API_KEY || process.env.PI_SERVER_KEY || '').trim()),
+    piServerKeyConfigured: (() => {
+      const piApiKey = (process.env.PI_API_KEY || process.env.PI_SERVER_KEY || '').trim();
+      return Boolean(piApiKey && piApiKey !== 'YOUR_PI_PLATFORM_API_KEY' && piApiKey !== 'MY_PI_API_KEY');
+    })(),
     providerConfigured: vtuNgAdapter.isConfigured(),
   };
   const ready = Object.values(checks).every(Boolean);
