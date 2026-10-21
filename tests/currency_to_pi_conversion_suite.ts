@@ -1,0 +1,455 @@
+import assert from 'node:assert/strict';
+import {
+  convertFiatToPi,
+  CurrencyConversionError,
+  PI_REFERENCE_RATE_USD,
+} from '../src/utils/currencyToPi';
+import { calculateAuthoritativePiAmount, calculatePiAmountFromFiatQuote } from '../src/utils/formatters';
+import { marketplaceService } from '../src/modules/marketplace';
+import { validateTrustedFxQuote } from '../src/server/services/TrustedFxQuoteService';
+import { calculateTrustedFiatToPi } from '../src/server/services/TrustedFiatToPiService';
+import { pricingEngine } from '../src/modules/pricing';
+import type { PiConversionConfig } from '../src/types/utility';
+import { parseTrustedFxProviderPayload, parseCurrencyApiPayload, getTrustedFxProviderConfig, fetchTrustedFxQuote } from '../src/server/services/TrustedFxProviderService';
+
+// Keep the shared quote timestamp fresh regardless of runner timezone/date.
+const fxAsOf = new Date(Date.now() - 60_000).toISOString();
+
+// USD is a 1:1 FX quote in this deterministic unit test.
+const oneUsd = convertFiatToPi({
+  fiatAmount: 1,
+  fiatCurrency: 'USD',
+  usdPerFiatUnit: 1,
+  fxAsOf,
+});
+assert.equal(oneUsd.usdAmount, 1);
+assert.equal(oneUsd.piAmount, '0.000003183102');
+assert.equal(oneUsd.piReferenceRateUsd, 314159);
+
+// Small values retain up to 12 decimal places rather than rounding to 4.
+const halfUsd = convertFiatToPi({
+  fiatAmount: 0.5,
+  fiatCurrency: 'USD',
+  usdPerFiatUnit: 1,
+  fxAsOf,
+});
+assert.equal(halfUsd.piAmount, '0.000001591551');
+
+// Illustrative FX input only; this is not a live exchange-rate assertion.
+const illustrativeNgn = convertFiatToPi({
+  fiatAmount: 1000,
+  fiatCurrency: 'NGN',
+  usdPerFiatUnit: 0.00065,
+  fxAsOf,
+});
+assert.equal(illustrativeNgn.usdAmount, 0.65);
+assert.equal(illustrativeNgn.piAmount, (0.65 / PI_REFERENCE_RATE_USD).toFixed(12));
+
+// Fail closed: no implicit FX fallback, bad currencies, bad timestamps, and
+// values that cannot be represented at the supported Pi precision.
+assert.throws(
+  () => convertFiatToPi({ fiatAmount: 100, fiatCurrency: 'NGN', usdPerFiatUnit: 0, fxAsOf }),
+  CurrencyConversionError,
+);
+assert.throws(
+  () => convertFiatToPi({ fiatAmount: 100, fiatCurrency: 'Naira', usdPerFiatUnit: 0.001, fxAsOf }),
+  CurrencyConversionError,
+);
+assert.throws(
+  () => convertFiatToPi({ fiatAmount: 100, fiatCurrency: 'USD', usdPerFiatUnit: 1, fxAsOf: 'not-a-date' }),
+  CurrencyConversionError,
+);
+assert.throws(
+  () => convertFiatToPi({ fiatAmount: 1e-10, fiatCurrency: 'USD', usdPerFiatUnit: 1, fxAsOf }),
+  CurrencyConversionError,
+);
+assert.throws(() => convertFiatToPi({ fiatAmount: 100, fiatCurrency: 'USD', usdPerFiatUnit: 1, fxAsOf: '2020-01-01T00:00:00.000Z' }), /stale/i);
+assert.throws(
+  () => convertFiatToPi({ fiatAmount: 100, fiatCurrency: 'USD', usdPerFiatUnit: 1, fxAsOf: new Date(Date.now() - 16 * 60 * 1000).toISOString() }),
+  /stale/i,
+);
+assert.throws(() => convertFiatToPi({ fiatAmount: 100, fiatCurrency: 'USD', usdPerFiatUnit: 1, fxAsOf: '2030-01-01T00:00:00.000Z' }), /future/i);
+assert.throws(() => convertFiatToPi({ fiatAmount: 100, fiatCurrency: 'USD', usdPerFiatUnit: 1, fxAsOf, maxFxAgeMs: 0 }), /maximum FX quote age/i);
+assert.equal(calculatePiAmountFromFiatQuote({ fiatAmount: 1000, fiatCurrency: 'NGN', usdPerFiatUnit: 0.00065, fxAsOf }), Number((0.65 / PI_REFERENCE_RATE_USD).toFixed(12)));
+assert.equal(calculateAuthoritativePiAmount(1, 500000), 0.000002);
+
+// The legacy pricing engine has no trusted FX quote parameter, so it must not
+// treat a local currency amount as USD or display a fabricated reverse quote.
+const usdPricingConfig = { currencyCode: 'USD' } as PiConversionConfig;
+const ngnPricingConfig = { currencyCode: 'NGN' } as PiConversionConfig;
+assert.equal(pricingEngine.calculatePiFromFiat(1, usdPricingConfig), Number((1 / PI_REFERENCE_RATE_USD).toFixed(12)));
+assert.equal(pricingEngine.calculatePiFromFiat(1000, ngnPricingConfig), 0);
+assert.equal(pricingEngine.calculateFiatFromPi(1, ngnPricingConfig), 0);
+assert.match(pricingEngine.getPricingDisclaimer(), /not an official Pi Network market rate/i);
+
+// Provider adapter consumes only an explicitly normalized, USD-base payload.
+const providerNow = Date.parse('2026-10-09T12:00:00.000Z');
+const providerPayload = {
+  source: 'fixture-fx-provider',
+  asOf: '2026-10-09T11:55:00.000Z',
+  baseCurrency: 'USD',
+  rates: { NGN: 1538.4615384615383 },
+};
+const parsedProviderQuote = parseTrustedFxProviderPayload(
+  providerPayload,
+  'NGN',
+  'fixture-fx-provider',
+  providerNow,
+);
+assert.equal(parsedProviderQuote.currency, 'NGN');
+
+// Boundary coverage for the documented quote-age policy: exactly the configured
+// maximum age is accepted, and a timestamp exactly 60 seconds ahead is within
+// the allowed clock-skew tolerance. Values beyond either boundary are rejected.
+const maxAgeBoundaryQuote = parseTrustedFxProviderPayload({
+  ...providerPayload,
+  asOf: new Date(providerNow - 15 * 60 * 1000).toISOString(),
+}, 'NGN', 'fixture-fx-provider', providerNow);
+assert.equal(maxAgeBoundaryQuote.asOf, new Date(providerNow - 15 * 60 * 1000).toISOString());
+const futureSkewBoundaryQuote = parseTrustedFxProviderPayload({
+  ...providerPayload,
+  asOf: new Date(providerNow + 60 * 1000).toISOString(),
+}, 'NGN', 'fixture-fx-provider', providerNow);
+assert.equal(futureSkewBoundaryQuote.asOf, new Date(providerNow + 60 * 1000).toISOString());
+assert.throws(
+  () => parseTrustedFxProviderPayload({
+    ...providerPayload,
+    asOf: new Date(providerNow - 15 * 60 * 1000 - 1).toISOString(),
+  }, 'NGN', 'fixture-fx-provider', providerNow),
+  /FX_QUOTE_STALE/,
+);
+assert.throws(
+  () => parseTrustedFxProviderPayload({
+    ...providerPayload,
+    asOf: new Date(providerNow + 60 * 1000 + 1).toISOString(),
+  }, 'NGN', 'fixture-fx-provider', providerNow),
+  /FX_TIMESTAMP_IN_FUTURE/,
+);
+
+assert.ok(Math.abs(parsedProviderQuote.usdPerFiatUnit - (1 / 1538.4615384615383)) < 1e-15);
+assert.throws(
+  () => parseTrustedFxProviderPayload(providerPayload, 'NGN', 'different-provider', providerNow),
+  /FX_SOURCE_UNTRUSTED/,
+);
+assert.throws(
+  () => parseTrustedFxProviderPayload({ ...providerPayload, rates: {} }, 'NGN', 'fixture-fx-provider', providerNow),
+  /FX_PROVIDER_RATE_MISSING_OR_INVALID/,
+);
+assert.throws(
+  () => parseTrustedFxProviderPayload({ ...providerPayload, baseCurrency: 'EUR' }, 'NGN', 'fixture-fx-provider', providerNow),
+  /FX_PROVIDER_BASE_CURRENCY_UNSUPPORTED/,
+);
+ // CurrencyAPI native schema: provider timestamp and USD-base quote are preserved.
+const currencyApiQuote = parseCurrencyApiPayload({
+  meta: { last_updated_at: '2026-10-09T11:55:00.000Z' },
+  data: { NGN: { code: 'NGN', value: 1538.4615384615383 } },
+}, 'NGN', 'currencyapi.com', providerNow);
+assert.equal(currencyApiQuote.source, 'currencyapi.com');
+assert.equal(currencyApiQuote.currency, 'NGN');
+assert.equal(currencyApiQuote.asOf, '2026-10-09T11:55:00.000Z');
+assert.ok(Math.abs(currencyApiQuote.usdPerFiatUnit - (1 / 1538.4615384615383)) < 1e-15);
+assert.throws(
+  () => parseCurrencyApiPayload({
+    meta: { last_updated_at: '2026-10-09T12:02:00.000Z' },
+    data: { NGN: { code: 'NGN', value: 1538.4615384615383 } },
+  }, 'NGN', 'currencyapi.com', providerNow),
+  /FX_TIMESTAMP_IN_FUTURE/,
+);
+assert.throws(
+  () => parseCurrencyApiPayload({
+    meta: { last_updated_at: '2026-10-09T11:55:00.000Z' },
+    data: { NGN: { code: 'EUR', value: 1538.4615384615383 } },
+  }, 'NGN', 'currencyapi.com', providerNow),
+  /FX_PROVIDER_RATE_MISSING_OR_INVALID/,
+);
+assert.throws(
+  () => parseCurrencyApiPayload({
+    meta: {},
+    data: { NGN: { code: 'NGN', value: 1538.4615384615383 } },
+  }, 'NGN', 'currencyapi.com', providerNow),
+  /FX_TIMESTAMP_INVALID/,
+);
+assert.throws(
+  () => parseCurrencyApiPayload({
+    meta: { last_updated_at: '2026-10-09T10:00:00.000Z' },
+    data: { NGN: { code: 'NGN', value: 1500 } },
+  }, 'NGN', 'currencyapi.com', providerNow),
+  /FX_QUOTE_STALE/,
+);
+assert.throws(
+  () => parseCurrencyApiPayload({
+    meta: { last_updated_at: '2026-10-09T11:55:00.000Z' },
+    data: { NGN: { code: 'NGN', value: 0 } },
+  }, 'NGN', 'currencyapi.com', providerNow),
+  /FX_PROVIDER_RATE_MISSING_OR_INVALID/,
+);
+assert.throws(
+  () => parseCurrencyApiPayload({
+    meta: { last_updated_at: '2026-10-09T11:55:00.000Z' },
+    data: { NGN: { code: 'NGN', value: 1500 } },
+  }, 'NGN', 'other-provider', providerNow),
+  /FX_SOURCE_UNTRUSTED/,
+);
+assert.throws(
+  () => getTrustedFxProviderConfig({}),
+  /FX_PROVIDER_ENDPOINT_NOT_CONFIGURED/,
+);
+assert.throws(
+  () => getTrustedFxProviderConfig({ PINOVA_FX_PROVIDER_URL: 'http://example.com/rates', PINOVA_FX_PROVIDER_SOURCE: 'fixture-fx-provider' }),
+  /FX_PROVIDER_HTTPS_REQUIRED/,
+);
+assert.throws(
+  () => getTrustedFxProviderConfig({ PINOVA_FX_PROVIDER_URL: 'https://api.currencyapi.com/v3/latest', PINOVA_FX_PROVIDER_SOURCE: 'currencyapi.com' }),
+  /FX_PROVIDER_API_KEY_REQUIRED/,
+);
+assert.throws(
+  () => getTrustedFxProviderConfig({ PINOVA_FX_PROVIDER_URL: 'https://api.currencyapi.com/v3/latest', PINOVA_FX_PROVIDER_SOURCE: 'currencyapi.com', PINOVA_FX_PROVIDER_API_KEY: '   ' }),
+  /FX_PROVIDER_API_KEY_REQUIRED/,
+);
+
+// Marketplace display estimates must not silently treat unknown currencies as USD.
+assert.equal(marketplaceService.currencyCalculator.getEstimatedValue(1, 'XOF'), 'Estimate unavailable (XOF; trusted FX quote required)');
+assert.equal(marketplaceService.currencyCalculator.getEstimatedValue(1, 'usd').includes('$'), true);
+
+// Trusted FX quotes require an explicitly configured source, matching currency,
+// positive rates, and a fresh timestamp. These are deterministic fixture tests.
+const trustedFxNow = Date.parse('2026-10-09T12:00:00.000Z');
+const validNgnQuote = {
+  currency: 'NGN',
+  usdPerFiatUnit: 0.00065,
+  asOf: '2026-10-09T11:55:00.000Z',
+  source: 'configured-test-provider',
+};
+assert.equal(
+  validateTrustedFxQuote(validNgnQuote, 'NGN', 'configured-test-provider', trustedFxNow).usdPerFiatUnit,
+  0.00065,
+);
+
+// Server conversion accepts only an explicitly trusted, fresh quote and keeps
+// the Pi amount at the shared 12-decimal precision. This uses a live timestamp
+// solely to make the test independent of the runner's wall clock.
+const liveTestQuote = { ...validNgnQuote, asOf: new Date(Date.now() - 60_000).toISOString() };
+const trustedConversion = calculateTrustedFiatToPi({
+  fiatAmount: 1000,
+  currency: 'NGN',
+  quote: liveTestQuote,
+  trustedSource: 'configured-test-provider',
+});
+assert.equal(trustedConversion.usdAmount, 0.65);
+assert.equal(trustedConversion.piAmount, '0.000002069016');
+assert.throws(
+  () => calculateTrustedFiatToPi({ fiatAmount: 1000, currency: 'NGN', quote: liveTestQuote, trustedSource: 'wrong-provider' }),
+  /FX_SOURCE_UNTRUSTED/,
+);
+assert.throws(
+  () => calculateTrustedFiatToPi({ fiatAmount: 1000, currency: 'NGN', quote: { ...liveTestQuote, asOf: '2020-01-01T00:00:00.000Z' }, trustedSource: 'configured-test-provider' }),
+  /FX_QUOTE_STALE/,
+);
+assert.throws(
+  () => validateTrustedFxQuote(validNgnQuote, 'NGN', '', trustedFxNow),
+  /FX_TRUSTED_SOURCE_NOT_CONFIGURED/,
+);
+assert.throws(
+  () => validateTrustedFxQuote({ ...validNgnQuote, source: 'untrusted-provider' }, 'NGN', 'configured-test-provider', trustedFxNow),
+  /FX_SOURCE_UNTRUSTED/,
+);
+assert.throws(
+  () => validateTrustedFxQuote(validNgnQuote, 'KES', 'configured-test-provider', trustedFxNow),
+  /FX_CURRENCY_MISMATCH/,
+);
+assert.throws(
+  () => validateTrustedFxQuote({ ...validNgnQuote, asOf: '2026-10-09T10:00:00.000Z' }, 'NGN', 'configured-test-provider', trustedFxNow),
+  /FX_QUOTE_STALE/,
+);
+assert.throws(
+  () => validateTrustedFxQuote({ ...validNgnQuote, usdPerFiatUnit: 0 }, 'NGN', 'configured-test-provider', trustedFxNow),
+  /FX_RATE_INVALID/,
+);
+
+// Additional direct validator boundary checks: malformed timestamps, quotes
+// beyond allowed future clock skew, and invalid age configuration all fail closed.
+assert.throws(
+  () => validateTrustedFxQuote({ ...validNgnQuote, asOf: 'not-a-timestamp' }, 'NGN', 'configured-test-provider', trustedFxNow),
+  /FX_TIMESTAMP_INVALID/,
+);
+assert.throws(
+  () => validateTrustedFxQuote({ ...validNgnQuote, asOf: new Date(trustedFxNow + 60_001).toISOString() }, 'NGN', 'configured-test-provider', trustedFxNow),
+  /FX_TIMESTAMP_IN_FUTURE/,
+);
+assert.throws(
+  () => validateTrustedFxQuote(validNgnQuote, 'NGN', 'configured-test-provider', trustedFxNow, 0),
+  /FX_VALIDATION_CONFIG_INVALID/,
+);
+
+// Transport failures fail closed. Mock fetch so these tests never call a live provider.
+const originalFetch = globalThis.fetch;
+try {
+  globalThis.fetch = (async () => new Response('provider unavailable', {
+    status: 503,
+    headers: { 'content-type': 'text/plain' },
+  })) as typeof fetch;
+  await assert.rejects(
+    fetchTrustedFxQuote('NGN', {
+      endpoint: 'https://fx.example.test/latest',
+      source: 'fixture-fx-provider',
+    }),
+    /FX_PROVIDER_HTTP_ERROR/,
+  );
+
+  globalThis.fetch = (async () => new Response('<html>not json</html>', {
+    status: 200,
+    headers: { 'content-type': 'text/html' },
+  })) as typeof fetch;
+  await assert.rejects(
+    fetchTrustedFxQuote('NGN', {
+      endpoint: 'https://fx.example.test/latest',
+      source: 'fixture-fx-provider',
+    }),
+    /FX_PROVIDER_CONTENT_TYPE_INVALID/,
+  );
+
+  globalThis.fetch = (async () => {
+    throw new TypeError('redirect rejected by fetch');
+  }) as typeof fetch;
+  await assert.rejects(
+    fetchTrustedFxQuote('NGN', {
+      endpoint: 'https://fx.example.test/latest',
+      source: 'fixture-fx-provider',
+    }),
+    /FX_PROVIDER_REQUEST_FAILED/,
+  );
+} finally {
+  globalThis.fetch = originalFetch;
+}
+
+  // A successful native CurrencyAPI response must use the server-side apikey header,
+  // request USD-base data, and reject redirects/cache reuse.
+  let capturedUrl = '';
+  let capturedInit: RequestInit | undefined;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    capturedUrl = String(input);
+    capturedInit = init;
+    return new Response(JSON.stringify({
+      meta: { last_updated_at: new Date(Date.now() - 30_000).toISOString() },
+      data: { NGN: { code: 'NGN', value: 1500 } },
+    }), {
+      status: 200,
+      headers: { 'content-type': 'application/json; charset=utf-8' },
+    });
+  }) as typeof fetch;
+  const fetchedQuote = await fetchTrustedFxQuote('NGN', {
+    endpoint: 'https://api.currencyapi.com/v3/latest',
+    source: 'currencyapi.com',
+    apiKey: 'fixture-only-not-a-real-secret',
+  });
+  const requestedUrl = new URL(capturedUrl);
+  assert.equal(requestedUrl.searchParams.get('base_currency'), 'USD');
+  assert.equal(requestedUrl.searchParams.get('currencies'), 'NGN');
+  assert.equal(requestedUrl.searchParams.has('apikey'), false);
+  assert.equal((capturedInit?.headers as Record<string, string>).apikey, 'fixture-only-not-a-real-secret');
+  assert.equal(capturedInit?.redirect, 'error');
+  assert.equal(capturedInit?.cache, 'no-store');
+  assert.equal(fetchedQuote.source, 'currencyapi.com');
+  assert.equal(fetchedQuote.currency, 'NGN');
+
+  // Timeout is normalized to a stable fail-closed error code.
+  globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
+    init?.signal?.addEventListener('abort', () => reject(new Error('mock request aborted')), { once: true });
+  })) as typeof fetch;
+  await assert.rejects(
+    fetchTrustedFxQuote('NGN', {
+      endpoint: 'https://fx.example.test/latest',
+      source: 'fixture-fx-provider',
+      timeoutMs: 5,
+    }),
+    /FX_PROVIDER_TIMEOUT/,
+  );
+
+// The generic trusted-provider adapter must also enforce HTTPS, keep credentials
+// out of URLs, and send configured credentials only in the Authorization header.
+assert.throws(
+  () => getTrustedFxProviderConfig({
+    PINOVA_FX_PROVIDER_URL: 'https://user:password@fx.example.test/latest',
+    PINOVA_FX_PROVIDER_SOURCE: 'fixture-fx-provider',
+  }),
+  /FX_PROVIDER_CREDENTIALS_IN_URL_FORBIDDEN/,
+);
+assert.throws(
+  () => getTrustedFxProviderConfig({
+    PINOVA_FX_PROVIDER_URL: 'https://fx.example.test/latest',
+    PINOVA_FX_PROVIDER_SOURCE: '',
+  }),
+  /FX_TRUSTED_SOURCE_NOT_CONFIGURED/,
+);
+
+let genericCapturedUrl = '';
+let genericCapturedInit: RequestInit | undefined;
+globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+  genericCapturedUrl = String(input);
+  genericCapturedInit = init;
+  return new Response(JSON.stringify({
+    source: 'fixture-fx-provider',
+    asOf: new Date(Date.now() - 30_000).toISOString(),
+    baseCurrency: 'USD',
+    rates: { NGN: 1500 },
+  }), {
+    status: 200,
+    headers: { 'content-type': 'application/json' },
+  });
+}) as typeof fetch;
+const genericFetchedQuote = await fetchTrustedFxQuote('NGN', {
+  endpoint: 'https://fx.example.test/latest',
+  source: 'fixture-fx-provider',
+  apiKey: 'fixture-only-not-a-real-secret',
+});
+assert.equal(new URL(genericCapturedUrl).searchParams.has('apikey'), false);
+assert.equal(genericCapturedInit?.headers && (genericCapturedInit.headers as Record<string, string>).Authorization, 'Bearer fixture-only-not-a-real-secret');
+assert.equal(genericCapturedInit?.redirect, 'error');
+assert.equal(genericCapturedInit?.cache, 'no-store');
+assert.equal(genericFetchedQuote.currency, 'NGN');
+assert.equal(genericFetchedQuote.source, 'fixture-fx-provider');
+
+// Malformed JSON from an otherwise successful HTTP response is a transport
+// failure, not a quote and must never fall back to an untrusted/local rate.
+globalThis.fetch = (async () => new Response('{invalid json', {
+  status: 200,
+  headers: { 'content-type': 'application/json' },
+})) as typeof fetch;
+await assert.rejects(
+  fetchTrustedFxQuote('NGN', {
+    endpoint: 'https://fx.example.test/latest',
+    source: 'fixture-fx-provider',
+  }),
+  /FX_PROVIDER_REQUEST_FAILED/,
+);
+
+// Quote-change regression: a refreshed trusted rate must produce a newly
+// calculated amount, rather than silently reusing the earlier quote's Pi amount.
+const changedRateQuote = {
+  ...liveTestQuote,
+  usdPerFiatUnit: 0.0006,
+  asOf: new Date(Date.now() - 30_000).toISOString(),
+};
+const changedRateConversion = calculateTrustedFiatToPi({
+  fiatAmount: 1000,
+  currency: 'NGN',
+  quote: changedRateQuote,
+  trustedSource: 'configured-test-provider',
+});
+assert.equal(changedRateConversion.usdAmount, 0.6);
+assert.equal(changedRateConversion.piAmount, (0.6 / PI_REFERENCE_RATE_USD).toFixed(12));
+assert.notEqual(changedRateConversion.piAmount, trustedConversion.piAmount);
+
+// A changed/stale quote cannot be used as if it were a current quote. This
+// models a quote that was refreshed after the estimate was first displayed.
+assert.throws(
+  () => calculateTrustedFiatToPi({
+    fiatAmount: 1000,
+    currency: 'NGN',
+    quote: { ...liveTestQuote, asOf: new Date(Date.now() - 16 * 60 * 1000).toISOString() },
+    trustedSource: 'configured-test-provider',
+  }),
+  /FX_QUOTE_STALE/,
+);
+
+console.log('Global currency-to-Pi conversion suite: all assertions passed.');

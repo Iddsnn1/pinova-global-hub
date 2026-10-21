@@ -3,6 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import dotenv from 'dotenv';
 import crypto from 'crypto';
+import { piAmountToPico } from './src/server/services/UtilityPaymentAuthorizationService';
 import { GoogleGenAI } from '@google/genai';
 import {
   paymentLedgerRepo,
@@ -33,6 +34,9 @@ import {
   Permission
 } from './src/server/auth';
 import { createRateLimiter } from './src/server/auth/rateLimit';
+import { calculateFiatToPiWithConfiguredFx } from './src/server/services/TrustedFxProviderService';
+import { processUtilityCheckout } from './src/server/services/UtilityCheckoutOrchestrator';
+import { verifyPiPaymentAuthoritative as verifyUtilityPiPaymentAuthoritative } from './src/server/services/PiPaymentVerificationService';
 import { AuditService } from './src/server/services/AuditService';
 import { EducationClassificationEngine } from './src/server/services/EducationClassificationEngine';
 import { StudentVerificationService } from './src/server/services/StudentVerificationService';
@@ -184,7 +188,13 @@ const PORT = process.env.DEFAULT_APP_PORT
   ? Number(process.env.DEFAULT_APP_PORT) 
   : (process.env.NGINX_PORT ? 3000 : (Number(process.env.PORT) || 3000));
 
-app.use(express.json());
+app.use(express.json({
+  // Preserve the exact bytes for provider webhook HMAC verification.
+  // Re-serializing req.body can change whitespace/key order and invalidate the signature.
+  verify: (req: any, _res, buf) => {
+    req.rawBody = Buffer.from(buf);
+  }
+}));
 
 // Initialize core server-side services
 const auditService = AuditService.getInstance(pstpAuditRepo);
@@ -2325,63 +2335,66 @@ app.post('/api/v1/utility/config', handlePostUtilityConfig);
 
 // Provider Account Validation API (Adapter Pattern)
 const handleUtilityValidate = async (req: express.Request, res: express.Response) => {
-  const { providerId, accountNumber } = req.body;
-  if (!accountNumber) {
-    res.status(400).json({ error: 'Account number parameter is required' });
+  const { providerId, accountNumber } = req.body || {};
+  if (typeof accountNumber !== 'string' || !accountNumber.trim()) {
+    res.status(400).json({
+      success: false,
+      valid: false,
+      requiresManualVerification: true,
+      verificationMethod: 'MANUAL_VERIFICATION',
+      statusMessage: 'A customer account number is required.'
+    });
     return;
   }
 
+  const normalizedProviderId = String(providerId || '').toLowerCase();
   const directApiProviders = ['safaricom', 'mtn', 'ikedc', 'dstv', 'mpesa', 'airtel', 'gotv', 'startimes', 'eko-electric', 'abuja-electric', 'kano-electric'];
-  const isDirectApiSupported = directApiProviders.some((p) => (providerId || '').toLowerCase().includes(p));
+  const isDirectApiSupported = directApiProviders.some((p) => normalizedProviderId.includes(p));
 
-  // If VTU.ng adapter is configured and this is a TV or utility provider, perform real customer lookup
+  // Only a configured upstream lookup can verify an account. Never infer that a
+  // number is valid from its format, provider ID, or a successful HTTP response.
   if (vtuNgAdapter.isConfigured() && isDirectApiSupported) {
     try {
-      const vtuResult = await vtuNgAdapter.verifyCustomer(providerId, accountNumber);
-      if (vtuResult.success && vtuResult.valid) {
+      const vtuResult = await vtuNgAdapter.verifyCustomer(providerId, accountNumber.trim());
+      const customerName = typeof vtuResult.customerName === 'string' ? vtuResult.customerName.trim() : '';
+      // Some upstream adapters/gateways return a generated label such as
+      // "Verified Account (9981)" after checking only the number format. That is
+      // not a subscriber identity and must never be promoted to verified status.
+      const isPlaceholderCustomerName =
+        /^(?:verified\s+account|account(?:\s+(?:number|holder))?|customer|subscriber|unknown|n\/?a|test|demo)(?:\b|\s*[(#:]|$)/i.test(customerName) ||
+        /^\+?[\d\s().-]+$/.test(customerName);
+      if (vtuResult.success === true && vtuResult.valid === true &&
+          customerName.length > 0 && !isPlaceholderCustomerName) {
         res.json({
           success: true,
           valid: true,
-          accountNumber,
-          accountName: vtuResult.customerName || `Verified Account (${accountNumber.slice(-4)})`,
+          accountNumber: accountNumber.trim(),
+          accountName: customerName,
           providerId: providerId || 'unknown',
           requiresManualVerification: false,
           verificationMethod: 'DIRECT_API',
-          statusMessage: 'Account structure validated via VTU.ng provider API gateway.',
-          disclaimer: 'Direct VTU.ng provider API validation.'
+          statusMessage: 'Subscriber account confirmed by the configured provider lookup.',
+          disclaimer: 'Verification was returned by the configured upstream provider.'
         });
         return;
       }
     } catch (e: any) {
-      console.warn('[Utility Validate] VTU customer lookup notice:', e.message);
+      console.warn('[Utility Validate] VTU customer lookup notice:', e?.message || 'lookup failed');
     }
   }
 
-  if (isDirectApiSupported) {
-    res.json({
-      success: true,
-      valid: true,
-      accountNumber,
-      accountName: `Verified Account (${accountNumber.slice(-4)})`,
-      providerId: providerId || 'unknown',
-      requiresManualVerification: false,
-      verificationMethod: 'DIRECT_API',
-      statusMessage: 'Account structure validated via provider API gateway.',
-      disclaimer: 'Direct provider API validation.'
-    });
-  } else {
-    res.json({
-      success: true,
-      valid: true,
-      accountNumber,
-      accountName: `Account #${accountNumber}`,
-      providerId: providerId || 'unknown',
-      requiresManualVerification: true,
-      verificationMethod: 'MANUAL_VERIFICATION',
-      statusMessage: 'Account queued for manual verification by utility provider operations.',
-      disclaimer: 'No direct customer lookup API connected for this provider. Verified manually by fulfillment team.'
-    });
-  }
+  res.status(200).json({
+    success: false,
+    valid: false,
+    accountNumber: accountNumber.trim(),
+    providerId: providerId || 'unknown',
+    requiresManualVerification: true,
+    verificationMethod: 'MANUAL_VERIFICATION',
+    statusMessage: isDirectApiSupported
+      ? 'Subscriber account could not be verified. A configured provider lookup with an explicit account confirmation is required.'
+      : 'No live subscriber lookup is configured for this provider. The account has not been verified.',
+    disclaimer: 'Do not treat number format or a placeholder account label as verification. Checkout must remain blocked until an authoritative provider lookup confirms the account.'
+  });
 };
 
 // Electricity Real Meter / Provider Verification API Endpoint
@@ -2966,220 +2979,348 @@ app.post(['/api/v2/payments/cancel', '/api/pi-payment/cancel', '/api/v1/pi-payme
 app.get(['/api/v2/payments/verify/:paymentId', '/api/pi-payment/verify/:paymentId', '/api/v2/pi/payments/verify', '/api/v2/payments/verify', '/api/pi-payment/verify'], paymentRateLimiter, handleVerifyPayment);
 app.get(['/api/v2/payments/config', '/api/pi-payment/config', '/api/v2/pi/config', '/api/v2/pi/diagnostic', '/api/pi/diagnostic'], handleGetPaymentConfig);
 
-// Server-side Utility Fulfillment & Verification Endpoint
-app.post('/api/v2/utility/fulfill', paymentRateLimiter, async (req, res) => {
-  const { paymentId, txid, category, country, countryCode, providerId, accountNumber, fiatAmount, piAmount, packageName, idempotencyKey } = req.body;
-
-  if (!paymentId) {
-    res.status(400).json({ success: false, error: 'Missing paymentId parameter' });
-    return;
-  }
-
-  let numericFiatAmount = typeof fiatAmount === 'number' ? fiatAmount : parseFloat(String(fiatAmount || '').replace(/[^0-9.]/g, ''));
-  if (isNaN(numericFiatAmount) || !isFinite(numericFiatAmount) || numericFiatAmount <= 0) {
-    const numPi = Number(piAmount);
-    if (numPi > 0) {
-      const cfgRate = platformConfigRepo.getConfig().piRateUsd || 314159;
-      numericFiatAmount = numPi * cfgRate;
-    }
-  }
-
-  if (isNaN(numericFiatAmount) || !isFinite(numericFiatAmount) || numericFiatAmount <= 0) {
-    res.status(400).json({
-      success: false,
-      status: 'INVALID_AMOUNT',
-      message: 'Validation Error: fiatAmount must be a valid positive number greater than 0.'
-    });
-    return;
-  }
-
-  // Validate Airtime Category Country-Provider consistency
-  if (category === 'airtime' || category === 'mobile_data') {
-    if (countryCode && providerId) {
-      const providerCountryMap: Record<string, string> = {
-        'prov-airtime-mtn-ng': 'NG',
-        'prov-airtime-airtel-ng': 'NG',
-        'prov-airtime-glo-ng': 'NG',
-        'prov-airtime-9mobile-ng': 'NG',
-        'prov-airtime-safaricom-ke': 'KE',
-        'prov-airtime-airtel-ke': 'KE',
-        'prov-airtime-mtn-gh': 'GH',
-        'prov-airtime-vodafone-gh': 'GH',
-        'prov-airtime-airtel-in': 'IN',
-        'prov-airtime-jio-in': 'IN',
-        'prov-airtime-att-us': 'US',
-        'prov-airtime-tmobile-us': 'US',
-        'prov-airtime-ee-gb': 'GB',
-        'prov-airtime-vodafone-gb': 'GB',
-        'prov-airtime-vodacom-za': 'ZA',
-        'prov-airtime-mtn-za': 'ZA',
-        'prov-airtime-globe-ph': 'PH',
-        'prov-airtime-smart-ph': 'PH',
-        'prov-airtime-telkomsel-id': 'ID',
-        'prov-airtime-indosat-id': 'ID',
-        'prov-airtime-viettel-vn': 'VN',
-        'prov-airtime-vinaphone-vn': 'VN'
-      };
-
-      const expectedCountry = providerCountryMap[providerId];
-      if (expectedCountry && expectedCountry !== countryCode) {
-        res.status(400).json({
-          success: false,
-          status: 'INVALID_PROVIDER_COUNTRY',
-          message: `Validation Error: Provider ${providerId} does not belong to target country code ${countryCode}.`
-        });
-        return;
-      }
-    }
-  }
-
-  // Idempotency check: If this paymentId or idempotencyKey was already fulfilled, return cached record
-  const existingKey = idempotencyKey || paymentId;
-  const existingTransaction = utilityFulfillmentRepo.findByKey(existingKey);
-  if (existingTransaction) {
-    console.log(`[Utility Fulfillment] Idempotent replay for Payment ID: ${existingKey}`);
-    res.json({
-      success: true,
-      idempotent: true,
-      data: existingTransaction
-    });
-    return;
-  }
-
-  // Authoritative Pi Payment Verification
-  const verification = await verifyPiPaymentAuthoritative(paymentId);
-
-  if (!verification.verified) {
-    console.warn(`[Utility Fulfillment] Payment verification rejected for ID: ${paymentId}`);
-    res.status(400).json({
-      success: false,
-      status: 'VERIFICATION_FAILED',
-      message: 'Server verification failed. Payment is not confirmed on Pi Platform.'
-    });
-    return;
-  }
-
-  const recordedPayment = paymentLedgerRepo.findByPaymentId(paymentId);
-  const verifiedTxid =
-    verification.paymentData?.transaction?.txid ||
-    recordedPayment?.txid ||
-    txid ||
-    '';
-
-  // Execute VTU.ng v2 Adapter or Global Escrow Fallback
-  let fulfillmentStatus: 'FULFILLED' | 'FULFILLMENT_PENDING' = 'FULFILLMENT_PENDING';
-  let fulfillmentMessage = 'Payment verified successfully. Fulfillment is pending provider configuration or operator confirmation.';
-  let providerRef: string = vtuNgAdapter.generateRequestId(paymentId, 'PEND');
-  let fulfillmentMetadata: Record<string, any> | undefined = undefined;
-
-  const normalizedCategory = String(category || 'utility').toLowerCase();
-  const isNigerianProvider = (countryCode === 'NG' || !countryCode || providerId?.toLowerCase().includes('-ng') || providerId?.toLowerCase().includes('ikedc') || providerId?.toLowerCase().includes('dstv'));
-
-  if (vtuNgAdapter.isConfigured() && isNigerianProvider) {
-    try {
-      if (normalizedCategory === 'airtime') {
-        const result = await vtuNgAdapter.purchaseAirtime({
-          paymentId,
-          phone: accountNumber,
-          serviceId: providerId,
-          amount: numericFiatAmount
-        });
-        fulfillmentStatus = result.fulfilled ? 'FULFILLED' : 'FULFILLMENT_PENDING';
-        fulfillmentMessage = result.fulfilled
-          ? (result.message || 'Airtime credited successfully via VTU.ng.')
-          : (result.message || 'Payment verified successfully. Fulfillment is pending provider configuration or operator confirmation.');
-        providerRef = result.providerReference || result.orderId || vtuNgAdapter.generateRequestId(paymentId, result.fulfilled ? 'AIRT' : 'PEND');
-        fulfillmentMetadata = { requestId: result.requestId, raw: result.rawResponse };
-      } else if (normalizedCategory === 'mobile_data' || normalizedCategory === 'data') {
-        const result = await vtuNgAdapter.purchaseData({
-          paymentId,
-          phone: accountNumber,
-          serviceId: providerId,
-          variationId: req.body.variationId || req.body.packageId || 'data-default'
-        });
-        fulfillmentStatus = result.fulfilled ? 'FULFILLED' : 'FULFILLMENT_PENDING';
-        fulfillmentMessage = result.fulfilled
-          ? (result.message || 'Data bundle activated successfully via VTU.ng.')
-          : (result.message || 'Payment verified successfully. Fulfillment is pending provider configuration or operator confirmation.');
-        providerRef = result.providerReference || result.orderId || vtuNgAdapter.generateRequestId(paymentId, result.fulfilled ? 'DATA' : 'PEND');
-        fulfillmentMetadata = { requestId: result.requestId, raw: result.rawResponse };
-      } else if (normalizedCategory === 'electricity' || normalizedCategory === 'power') {
-        const result = await vtuNgAdapter.purchaseElectricity({
-          paymentId,
-          phone: req.body.phone || accountNumber,
-          serviceId: providerId,
-          customerId: accountNumber,
-          variationId: req.body.meterType === 'postpaid' ? 'postpaid' : 'prepaid',
-          amount: numericFiatAmount
-        });
-        fulfillmentStatus = result.fulfilled ? 'FULFILLED' : 'FULFILLMENT_PENDING';
-        fulfillmentMessage = result.fulfilled
-          ? (result.message || 'Electricity token generated successfully via VTU.ng.')
-          : (result.message || 'Payment verified successfully. Fulfillment is pending provider configuration or operator confirmation.');
-        providerRef = result.providerReference || result.orderId || vtuNgAdapter.generateRequestId(paymentId, result.fulfilled ? 'ELEC' : 'PEND');
-        fulfillmentMetadata = {
-          requestId: result.requestId,
-          token: result.token,
-          units: result.units,
-          customerName: result.customerName,
-          raw: result.rawResponse
-        };
-      } else if (normalizedCategory === 'tv' || normalizedCategory === 'cable') {
-        const result = await vtuNgAdapter.purchaseTv({
-          paymentId,
-          phone: req.body.phone || '08000000000',
-          serviceId: providerId,
-          smartcardNumber: accountNumber,
-          variationId: req.body.variationId || req.body.packageId || 'tv-default',
-          amount: numericFiatAmount
-        });
-        fulfillmentStatus = result.fulfilled ? 'FULFILLED' : 'FULFILLMENT_PENDING';
-        fulfillmentMessage = result.fulfilled
-          ? (result.message || 'Cable TV subscription renewed successfully via VTU.ng.')
-          : (result.message || 'Payment verified successfully. Fulfillment is pending provider configuration or operator confirmation.');
-        providerRef = result.providerReference || result.orderId || vtuNgAdapter.generateRequestId(paymentId, result.fulfilled ? 'CABL' : 'PEND');
-        fulfillmentMetadata = { requestId: result.requestId, raw: result.rawResponse };
-      } else {
-        // Unmapped Nigerian category - Safe Pending State
-        fulfillmentStatus = 'FULFILLMENT_PENDING';
-        fulfillmentMessage = 'Payment verified successfully. Fulfillment is pending provider configuration or operator confirmation.';
-        providerRef = vtuNgAdapter.generateRequestId(paymentId, 'PEND');
-      }
-    } catch (vtuErr: any) {
-      console.warn('[VTU.ng Adapter] Transaction dispatch error:', vtuErr.message);
-      fulfillmentStatus = 'FULFILLMENT_PENDING';
-      fulfillmentMessage = 'Payment verified successfully. Fulfillment is pending provider configuration or operator confirmation.';
-      providerRef = vtuNgAdapter.generateRequestId(paymentId, 'PEND');
-    }
-  } else {
-    // Unconfigured or International Provider Mode: Safe Pending State with Escrow Lock
-    fulfillmentStatus = 'FULFILLMENT_PENDING';
-    fulfillmentMessage = 'Payment verified successfully. Fulfillment is pending provider configuration or operator confirmation.';
-    providerRef = vtuNgAdapter.generateRequestId(paymentId, 'PEND');
-  }
-
-  const resultRecord = {
-    transactionId: `UTIL-TX-${Date.now()}`,
-    paymentId,
-    txid: verifiedTxid,
-    status: fulfillmentStatus,
-    message: fulfillmentMessage,
-    category: category || 'utility',
-    providerId: providerId || 'unknown',
-    accountNumber: accountNumber || '',
-    fiatAmount: Number(numericFiatAmount.toFixed(2)),
-    piAmount: Number(Number(piAmount || 0).toFixed(4)),
-    packageName: packageName || 'Utility Payment',
-    timestamp: new Date().toISOString(),
-    providerReference: providerRef,
-    metadata: fulfillmentMetadata
+// Read-only readiness gate for the utility UI. Never exposes secret values and
+// prevents collecting a Pi payment when durable storage, trusted FX, or the
+// provider integration is unavailable. Checkout stays opt-in via the server flag.
+app.get('/api/v2/utility/checkout-status', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  const checks = {
+    featureEnabled: process.env.PINOVA_UTILITY_CHECKOUT_ENABLED === 'true',
+    databaseConfigured: Boolean(process.env.DATABASE_URL?.trim()),
+    trustedFxConfigured: Boolean(
+      process.env.PINOVA_FX_PROVIDER_API_KEY?.trim() &&
+      process.env.PINOVA_FX_PROVIDER_URL?.trim() &&
+      process.env.PINOVA_FX_PROVIDER_SOURCE?.trim()
+    ),
+    piServerKeyConfigured: (() => {
+      const piApiKey = (process.env.PI_API_KEY || process.env.PI_SERVER_KEY || '').trim();
+      return Boolean(piApiKey && piApiKey !== 'YOUR_PI_PLATFORM_API_KEY' && piApiKey !== 'MY_PI_API_KEY');
+    })(),
+    providerConfigured: vtuNgAdapter.isConfigured(),
   };
-
-  utilityFulfillmentRepo.recordTransaction(existingKey, resultRecord);
-
-  res.json({
+  const ready = Object.values(checks).every(Boolean);
+  return res.status(200).json({
     success: true,
-    data: resultRecord
+    ready,
+    checks,
+    message: ready
+      ? 'Utility checkout prerequisites are configured.'
+      : 'Checkout is paused until the server feature flag, Neon, trusted FX, Pi server credentials, and VTU.ng provider are configured.'
+  });
+});
+
+// Create canonical utility invoices only from an authenticated Pi session.
+// Ownership comes from req.user; all amount/FX fields are recomputed by Neon repository.
+app.post('/api/v2/utility/invoices', paymentRateLimiter, authenticate, requireAuthenticatedUser, async (req: AuthenticatedRequest, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  try {
+    const user = req.user;
+    const ownerUserId = String(user?.id || '').trim();
+    const ownerPiUid = String(user?.piUid || '').trim();
+    if (!ownerUserId || !ownerPiUid) {
+      return res.status(403).json({
+        success: false,
+        error: 'PI_IDENTITY_REQUIRED',
+        message: 'A verified Pi identity is required before creating a utility invoice.'
+      });
+    }
+
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const serviceCategory = typeof body.serviceCategory === 'string' ? body.serviceCategory.trim().toLowerCase() : '';
+    const providerId = typeof body.providerId === 'string' ? body.providerId.trim() : '';
+    const accountNumber = typeof body.accountNumber === 'string' ? body.accountNumber.trim() : '';
+    const packageName = typeof body.packageName === 'string' ? body.packageName.trim() : '';
+    const fiatAmount = typeof body.fiatAmount === 'string' ? body.fiatAmount.trim() : '';
+    const fiatCurrency = typeof body.fiatCurrency === 'string' ? body.fiatCurrency.trim().toUpperCase() : '';
+
+    if (!/^[a-z][a-z0-9_-]{1,39}$/.test(serviceCategory) ||
+        !/^[a-zA-Z0-9._:-]{1,120}$/.test(providerId) ||
+        !/^[^\x00-\x1F]{1,160}$/.test(accountNumber) ||
+        !/^[^\x00-\x1F]{1,120}$/.test(packageName) ||
+        !/^[A-Z]{3}$/.test(fiatCurrency) ||
+        !/^(?:0|[1-9][0-9]*)(?:\.[0-9]{1,8})?$/.test(fiatAmount) ||
+        !/[1-9]/.test(fiatAmount)) {
+      return res.status(400).json({
+        success: false,
+        error: 'UTILITY_INVOICE_INPUT_INVALID',
+        message: 'Provide a valid service, provider, account, package, positive fiat amount and ISO currency.'
+      });
+    }
+
+    // piAmount, owner IDs, FX source/rate/timestamp, invoice ID and expiry from
+    // the request are deliberately ignored. The server creates expiry and IDs.
+    const { NeonUtilityInvoiceRepository } = await import('./src/server/db/repositories/NeonUtilityInvoiceRepository');
+    const repository = new NeonUtilityInvoiceRepository();
+    const invoice = await repository.createInvoice({
+      ownerUserId,
+      ownerPiUid,
+      serviceCategory,
+      providerId,
+      accountNumber,
+      packageName,
+      fiatAmount,
+      fiatCurrency,
+      expiresAt: new Date(Date.now() + 5 * 60_000).toISOString()
+    });
+    return res.status(201).json({
+      success: true,
+      invoice: {
+        invoiceId: invoice.invoiceId,
+        serviceCategory: invoice.serviceCategory,
+        providerId: invoice.providerId,
+        packageName: invoice.packageName,
+        fiatAmount: invoice.fiatAmount,
+        fiatCurrency: invoice.fiatCurrency,
+        piAmount: invoice.piAmount,
+        fxSource: invoice.fxSource,
+        fxAsOf: invoice.fxAsOf,
+        expiresAt: invoice.expiresAt,
+        status: invoice.status
+      }
+    });
+  } catch (error) {
+    const code = error instanceof Error ? error.message : 'UTILITY_INVOICE_CREATE_FAILED';
+    const status = code.startsWith('FX_') ? 503 :
+      code === 'UTILITY_DATABASE_URL_REQUIRED' ? 503 :
+      code === 'UTILITY_FIAT_AMOUNT_INVALID' || code === 'UTILITY_FIAT_AMOUNT_PRECISION_UNSUPPORTED' || code === 'UTILITY_FIAT_CURRENCY_INVALID' ? 400 : 500;
+    console.error('[UTILITY INVOICE CREATE]', code);
+    return res.status(status).json({
+      success: false,
+      error: status === 500 ? 'UTILITY_INVOICE_CREATE_FAILED' : code,
+      message: status === 503
+        ? 'Trusted FX or durable invoice storage is unavailable; no invoice was created.'
+        : status === 400
+          ? 'The fiat amount, currency, or supported decimal precision is invalid.'
+          : 'The utility invoice could not be created.'
+    });
+  }
+});
+
+// Bind a Pi SDK payment ID to an open invoice owned by the authenticated user.
+// This only binds the identifier; authoritative verification still happens server-side.
+app.post('/api/v2/utility/invoices/:invoiceId/payment', paymentRateLimiter, authenticate, requireAuthenticatedUser, async (req: AuthenticatedRequest, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  const ownerUserId = String(req.user?.id || '').trim();
+  const invoiceId = typeof req.params.invoiceId === 'string' ? req.params.invoiceId.trim() : '';
+  const paymentId = typeof req.body?.paymentId === 'string' ? req.body.paymentId.trim() : '';
+  if (!ownerUserId || !String(req.user?.piUid || '').trim()) {
+    return res.status(403).json({ success: false, error: 'PI_IDENTITY_REQUIRED' });
+  }
+  if (!/^UTIL-[0-9a-f-]{36}$/i.test(invoiceId) || !paymentId || paymentId.length > 200 || /[\x00-\x1F]/.test(paymentId)) {
+    return res.status(400).json({ success: false, error: 'UTILITY_PAYMENT_BINDING_INPUT_INVALID' });
+  }
+  try {
+    const { NeonUtilityInvoiceRepository } = await import('./src/server/db/repositories/NeonUtilityInvoiceRepository');
+    const repository = new NeonUtilityInvoiceRepository();
+    const authenticatedPiUid = String(req.user?.piUid || '').trim();
+    const invoice = await repository.findOwnedInvoice(invoiceId, ownerUserId);
+    // The application account ID alone is not enough: the Pi identity must still
+    // match the identity captured when this invoice was created.
+    if (!invoice || !authenticatedPiUid || invoice.ownerPiUid !== authenticatedPiUid) {
+      return res.status(409).json({
+        success: false,
+        error: 'UTILITY_PAYMENT_BINDING_REJECTED',
+        message: 'The invoice may be expired, unavailable, or not owned by this Pi identity.'
+      });
+    }
+    const bound = await repository.bindPaymentId(invoiceId, ownerUserId, paymentId);
+    if (!bound) {
+      return res.status(409).json({
+        success: false,
+        error: 'UTILITY_PAYMENT_BINDING_REJECTED',
+        message: 'The invoice may be expired, already bound, unavailable, or not owned by this account.'
+      });
+    }
+    return res.status(200).json({ success: true, invoiceId, paymentId, status: 'PAYMENT_ID_BOUND' });
+  } catch (error) {
+    const code = error instanceof Error ? error.message : 'UTILITY_PAYMENT_BINDING_FAILED';
+    console.error('[UTILITY PAYMENT BIND]', code);
+    return res.status(503).json({ success: false, error: 'UTILITY_PAYMENT_BINDING_UNAVAILABLE' });
+  }
+});
+
+// Read a durable utility invoice/receipt status without exposing account details.
+// The authenticated Pi UID must still match the UID recorded when the invoice was created.
+app.get('/api/v2/utility/invoices/:invoiceId', paymentRateLimiter, authenticate, requireAuthenticatedUser, async (req: AuthenticatedRequest, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  const ownerUserId = String(req.user?.id || '').trim();
+  const ownerPiUid = String(req.user?.piUid || '').trim();
+  const invoiceId = typeof req.params.invoiceId === 'string' ? req.params.invoiceId.trim() : '';
+  if (!ownerUserId || !ownerPiUid) {
+    return res.status(403).json({ success: false, error: 'PI_IDENTITY_REQUIRED' });
+  }
+  if (!/^UTIL-[0-9a-f-]{36}$/i.test(invoiceId)) {
+    return res.status(400).json({ success: false, error: 'UTILITY_INVOICE_ID_INVALID' });
+  }
+  try {
+    const { NeonUtilityInvoiceRepository } = await import('./src/server/db/repositories/NeonUtilityInvoiceRepository');
+    const repository = new NeonUtilityInvoiceRepository();
+    const invoice = await repository.findOwnedInvoice(invoiceId, ownerUserId);
+    // Avoid disclosing whether an invoice exists for a different account or Pi identity.
+    if (!invoice || invoice.ownerPiUid !== ownerPiUid) {
+      return res.status(404).json({ success: false, error: 'UTILITY_INVOICE_NOT_FOUND' });
+    }
+    return res.status(200).json({
+      success: true,
+      invoice: {
+        invoiceId: invoice.invoiceId,
+        serviceCategory: invoice.serviceCategory,
+        providerId: invoice.providerId,
+        packageName: invoice.packageName,
+        fiatAmount: invoice.fiatAmount,
+        fiatCurrency: invoice.fiatCurrency,
+        piAmount: invoice.piAmount,
+        status: invoice.status,
+        paymentBound: Boolean(invoice.paymentId),
+        fxSource: invoice.fxSource,
+        fxAsOf: invoice.fxAsOf,
+        expiresAt: invoice.expiresAt,
+        createdAt: invoice.createdAt,
+      },
+    });
+  } catch (error) {
+    const code = error instanceof Error ? error.message : 'UTILITY_INVOICE_READ_FAILED';
+    console.error('[UTILITY INVOICE READ]', code);
+    return res.status(503).json({ success: false, error: 'UTILITY_INVOICE_STATUS_UNAVAILABLE' });
+  }
+});
+
+// Authenticated canonical checkout. The feature flag is deliberately OFF by default;
+// no Vercel environment variable is changed by this commit. The legacy fulfill route
+// below remains disabled. Only validated Nigerian Airtime invoices are dispatchable.
+app.post('/api/v2/utility/invoices/:invoiceId/checkout', paymentRateLimiter, authenticate, requireAuthenticatedUser, async (req: AuthenticatedRequest, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('Retry-After', '300');
+  if (process.env.PINOVA_UTILITY_CHECKOUT_ENABLED !== 'true') {
+    return res.status(503).json({
+      success: false,
+      error: 'UTILITY_CHECKOUT_DISABLED',
+      message: 'Utility checkout is not enabled. No provider request was sent.'
+    });
+  }
+
+  const ownerUserId = String(req.user?.id || '').trim();
+  const ownerPiUid = String(req.user?.piUid || '').trim();
+  const invoiceId = typeof req.params.invoiceId === 'string' ? req.params.invoiceId.trim() : '';
+  const paymentId = typeof req.body?.paymentId === 'string' ? req.body.paymentId.trim() : '';
+  if (!ownerUserId || !ownerPiUid) {
+    return res.status(403).json({ success: false, error: 'PI_IDENTITY_REQUIRED' });
+  }
+  if (!/^UTIL-[0-9a-f-]{36}$/i.test(invoiceId) || !paymentId || paymentId.length > 200 || /[\x00-\x1F]/.test(paymentId)) {
+    return res.status(400).json({ success: false, error: 'UTILITY_CHECKOUT_INPUT_INVALID' });
+  }
+
+  try {
+    const { NeonUtilityInvoiceRepository } = await import('./src/server/db/repositories/NeonUtilityInvoiceRepository');
+    const repository = new NeonUtilityInvoiceRepository();
+    const invoice = await repository.findOwnedInvoice(invoiceId, ownerUserId);
+    if (!invoice || invoice.ownerPiUid !== ownerPiUid) {
+      return res.status(404).json({ success: false, error: 'UTILITY_INVOICE_NOT_FOUND' });
+    }
+    if (invoice.paymentId !== paymentId) {
+      return res.status(409).json({ success: false, error: 'PI_PAYMENT_ID_MISMATCH' });
+    }
+
+    // Until additional provider-specific fulfillment adapters are audited, this
+    // route deliberately supports only NGN Airtime with an explicit network ID.
+    const networkAliases: Record<string, string> = {
+      // Canonical provider IDs from src/data/utilityData.ts must be accepted;
+      // the UI submits provider.id, not the display name or short network alias.
+      'prov-airtime-ng-mtn-nigeria': 'mtn',
+      'prov-airtime-ng-airtel-nigeria': 'airtel',
+      'prov-airtime-ng-glo-nigeria': 'glo',
+      'prov-airtime-ng-9mobile-nigeria': '9mobile',
+      // Backward-compatible aliases for explicitly configured integrations.
+      'mtn': 'mtn', 'mtn-ng': 'mtn', 'mtn-nigeria': 'mtn',
+      'airtel': 'airtel', 'airtel-ng': 'airtel', 'airtel-nigeria': 'airtel',
+      'glo': 'glo', 'glo-ng': 'glo', 'glo-nigeria': 'glo',
+      '9mobile': '9mobile', '9mobile-ng': '9mobile', '9mobile-nigeria': '9mobile',
+      'etisalat': '9mobile'
+    };
+    const normalizedProviderId = invoice.providerId.toLowerCase().trim().replace(/\s+/g, '-');
+    const network = networkAliases[normalizedProviderId];
+    const amount = Number(invoice.fiatAmount);
+    const normalizedPhone = invoice.accountNumber.replace(/[^0-9]/g, '');
+    const phone = normalizedPhone.startsWith('234') && normalizedPhone.length === 13
+      ? '0' + normalizedPhone.slice(3)
+      : normalizedPhone;
+    if (invoice.serviceCategory !== 'airtime' || invoice.fiatCurrency !== 'NGN' ||
+        !network || !Number.isSafeInteger(amount) || amount <= 0 ||
+        !/^0[0-9]{10}$/.test(phone)) {
+      return res.status(422).json({
+        success: false,
+        error: 'UTILITY_SERVICE_NOT_SUPPORTED',
+        message: 'Only configured Nigerian Airtime invoices with a valid network, phone, and whole-NGN amount are supported.'
+      });
+    }
+
+    const result = await processUtilityCheckout({
+      repository,
+      verifyPayment: verifyUtilityPiPaymentAuthoritative,
+      fulfill: async (canonicalInvoice, verifiedPaymentId) => {
+        const providerResult = await vtuNgAdapter.purchaseAirtime({
+          paymentId: verifiedPaymentId,
+          phone,
+          serviceId: network,
+          amount
+        });
+        if (providerResult.status === 'FULFILLED' && providerResult.fulfilled === true) {
+          return {
+            status: 'SUCCEEDED' as const,
+            providerReference: providerResult.providerReference || providerResult.orderId || providerResult.requestId,
+            response: { status: providerResult.status, message: providerResult.message, requestId: providerResult.requestId }
+          };
+        }
+        if (providerResult.status === 'FAILED') {
+          return {
+            status: 'FAILED' as const,
+            providerReference: providerResult.providerReference || providerResult.requestId,
+            response: { status: providerResult.status, errorCode: providerResult.errorCode, message: providerResult.message }
+          };
+        }
+        // A pending/unconfigured/ambiguous response is not safe to retry blindly.
+        return {
+          status: 'UNKNOWN' as const,
+          providerReference: providerResult.providerReference || providerResult.requestId,
+          response: { status: providerResult.status, errorCode: providerResult.errorCode, message: providerResult.message }
+        };
+      }
+    }, { invoiceId, ownerUserId, paymentId });
+
+    if (result.status === 'REJECTED') {
+      const status = result.error === 'UTILITY_INVOICE_NOT_FOUND' ? 404 :
+        result.error === 'PI_PAYMENT_ID_MISMATCH' ? 409 :
+        result.error === 'PI_PAYMENT_NOT_VERIFIED' || result.error === 'PI_PAYMENT_OWNER_MISMATCH' ? 403 : 503;
+      return res.status(status).json({ success: false, error: result.error });
+    }
+    if (result.status === 'FULFILLED' || result.status === 'RESOLVED') {
+      return res.status(200).json({ success: true, checkout: result });
+    }
+    if (result.status === 'FULFILLMENT_FAILED') {
+      return res.status(502).json({ success: false, checkout: result });
+    }
+    return res.status(202).json({ success: false, checkout: result, message: 'The provider outcome is pending reconciliation; do not submit a new payment.' });
+  } catch (error) {
+    const code = error instanceof Error ? error.message : 'UTILITY_CHECKOUT_FAILED';
+    console.error('[UTILITY CHECKOUT]', code);
+    return res.status(503).json({ success: false, error: 'UTILITY_CHECKOUT_UNAVAILABLE' });
+  }
+});
+
+// Server-side Utility Fulfillment & Verification Endpoint
+// Server-side Utility Fulfillment & Verification Endpoint
+// Fail closed until a canonical, server-owned utility invoice is created and
+// bound to the Pi payment. The legacy handler trusted client fiatAmount/piAmount
+// and could dispatch real provider fulfillment without checking paymentData.amount.
+// Keep this endpoint unavailable rather than allowing a client-priced fulfillment.
+app.post('/api/v2/utility/fulfill', paymentRateLimiter, async (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('Retry-After', '300');
+  return res.status(503).json({
+    success: false,
+    status: 'UTILITY_INVOICE_AUTHORIZATION_REQUIRED',
+    error: 'UTILITY_CHECKOUT_DISABLED',
+    message: 'Utility fulfillment is paused until server-side invoice ownership, trusted FX pricing, exact Pi payment amount verification, and payment-bound idempotency are enforced.'
   });
 });
 
@@ -3209,57 +3350,45 @@ app.get('/api/v2/utility/vtu/variations/tv', async (req, res) => {
   res.json(variationsResult);
 });
 
-app.post('/api/v2/utility/vtu/requery', async (req, res) => {
-  const { requestId } = req.body || {};
-  if (!requestId) {
-    res.status(400).json({ success: false, error: 'Missing requestId parameter' });
-    return;
-  }
-  const requeryResult = await vtuNgAdapter.requeryOrder(requestId);
-  res.json(requeryResult);
+// Public requery is intentionally disabled until provider request IDs are resolved
+// through a persistent, owner-bound invoice/fulfillment record. Accepting arbitrary
+// request IDs here could expose provider transaction status across users.
+app.post('/api/v2/utility/vtu/requery', paymentRateLimiter, async (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('Retry-After', '300');
+  return res.status(503).json({
+    success: false,
+    status: 'UTILITY_REQUERY_OWNER_BINDING_REQUIRED',
+    error: 'UTILITY_REQUERY_DISABLED',
+    message: 'Utility status lookup is paused until request IDs are bound to an authenticated owner and persistent fulfillment attempt.'
+  });
 });
 
-// VTU.ng Webhook / Status Callback Endpoint with Signature Verification
+// VTU.ng Webhook / Status Callback Endpoint.
+// Signature verification is enabled, but state mutation stays disabled until webhook
+// request IDs are reconciled against durable Neon invoice/fulfillment records. The
+// legacy utilityFulfillmentRepo is process-local and must not be treated as authority.
 app.post('/api/v2/utility/vtu/webhook', (req, res) => {
-  try {
-    const rawSignature = (req.headers['x-vtu-signature'] || req.headers['signature'] || req.headers['x-signature']) as string | undefined;
-    const rawBody = JSON.stringify(req.body || {});
-    
-    // Validate signature using VTU_USER_PIN if configured
-    const isSignatureValid = vtuNgAdapter.verifyWebhookSignature(rawBody, rawSignature);
-    if (!isSignatureValid) {
-      console.warn('[VTU.ng Webhook] Rejected incoming webhook with invalid signature');
-      res.status(401).json({ success: false, error: 'INVALID_WEBHOOK_SIGNATURE' });
-      return;
-    }
-
-    const { request_id, order_id, status, token, units } = req.body || {};
-    if (request_id) {
-      // Find and idempotently update transaction status if registered
-      const existing = utilityFulfillmentRepo.findByKey(request_id);
-      if (existing) {
-        const normalizedStatus = String(status || '').toUpperCase();
-        const updatedStatus = normalizedStatus === 'SUCCESS' || normalizedStatus === 'COMPLETED' ? 'FULFILLED' : (normalizedStatus === 'FAILED' ? 'FAILED' : 'FULFILLMENT_PENDING');
-        
-        utilityFulfillmentRepo.recordTransaction(request_id, {
-          ...existing,
-          status: updatedStatus as any,
-          providerReference: order_id ? String(order_id) : existing.providerReference,
-          metadata: {
-            ...(existing.metadata || {}),
-            token: token || existing.metadata?.token,
-            units: units || existing.metadata?.units,
-            webhookReceivedAt: new Date().toISOString()
-          }
-        });
-      }
-    }
-
-    res.json({ success: true, received: true });
-  } catch (err: any) {
-    console.warn('[VTU.ng Webhook] Processing error:', err.message);
-    res.status(500).json({ success: false, error: 'WEBHOOK_PROCESSING_ERROR' });
+  const rawSignature = (req.headers['x-vtu-signature'] || req.headers['signature'] || req.headers['x-signature']) as string | undefined;
+  const rawBodyBuffer = (req as any).rawBody;
+  if (!Buffer.isBuffer(rawBodyBuffer)) {
+    return res.status(400).json({ success: false, error: 'RAW_WEBHOOK_BODY_REQUIRED' });
   }
+
+  const isSignatureValid = vtuNgAdapter.verifyWebhookSignature(rawBodyBuffer.toString('utf8'), rawSignature);
+  if (!isSignatureValid) {
+    console.warn('[VTU.ng Webhook] Rejected incoming webhook with invalid signature');
+    return res.status(401).json({ success: false, error: 'INVALID_WEBHOOK_SIGNATURE' });
+  }
+
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('Retry-After', '300');
+  return res.status(503).json({
+    success: false,
+    received: false,
+    error: 'UTILITY_WEBHOOK_PERSISTENCE_REQUIRED',
+    message: 'Signed webhook accepted for authentication only; fulfillment status updates remain paused until request IDs are reconciled through durable Neon invoice and fulfillment records.'
+  });
 });
 
 // ==========================================
@@ -3517,8 +3646,13 @@ app.get('/api/education/invoices', authenticate, (req: AuthenticatedRequest, res
     const currentUser = req.user?.username;
     const currentUserId = req.user?.id;
     const roles = req.user?.roles || [];
-    const isAdmin = roles.some((r: string) => ['PLATFORM_ADMIN', 'BURSAR', 'FINANCE_ADMIN', 'INSTITUTION_ADMIN'].includes(r));
-    const isInstitutionStaff = Boolean(req.user?.institutionId && institutionId && req.user.institutionId === String(institutionId));
+    const isPlatformAdmin = roles.includes('PLATFORM_ADMIN');
+    const isInstitutionStaff = Boolean(
+      roles.some((role: string) => ['BURSAR', 'FINANCE_ADMIN', 'INSTITUTION_ADMIN'].includes(role)) &&
+      req.user?.institutionId &&
+      institutionId &&
+      req.user.institutionId === String(institutionId)
+    );
     const requestedGuardian = guardianId ? String(guardianId) : undefined;
     const ownsGuardianFilter = Boolean(
       requestedGuardian &&
@@ -3533,7 +3667,7 @@ app.get('/api/education/invoices', authenticate, (req: AuthenticatedRequest, res
        false)
     );
 
-    if (!isAdmin && !isInstitutionStaff && !ownsGuardianFilter && !ownsStudentFilter) {
+    if (!isPlatformAdmin && !isInstitutionStaff && !ownsGuardianFilter && !ownsStudentFilter) {
       res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Invoice access requires an authorized student, guardian, or institution context.' });
       return;
     }
@@ -3559,17 +3693,25 @@ app.get('/api/education/invoices/:id', authenticate, (req: AuthenticatedRequest,
       return;
     }
     const roles = req.user?.roles || [];
-    const isAdmin = roles.some((r: string) => ['PLATFORM_ADMIN', 'BURSAR', 'FINANCE_ADMIN', 'INSTITUTION_ADMIN'].includes(r));
     const currentUser = req.user?.username;
     const currentUserId = req.user?.id;
-    const authorized = isAdmin ||
-      Boolean(req.user?.institutionId && req.user.institutionId === invoice.institutionId) ||
-      Boolean(currentUser && invoice.guardianId && invoice.guardianId.toLowerCase() === currentUser.toLowerCase()) ||
-      Boolean(currentUserId && invoice.guardianId === currentUserId) ||
-      Boolean(req.user?.guardianId && invoice.guardianId && req.user.guardianId.toLowerCase() === invoice.guardianId.toLowerCase()) ||
-      Boolean(currentUser && invoice.studentId && invoice.studentId.toLowerCase() === currentUser.toLowerCase()) ||
-      Boolean(currentUserId && invoice.studentId === currentUserId) ||
-      false;
+    const isPlatformAdmin = roles.includes('PLATFORM_ADMIN');
+    const isInstitutionStaff = Boolean(
+      roles.some((role: string) => ['BURSAR', 'FINANCE_ADMIN', 'INSTITUTION_ADMIN'].includes(role)) &&
+      req.user?.institutionId &&
+      req.user.institutionId === invoice.institutionId
+    );
+    const isGuardianOwner = Boolean(
+      (currentUser && invoice.guardianId && invoice.guardianId.toLowerCase() === currentUser.toLowerCase()) ||
+      (currentUserId && invoice.guardianId === currentUserId) ||
+      (req.user?.guardianId && invoice.guardianId && req.user.guardianId.toLowerCase() === invoice.guardianId.toLowerCase())
+    );
+    const isStudentOwner = Boolean(
+      (currentUser && invoice.studentId && invoice.studentId.toLowerCase() === currentUser.toLowerCase()) ||
+      (currentUserId && invoice.studentId === currentUserId) ||
+      ((req.user as any)?.studentId && invoice.studentId && (req.user as any).studentId.toLowerCase() === invoice.studentId.toLowerCase())
+    );
+    const authorized = isPlatformAdmin || isInstitutionStaff || isGuardianOwner || isStudentOwner;
     if (!authorized) {
       res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Access denied to this invoice.' });
       return;
@@ -3650,26 +3792,16 @@ app.post('/api/education/invoices/pay', paymentRateLimiter, authenticate, async 
       return;
     }
 
-    if (invoice.status === 'PAID') {
-      res.status(400).json({ success: false, error: 'INVOICE_ALREADY_PAID', message: 'This invoice is already fully paid.' });
-      return;
-    }
-
-    if (numericAmount > invoice.outstandingBalance + 0.01) {
-      res.status(400).json({
-        success: false,
-        error: 'AMOUNT_EXCEEDS_BALANCE',
-        message: `Amount $${numericAmount} exceeds current outstanding balance of $${invoice.outstandingBalance.toFixed(2)}`
-      });
-      return;
-    }
-
     // Enforce invoice ownership in production and for authenticated callers
     const currentUser = req.user?.username;
     const currentUserId = req.user?.id;
     const userRoles = req.user?.roles || [];
-    const isPlatformAdmin = userRoles.includes('PLATFORM_ADMIN') || userRoles.includes('BURSAR') || userRoles.includes('FINANCE_ADMIN');
-    const isInstitutionStaff = Boolean(req.user?.institutionId && req.user.institutionId === invoice.institutionId);
+    const isPlatformAdmin = userRoles.includes('PLATFORM_ADMIN');
+    const isInstitutionStaff = Boolean(
+      userRoles.some((role: string) => ['INSTITUTION_ADMIN', 'BURSAR', 'FINANCE_ADMIN'].includes(role)) &&
+      req.user?.institutionId &&
+      req.user.institutionId === invoice.institutionId
+    );
     const isGuardianOwner = Boolean(
       (currentUser && invoice.guardianId && invoice.guardianId.toLowerCase() === currentUser.toLowerCase()) ||
       (currentUserId && invoice.guardianId && invoice.guardianId === currentUserId) ||
@@ -3678,12 +3810,11 @@ app.post('/api/education/invoices/pay', paymentRateLimiter, authenticate, async 
     const isStudentOwner = Boolean(
       (currentUser && invoice.studentId && invoice.studentId.toLowerCase() === currentUser.toLowerCase()) ||
       (currentUserId && invoice.studentId && invoice.studentId === currentUserId) ||
-      (currentUser && invoice.studentName && invoice.studentName.toLowerCase() === currentUser.toLowerCase()) ||
       ((req.user as any)?.studentId && invoice.studentId && (req.user as any).studentId.toLowerCase() === invoice.studentId.toLowerCase())
     );
     const isInvoiceOwner = isGuardianOwner || isStudentOwner;
 
-    if (isProduction && !isPlatformAdmin && !isInstitutionStaff && !isInvoiceOwner) {
+    if (!isPlatformAdmin && !isInstitutionStaff && !isInvoiceOwner) {
       res.status(403).json({
         success: false,
         error: 'FORBIDDEN',
@@ -3691,6 +3822,40 @@ app.post('/api/education/invoices/pay', paymentRateLimiter, authenticate, async 
       });
       return;
     }
+
+    // Do not disclose invoice payment state or balance until access is authorized.
+    if (invoice.status === 'PAID') {
+      res.status(400).json({ success: false, error: 'INVOICE_ALREADY_PAID', message: 'This invoice is already fully paid.' });
+      return;
+    }
+
+    const invoiceCurrency = String(invoice.currency || '').trim().toUpperCase();
+    const requestedPico = piAmountToPico(amountPaid);
+    const outstandingPico = invoiceCurrency === 'PI' ? piAmountToPico(invoice.outstandingBalance) : null;
+    const exceedsOutstanding = invoiceCurrency === 'PI'
+      ? requestedPico === null || outstandingPico === null || requestedPico > outstandingPico
+      : numericAmount > invoice.outstandingBalance;
+    if (exceedsOutstanding) {
+      res.status(400).json({
+        success: false,
+        error: 'AMOUNT_EXCEEDS_BALANCE',
+        message: invoiceCurrency === 'PI'
+          ? 'Payment amount exceeds the outstanding Pi balance.'
+          : 'Payment amount exceeds the outstanding invoice balance.'
+      });
+      return;
+    }
+
+    let authoritativeEducationSettlement: {
+      verified: true;
+      source: 'pi_platform' | 'sandbox_dev';
+      paymentId: string;
+      amount: number;
+      txid: string;
+      userUid: string;
+      network: string;
+      direction: string;
+    } | undefined;
 
     // Pi Network authoritative server verification
     if (paymentMethod === 'PI_NETWORK') {
@@ -3769,7 +3934,24 @@ app.post('/api/education/invoices/pay', paymentRateLimiter, authenticate, async 
         return;
       }
 
-      if (Math.abs(numericAmount - authoritativePiAmount) > 0.00000001) {
+      authoritativeEducationSettlement = {
+        verified: true,
+        source: verification.source,
+        paymentId: piPaymentId,
+        amount: authoritativePiAmount,
+        txid: authoritativeTxid,
+        userUid: authoritativeUserUid,
+        network: String(paymentData?.network || '').trim(),
+        direction
+      };
+
+      const requestedSettlementPico = piAmountToPico(amountPaid);
+      const authoritativeSettlementPico = piAmountToPico(paymentData?.amount);
+      if (
+        requestedSettlementPico === null ||
+        authoritativeSettlementPico === null ||
+        requestedSettlementPico !== authoritativeSettlementPico
+      ) {
         res.status(400).json({
           success: false,
           error: 'PI_AMOUNT_MISMATCH',
@@ -3806,19 +3988,21 @@ app.post('/api/education/invoices/pay', paymentRateLimiter, authenticate, async 
       res.status(401).json({ success: false, error: 'AUTHENTICATED_USERNAME_REQUIRED', message: 'Authenticated payer identity is required.' });
       return;
     }
-    const effectiveIdempotencyKey = idempotencyKey || piPaymentId;
+    const effectiveIdempotencyKey = piPaymentId || idempotencyKey;
 
     // Execute atomic settlement in repository with canonical SHA-256 digest creation
     const result = educationRepo.recordPayment({
       invoiceId,
       amountPaid: numericAmount,
-      currency,
+      // The invoice is the currency authority; never persist a client-supplied currency label.
+      currency: invoiceCurrency,
       piAmount: Number(req.body.piAmount),
       piPaymentId,
       piTxid: req.body.piTxid,
       paymentMethod,
       payerUsername,
-      idempotencyKey: effectiveIdempotencyKey
+      idempotencyKey: effectiveIdempotencyKey,
+      authoritativePiSettlement: authoritativeEducationSettlement
     });
 
     // Record immutable audit log
@@ -3828,7 +4012,7 @@ app.post('/api/education/invoices/pay', paymentRateLimiter, authenticate, async 
       actor: payerUsername,
       actorRole: 'payer',
       action: 'EDUCATION_FEE_PAID',
-      details: `Paid ${numericAmount} ${currency} (Pi: ${result.payment.piAmount}) for student ${invoice.studentName}`,
+      details: `Paid ${numericAmount} ${invoiceCurrency} (Pi: ${result.payment.piAmount}) for student ${invoice.studentName}`,
       ipAddress: req.ip || '127.0.0.1',
       deviceInfo: (req.headers['user-agent'] as string) || 'Pi Browser Web'
     });
@@ -3859,8 +4043,12 @@ app.get('/api/education/invoices/:id/payments', authenticate, (req: Authenticate
     const currentUser = req.user?.username;
     const currentUserId = req.user?.id;
     const userRoles = req.user?.roles || [];
-    const isPlatformAdmin = userRoles.includes('PLATFORM_ADMIN') || userRoles.includes('BURSAR') || userRoles.includes('FINANCE_ADMIN');
-    const isInstitutionStaff = Boolean(req.user?.institutionId && req.user.institutionId === invoice.institutionId);
+    const isPlatformAdmin = userRoles.includes('PLATFORM_ADMIN');
+    const isInstitutionStaff = Boolean(
+      userRoles.some((role: string) => ['BURSAR', 'FINANCE_ADMIN', 'INSTITUTION_ADMIN'].includes(role)) &&
+      req.user?.institutionId &&
+      req.user.institutionId === invoice.institutionId
+    );
 
     const isGuardianOwner = Boolean(
       (currentUser && invoice.guardianId && invoice.guardianId.toLowerCase() === currentUser.toLowerCase()) ||
@@ -3870,12 +4058,11 @@ app.get('/api/education/invoices/:id/payments', authenticate, (req: Authenticate
     const isStudentOwner = Boolean(
       (currentUser && invoice.studentId && invoice.studentId.toLowerCase() === currentUser.toLowerCase()) ||
       (currentUserId && invoice.studentId && invoice.studentId === currentUserId) ||
-      (currentUser && invoice.studentName && invoice.studentName.toLowerCase() === currentUser.toLowerCase()) ||
       ((req.user as any)?.studentId && invoice.studentId && (req.user as any).studentId.toLowerCase() === invoice.studentId.toLowerCase())
     );
     const isAuthorized = isPlatformAdmin || isInstitutionStaff || isGuardianOwner || isStudentOwner;
 
-    if (isProduction && !isAuthorized) {
+    if (!isAuthorized) {
       res.status(403).json({
         success: false,
         error: 'FORBIDDEN',
@@ -5477,11 +5664,122 @@ const handleFlightBook = async (req: express.Request, res: express.Response) => 
       const authoritativeAmount = typeof currentOffer.total_amount === 'string' && currentOffer.total_amount.trim() ? currentOffer.total_amount.trim() : '0.00';
       const authoritativeCurrency = typeof currentOffer.total_currency === 'string' && currentOffer.total_currency.trim() ? currentOffer.total_currency.trim() : 'USD';
 
-      if (parseFloat(authoritativeAmount) <= 0) {
+      const authoritativeFiatNumber = Number(authoritativeAmount);
+      if (
+        !/^\d+(?:\.\d+)?$/.test(authoritativeAmount) ||
+        !Number.isFinite(authoritativeFiatNumber) ||
+        authoritativeFiatNumber <= 0 ||
+        !/^[A-Z]{3}$/.test(authoritativeCurrency)
+      ) {
         res.status(400).json({
           success: false,
           error: 'DUFFEL_VALIDATION_ERROR',
-          message: 'Authoritative offer has an invalid carrier fare amount. Please search again.',
+          message: 'Authoritative offer has an invalid carrier fare amount or currency. Please search again.',
+          reqId
+        });
+        return;
+      }
+
+      // 5a. Reconcile the completed Pi payment against the current authoritative
+      // Duffel fare. The browser's fareAmountPi is display-only and is never
+      // accepted as the settlement amount. Missing/stale FX or any mismatch
+      // blocks airline order creation and records a protected reconciliation case.
+      let expectedPiAmount: number;
+      let actualPiAmount: number;
+      try {
+        const conversion = await calculateFiatToPiWithConfiguredFx(
+          authoritativeFiatNumber,
+          authoritativeCurrency
+        );
+        expectedPiAmount = Number(conversion.piAmount);
+        actualPiAmount = Number(verification.paymentData?.amount);
+        if (
+          !Number.isFinite(expectedPiAmount) ||
+          expectedPiAmount <= 0 ||
+          !Number.isFinite(actualPiAmount) ||
+          actualPiAmount <= 0
+        ) {
+          throw new Error('PI_AMOUNT_INVALID');
+        }
+      } catch (conversionError) {
+        const failedAt = new Date().toISOString();
+        const failedRecord = flightFulfillmentRepo.recordBooking(cleanPaymentId, {
+          id: `FLT-BOK-${cleanPaymentId}`,
+          paymentId: cleanPaymentId,
+          bookingAttemptId,
+          offerId: cleanOfferId,
+          idempotencyKey: stableIdempotencyKey,
+          pnr: null,
+          bookingReference: `ESCROW-${cleanPaymentId.slice(-8).toUpperCase()}`,
+          duffelOrderId: null,
+          ticketNumber: null,
+          bookingStatus: 'BOOKING_FAILED_HELD_FOR_REFUND' as const,
+          reconciliationStatus: 'PENDING' as const,
+          provider: 'duffel',
+          bookingMode: 'LIVE_DUFFEL' as const,
+          isLiveBooking: false,
+          message: 'Pi payment was verified, but the authoritative fare could not be reconciled with a fresh trusted FX quote. Airline order creation is blocked; refund/reconciliation is required.',
+          passengerName: `${passengerDetails?.givenName || 'Pioneer'} ${passengerDetails?.familyName || 'Traveler'}`,
+          timestamp: failedAt,
+          createdAt: failedAt,
+          updatedAt: failedAt,
+          metadata: {
+            authoritativeFiatAmount: authoritativeAmount,
+            authoritativeFiatCurrency: authoritativeCurrency,
+            reconciliationReason: conversionError instanceof Error && conversionError.message.startsWith('FX_')
+              ? conversionError.message
+              : 'AUTHORITATIVE_PI_CONVERSION_FAILED'
+          }
+        });
+        res.status(503).json({
+          success: false,
+          error: 'AUTHORITATIVE_PI_CONVERSION_UNAVAILABLE',
+          status: 'BOOKING_FAILED_HELD_FOR_REFUND',
+          message: 'Pi payment was verified, but the current airline fare could not be reconciled using trusted FX. No airline order was created; refund/reconciliation is required.',
+          booking: failedRecord,
+          reqId
+        });
+        return;
+      }
+
+      // Pi payments are rounded to the engine's 12-decimal contract. A mismatch
+      // is not silently topped up, partially accepted, or booked against.
+      if (Math.abs(actualPiAmount - expectedPiAmount) >= 1e-12) {
+        const failedAt = new Date().toISOString();
+        const failedRecord = flightFulfillmentRepo.recordBooking(cleanPaymentId, {
+          id: `FLT-BOK-${cleanPaymentId}`,
+          paymentId: cleanPaymentId,
+          bookingAttemptId,
+          offerId: cleanOfferId,
+          idempotencyKey: stableIdempotencyKey,
+          pnr: null,
+          bookingReference: `ESCROW-${cleanPaymentId.slice(-8).toUpperCase()}`,
+          duffelOrderId: null,
+          ticketNumber: null,
+          bookingStatus: 'BOOKING_FAILED_HELD_FOR_REFUND' as const,
+          reconciliationStatus: 'PENDING' as const,
+          provider: 'duffel',
+          bookingMode: 'LIVE_DUFFEL' as const,
+          isLiveBooking: false,
+          message: 'Verified Pi payment does not match the current authoritative airline fare. Airline order creation is blocked; refund/reconciliation is required.',
+          passengerName: `${passengerDetails?.givenName || 'Pioneer'} ${passengerDetails?.familyName || 'Traveler'}`,
+          timestamp: failedAt,
+          createdAt: failedAt,
+          updatedAt: failedAt,
+          metadata: {
+            authoritativeFiatAmount: authoritativeAmount,
+            authoritativeFiatCurrency: authoritativeCurrency,
+            expectedPiAmount: expectedPiAmount.toFixed(12),
+            actualPiAmount: actualPiAmount.toFixed(12),
+            reconciliationReason: 'PI_PAYMENT_AMOUNT_MISMATCH'
+          }
+        });
+        res.status(409).json({
+          success: false,
+          error: 'PI_PAYMENT_AMOUNT_MISMATCH',
+          status: 'BOOKING_FAILED_HELD_FOR_REFUND',
+          message: 'The verified Pi payment does not match the current airline fare. No airline order was created; refund/reconciliation is required.',
+          booking: failedRecord,
           reqId
         });
         return;
@@ -5982,6 +6280,53 @@ process.on('uncaughtException', (err) => {
 });
 
 const productRepository = new ProductRepository();
+
+// Public conversion estimate endpoint. The caller supplies only amount and currency;
+ // rates and timestamps are fetched and validated server-side from the configured provider.
+const fxQuoteRateLimiter = createRateLimiter({
+  windowMs: 60000,
+  maxRequests: 30,
+  message: 'Currency conversion rate limit exceeded. Please retry shortly.',
+});
+
+const handleFiatToPiEstimate = async (req: express.Request, res: express.Response) => {
+  // Quote responses must not be cached beyond the provider freshness window.
+  res.setHeader('Cache-Control', 'no-store');
+  const fiatAmount = Number(req.body?.fiatAmount);
+  const currency = String(req.body?.currency || '').trim().toUpperCase();
+  if (!Number.isFinite(fiatAmount) || fiatAmount <= 0 || fiatAmount > 1_000_000_000_000) {
+    return res.status(400).json({ success: false, code: 'FIAT_AMOUNT_INVALID' });
+  }
+  if (!/^[A-Z]{3}$/.test(currency)) {
+    return res.status(400).json({ success: false, code: 'FIAT_CURRENCY_INVALID' });
+  }
+
+  try {
+    const conversion = await calculateFiatToPiWithConfiguredFx(fiatAmount, currency);
+    return res.json({
+      success: true,
+      conversion,
+      estimateOnly: true,
+      paymentAuthorized: false,
+      referenceRateDisclaimer: '1 Pi = USD 314,159 is a PiNova community reference, not an official Pi Network market rate.',
+    });
+  } catch (error) {
+    const code = error instanceof Error && error.message.startsWith('FX_')
+      ? error.message
+      : 'FX_CONVERSION_UNAVAILABLE';
+    // Fail closed: never return a guessed conversion or provider credentials/details.
+    return res.status(503).json({
+      success: false,
+      code,
+      message: 'A fresh trusted FX quote is unavailable. No Pi conversion estimate was returned.',
+      estimateOnly: true,
+      paymentAuthorized: false,
+    });
+  }
+};
+
+app.post('/api/currency/fiat-to-pi', fxQuoteRateLimiter, handleFiatToPiEstimate);
+app.post('/api/v1/currency/fiat-to-pi', fxQuoteRateLimiter, handleFiatToPiEstimate);
 
 app.get('/api/products', (req, res) => {
   try {

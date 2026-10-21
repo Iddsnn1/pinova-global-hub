@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { piAmountToPico } from '../../services/UtilityPaymentAuthorizationService';
 import { StorageEngine } from '../StorageEngine';
 import {
   InstitutionProfile,
@@ -284,6 +285,7 @@ export class EducationRepository {
     discount?: number;
     scholarship?: number;
     tax?: number;
+    currency?: string;
   }): {
     subtotal: number;
     compulsoryFees: number;
@@ -293,19 +295,23 @@ export class EducationRepository {
     tax: number;
     totalAmount: number;
   } {
-    const round2 = (num: number) => Math.round((num + Number.EPSILON) * 100) / 100;
-    const subtotal = Math.max(0, round2(params.subtotal || 0));
-    const compulsoryFees = Math.max(0, round2(params.compulsoryFees || 0));
-    const optionalFees = Math.max(0, round2(params.optionalFees || 0));
-    const discount = Math.max(0, round2(params.discount || 0));
-    const scholarship = Math.max(0, round2(params.scholarship || 0));
-    const tax = Math.max(0, round2(params.tax || 0));
+    // Education invoices are Pi-native. Preserve pico-Pi (12 decimal places)
+    // instead of applying fiat's 2-decimal rounding to Pi values.
+    const decimals = String(params.currency || 'USD').trim().toUpperCase() === 'PI' ? 12 : 2;
+    const scale = 10 ** decimals;
+    const roundAmount = (num: number) => Math.round((num + Number.EPSILON) * scale) / scale;
+    const subtotal = Math.max(0, roundAmount(params.subtotal || 0));
+    const compulsoryFees = Math.max(0, roundAmount(params.compulsoryFees || 0));
+    const optionalFees = Math.max(0, roundAmount(params.optionalFees || 0));
+    const discount = Math.max(0, roundAmount(params.discount || 0));
+    const scholarship = Math.max(0, roundAmount(params.scholarship || 0));
+    const tax = Math.max(0, roundAmount(params.tax || 0));
 
-    const totalBeforeDeductions = round2(subtotal + compulsoryFees + optionalFees);
+    const totalBeforeDeductions = roundAmount(subtotal + compulsoryFees + optionalFees);
     const cappedDiscount = Math.min(discount, totalBeforeDeductions);
     const cappedScholarship = Math.min(scholarship, Math.max(0, totalBeforeDeductions - cappedDiscount));
-    const totalDeductions = round2(cappedDiscount + cappedScholarship);
-    const totalAmount = Math.max(0, round2(totalBeforeDeductions - totalDeductions + tax));
+    const totalDeductions = roundAmount(cappedDiscount + cappedScholarship);
+    const totalAmount = Math.max(0, roundAmount(totalBeforeDeductions - totalDeductions + tax));
 
     return {
       subtotal,
@@ -320,15 +326,26 @@ export class EducationRepository {
 
   public createInvoice(invoiceData: EducationInvoice): EducationInvoice {
     // Recompute authoritative totals server-side
-    const totals = EducationRepository.calculateInvoiceTotals({
-      subtotal: invoiceData.subtotal,
-      discount: invoiceData.discountAmount,
-      tax: invoiceData.taxAmount
-    });
-
     const invoiceCurrency = String(invoiceData.currency || '').trim().toUpperCase();
     if (invoiceCurrency !== 'PI') {
       throw new Error('PI_NATIVE_INVOICE_REQUIRED');
+    }
+
+    const totals = EducationRepository.calculateInvoiceTotals({
+      subtotal: invoiceData.subtotal,
+      discount: invoiceData.discountAmount,
+      tax: invoiceData.taxAmount,
+      currency: invoiceCurrency
+    });
+
+    const totalAmountPico = piAmountToPico(totals.totalAmount);
+    const amountPaidPico = piAmountToPico(invoiceData.amountPaid || 0);
+    if (
+      totalAmountPico === null ||
+      amountPaidPico === null ||
+      amountPaidPico > totalAmountPico
+    ) {
+      throw new Error('EDUCATION_INVOICE_AMOUNT_INVALID');
     }
 
     const invoice: EducationInvoice = {
@@ -337,8 +354,9 @@ export class EducationRepository {
       subtotal: totals.subtotal,
       discountAmount: totals.discount,
       taxAmount: totals.tax,
-      totalAmount: totals.totalAmount,
-      outstandingBalance: Math.max(0, totals.totalAmount - (invoiceData.amountPaid || 0))
+      totalAmount: Number(totalAmountPico) / 1e12,
+      amountPaid: Number(amountPaidPico) / 1e12,
+      outstandingBalance: Number(totalAmountPico - amountPaidPico) / 1e12
     };
 
     this.invoicesEngine.set(invoice.id, invoice);
@@ -367,6 +385,48 @@ export class EducationRepository {
     currency: string;
     paymentTimestamp: string;
     settlementStatus: string;
+    piAmount?: number;
+    piPaymentId?: string;
+    piTxid?: string;
+    paymentMethod?: string;
+  }): string {
+    const currency = (params.currency || 'PI').trim().toUpperCase();
+    // Pi receipts must preserve all 12 decimal places; formatting to 2 decimals
+    // would make distinct pico-Pi settlements share the same canonical amount.
+    const amountPico = currency === 'PI' ? piAmountToPico(params.amount) : null;
+    const canonicalAmount = currency === 'PI'
+      ? (amountPico === null ? 'INVALID_PI_AMOUNT' : amountPico.toString())
+      : Number(params.amount).toFixed(2);
+    const canonicalPayload = [
+      (params.receiptReference || '').trim().toUpperCase(),
+      (params.invoiceReference || '').trim(),
+      (params.paymentId || '').trim(),
+      (params.studentId || '').trim(),
+      (params.institutionId || '').trim(),
+      canonicalAmount,
+      currency,
+      (params.piAmount === undefined ? '' : (piAmountToPico(params.piAmount)?.toString() ?? 'INVALID_PI_AMOUNT')),
+      (params.piPaymentId || '').trim(),
+      (params.piTxid || '').trim(),
+      (params.paymentMethod || '').trim().toUpperCase(),
+      (params.paymentTimestamp || '').trim(),
+      (params.settlementStatus || 'SETTLED').trim().toUpperCase()
+    ].join('|');
+
+    return crypto.createHash('sha256').update(canonicalPayload).digest('hex');
+  }
+
+  /** Legacy canonical payload retained so receipts created before v2 remain verifiable. */
+  public static computeLegacyReceiptDigest(params: {
+    receiptReference: string;
+    invoiceReference: string;
+    paymentId?: string;
+    studentId?: string;
+    institutionId: string;
+    amount: number;
+    currency: string;
+    paymentTimestamp: string;
+    settlementStatus: string;
   }): string {
     const canonicalPayload = [
       (params.receiptReference || '').trim().toUpperCase(),
@@ -379,7 +439,6 @@ export class EducationRepository {
       (params.paymentTimestamp || '').trim(),
       (params.settlementStatus || 'SETTLED').trim().toUpperCase()
     ].join('|');
-
     return crypto.createHash('sha256').update(canonicalPayload).digest('hex');
   }
 
@@ -394,6 +453,16 @@ export class EducationRepository {
     paymentMethod: 'PI_NETWORK' | 'FIAT_ESCROW' | 'SCHOLARSHIP_GRANT';
     payerUsername: string;
     idempotencyKey?: string;
+    authoritativePiSettlement?: {
+      verified: true;
+      source: 'pi_platform' | 'sandbox_dev';
+      paymentId: string;
+      amount: number;
+      txid: string;
+      userUid: string;
+      network: string;
+      direction: string;
+    };
   }): {
     success: boolean;
     payment: EducationPaymentTransaction;
@@ -409,13 +478,42 @@ export class EducationRepository {
     );
 
     if (existingPayment) {
+      // A replay is still a Pi settlement request: require the same server-verified
+      // proof before returning an existing receipt, rather than treating idempotency
+      // as a way to bypass the authoritative payment guard.
+      if (params.paymentMethod === 'PI_NETWORK') {
+        const settlement = params.authoritativePiSettlement;
+        if (!settlement || settlement.verified !== true) throw new Error('PI_SETTLEMENT_PROOF_REQUIRED');
+        if (process.env.NODE_ENV === 'production' && settlement.source !== 'pi_platform') throw new Error('PI_PLATFORM_VERIFICATION_REQUIRED');
+        if (settlement.paymentId !== String(params.piPaymentId || '')) throw new Error('PI_SETTLEMENT_ID_MISMATCH');
+        const settlementPico = piAmountToPico(settlement.amount);
+        const replayPiAmountPico = piAmountToPico(params.piAmount);
+        const replayPaidAmountPico = piAmountToPico(params.amountPaid);
+        if (
+          settlementPico === null ||
+          replayPiAmountPico === null ||
+          replayPaidAmountPico === null ||
+          settlementPico <= 0n ||
+          settlementPico !== replayPiAmountPico ||
+          settlementPico !== replayPaidAmountPico
+        ) throw new Error('PI_SETTLEMENT_AMOUNT_MISMATCH');
+        if (!settlement.txid || settlement.txid !== String(params.piTxid || '')) throw new Error('PI_SETTLEMENT_TXID_MISMATCH');
+        if (!settlement.userUid || !settlement.network || settlement.direction !== 'user_to_app') throw new Error('PI_SETTLEMENT_IDENTITY_INVALID');
+      }
       const existingInvoice = this.invoicesEngine.get(existingPayment.invoiceId);
       if (!existingInvoice) throw new Error('PAYMENT_REPLAY_INVOICE_MISSING');
 
       const sameInvoice = existingPayment.invoiceId === params.invoiceId;
       const sameCurrency = existingPayment.currency.trim().toUpperCase() === String(params.currency || '').trim().toUpperCase();
-      const sameAmount = Math.abs(existingPayment.amountPaid - params.amountPaid) <= 0.00000001;
-      const samePiAmount = Math.abs(existingPayment.piAmount - Number(params.piAmount ?? 0)) <= 0.00000001;
+      const sameAmount = String(params.currency || '').trim().toUpperCase() === 'PI'
+        ? piAmountToPico(existingPayment.amountPaid) !== null &&
+          piAmountToPico(existingPayment.amountPaid) === piAmountToPico(params.amountPaid)
+        : Math.abs(existingPayment.amountPaid - params.amountPaid) <= 0.00000001;
+      const existingPiAmountPico = piAmountToPico(existingPayment.piAmount);
+      const requestedPiAmountPico = piAmountToPico(params.piAmount ?? 0);
+      const samePiAmount = existingPiAmountPico !== null &&
+        requestedPiAmountPico !== null &&
+        existingPiAmountPico === requestedPiAmountPico;
       const samePiPayment = (existingPayment.piPaymentId || '') === (params.piPaymentId || '');
       const samePayer = existingPayment.payerUsername.trim().toLowerCase() === params.payerUsername.trim().toLowerCase();
 
@@ -442,6 +540,23 @@ export class EducationRepository {
 
     if (params.paymentMethod === 'PI_NETWORK') {
       if (!params.piPaymentId) throw new Error('PI_PAYMENT_ID_REQUIRED');
+      const settlement = params.authoritativePiSettlement;
+      if (!settlement || settlement.verified !== true) throw new Error('PI_SETTLEMENT_PROOF_REQUIRED');
+      if (process.env.NODE_ENV === 'production' && settlement.source !== 'pi_platform') throw new Error('PI_PLATFORM_VERIFICATION_REQUIRED');
+      if (settlement.paymentId !== params.piPaymentId) throw new Error('PI_SETTLEMENT_ID_MISMATCH');
+      const settlementPico = piAmountToPico(settlement.amount);
+      const submittedPiPico = piAmountToPico(params.piAmount);
+      const paidAmountPico = piAmountToPico(params.amountPaid);
+      if (
+        settlementPico === null ||
+        submittedPiPico === null ||
+        paidAmountPico === null ||
+        settlementPico <= 0n ||
+        settlementPico !== submittedPiPico ||
+        settlementPico !== paidAmountPico
+      ) throw new Error('PI_SETTLEMENT_AMOUNT_MISMATCH');
+      if (!settlement.txid || settlement.txid !== String(params.piTxid || '')) throw new Error('PI_SETTLEMENT_TXID_MISMATCH');
+      if (!settlement.userUid || !settlement.network || settlement.direction !== 'user_to_app') throw new Error('PI_SETTLEMENT_IDENTITY_INVALID');
       const invoiceCurrency = String(invoice.currency || '').trim().toUpperCase();
       const paymentCurrency = String(params.currency || '').trim().toUpperCase();
       if (invoiceCurrency !== 'PI') throw new Error('PI_NATIVE_INVOICE_REQUIRED');
@@ -451,12 +566,30 @@ export class EducationRepository {
       const submittedPiAmount = Number(params.piAmount);
       if (!Number.isFinite(paidPiAmount) || paidPiAmount <= 0) throw new Error('PI_AMOUNT_REQUIRED');
       if (!Number.isFinite(submittedPiAmount) || submittedPiAmount <= 0) throw new Error('PI_AMOUNT_REQUIRED');
-      if (Math.abs(submittedPiAmount - paidPiAmount) > 0.000000000001) throw new Error('PI_AMOUNT_MISMATCH');
+      const submittedPiAmountPico = piAmountToPico(submittedPiAmount);
+      const paidPiAmountPico = piAmountToPico(paidPiAmount);
+      if (
+        submittedPiAmountPico === null ||
+        paidPiAmountPico === null ||
+        submittedPiAmountPico !== paidPiAmountPico
+      ) throw new Error('PI_AMOUNT_MISMATCH');
     }
 
-    // Phase 10: Prevent overpayment beyond outstanding balance
-    if (params.amountPaid > invoice.outstandingBalance + 0.001) {
-      throw new Error(`Payment amount (${params.amountPaid} π) exceeds outstanding balance (${invoice.outstandingBalance} π). Overpayment rejected.`);
+    // Phase 10: enforce exact pico-Pi balance arithmetic; no fractional tolerance.
+    const requestedPaymentPico = piAmountToPico(params.amountPaid);
+    const outstandingBalancePico = piAmountToPico(invoice.outstandingBalance);
+    const invoiceTotalPico = piAmountToPico(invoice.totalAmount);
+    const previouslyPaidPico = piAmountToPico(invoice.amountPaid);
+    if (
+      requestedPaymentPico === null ||
+      outstandingBalancePico === null ||
+      invoiceTotalPico === null ||
+      previouslyPaidPico === null ||
+      requestedPaymentPico <= 0n ||
+      requestedPaymentPico > outstandingBalancePico ||
+      previouslyPaidPico + requestedPaymentPico > invoiceTotalPico
+    ) {
+      throw new Error(`Payment amount (${params.amountPaid} π) exceeds or cannot be represented within outstanding balance (${invoice.outstandingBalance} π). Overpayment rejected.`);
     }
 
     const timestamp = new Date().toISOString();
@@ -474,14 +607,21 @@ export class EducationRepository {
       institutionId: invoice.institutionId,
       amount: params.amountPaid,
       currency: params.currency,
+      piAmount: params.piAmount,
+      piPaymentId: params.piPaymentId,
+      piTxid: params.piTxid,
+      paymentMethod: params.paymentMethod,
       paymentTimestamp: timestamp,
       settlementStatus: 'SETTLED'
     });
 
-    // 4. Update Invoice Balances
-    const newAmountPaid = invoice.amountPaid + params.amountPaid;
-    const newOutstandingBalance = Math.max(0, invoice.totalAmount - newAmountPaid);
-    const newStatus = newOutstandingBalance <= 0.001 ? 'PAID' : 'PARTIALLY_PAID';
+    // 4. Update invoice balances using pico-Pi integers so a tiny remaining
+    // balance cannot be silently rounded into PAID by a tolerance threshold.
+    const newAmountPaidPico = previouslyPaidPico + requestedPaymentPico;
+    const newOutstandingBalancePico = invoiceTotalPico - newAmountPaidPico;
+    const newAmountPaid = Number(newAmountPaidPico) / 1e12;
+    const newOutstandingBalance = Number(newOutstandingBalancePico) / 1e12;
+    const newStatus = newOutstandingBalancePico === 0n ? 'PAID' : 'PARTIALLY_PAID';
 
     const updatedInvoice: EducationInvoice = {
       ...invoice,
@@ -520,7 +660,7 @@ export class EducationRepository {
       receiptNumber,
       verificationReference: verificationRef,
       verificationHash: auditHash,
-      algorithm: 'SHA-256',
+      algorithm: 'SHA-256-v2',
       invoiceId: invoice.id,
       invoiceNumber: invoice.invoiceNumber,
       paymentId,
@@ -614,7 +754,7 @@ export class EducationRepository {
     }
 
     // Phase 12: authoritatively recompute canonical digest from record fields
-    const expectedDigest = EducationRepository.computeReceiptDigest({
+    const digestParams = {
       receiptReference: receipt.receiptNumber,
       invoiceReference: receipt.invoiceNumber || receipt.invoiceId,
       paymentId: receipt.paymentId || receipt.piPaymentId || '',
@@ -622,9 +762,17 @@ export class EducationRepository {
       institutionId: receipt.institutionId,
       amount: receipt.amountPaid,
       currency: receipt.currency,
+      piAmount: receipt.piAmount,
+      piPaymentId: receipt.piPaymentId,
+      piTxid: receipt.piTxid,
+      paymentMethod: receipt.paymentMethod,
       paymentTimestamp: receipt.paymentDate,
       settlementStatus: receipt.settlementStatus || 'SETTLED'
-    });
+    };
+    // Keep legacy receipts verifiable without weakening v2 metadata binding.
+    const expectedDigest = receipt.algorithm === 'SHA-256-v2'
+      ? EducationRepository.computeReceiptDigest(digestParams)
+      : EducationRepository.computeLegacyReceiptDigest(digestParams);
 
     const isTampered = expectedDigest !== receipt.verificationHash;
     if (isTampered) {
@@ -895,10 +1043,20 @@ export class EducationRepository {
     if (scholarship.eligibleCountries?.length && invoice.countryCode && !scholarship.eligibleCountries.includes(invoice.countryCode)) {
       return { success: false, error: 'SCHOLARSHIP_COUNTRY_NOT_ELIGIBLE' };
     }
+    // Scholarship coverage is denominated in USD, while all invoices currently
+    // accepted by createInvoice are Pi-denominated. Never compare or apply USD
+    // directly to a Pi balance: that silently mixes currencies and can over/under
+    // credit a student's invoice. Keep this operation fail-closed until the
+    // trusted FX quote is incorporated into the scholarship settlement contract.
+    const invoiceCurrency = String(invoice.currency || '').trim().toUpperCase();
+    if (invoiceCurrency !== 'USD') {
+      return { success: false, error: 'SCHOLARSHIP_FX_CONVERSION_REQUIRED' };
+    }
+
     const deduction = Math.min(scholarship.coverageAmountUsd, invoice.outstandingBalance);
     const newAmountPaid = invoice.amountPaid + deduction;
     const newOutstanding = Math.max(0, invoice.totalAmount - newAmountPaid);
-    const newStatus = newOutstanding <= 0.001 ? 'PAID' : 'PARTIALLY_PAID';
+    const newStatus = newOutstanding === 0 ? 'PAID' : 'PARTIALLY_PAID';
 
     const updated: EducationInvoice = {
       ...invoice,

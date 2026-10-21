@@ -25,6 +25,7 @@ export type VtuErrorCode =
   | 'VTU_API_UNAVAILABLE'
   | 'VTU_PROVIDER_REJECTED'
   | 'VTU_INVALID_CUSTOMER'
+  | 'VTU_INVALID_AMOUNT'
   | 'VTU_TRANSACTION_PENDING'
   | 'VTU_TRANSACTION_FAILED'
   | 'VTU_SERVICE_NOT_CONFIGURED'
@@ -121,15 +122,16 @@ export class VtuNgAdapter {
   }
 
   /**
-   * Generates a deterministic but unique VTU request ID (<= 50 characters)
+   * Generates a stable provider request ID for a payment (<= 50 characters).
+   * Repeated attempts for the same Pi payment must reuse the same provider key;
+   * time/random suffixes would defeat provider-side duplicate detection after a
+   * timeout or lost response.
    */
   public generateRequestId(paymentId: string, prefix: string = 'UTIL'): string {
-    const cleanId = String(paymentId || 'GEN').replace(/[^a-zA-Z0-9]/g, '');
-    const shortPay = cleanId.slice(-14) || 'PSTP';
-    const timestamp = Date.now().toString(36);
-    const rand = Math.random().toString(36).substring(2, 6);
-    const reqId = `PNV-${prefix}-${shortPay}-${timestamp}-${rand}`;
-    return reqId.slice(0, 50);
+    const normalizedPaymentId = String(paymentId || '').trim();
+    const safePrefix = String(prefix || 'UTIL').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8) || 'UTIL';
+    const digest = crypto.createHash('sha256').update(normalizedPaymentId || 'GEN').digest('hex').slice(0, 24);
+    return `PNV-${safePrefix}-${digest}`.slice(0, 50);
   }
 
   /**
@@ -386,9 +388,11 @@ export class VtuNgAdapter {
     }
 
     if (!this.isConfigured()) {
+      // Never report a customer as verified when no authoritative provider
+      // lookup occurred. UI must not treat configuration absence as approval.
       return {
-        success: true,
-        valid: true,
+        success: false,
+        valid: false,
         accountStatus: 'UNCONFIGURED',
         errorCode: 'VTU_CREDENTIALS_MISSING',
         message: 'VTU.ng credentials not configured; live customer verification unavailable.'
@@ -453,8 +457,60 @@ export class VtuNgAdapter {
     amount: number;
   }): Promise<VtuFulfillmentResult> {
     const requestId = this.generateRequestId(params.paymentId, 'AIR');
-    const normalizedService = this.mapServiceId(params.serviceId);
+    const rawPhone = String(params.phone || '').replace(/[^0-9]/g, '');
+    const normalizedInputPhone = rawPhone.startsWith('234') && rawPhone.length === 13
+      ? `0${rawPhone.slice(3)}`
+      : rawPhone;
     const cleanPhone = this.formatPhoneNumber(params.phone);
+    const rawServiceId = String(params.serviceId || '').toLowerCase().trim();
+    const normalizedService = this.mapServiceId(rawServiceId);
+
+    // Never fall back to a dummy phone number or silently round a client amount
+    // at the provider boundary. Canonical invoice/payment checks happen upstream;
+    // these checks are defense in depth before any irreversible VTU request.
+    if (!String(params.paymentId || '').trim() || !/^0[0-9]{10}$/.test(normalizedInputPhone)) {
+      return {
+        success: false,
+        fulfilled: false,
+        status: 'FAILED',
+        requestId,
+        errorCode: 'VTU_INVALID_CUSTOMER',
+        message: 'A valid Nigerian mobile number and verified payment reference are required.'
+      };
+    }
+    if (!Number.isSafeInteger(params.amount) || params.amount <= 0) {
+      return {
+        success: false,
+        fulfilled: false,
+        status: 'FAILED',
+        requestId,
+        errorCode: 'VTU_INVALID_AMOUNT',
+        message: 'Airtime amount must be a positive whole-number NGN amount.'
+      };
+    }
+    // Airtime fulfillment is limited to explicitly supported Nigerian mobile
+    // networks. mapServiceId() intentionally preserves unknown IDs for other
+    // utility types, so do not treat any non-empty string as a valid airtime ID.
+    const supportedAirtimeServices = new Set(['mtn', 'airtel', 'glo', '9mobile']);
+    // mapServiceId() also supports fuzzy matching for legacy non-airtime catalog
+    // labels. For irreversible airtime purchases, require a whole-token match so
+    // arbitrary IDs such as "notmtn" cannot be normalized into a real network.
+    const hasSupportedNetworkToken =
+      /(^|[^a-z0-9])mtn([^a-z0-9]|$)/.test(rawServiceId) ||
+      /(^|[^a-z0-9])airtel([^a-z0-9]|$)/.test(rawServiceId) ||
+      /(^|[^a-z0-9])glo([^a-z0-9]|$)/.test(rawServiceId) ||
+      /(^|[^a-z0-9])9mobile([^a-z0-9]|$)/.test(rawServiceId) ||
+      /(^|[^a-z0-9])etisalat([^a-z0-9]|$)/.test(rawServiceId);
+    if (!supportedAirtimeServices.has(normalizedService) || !hasSupportedNetworkToken) {
+      return {
+        success: false,
+        fulfilled: false,
+        status: 'FAILED',
+        requestId,
+        errorCode: 'VTU_SERVICE_NOT_CONFIGURED',
+        message: 'A supported Nigerian airtime network is required.'
+      };
+    }
 
     if (!this.isConfigured()) {
       return {
@@ -473,23 +529,37 @@ export class VtuNgAdapter {
         request_id: requestId,
         phone: cleanPhone,
         service_id: normalizedService,
-        amount: Math.round(params.amount)
+        amount: params.amount
       })
     });
 
     if (res.ok && res.data) {
       const payload: any = res.data;
-      const isSuccess = String(payload?.code || payload?.status || '').toLowerCase() === 'success';
+      const providerStatus = String(
+        payload?.data?.status || payload?.status || payload?.data?.order_status || '',
+      ).trim().toLowerCase();
+      const orderMessage = String(payload?.message || '').trim().toLowerCase();
+      // VTU.ng can return HTTP 200 and code="success" while an order is only
+      // processing-api. Never show a paid utility as fulfilled until the provider
+      // explicitly reports completed-api (or an equivalent explicit completed state).
+      const isFulfilled = providerStatus === 'completed-api' ||
+        providerStatus === 'completed' || providerStatus === 'fulfilled';
+      const isDefinitiveFailure = ['refunded', 'failed', 'cancelled'].includes(providerStatus) ||
+        orderMessage === 'order refunded' || orderMessage === 'order failed' ||
+        orderMessage === 'order cancelled';
       const orderId = payload?.data?.order_id || payload?.order_id || payload?.data?.reference;
+      const resultStatus = isFulfilled ? 'FULFILLED'
+        : isDefinitiveFailure ? 'FAILED' : 'FULFILLMENT_PENDING';
 
       return {
-        success: isSuccess,
-        fulfilled: isSuccess,
-        status: isSuccess ? 'FULFILLED' : 'FULFILLMENT_PENDING',
+        success: isFulfilled,
+        fulfilled: isFulfilled,
+        status: resultStatus,
         orderId: String(orderId || ''),
         requestId,
         providerReference: String(orderId || requestId),
-        message: payload?.message || (isSuccess ? 'Airtime recharge successful' : 'Airtime request accepted'),
+        message: payload?.message || (isFulfilled ? 'Airtime recharge successful' : 'Airtime order status requires confirmation'),
+        errorCode: isDefinitiveFailure ? 'VTU_TRANSACTION_FAILED' : undefined,
         rawResponse: payload
       };
     }
@@ -716,21 +786,40 @@ export class VtuNgAdapter {
    * Requery / Check Status: POST /api/v2/requery
    */
   public async requeryOrder(requestId: string): Promise<{ success: boolean; status?: string; raw?: any; errorCode?: VtuErrorCode; error?: string }> {
+    const cleanRequestId = String(requestId || '').trim();
+    // Only query request IDs generated by this application. This prevents an
+    // arbitrary client-supplied provider reference from being used to probe
+    // unrelated VTU.ng transactions. The owner-bound API layer must still
+    // resolve the ID from a durable fulfillment attempt before calling this.
+    if (!/^PNV-[A-Z0-9]{1,8}-[a-f0-9]{24}$/.test(cleanRequestId)) {
+      return {
+        success: false,
+        errorCode: 'VTU_PROVIDER_REJECTED',
+        error: 'A valid PiNova provider request ID is required.'
+      };
+    }
     if (!this.isConfigured()) {
       return { success: false, errorCode: 'VTU_CREDENTIALS_MISSING', error: 'VTU credentials not configured' };
     }
 
     const res = await this.executeVtuRequest('/api/v2/requery', {
       method: 'POST',
-      body: JSON.stringify({ request_id: requestId })
+      body: JSON.stringify({ request_id: cleanRequestId })
     });
 
     if (res.ok && res.data) {
       const payload: any = res.data;
-      const status = payload?.data?.status || payload?.status || 'UNKNOWN';
+      const rawStatus = String(payload?.data?.status || payload?.status || 'UNKNOWN').trim().toLowerCase();
+      const status = rawStatus === 'completed-api' || rawStatus === 'completed' || rawStatus === 'fulfilled'
+        ? 'COMPLETED'
+        : rawStatus === 'refunded' || rawStatus === 'failed' || rawStatus === 'cancelled'
+          ? 'FAILED'
+          : rawStatus === 'processing-api' || rawStatus === 'processing' || rawStatus === 'queued-api' || rawStatus === 'queued'
+            ? 'PROCESSING'
+            : 'UNKNOWN';
       return {
         success: true,
-        status: String(status).toUpperCase(),
+        status,
         raw: payload
       };
     }
@@ -747,17 +836,18 @@ export class VtuNgAdapter {
    * Webhook Signature Verification using VTU_USER_PIN (HMAC / SHA256)
    */
   public verifyWebhookSignature(payloadString: string, signatureHeader?: string): boolean {
-    if (!this.config.userPin) {
-      // If PIN not configured, allow payload with warning
-      return true;
-    }
-    if (!signatureHeader) {
+    // Fail closed: never accept a webhook when the signing secret is missing.
+    if (!this.config.userPin || !signatureHeader || typeof payloadString !== 'string') {
       return false;
     }
 
     try {
+      const supplied = signatureHeader.trim();
       const computed = crypto.createHmac('sha256', this.config.userPin).update(payloadString).digest('hex');
-      return crypto.timingSafeEqual(Buffer.from(computed), Buffer.from(signatureHeader));
+      const computedBytes = Buffer.from(computed, 'utf8');
+      const suppliedBytes = Buffer.from(supplied, 'utf8');
+      if (computedBytes.length !== suppliedBytes.length) return false;
+      return crypto.timingSafeEqual(computedBytes, suppliedBytes);
     } catch {
       return false;
     }

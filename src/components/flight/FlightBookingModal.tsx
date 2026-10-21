@@ -228,7 +228,7 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
 
     return Number.isFinite(parsed) && parsed > 0
       ? Number(parsed.toFixed(2))
-      : 100.0;
+      : 0;
   })();
 
   const [currentFareFiat, setCurrentFareFiat] =
@@ -244,19 +244,24 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
       ? piRateUsd
       : 314159;
 
-  const offerPiAmount = Number(offer.fareAmountPi);
-  const canonicalPiAmount =
-    Number.isFinite(offerPiAmount) && offerPiAmount > 0
-      ? offerPiAmount
-      : Number((currentFareFiat / effectivePiRate).toFixed(12));
+  // This modal currently supports checkout only for USD-denominated offers.
+  // Non-USD fares require a trusted server quote and a server-authorized
+  // canonical amount; never fall back to a fabricated USD conversion.
+  const offerCurrency = String(offer.fareCurrency || '').trim().toUpperCase();
+  const hasSupportedPiConversion = offerCurrency === 'USD';
+  const canonicalPiAmount = hasSupportedPiConversion && Number.isFinite(currentFareFiat) && currentFareFiat > 0
+    ? Number((currentFareFiat / effectivePiRate).toFixed(12))
+    : 0;
 
   const formattedPi =
-    canonicalPiAmount < 0.0001
-      ? canonicalPiAmount.toFixed(6)
-      : canonicalPiAmount
-          .toFixed(6)
-          .replace(/0+$/, '')
-          .replace(/\.$/, '');
+    canonicalPiAmount <= 0
+      ? 'Unavailable'
+      : canonicalPiAmount < 0.0001
+        ? canonicalPiAmount.toFixed(6)
+        : canonicalPiAmount
+            .toFixed(6)
+            .replace(/0+$/, '')
+            .replace(/\.$/, '');
 
   /*
    * ============================================================
@@ -403,6 +408,10 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
       currentFareFiat <= 0
     ) {
       return 'Flight fare must be a valid positive amount.';
+    }
+
+    if (!hasSupportedPiConversion || !Number.isFinite(canonicalPiAmount) || canonicalPiAmount <= 0) {
+      return 'Pi conversion is unavailable for this fare currency. Please choose a USD-denominated offer or retry when trusted FX conversion is available.';
     }
 
     return null;
@@ -616,12 +625,13 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
     }
 
     if (
+      !hasSupportedPiConversion ||
       !Number.isFinite(canonicalPiAmount) ||
       canonicalPiAmount <= 0
     ) {
       setFlowState('payment_failed');
       setErrorMessage(
-        'Payment amount could not be calculated safely. Please restart checkout.'
+        'Trusted Pi conversion is unavailable for this fare currency. No payment was created; please choose a USD-denominated offer or retry later.'
       );
       return;
     }

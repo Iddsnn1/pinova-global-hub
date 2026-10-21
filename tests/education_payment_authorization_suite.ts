@@ -47,6 +47,25 @@ async function run() {
     updatedAt: new Date().toISOString()
   });
 
+  const picoInvoice = repo.createInvoice({
+    ...invoice,
+    id: 'inv-edu-security-pico-001',
+    invoiceNumber: 'INV/EDU/SEC/PICO/001',
+    items: [{ id: 'fee-pico', category: 'tuition', description: 'Pico-Pi precision fixture', amount: 0.000000000001, isCompulsory: true }],
+    subtotal: 0.000000000001,
+    discountAmount: 0,
+    taxAmount: 0,
+    totalAmount: 0.000000000001,
+    amountPaid: 0,
+    outstandingBalance: 0.000000000001,
+    currency: 'PI',
+    status: 'UNPAID'
+  });
+  ok(
+    picoInvoice.totalAmount === 0.000000000001 && picoInvoice.outstandingBalance === 0.000000000001,
+    'invoice creation preserves one pico-Pi instead of rounding it to zero'
+  );
+
   const first = repo.recordPayment({
     invoiceId: invoice.id,
     amountPaid: 3.5,
@@ -56,13 +75,159 @@ async function run() {
     piTxid: 'tx-security-001',
     paymentMethod: 'PI_NETWORK',
     payerUsername: 'guardian-001',
-    idempotencyKey: 'edu-idem-001'
+    idempotencyKey: 'edu-idem-001',
+    authoritativePiSettlement: {
+      verified: true,
+      source: 'sandbox_dev',
+      paymentId: 'pi-pay-security-001',
+      amount: 3.5,
+      txid: 'tx-security-001',
+      userUid: 'sandbox-user-001',
+      network: 'Pi Testnet',
+      direction: 'user_to_app'
+    }
   });
 
   ok(first.payment.status === 'VERIFIED_COMPLETED', 'verified Pi payment creates completed education settlement');
   ok(first.invoice.status === 'PAID', 'invoice becomes PAID only after authoritative settlement');
   ok(first.receipt.verificationHash === first.payment.auditHash, 'receipt digest is bound to payment audit hash');
 
+  const precisionInvoice = repo.createInvoice({
+    id: 'inv-edu-security-precision-001',
+    invoiceNumber: 'INV/EDU/SEC/PRECISION/001',
+    institutionId: 'inst-001',
+    institutionName: 'Authorized Institution Test Fixture',
+    studentId: 'student-001',
+    studentName: 'Test Student',
+    studentMatricOrReg: 'MAT-001',
+    guardianId: 'guardian-001',
+    educationTier: 'tertiary',
+    educationLevel: 'Undergraduate',
+    programmeOrClass: '100 Level',
+    academicSession: '2026/2027',
+    termOrSemester: 'Semester 1',
+    items: [{ id: 'fee-precision', category: 'tuition', description: 'Tuition', amount: 3.5, isCompulsory: true }],
+    subtotal: 3.5,
+    discountAmount: 0,
+    taxAmount: 0,
+    totalAmount: 3.5,
+    amountPaid: 0,
+    outstandingBalance: 3.5,
+    currency: 'PI',
+    dueDate: '2026-10-31T00:00:00.000Z',
+    status: 'UNPAID',
+    allowedInstallments: 1,
+    installmentsPaidCount: 0,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  });
+  const scholarship = repo.createScholarship({
+    title: 'Currency guard test scholarship',
+    sponsorName: 'Test sponsor',
+    sponsorType: 'institution',
+    badge: 'TEST',
+    description: 'Regression fixture',
+    coverageType: 'Partial Tuition (50%)',
+    amountValue: '$100 / Year',
+    coverageAmountUsd: 100,
+    applicableTiers: ['tertiary'],
+    eligibleCountries: ['NG'],
+    deadline: '2026-12-31T00:00:00.000Z',
+    eligibilityCriteria: [],
+    numberOfAwards: 1,
+    applicationCount: 0
+  });
+  const invoiceBeforeScholarship = repo.getInvoiceById(precisionInvoice.id);
+  const scholarshipCurrencyGuard = repo.applyScholarshipToInvoice(precisionInvoice.id, scholarship.id);
+  const invoiceAfterScholarship = repo.getInvoiceById(precisionInvoice.id);
+  ok(
+    !scholarshipCurrencyGuard.success && scholarshipCurrencyGuard.error === 'SCHOLARSHIP_FX_CONVERSION_REQUIRED',
+    'USD scholarship is not applied directly to a Pi-denominated invoice'
+  );
+  ok(
+    invoiceBeforeScholarship?.amountPaid === invoiceAfterScholarship?.amountPaid &&
+      invoiceBeforeScholarship?.outstandingBalance === invoiceAfterScholarship?.outstandingBalance &&
+      invoiceBeforeScholarship?.status === invoiceAfterScholarship?.status,
+    'rejected cross-currency scholarship leaves invoice balance and status unchanged'
+  );
+
+  let picoOverpaymentRejected = false;
+  try {
+    repo.recordPayment({
+      invoiceId: precisionInvoice.id,
+      amountPaid: 3.500000000001,
+      currency: 'PI',
+      piAmount: 3.500000000001,
+      piPaymentId: 'pi-pay-security-precision-001',
+      piTxid: 'tx-security-precision-001',
+      paymentMethod: 'PI_NETWORK',
+      payerUsername: 'guardian-001',
+      idempotencyKey: 'edu-idem-precision-001',
+      authoritativePiSettlement: {
+        verified: true,
+        source: 'sandbox_dev',
+        paymentId: 'pi-pay-security-precision-001',
+        amount: 3.500000000001,
+        txid: 'tx-security-precision-001',
+        userUid: 'sandbox-user-001',
+        network: 'Pi Testnet',
+        direction: 'user_to_app'
+      }
+    });
+  } catch (error: any) {
+    picoOverpaymentRejected = String(error?.message || '').includes('Overpayment rejected');
+  }
+  ok(picoOverpaymentRejected, 'overpayment of exactly one pico-Pi is rejected');
+
+  const almostPaid = repo.recordPayment({
+    invoiceId: precisionInvoice.id,
+    amountPaid: 3.499999999999,
+    currency: 'PI',
+    piAmount: 3.499999999999,
+    piPaymentId: 'pi-pay-security-almost-paid',
+    piTxid: 'tx-security-almost-paid',
+    paymentMethod: 'PI_NETWORK',
+    payerUsername: 'guardian-001',
+    idempotencyKey: 'edu-idem-almost-paid',
+    authoritativePiSettlement: {
+      verified: true,
+      source: 'sandbox_dev',
+      paymentId: 'pi-pay-security-almost-paid',
+      amount: 3.499999999999,
+      txid: 'tx-security-almost-paid',
+      userUid: 'sandbox-user-001',
+      network: 'Pi Testnet',
+      direction: 'user_to_app'
+    }
+  });
+  ok(almostPaid.invoice.status === 'PARTIALLY_PAID', 'one pico-Pi outstanding keeps invoice partially paid');
+  ok(almostPaid.invoice.outstandingBalance === 0.000000000001, 'one pico-Pi outstanding is preserved exactly');
+  ok(
+    EducationRepository.computeReceiptDigest({
+      receiptReference: 'RCP-PRECISION',
+      invoiceReference: 'INV-PRECISION',
+      paymentId: 'PAY-PRECISION',
+      studentId: 'student-001',
+      institutionId: 'inst-001',
+      amount: 0.000000000001,
+      currency: 'PI',
+      paymentTimestamp: '2026-10-12T00:00:00.000Z',
+      settlementStatus: 'SETTLED'
+    }) !== EducationRepository.computeReceiptDigest({
+      receiptReference: 'RCP-PRECISION',
+      invoiceReference: 'INV-PRECISION',
+      paymentId: 'PAY-PRECISION',
+      studentId: 'student-001',
+      institutionId: 'inst-001',
+      amount: 0.000000000002,
+      currency: 'PI',
+      paymentTimestamp: '2026-10-12T00:00:00.000Z',
+      settlementStatus: 'SETTLED'
+    }),
+    'receipt digest distinguishes amounts differing by one pico-Pi'
+  );
+
+  const paymentCountBeforeReplay = repo.getAllPayments().length;
   const replay = repo.recordPayment({
     invoiceId: invoice.id,
     amountPaid: 3.5,
@@ -72,10 +237,20 @@ async function run() {
     piTxid: 'tx-security-001',
     paymentMethod: 'PI_NETWORK',
     payerUsername: 'guardian-001',
-    idempotencyKey: 'edu-idem-001'
+    idempotencyKey: 'edu-idem-001',
+    authoritativePiSettlement: {
+      verified: true,
+      source: 'sandbox_dev',
+      paymentId: 'pi-pay-security-001',
+      amount: 3.5,
+      txid: 'tx-security-001',
+      userUid: 'sandbox-user-001',
+      network: 'Pi Testnet',
+      direction: 'user_to_app'
+    }
   });
   ok(replay.payment.id === first.payment.id, 'exact replay returns the original settlement');
-  ok(repo.getAllPayments().length === 1, 'exact replay does not create a second payment');
+  ok(repo.getAllPayments().length === paymentCountBeforeReplay, 'exact replay does not create a second payment');
 
   let replayMismatchRejected = false;
   try {
@@ -88,10 +263,20 @@ async function run() {
       piTxid: 'tx-security-001',
       paymentMethod: 'PI_NETWORK',
       payerUsername: 'guardian-001',
-      idempotencyKey: 'edu-idem-001'
+      idempotencyKey: 'edu-idem-001',
+      authoritativePiSettlement: {
+      verified: true,
+      source: 'sandbox_dev',
+      paymentId: 'pi-pay-security-001',
+      amount: 3.5,
+      txid: 'tx-security-001',
+      userUid: 'sandbox-user-001',
+      network: 'Pi Testnet',
+      direction: 'user_to_app'
+    }
     });
   } catch (error: any) {
-    replayMismatchRejected = error?.message === 'PAYMENT_REPLAY_BINDING_MISMATCH';
+    replayMismatchRejected = ['PAYMENT_REPLAY_BINDING_MISMATCH', 'PI_SETTLEMENT_AMOUNT_MISMATCH'].includes(error?.message);
   }
   ok(replayMismatchRejected, 'replay with altered amount is rejected');
 
@@ -106,7 +291,17 @@ async function run() {
       piTxid: 'tx-security-001',
       paymentMethod: 'PI_NETWORK',
       payerUsername: 'guardian-001',
-      idempotencyKey: 'edu-idem-001'
+      idempotencyKey: 'edu-idem-001',
+      authoritativePiSettlement: {
+      verified: true,
+      source: 'sandbox_dev',
+      paymentId: 'pi-pay-security-001',
+      amount: 3.5,
+      txid: 'tx-security-001',
+      userUid: 'sandbox-user-001',
+      network: 'Pi Testnet',
+      direction: 'user_to_app'
+    }
     });
   } catch (error: any) {
     crossInvoiceReplayRejected = error?.message === 'PAYMENT_REPLAY_BINDING_MISMATCH';
@@ -118,6 +313,14 @@ async function run() {
   storedReceipt.amountPaid = 2.5;
   const tampered = repo.verifyReceipt(receiptNumber);
   ok(tampered.status === 'TAMPERED' && !tampered.valid, 'receipt amount mutation fails SHA-256 verification');
+
+  const precisionReceipt = repo.getReceiptByNumber(almostPaid.receipt.receiptNumber)!;
+  precisionReceipt.piTxid = 'tampered-transaction-id';
+  const piMetadataTampered = repo.verifyReceipt(precisionReceipt.receiptNumber);
+  ok(
+    piMetadataTampered.status === 'TAMPERED' && !piMetadataTampered.valid,
+    'receipt Pi transaction metadata mutation fails SHA-256 verification'
+  );
 
   setJambCapsAuthoritativeAdapter(null);
   const noAdapter = await verifyJambCapsAuthorization({
