@@ -119,6 +119,22 @@ function run() {
     PINOVA_FX_PROVIDER_SOURCE: 'trusted.test',
   }), 'FX_PROVIDER_CREDENTIALS_IN_URL_FORBIDDEN');
 
+  throwsCode(() => getTrustedFxProviderConfig({
+    PINOVA_FX_PROVIDER_URL: 'not-a-valid-url',
+    PINOVA_FX_PROVIDER_SOURCE: 'trusted.test',
+  }), 'FX_PROVIDER_ENDPOINT_INVALID');
+
+  throwsCode(() => getTrustedFxProviderConfig({
+    PINOVA_FX_PROVIDER_URL: 'https://api.currencyapi.com/v3/latest',
+    PINOVA_FX_PROVIDER_SOURCE: 'currencyapi.com',
+  }), 'FX_PROVIDER_API_KEY_REQUIRED');
+
+  throwsCode(() => getTrustedFxProviderConfig({
+    PINOVA_FX_PROVIDER_URL: 'https://api.currencyapi.com/v3/latest',
+    PINOVA_FX_PROVIDER_SOURCE: 'other-provider.test',
+    PINOVA_FX_PROVIDER_API_KEY: 'test-key',
+  }), 'FX_SOURCE_UNTRUSTED');
+
   console.log('Trusted FX quote/provider validation suite passed.');
 }
 
