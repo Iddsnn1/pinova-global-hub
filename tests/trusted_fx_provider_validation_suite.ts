@@ -3,6 +3,7 @@ import {
   DEFAULT_MAX_TRUSTED_FX_AGE_MS,
   validateTrustedFxQuote,
 } from '../src/server/services/TrustedFxQuoteService';
+import { calculateTrustedFiatToPi } from '../src/server/services/TrustedFiatToPiService';
 import {
   getTrustedFxProviderConfig,
   parseCurrencyApiPayload,
@@ -133,6 +134,20 @@ function run() {
     meta: { last_updated_at: freshAsOf },
     data: { NGN: { code: 'NGN', value: 1000 } },
   }, 'NGN', 'other-provider.test', now), 'FX_SOURCE_UNTRUSTED');
+
+  // The conversion service itself must reject stale quotes before returning a Pi estimate.
+  throwsCode(() => calculateTrustedFiatToPi({
+    fiatAmount: 1000,
+    currency: 'NGN',
+    quote: {
+      currency: 'NGN',
+      usdPerFiatUnit: 0.001,
+      asOf: new Date(now - DEFAULT_MAX_TRUSTED_FX_AGE_MS - 1).toISOString(),
+      source: 'trusted.test',
+    },
+    trustedSource: 'trusted.test',
+    nowMs: now,
+  }), 'FX_QUOTE_STALE');
 
   console.log('Trusted FX quote/provider validation suite passed.');
 }
