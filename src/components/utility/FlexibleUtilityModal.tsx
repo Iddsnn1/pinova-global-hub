@@ -399,7 +399,7 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
       setErrorMessage(null);
       return;
     }
-    if (!/^\\d*(?:\\.\\d{0,8})?$/.test(raw)) {
+    if (!/^\d*(?:\.\d{0,8})?$/.test(raw)) {
       setErrorMessage('Enter a plain decimal amount with no more than 8 digits after the decimal point.');
       return;
     }
