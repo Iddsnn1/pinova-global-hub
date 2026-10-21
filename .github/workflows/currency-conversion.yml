@@ -11,6 +11,7 @@ on:
       - "src/server/services/UtilityPaymentAuthorizationService.ts"
       - "src/server/db/repositories/NeonUtilityInvoiceRepository.ts"
       - "server.ts"
+      - "tests/trusted_fx_provider_validation_suite.ts"
       - "tests/utility_checkout_route_integration_suite.ts"
       - "tests/utility_checkout_orchestrator_suite.ts"
       - "tests/utility_payment_authorization_suite.ts"
@@ -35,6 +36,7 @@ on:
       - "src/server/services/UtilityPaymentAuthorizationService.ts"
       - "src/server/db/repositories/NeonUtilityInvoiceRepository.ts"
       - "server.ts"
+      - "tests/trusted_fx_provider_validation_suite.ts"
       - "tests/utility_checkout_route_integration_suite.ts"
       - "tests/utility_checkout_orchestrator_suite.ts"
       - "tests/utility_payment_authorization_suite.ts"
@@ -73,6 +75,8 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Currency conversion tests
         run: npm run test:currency
+      - name: Trusted FX provider validation tests
+        run: npx tsx tests/trusted_fx_provider_validation_suite.ts
       - name: Utility checkout HTTP route tests
         run: npm run test:utility-routes
       - name: Utility checkout orchestration tests
