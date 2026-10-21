@@ -510,7 +510,8 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       const piUserUid = extractPiUserUid(paymentData);
       if (!piUserUid || !user.piUid || piUserUid !== user.piUid) return json(res, 403, { ok: false, verified: false, error: 'PI_PAYMENT_BUYER_MISMATCH' });
 
-      const txid = String(paymentData?.transaction?.txid || paymentData?.transaction?.hash || body.txid || '').trim();
+      // Only trust a transaction ID returned by authoritative Pi verification; never accept a client-supplied txid as settlement evidence.
+      const txid = String(paymentData?.transaction?.txid || paymentData?.transaction?.hash || '').trim();
       if (process.env.NODE_ENV === 'production' && !txid) return json(res, 409, { ok: false, verified: false, error: 'PI_TRANSACTION_ID_REQUIRED' });
       if (txid) {
         const existingTx = paymentLedgerRepo.findByTxid(txid);
