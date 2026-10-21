@@ -4,6 +4,7 @@ import {
   validateTrustedFxQuote,
 } from '../src/server/services/TrustedFxQuoteService';
 import {
+  getTrustedFxProviderConfig,
   parseCurrencyApiPayload,
   parseTrustedFxProviderPayload,
 } from '../src/server/services/TrustedFxProviderService';
@@ -105,6 +106,18 @@ function run() {
     meta: { last_updated_at: freshAsOf },
     data: { NGN: { code: 'USD', value: 1000 } },
   }, 'NGN', 'currencyapi.com', now), 'FX_PROVIDER_RATE_MISSING_OR_INVALID');
+
+  // Provider configuration must reject insecure transport and embedded URL credentials
+  // before any network request can occur.
+  throwsCode(() => getTrustedFxProviderConfig({
+    PINOVA_FX_PROVIDER_URL: 'http://api.example.test/latest',
+    PINOVA_FX_PROVIDER_SOURCE: 'trusted.test',
+  }), 'FX_PROVIDER_HTTPS_REQUIRED');
+
+  throwsCode(() => getTrustedFxProviderConfig({
+    PINOVA_FX_PROVIDER_URL: 'https://user:password@api.example.test/latest',
+    PINOVA_FX_PROVIDER_SOURCE: 'trusted.test',
+  }), 'FX_PROVIDER_CREDENTIALS_IN_URL_FORBIDDEN');
 
   console.log('Trusted FX quote/provider validation suite passed.');
 }
