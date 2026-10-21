@@ -80,6 +80,27 @@ async function run() {
   assert.equal(notVerified.calls.fulfill, 0, 'an unverified payment must never call the provider');
   assert.equal(notVerified.calls.record, 0);
 
+  // A verifier response that claims success but omits authoritative payment data
+  // is malformed and must not reach reservation or the provider boundary.
+  const missingVerifiedPaymentData = setup({
+    verifyPayment: async () => ({
+      verified: true,
+      status: 'VERIFIED' as const,
+      source: 'pi_platform' as const,
+      message: 'verified response missing payment data',
+      paymentData: undefined,
+    }),
+  });
+  assert.deepEqual(await processUtilityCheckout(missingVerifiedPaymentData.deps, {
+    invoiceId: invoice.invoiceId, ownerUserId: invoice.ownerUserId, paymentId: invoice.paymentId,
+  }), { status: 'REJECTED', error: 'PI_PAYMENT_NOT_VERIFIED' });
+  assert.equal(missingVerifiedPaymentData.calls.verify, 1);
+  assert.equal(missingVerifiedPaymentData.calls.reserve, 0,
+    'a malformed verifier success without payment data must not reserve the invoice');
+  assert.equal(missingVerifiedPaymentData.calls.fulfill, 0,
+    'a malformed verifier success without payment data must never call the provider');
+  assert.equal(missingVerifiedPaymentData.calls.record, 0);
+
   const ownerMismatch = setup({
     verifyPayment: async () => ({
       ...verifiedPayment,
