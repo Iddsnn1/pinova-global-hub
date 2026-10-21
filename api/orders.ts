@@ -5,6 +5,7 @@ import { listDurableVendorApplications } from '../dist/server.cjs';
 import { durableProductStorageEnabled, getDurableProduct } from '../dist/server.cjs';
 import type { Order, OrderItem, PstpOrderStatus } from '../src/types';
 import { isAllowedOrderTransition, isAllowedSellerTransition, expectedCarrierTransition } from '../src/modules/orders/lifecycle';
+import { matchesPiAmountAt12Decimals } from '../src/server/services/PiOrderPaymentContract';
 
 function json(res: ServerResponse, status: number, body: unknown) {
   res.statusCode = status;
@@ -504,7 +505,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       if (!verification.verified) return json(res, 402, { ok: false, verified: false, error: 'PI_PAYMENT_NOT_VERIFIED', message: verification.message });
       const paymentData = verification.paymentData || {};
       const paymentAmount = Number(paymentData.amount);
-      if (!Number.isFinite(paymentAmount) || Math.abs(paymentAmount - order.totalPi) > 0.0000001) return json(res, 409, { ok: false, verified: false, error: 'PI_PAYMENT_AMOUNT_MISMATCH' });
+      if (!matchesPiAmountAt12Decimals(paymentAmount, order.totalPi)) return json(res, 409, { ok: false, verified: false, error: 'PI_PAYMENT_AMOUNT_MISMATCH' });
 
       const piUserUid = extractPiUserUid(paymentData);
       if (!piUserUid || !user.piUid || piUserUid !== user.piUid) return json(res, 403, { ok: false, verified: false, error: 'PI_PAYMENT_BUYER_MISMATCH' });
