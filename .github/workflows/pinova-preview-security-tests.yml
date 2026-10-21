@@ -7,9 +7,12 @@ on:
     paths:
       - "src/server/services/PiNovaFxService.ts"
       - "src/server/services/PiPaymentVerificationService.ts"
+      - "src/server/services/PiOrderPaymentContract.ts"
+      - "api/orders.ts"
       - "tests/pinova_fx_service_suite.ts"
       - "tests/education_payment_authorization_suite.ts"
       - "tests/pi_payment_verification_suite.ts"
+      - "tests/pi_order_payment_contract_suite.ts"
       - "package.json"
       - ".github/workflows/pinova-preview-security-tests.yml"
   workflow_dispatch:
@@ -38,3 +41,5 @@ jobs:
         run: npm run test:edu:security
       - name: Pi payment verification mocked tests
         run: npm run test:pi:verification
+      - name: Pi order amount precision contract tests
+        run: npx tsx tests/pi_order_payment_contract_suite.ts
