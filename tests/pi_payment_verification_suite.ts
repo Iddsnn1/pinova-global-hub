@@ -27,6 +27,18 @@ async function run() {
     assert.equal((await verifyPiPaymentAuthoritative('mock-payment-3')).verified, false);
     globalThis.fetch = (async () => new Response('unavailable', { status: 503 })) as typeof fetch;
     assert.equal((await verifyPiPaymentAuthoritative('mock-payment-4')).verified, false);
+
+    // Malformed JSON and transport failures must fail closed in production.
+    globalThis.fetch = (async () => new Response('{invalid-json', { status: 200 })) as typeof fetch;
+    assert.equal((await verifyPiPaymentAuthoritative('mock-payment-5')).verified, false);
+    globalThis.fetch = (async () => { throw new Error('simulated Pi API network failure'); }) as typeof fetch;
+    assert.equal((await verifyPiPaymentAuthoritative('mock-payment-6')).verified, false);
+
+    // Without a server key, production must not fall back to sandbox/ledger state.
+    delete process.env.PI_API_KEY;
+    delete process.env.PI_SERVER_KEY;
+    globalThis.fetch = (async () => { throw new Error('fetch must not be called without a key'); }) as typeof fetch;
+    assert.equal((await verifyPiPaymentAuthoritative('mock-payment-7')).verified, false);
     console.log('Pi payment verification mock suite passed.');
   } finally {
     globalThis.fetch = originalFetch;
