@@ -97,6 +97,17 @@ async function run() {
     const forgedToken = Buffer.from(forgedPayload, 'utf8').toString('base64url') + '.' + originalSignature;
     assert.equal(verifyPiNovaFxQuoteToken(forgedToken, 1_800_000_001_000), null);
     assert.equal(verifyPiNovaFxQuoteToken(signed.token, 1_800_000_301_000), null);
+    // Expiration is exclusive: a quote must be rejected at the exact expiry millisecond.
+    assert.equal(verifyPiNovaFxQuoteToken(signed.token, 1_800_000_300_000), null);
+
+    // Tampering with the USD conversion amount or Pi amount must also invalidate
+    // the signature, preventing fiat/Pi amount substitution.
+    const parsedPayload = JSON.parse(decodedPayload);
+    for (const field of ['amountUsd', 'referencePiAmount']) {
+      const forged = { ...parsedPayload, [field]: parsedPayload[field] + 1 };
+      const encoded = Buffer.from(JSON.stringify(forged), 'utf8').toString('base64url');
+      assert.equal(verifyPiNovaFxQuoteToken(encoded + '.' + originalSignature, 1_800_000_001_000), null);
+    }
   } finally {
     if (previousSecret === undefined) delete process.env.PINOVA_FX_QUOTE_SECRET;
     else process.env.PINOVA_FX_QUOTE_SECRET = previousSecret;
