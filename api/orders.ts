@@ -5,7 +5,7 @@ import { listDurableVendorApplications } from '../dist/server.cjs';
 import { durableProductStorageEnabled, getDurableProduct } from '../dist/server.cjs';
 import type { Order, OrderItem, PstpOrderStatus } from '../src/types';
 import { isAllowedOrderTransition, isAllowedSellerTransition, expectedCarrierTransition } from '../src/modules/orders/lifecycle';
-import { matchesPiAmountAt12Decimals } from '../src/server/services/PiOrderPaymentContract';
+import { getPiAuthoritativeTransactionId, matchesPiAmountAt12Decimals } from '../src/server/services/PiOrderPaymentContract';
 
 function json(res: ServerResponse, status: number, body: unknown) {
   res.statusCode = status;
@@ -511,7 +511,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       if (!piUserUid || !user.piUid || piUserUid !== user.piUid) return json(res, 403, { ok: false, verified: false, error: 'PI_PAYMENT_BUYER_MISMATCH' });
 
       // Only trust a transaction ID returned by authoritative Pi verification; never accept a client-supplied txid as settlement evidence.
-      const txid = String(paymentData?.transaction?.txid || paymentData?.transaction?.hash || '').trim();
+      const txid = getPiAuthoritativeTransactionId(paymentData);
       if (process.env.NODE_ENV === 'production' && !txid) return json(res, 409, { ok: false, verified: false, error: 'PI_TRANSACTION_ID_REQUIRED' });
       if (txid) {
         const existingTx = paymentLedgerRepo.findByTxid(txid);
