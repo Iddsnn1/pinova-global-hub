@@ -11,3 +11,18 @@ export function matchesPiAmountAt12Decimals(actual: unknown, expected: unknown):
   if (actualAmount <= 0 || expectedAmount <= 0) return false;
   return Math.round(actualAmount * 1e12) === Math.round(expectedAmount * 1e12);
 }
+
+/**
+ * Settlement transaction identifiers must come only from the authoritative
+ * Pi platform verification response. Never use a client-request body fallback.
+ */
+export function getPiAuthoritativeTransactionId(paymentData: unknown): string {
+  if (!paymentData || typeof paymentData !== 'object') return '';
+  const data = paymentData as {
+    transaction?: { txid?: unknown; hash?: unknown } | null;
+  };
+  const candidate = data.transaction?.txid || data.transaction?.hash || '';
+  return typeof candidate === 'string' || typeof candidate === 'number'
+    ? String(candidate).trim()
+    : '';
+}
