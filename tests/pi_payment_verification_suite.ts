@@ -5,6 +5,7 @@ async function run() {
   const originalFetch = globalThis.fetch;
   const oldEnv = process.env.NODE_ENV;
   const oldKey = process.env.PI_API_KEY;
+  const oldServerKey = process.env.PI_SERVER_KEY;
   process.env.NODE_ENV = 'production';
   process.env.PI_API_KEY = 'mock-only-key';
   let calls = 0;
@@ -44,6 +45,7 @@ async function run() {
     globalThis.fetch = originalFetch;
     if (oldEnv === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = oldEnv;
     if (oldKey === undefined) delete process.env.PI_API_KEY; else process.env.PI_API_KEY = oldKey;
+    if (oldServerKey === undefined) delete process.env.PI_SERVER_KEY; else process.env.PI_SERVER_KEY = oldServerKey;
   }
 }
 run().catch((error) => { console.error(error); process.exitCode = 1; });
