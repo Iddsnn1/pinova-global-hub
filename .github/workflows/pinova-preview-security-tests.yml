@@ -6,6 +6,8 @@ on:
       - migration/neon-durable-storage
     paths:
       - "src/**/*.ts"
+      - "src/**/*.tsx"
+      - "server.ts"
       - "api/**/*.ts"
       - "scripts/**/*.mjs"
       - "tests/pinova_fx_service_suite.ts"
