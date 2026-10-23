@@ -243,7 +243,9 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({ products, openCreateOn
           educationSubjects: isEducationListing ? draft.educationSubjects.split(',').map(s => s.trim()).filter(Boolean) : undefined,
           productType: draft.category === 'physical' ? 'physical' : draft.category === 'digital' ? 'digital' : 'service' })
         : await createSellerProduct({ title, description, pricePi, category: draft.category, marketplaceCategory: draft.marketplaceCategory, subcategory: draft.subcategory.trim(), images: uploadedImageUrl ? [uploadedImageUrl] : [], stock,
-          educationTier: isEducationListing ? draft.educationTier : undefined,
+          educationTier: isEducationListing && draft.educationTier
+              ? (draft.educationTier as Product['educationTier'])
+              : undefined,
           educationLevelId: isEducationListing ? draft.educationLevelId.trim() || undefined : undefined,
           educationGradeLevel: isEducationListing ? draft.educationGradeLevel.trim() || undefined : undefined,
           educationCountryCode: isEducationListing ? draft.educationCountryCode.trim().toUpperCase() || undefined : undefined,
