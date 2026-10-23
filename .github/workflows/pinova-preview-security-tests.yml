@@ -38,15 +38,8 @@ jobs:
         with:
           node-version: "22"
       - name: Install dependencies
-        run: |
-          if [ -f package-lock.json ]; then
-            npm ci --no-audit --no-fund
-          elif [ -f npm-shrinkwrap.json ]; then
-            npm ci --no-audit --no-fund
-          else
-            echo "::warning::No npm lockfile found on this branch; using npm install temporarily."
-            npm install --no-audit --no-fund
-          fi
+        # This branch currently has no package-lock.json; npm ci would fail with EUSAGE.
+        run: npm install --no-audit --no-fund
       - name: FX provider mocked tests
         run: npm run test:fx
       - name: Education invoice authorization tests
