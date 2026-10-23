@@ -36,7 +36,15 @@ jobs:
         with:
           node-version: "22"
       - name: Install dependencies
-        run: npm ci --no-audit --no-fund
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci --no-audit --no-fund
+          elif [ -f npm-shrinkwrap.json ]; then
+            npm ci --no-audit --no-fund
+          else
+            echo "::warning::No npm lockfile found on this branch; using npm install temporarily."
+            npm install --no-audit --no-fund
+          fi
       - name: FX provider mocked tests
         run: npm run test:fx
       - name: Education invoice authorization tests
