@@ -1500,7 +1500,7 @@ app.delete(
         } catch {
           return res.status(500).json({ success: false, error: 'BRANDING_METADATA_ERROR', message: 'Branding metadata could not be validated.' });
         }
-      } else if (!isGlobalAdmin && !isInstitutionAdmin) {
+      } else if (!isAdmin) {
         return res.status(404).json({ success: false, error: 'ASSET_NOT_FOUND' });
       }
 
@@ -3633,7 +3633,7 @@ app.post('/api/education/invoices/pay', paymentRateLimiter, authenticate, async 
     const currentUserId = req.user?.id;
     const userRoles = req.user?.roles || [];
     const isPlatformAdmin = userRoles.includes('PLATFORM_ADMIN') || userRoles.includes('BURSAR') || userRoles.includes('FINANCE_ADMIN');
-    const isInstitutionStaff = Boolean(roles.includes('INSTITUTION_ADMIN') && req.user?.institutionId && req.user.institutionId === invoice.institutionId);
+    const isInstitutionStaff = Boolean(userRoles.includes('INSTITUTION_ADMIN') && req.user?.institutionId && req.user.institutionId === invoice.institutionId);
     const isGuardianOwner = Boolean(
       (currentUser && invoice.guardianId && invoice.guardianId.toLowerCase() === currentUser.toLowerCase()) ||
       (currentUserId && invoice.guardianId && invoice.guardianId === currentUserId) ||
