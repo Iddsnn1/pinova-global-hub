@@ -3771,29 +3771,90 @@ export class PiSdkManagerService {
                             {}) as any;
 
                         /*
-                         * Do not claim success merely because
-                         * the endpoint returned HTTP 200.
-                         *
-                         * The backend returns verified=true
-                         * after Pi blockchain verification.
+                         * A completed Pi payment is not proof that a utility order
+                         * was fulfilled. Airtime/data must pass through the dedicated
+                         * server verification + signed FX quote + provider workflow.
                          */
-                        if (
-                          data.verified ===
-                            false ||
-                          data.success ===
-                            false
-                        ) {
-                          throw new Error(
-                            'Pi transaction could not be verified.'
-                          );
+                        const metadata = params.metadata || {};
+                        const normalizedCategory = String(metadata.category || '').trim().toLowerCase();
+                        const requiresUtilityFulfillment = ['airtime', 'mobile_data', 'data'].includes(normalizedCategory);
+                        let fulfillmentStatus: 'FULFILLED' | 'FULFILLMENT_PENDING' = requiresUtilityFulfillment
+                          ? 'FULFILLMENT_PENDING'
+                          : 'FULFILLED';
+                        let resultData: any = {
+                          ...data,
+                          transactionId: data.transactionId || paymentId,
+                          paymentId,
+                          txid
+                        };
+                        let resultMessage = 'Pi payment completed and verified successfully.';
+
+                        if (requiresUtilityFulfillment) {
+                          try {
+                            const fulfillmentResponse = await safeFetchJson(
+                              '/api/v2/utility/fulfill',
+                              {
+                                method: 'POST',
+                                headers: {
+                                  'Content-Type': 'application/json',
+                                  'Idempotency-Key': paymentId
+                                },
+                                body: JSON.stringify({
+                                  paymentId,
+                                  txid,
+                                  category: normalizedCategory,
+                                  country: metadata.country,
+                                  countryCode: metadata.countryCode,
+                                  providerId: metadata.providerId,
+                                  accountNumber: metadata.accountNumber,
+                                  fiatAmount: metadata.fiatAmount,
+                                  fiatCurrency: metadata.fiatCurrency,
+                                  piAmount: params.amountPi,
+                                  packageName: metadata.packageName,
+                                  variationId: metadata.variationId || metadata.packageId,
+                                  idempotencyKey: paymentId,
+                                  fxQuoteToken: metadata.fxQuoteToken
+                                })
+                              }
+                            );
+
+                            const fulfillmentBody: any = fulfillmentResponse.data || {};
+                            if (fulfillmentResponse.ok && fulfillmentBody.success === true && fulfillmentBody.data) {
+                              resultData = {
+                                ...fulfillmentBody.data,
+                                paymentId,
+                                txid,
+                                transactionId: fulfillmentBody.data.transactionId || paymentId
+                              };
+                              fulfillmentStatus = fulfillmentBody.data.status === 'FULFILLED'
+                                ? 'FULFILLED'
+                                : 'FULFILLMENT_PENDING';
+                              resultMessage = fulfillmentStatus === 'FULFILLED'
+                                ? 'Pi payment verified and utility order fulfilled.'
+                                : 'Pi payment completed. Utility fulfillment is pending provider confirmation.';
+                            } else {
+                              // Payment completion is irreversible here; preserve the real Pi
+                              // payment identifiers and show a pending receipt rather than
+                              // falsely claiming that airtime/data was delivered.
+                              resultData = {
+                                ...resultData,
+                                fulfillmentError: fulfillmentBody.error || fulfillmentResponse.error || 'UTILITY_FULFILLMENT_PENDING',
+                                fulfillmentHttpStatus: fulfillmentResponse.status
+                              };
+                              resultMessage = 'Pi payment completed, but utility fulfillment is pending review. Do not pay again.';
+                            }
+                          } catch (fulfillmentError: any) {
+                            resultData = {
+                              ...resultData,
+                              fulfillmentError: fulfillmentError?.message || 'UTILITY_FULFILLMENT_PENDING'
+                            };
+                            resultMessage = 'Pi payment completed, but utility fulfillment is pending review. Do not pay again.';
+                          }
                         }
 
-                        this.currentPaymentStage =
-                          'COMPLETED';
+                        this.currentPaymentStage = 'COMPLETED';
 
-                        params.onStatusUpdate?.(
-                          'Pi payment completed and verified successfully.'
-                        );
+                        params.onStatusUpdate?.(resultMessage);
 
                         clear();
 
@@ -3801,9 +3862,9 @@ export class PiSdkManagerService {
                           paymentId,
                           txid,
                           success: true,
-                          fulfillmentStatus: 'FULFILLED',
-                          message: 'Pi payment verified and completed successfully.',
-                          data
+                          fulfillmentStatus,
+                          message: resultMessage,
+                          data: resultData
                         });
 
                         this.notifyDiagnosticStateChange();
