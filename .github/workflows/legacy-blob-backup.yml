@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       import_to_neon:
-        description: 'After export validation, idempotently import the backup into Neon'
+        description: 'After export validation, idempotently import the backup into the dedicated Neon Preview branch'
         required: true
         default: false
         type: boolean
@@ -118,20 +118,23 @@ jobs:
           console.log(JSON.stringify({validated:true, schemaVersion:backup.schemaVersion, manifest:backup.manifest.length}, null, 2));
           NODE
 
-      - name: Import validated backup into Neon
+      - name: Import validated backup into Neon Preview only
         if: ${{ inputs.import_to_neon == true }}
         env:
-          VERCEL_TOKEN: ${{ secrets.Vercel_Token }}
+          NEON_PREVIEW_DATABASE_URL: ${{ secrets.NEON_PREVIEW_DATABASE_URL }}
           LEGACY_BLOB_BACKUP_FILE: /tmp/pinova-legacy-blob-backup.json
         run: |
           set -euo pipefail
-          test -n "${VERCEL_TOKEN:-}" || { echo "VERCEL_TOKEN_MISSING: Vercel_Token is required only for the optional Neon import environment pull"; exit 1; }
-          mkdir -p /tmp/pinova-vercel
-          cd /tmp/pinova-vercel
-          npx --yes vercel@latest link --yes --project pinova-global-hub --scope iddsnn1s-projects --token "$VERCEL_TOKEN"
-          npx --yes vercel@latest env pull .env.legacy --environment production --token "$VERCEL_TOKEN"
-          set -a
-          . /tmp/pinova-vercel/.env.legacy
-          set +a
-          test -n "${DATABASE_URL:-}" || { echo "NEON_DATABASE_URL_MISSING: DATABASE_URL was not provided by Vercel production environment"; exit 1; }
-          node "$GITHUB_WORKSPACE/scripts/import-neon-backup.mjs" "$LEGACY_BLOB_BACKUP_FILE"
+          test -n "${NEON_PREVIEW_DATABASE_URL:-}" || {
+            echo "NEON_PREVIEW_DATABASE_URL_MISSING: configure this repository/environment secret with the dedicated Neon Preview branch URL"
+            exit 1
+          }
+          # Fail closed unless the target is explicitly the dedicated Preview branch.
+          case "$NEON_PREVIEW_DATABASE_URL" in
+            *br-hidden-fog-b2h2m1fh*) ;;
+            *)
+              echo "NEON_TARGET_NOT_PREVIEW_BRANCH: refusing import because the URL does not identify the expected Preview branch"
+              exit 1
+              ;;
+          esac
+          DATABASE_URL="$NEON_PREVIEW_DATABASE_URL" node "$GITHUB_WORKSPACE/scripts/import-neon-backup.mjs" "$LEGACY_BLOB_BACKUP_FILE"
