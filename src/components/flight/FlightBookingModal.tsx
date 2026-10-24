@@ -235,16 +235,20 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
     useState<number>(initialFareNum);
 
   /*
-   * One canonical Pi rate is used everywhere.
+   * Pi is the canonical settlement amount for checkout.
+   * Prefer the Pi amount captured on the offer so a later display/reference
+   * conversion cannot mutate the amount being paid.
    */
   const effectivePiRate =
     Number.isFinite(piRateUsd) && piRateUsd > 0
       ? piRateUsd
-      : 10.0;
+      : 314159;
 
-  const canonicalPiAmount = Number(
-    (currentFareFiat / effectivePiRate).toFixed(7)
-  );
+  const offerPiAmount = Number(offer.fareAmountPi);
+  const canonicalPiAmount =
+    Number.isFinite(offerPiAmount) && offerPiAmount > 0
+      ? offerPiAmount
+      : Number((currentFareFiat / effectivePiRate).toFixed(12));
 
   const formattedPi =
     canonicalPiAmount < 0.0001

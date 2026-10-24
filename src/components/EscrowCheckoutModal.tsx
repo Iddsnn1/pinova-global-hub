@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
+import { formatPiAmount } from '../utils/formatters';
 import { X, ShieldCheck, Lock, CheckCircle2, Loader2, AlertCircle, ArrowRight, Smartphone, MapPin, Truck } from 'lucide-react';
 import { OrderItem, CartItem, Coupon } from '../types';
-import { executePiPayment, authenticatePiUser, resetPiAuthState } from '../lib/piSdk';
+import { executePiPayment, authenticatePiUser, getAuthenticatedPiUser, resetPiAuthState } from '../lib/piSdk';
 
 interface EscrowCheckoutModalProps {
   cartItems: OrderItem[];
@@ -50,10 +51,16 @@ export const EscrowCheckoutModal: React.FC<EscrowCheckoutModalProps> = ({
     return acc + getItemUnitPrice(item) * item.quantity;
   }, 0);
 
-  const discountAmount = appliedCoupon ? (subtotal * appliedCoupon.discountPercent) / 100 : 0;
+  const eligibleCouponSubtotal = appliedCoupon?.sellerUsername
+    ? cartItems.reduce((acc, item) => {
+        if (item.product.sellerId !== appliedCoupon.sellerUsername) return acc;
+        return acc + getItemUnitPrice(item) * item.quantity;
+      }, 0)
+    : subtotal;
+  const discountAmount = appliedCoupon ? (eligibleCouponSubtotal * appliedCoupon.discountPercent) / 100 : 0;
   const isPhysicalOrder = cartItems.some((i) => i.product.category === 'physical');
   const shippingCost = isPhysicalOrder ? 2.50 : 0;
-  const totalAmountPi = subtotal - discountAmount + shippingCost;
+  const totalAmountPi = Math.max(0, subtotal - discountAmount + shippingCost);
 
   const addLog = (msg: string) => {
     setStatusLogs((prev) => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`]);
@@ -76,8 +83,52 @@ export const EscrowCheckoutModal: React.FC<EscrowCheckoutModalProps> = ({
       return;
     }
 
-    const memo = `PiNova Purchase (${cartItems.length} items) - Order by ${userUsername}`;
-    const generatedOrderId = `ORD-PI-${Date.now().toString().slice(-6)}`;
+    try {
+      const sessionUser = getAuthenticatedPiUser();
+      const accessToken = sessionUser?.accessToken;
+      if (!accessToken) throw new Error('Authenticated Pi session token unavailable.');
+
+      const idempotencyKey = `checkout-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+      addLog('Creating secure server order...');
+
+      const orderController = new AbortController();
+      const orderTimeout = window.setTimeout(() => orderController.abort(), 30000);
+
+      let orderResponse: Response;
+      try {
+        orderResponse = await fetch('/api/v1/orders', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Idempotency-Key': idempotencyKey,
+            'Authorization': `Bearer ${accessToken}`
+          },
+          body: JSON.stringify({
+            items: cartItems.map((item) => ({
+              productId: item.product.id,
+              quantity: item.quantity,
+              selectedVariant: item.selectedVariant,
+              customDetails: item.customDetails
+            })),
+            promoCode: appliedCoupon?.code || ''
+          }),
+          signal: orderController.signal
+        });
+      } catch (orderError: any) {
+        if (orderError?.name === 'AbortError') {
+          throw new Error('The secure order service did not respond within 30 seconds. Please try again.');
+        }
+        throw orderError;
+      } finally {
+        window.clearTimeout(orderTimeout);
+      }
+    const orderData = await orderResponse.json().catch(() => null);
+    if (!orderResponse.ok || !orderData?.order?.id) {
+      throw new Error(orderData?.message || orderData?.error || 'Unable to create a server-authoritative order.');
+    }
+    const authoritativeOrder = orderData.order;
+    const generatedOrderId = authoritativeOrder.id;
+    const authoritativeTotalPi = Number(authoritativeOrder.totalPi);
     setCreatedOrderId(generatedOrderId);
 
     const metadata = {
@@ -86,10 +137,11 @@ export const EscrowCheckoutModal: React.FC<EscrowCheckoutModalProps> = ({
       itemCount: cartItems.length,
       shippingCountry
     };
+    const memo = `PiNova PSTP Order ${generatedOrderId}`;
 
     executePiPayment(
       {
-        amount: Number(totalAmountPi.toFixed(2)),
+        amount: authoritativeTotalPi,
         memo,
         metadata
       },
@@ -100,7 +152,29 @@ export const EscrowCheckoutModal: React.FC<EscrowCheckoutModalProps> = ({
         onSuccess: (paymentId, txid) => {
           setCompletedPaymentId(paymentId);
           setCompletedTxid(txid);
-          setPaymentStep('success');
+
+          fetch(`/api/v1/orders/${encodeURIComponent(generatedOrderId)}/payment-verify`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${accessToken}`
+            },
+            body: JSON.stringify({ paymentId, txid })
+          })
+            .then(async (verifyRes) => {
+              const verifyData = await verifyRes.json().catch(() => null);
+              if (!verifyRes.ok || verifyData?.verified !== true) {
+                throw new Error(verifyData?.message || verifyData?.error || 'Server-side Pi payment verification failed.');
+              }
+              setPaymentStep('success');
+              onPaymentSuccess(verifyData.order || { ...authoritativeOrder, piPaymentId: paymentId, piTxid: txid, serverVerified: true });
+            })
+            .catch((verifyErr) => {
+              setPaymentStep('failed');
+              setErrorMessage(verifyErr?.message || 'Server-side Pi payment verification failed.');
+              addLog(`Server verification error: ${verifyErr?.message || verifyErr}`);
+            });
+          return;
 
           // Construct digital deliveries if any
           const digitalDeliveries = cartItems
@@ -117,7 +191,7 @@ export const EscrowCheckoutModal: React.FC<EscrowCheckoutModalProps> = ({
             id: metadata.orderId,
             buyerUsername: userUsername,
             items: cartItems,
-            totalPi: Number(totalAmountPi.toFixed(2)),
+            totalPi: totalAmountPi,
             escrowStatus: isPhysicalOrder ? 'in_escrow' : (hasServiceOrder ? 'in_escrow' : 'released'),
             piPaymentId: paymentId,
             piTxid: txid,
@@ -170,6 +244,12 @@ export const EscrowCheckoutModal: React.FC<EscrowCheckoutModalProps> = ({
         }
       }
     );
+    } catch (paymentFlowErr: any) {
+      const errMsg = paymentFlowErr?.message || String(paymentFlowErr);
+      setPaymentStep('failed');
+      setErrorMessage(errMsg || 'Unable to start the Pi payment flow.');
+      addLog(`Payment preparation error: ${errMsg || 'Unknown error'}`);
+    }
   };
 
   return (
@@ -217,7 +297,7 @@ export const EscrowCheckoutModal: React.FC<EscrowCheckoutModalProps> = ({
                         <span className="text-slate-500 ml-1">x{item.quantity}</span>
                       </div>
                       <span className="font-mono font-bold text-purple-600 dark:text-purple-400">
-                        {(getItemUnitPrice(item) * item.quantity).toFixed(2)} π
+                        {formatPiAmount((getItemUnitPrice(item) * item.quantity))} π
                       </span>
                     </div>
                   ))}
@@ -237,7 +317,7 @@ export const EscrowCheckoutModal: React.FC<EscrowCheckoutModalProps> = ({
                       placeholder="Full Name"
                       value={shippingAddress.fullName}
                       onChange={(e) => setShippingAddress({ ...shippingAddress, fullName: e.target.value })}
-                      className="col-span-2 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 outline-none"
+                      className="col-span-2 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none"
                     />
                     <input
                       type="text"
@@ -251,7 +331,7 @@ export const EscrowCheckoutModal: React.FC<EscrowCheckoutModalProps> = ({
                       placeholder="City"
                       value={shippingAddress.city}
                       onChange={(e) => setShippingAddress({ ...shippingAddress, city: e.target.value })}
-                      className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 outline-none"
+                      className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none"
                     />
                     <input
                       type="text"
@@ -264,16 +344,33 @@ export const EscrowCheckoutModal: React.FC<EscrowCheckoutModalProps> = ({
                 </div>
               )}
 
-              {/* Final Total & Order Protection Box */}
-              <div className="p-4 rounded-2xl bg-gradient-to-r from-purple-900/40 to-indigo-900/40 border border-purple-800/40 flex items-center justify-between">
-                <div>
-                  <span className="text-xs text-purple-300 font-semibold uppercase tracking-wider">Total Pi to Pay</span>
-                  <div className="text-2xl font-black text-amber-400">{totalAmountPi.toFixed(2)} π</div>
+              {/* Transparent price breakdown + Order Protection */}
+              <div className="p-4 rounded-2xl bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 space-y-3">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-semibold text-slate-700 dark:text-slate-200">Items subtotal</span>
+                  <span className="font-mono font-bold text-slate-900 dark:text-white">{formatPiAmount(subtotal)} π</span>
                 </div>
-
-                <div className="text-right">
-                  <span className="text-[11px] text-emerald-400 font-bold block">100% Order Protection</span>
-                  <span className="text-[10px] text-purple-300">Protected by PiNova Order Protection</span>
+                {discountAmount > 0 && (
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-semibold text-emerald-700 dark:text-emerald-300">Discount</span>
+                    <span className="font-mono font-bold text-emerald-700 dark:text-emerald-300">-{formatPiAmount(discountAmount)} π</span>
+                  </div>
+                )}
+                {shippingCost > 0 && (
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-semibold text-slate-700 dark:text-slate-200">Shipping</span>
+                    <span className="font-mono font-bold text-slate-900 dark:text-white">{formatPiAmount(shippingCost)} π</span>
+                  </div>
+                )}
+                <div className="border-t border-slate-300 dark:border-slate-600 pt-3 flex items-center justify-between">
+                  <div>
+                    <span className="text-xs text-slate-700 dark:text-slate-200 font-bold uppercase tracking-wider">Total Pi to Pay</span>
+                    <div className="text-2xl font-black text-slate-950 dark:text-white">{formatPiAmount(totalAmountPi)} π</div>
+                  </div>
+                  <div className="text-right max-w-[180px]">
+                    <span className="text-[11px] text-emerald-700 dark:text-emerald-300 font-bold block">100% Order Protection</span>
+                    <span className="text-[10px] text-slate-600 dark:text-slate-300">Protected by PiNova Order Protection</span>
+                  </div>
                 </div>
               </div>
 
@@ -282,7 +379,7 @@ export const EscrowCheckoutModal: React.FC<EscrowCheckoutModalProps> = ({
                 onClick={handleStartPayment}
                 className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-purple-600 via-indigo-600 to-amber-500 text-white font-black text-sm shadow-xl shadow-purple-500/20 hover:opacity-95 transition-opacity flex items-center justify-center gap-2"
               >
-                <span>Authorize Pi Payment ({totalAmountPi.toFixed(2)} π)</span>
+                <span>Authorize Pi Payment ({formatPiAmount(totalAmountPi)} π)</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
             </>
@@ -297,8 +394,8 @@ export const EscrowCheckoutModal: React.FC<EscrowCheckoutModalProps> = ({
               </div>
 
               <div>
-                <h4 className="font-black text-lg text-slate-900 dark:text-slate-100">Connecting to Pi Network SDK...</h4>
-                <p className="text-xs text-slate-400 mt-1">Please confirm the payment prompt inside your Pi Wallet.</p>
+                <h4 className="font-black text-lg text-slate-900 dark:text-slate-100">Processing Pi Payment...</h4>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Follow the secure payment status below. Pi Wallet will prompt you when the payment is ready.</p>
               </div>
 
               {/* Status Log Box */}

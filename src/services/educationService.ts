@@ -1,5 +1,8 @@
 import {
   InstitutionProfile,
+  UniversityFaculty,
+  AcademicDepartment,
+  EducationProgramme,
   CountryEducationTaxonomy,
   StudentIdentity,
   GuardianChildSummary,
@@ -11,19 +14,12 @@ import {
   EducationPaymentTransaction
 } from '../types/education';
 import { getTaxonomyByCountry } from '../data/educationTaxonomyData';
-import { GLOBAL_EDUCATION_INSTITUTIONS } from '../data/educationInstitutionsData';
-import {
-  SEED_CHILDREN_SUMMARIES,
-  SEED_INVOICES,
-  SEED_RECEIPTS,
-  SEED_ADMISSION_APPLICATIONS,
-  SEED_SCHOLARSHIPS,
-  SEED_MARKETPLACE_ITEMS
-} from '../data/educationSeedData';
-
+import { normalizeCountryCode, matchesSubdivision } from '../data/countrySubdivisions';
 export const educationService = {
   async getInstitutions(filter?: {
     countryCode?: string;
+    country?: string;
+    state?: string;
     tier?: string;
     institutionType?: string;
     isPublic?: boolean;
@@ -33,6 +29,8 @@ export const educationService = {
     try {
       const params = new URLSearchParams();
       if (filter?.countryCode) params.append('countryCode', filter.countryCode);
+      if (filter?.country) params.append('country', filter.country);
+      if (filter?.state) params.append('state', filter.state);
       if (filter?.tier) params.append('tier', filter.tier);
       if (filter?.institutionType) params.append('institutionType', filter.institutionType);
       if (filter?.isPublic !== undefined) params.append('isPublic', String(filter.isPublic));
@@ -45,10 +43,10 @@ export const educationService = {
         return data.institutions || [];
       }
     } catch (e) {
-      console.warn('[educationService] Fallback to local institutions data:', e);
+      console.warn('[educationService] Authoritative institution API unavailable:', e);
     }
-    // Fallback
-    return GLOBAL_EDUCATION_INSTITUTIONS;
+    // Production safety: never expose static institution records when the authoritative provider API is unavailable.
+    return [];
   },
 
   async getInstitution(id: string): Promise<InstitutionProfile | null> {
@@ -61,10 +59,68 @@ export const educationService = {
     } catch (e) {
       console.warn('[educationService] Failed fetching institution by ID:', e);
     }
-    return GLOBAL_EDUCATION_INSTITUTIONS.find((i) => i.id === id) || null;
+    // No local/static institution fallback; provider data must be authoritative.
+    return null;
   },
 
-  async getTaxonomy(countryCode: string = 'NG'): Promise<CountryEducationTaxonomy> {
+  async getFaculties(institutionId: string): Promise<UniversityFaculty[]> {
+    try {
+      const res = await fetch(`/api/education/institutions/${encodeURIComponent(institutionId)}/faculties`);
+      if (res.ok) {
+        const data = await res.json();
+        return data.faculties || [];
+      }
+    } catch (e) {
+      console.warn('[educationService] Failed fetching faculties via API:', e);
+    }
+    // No local/static institution fallback.
+    return [];
+  },
+
+  async getDepartments(institutionId: string, facultyId: string): Promise<AcademicDepartment[]> {
+    try {
+      const res = await fetch(`/api/education/institutions/${encodeURIComponent(institutionId)}/faculties/${encodeURIComponent(facultyId)}/departments`);
+      if (res.ok) {
+        const data = await res.json();
+        return data.departments || [];
+      }
+    } catch (e) {
+      console.warn('[educationService] Failed fetching departments via API:', e);
+    }
+    // No local/static institution fallback.
+    return [];
+  },
+
+  async getProgrammes(
+    institutionId: string,
+    facultyId?: string,
+    departmentId?: string
+  ): Promise<EducationProgramme[]> {
+    try {
+      if (facultyId && departmentId) {
+        const res = await fetch(
+          `/api/education/institutions/${encodeURIComponent(institutionId)}/faculties/${encodeURIComponent(facultyId)}/departments/${encodeURIComponent(departmentId)}/programmes`
+        );
+        if (res.ok) {
+          const data = await res.json();
+          return data.programmes || [];
+        }
+      } else {
+        const res = await fetch(`/api/education/institutions/${encodeURIComponent(institutionId)}/programmes`);
+        if (res.ok) {
+          const data = await res.json();
+          return data.programmes || [];
+        }
+      }
+    } catch (e) {
+      console.warn('[educationService] Failed fetching programmes via API:', e);
+    }
+
+    // No local/static programme fallback.
+    return [];
+  },
+
+  async getTaxonomy(countryCode: string = 'NG'): Promise<CountryEducationTaxonomy | null> {
     try {
       const res = await fetch(`/api/education/taxonomy/${encodeURIComponent(countryCode)}`);
       if (res.ok) {
@@ -72,22 +128,23 @@ export const educationService = {
         return data.taxonomy;
       }
     } catch (e) {
-      console.warn('[educationService] Using local taxonomy config:', e);
+      console.warn('[educationService] Using canonical taxonomy config:', e);
     }
     return getTaxonomyByCountry(countryCode);
   },
 
-  async getGuardianChildren(guardianId: string = 'user-pioneer-parent-001'): Promise<GuardianChildSummary[]> {
+  async getGuardianChildren(guardianId?: string): Promise<GuardianChildSummary[]> {
     try {
-      const res = await fetch(`/api/education/guardians/${encodeURIComponent(guardianId)}/children`);
+      const endpoint = guardianId ? `/api/education/guardians/${encodeURIComponent(guardianId)}/children` : '/api/education/guardians/me/children';
+      const res = await fetch(endpoint);
       if (res.ok) {
         const data = await res.json();
         return data.children || [];
       }
     } catch (e) {
-      console.warn('[educationService] Fallback to seed children summaries:', e);
+      console.warn('[educationService] Authoritative children API unavailable:', e);
     }
-    return SEED_CHILDREN_SUMMARIES;
+    return [];
   },
 
   async getInvoices(filter?: {
@@ -109,9 +166,9 @@ export const educationService = {
         return data.invoices || [];
       }
     } catch (e) {
-      console.warn('[educationService] Fallback to seed invoices:', e);
+      console.warn('[educationService] Authoritative invoice API unavailable:', e);
     }
-    return SEED_INVOICES;
+    return [];
   },
 
   async payInvoice(payload: {
@@ -131,9 +188,15 @@ export const educationService = {
     receipt: DigitalEducationReceipt;
     message?: string;
   }> {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    const token = localStorage.getItem('auth_token') || localStorage.getItem('pi_auth_token') || localStorage.getItem('pinova_token');
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
     const res = await fetch('/api/education/invoices/pay', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify(payload)
     });
 
@@ -143,6 +206,24 @@ export const educationService = {
     }
 
     return await res.json();
+  },
+
+  async getInvoicePayments(invoiceId: string): Promise<EducationPaymentTransaction[]> {
+    try {
+      const headers: Record<string, string> = {};
+      const token = localStorage.getItem('auth_token') || localStorage.getItem('pi_auth_token') || localStorage.getItem('pinova_token');
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      const res = await fetch(`/api/education/invoices/${encodeURIComponent(invoiceId)}/payments`, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        return Array.isArray(data) ? data : [];
+      }
+    } catch (e) {
+      console.warn('[educationService] Failed fetching invoice payments from server:', e);
+    }
+    return [];
   },
 
   async verifyReceipt(receiptNumber: string): Promise<{
@@ -192,9 +273,9 @@ export const educationService = {
         return data.applications || [];
       }
     } catch (e) {
-      console.warn('[educationService] Using seed admissions:', e);
+      console.warn('[educationService] Authoritative admissions API unavailable:', e);
     }
-    return SEED_ADMISSION_APPLICATIONS;
+    return [];
   },
 
   async submitAdmission(appData: any): Promise<AdmissionApplication> {
@@ -209,6 +290,43 @@ export const educationService = {
     }
     const data = await res.json();
     return data.application;
+  },
+
+  async getAdmissionDocuments(applicationId?: string): Promise<import('../types/education').AdmissionDocument[]> {
+    try {
+      const params = applicationId ? `?applicationId=${encodeURIComponent(applicationId)}` : '';
+      const res = await fetch(`/api/education/admissions/documents${params}`);
+      if (!res.ok) return [];
+      const data = await res.json();
+      return Array.isArray(data.documents) ? data.documents : [];
+    } catch (e) {
+      console.warn('[educationService] Academic document listing unavailable:', e);
+      return [];
+    }
+  },
+
+  async uploadAcademicDocument(input: {
+    file: File;
+    documentType: import('../types/education').AdmissionDocument['type'];
+    applicationId?: string;
+  }): Promise<import('../types/education').AdmissionDocument> {
+    const headers: Record<string, string> = {
+      'Content-Type': input.file.type,
+      'X-Document-Type': input.documentType,
+      'X-Filename': input.file.name
+    };
+    if (input.applicationId) headers['X-Application-Id'] = input.applicationId;
+
+    const res = await fetch('/api/education/admissions/documents/upload', {
+      method: 'POST',
+      headers,
+      body: input.file
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.document) {
+      throw new Error(data.message || data.error || 'Academic document upload failed');
+    }
+    return data.document;
   },
 
   async acceptOffer(applicationId: string): Promise<AdmissionApplication> {
@@ -235,16 +353,31 @@ export const educationService = {
         return data.scholarships || [];
       }
     } catch (e) {
-      console.warn('[educationService] Using seed scholarships:', e);
+      console.warn('[educationService] Authoritative scholarship provider unavailable:', e);
     }
-    return SEED_SCHOLARSHIPS;
+    return [];
   },
 
-  async getMarketplaceItems(category?: string, tier?: string): Promise<EducationMarketplaceItem[]> {
+  async getMarketplaceItems(
+    category?: string,
+    tier?: string,
+    filter?: {
+      countryCode?: string;
+      educationLevelId?: string;
+      gradeLevel?: string;
+      curriculumId?: string;
+      subject?: string;
+    }
+  ): Promise<EducationMarketplaceItem[]> {
     try {
       const params = new URLSearchParams();
       if (category) params.append('category', category);
       if (tier) params.append('tier', tier);
+      if (filter?.countryCode) params.append('countryCode', filter.countryCode);
+      if (filter?.educationLevelId) params.append('educationLevelId', filter.educationLevelId);
+      if (filter?.gradeLevel) params.append('gradeLevel', filter.gradeLevel);
+      if (filter?.curriculumId) params.append('curriculumId', filter.curriculumId);
+      if (filter?.subject) params.append('subject', filter.subject);
 
       const res = await fetch(`/api/education/marketplace?${params.toString()}`);
       if (res.ok) {
@@ -252,9 +385,9 @@ export const educationService = {
         return data.items || [];
       }
     } catch (e) {
-      console.warn('[educationService] Using seed marketplace items:', e);
+      console.warn('[educationService] Authoritative education marketplace API unavailable:', e);
     }
-    return SEED_MARKETPLACE_ITEMS;
+    return [];
   },
 
   async getInstitutionAnalytics(institutionId: string): Promise<any> {

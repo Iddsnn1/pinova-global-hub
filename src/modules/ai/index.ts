@@ -328,17 +328,33 @@ export class GeminiAIAdapter implements IAIProviderAdapter {
   async searchCatalog(request: AISearchRequest): Promise<AISearchResponse> {
     const start = Date.now();
     try {
-      const result = await safeFetchJson('/api/v1/ai/search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...request, provider: 'gemini' })
-      });
-      if (result.ok && result.data) {
-        return {
-          ...result.data,
-          providerUsed: this.providerName,
-          latencyMs: Date.now() - start
-        };
+      // AI search must never block the marketplace UI indefinitely.
+      // Keep the canonical local catalog as the fail-safe source of truth.
+      const controller = new AbortController();
+      const timeoutId = window.setTimeout(() => controller.abort(), 7000);
+      try {
+        const result = await safeFetchJson('/api/v1/ai/search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...request, provider: 'gemini' }),
+          signal: controller.signal
+        });
+        if (result.ok && result.data) {
+          const data = result.data as Partial<AISearchResponse>;
+          return {
+            aiInsights: typeof data.aiInsights === 'string' ? data.aiInsights : '',
+            recommendedProductIds: Array.isArray(data.recommendedProductIds)
+              ? data.recommendedProductIds.filter((id): id is string => typeof id === 'string')
+              : [],
+            suggestedCategory: typeof data.suggestedCategory === 'string' ? data.suggestedCategory : 'all',
+            buyingAdvice: typeof data.buyingAdvice === 'string' ? data.buyingAdvice : undefined,
+            budgetMatch: typeof data.budgetMatch === 'string' ? data.budgetMatch : undefined,
+            providerUsed: this.providerName,
+            latencyMs: Date.now() - start
+          };
+        }
+      } finally {
+        window.clearTimeout(timeoutId);
       }
     } catch (e) {
       console.warn('Gemini API notice:', e);

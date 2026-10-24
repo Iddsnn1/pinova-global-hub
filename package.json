@@ -4,15 +4,26 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "tsx server.ts",
-    "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
+    "dev": "NODE_ENV=development tsx server.ts",
+    "build": "node scripts/forensic-clean-seller-studio-fallback.mjs && node scripts/patch-express-query-url.mjs && vite build && node scripts/patch-vendor-branding-blob.mjs && esbuild server.ts --bundle --platform=node --format=cjs --packages=bundle --sourcemap --outfile=dist/server.cjs",
     "start": "node dist/server.cjs",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
-    "test": "tsx tests/education_ecosystem_verification_suite.ts && tsx tests/audit_v2_remediation_suite.ts && tsx tests/duffel_flight_audit_suite.ts",
+    "test": "tsx tests/pinova_fx_service_suite.ts && tsx tests/order_lifecycle_contract_suite.ts && tsx tests/pi_precision_persistence_suite.ts && tsx tests/education_ecosystem_verification_suite.ts && tsx tests/education_payment_authorization_suite.ts && tsx tests/education_directory_functional_suite.ts && tsx tests/education_data_integrity_suite.ts && tsx tests/education_data_integrity_edge_suite.ts && tsx tests/audit_v2_remediation_suite.ts && tsx tests/duffel_flight_audit_suite.ts && tsx tests/vendor_kyc_document_upload_suite.ts && tsx tests/vendor_branding_upload_suite.ts && tsx tests/vendor_governance_lifecycle_suite.ts",
+    "test:fx": "tsx tests/pinova_fx_service_suite.ts",
+    "test:pi:verification": "tsx tests/pi_payment_verification_suite.ts",
     "test:edu": "tsx tests/education_ecosystem_verification_suite.ts",
+    "test:edu:security": "tsx tests/education_payment_authorization_suite.ts",
+    "test:edu:directory": "tsx tests/education_directory_functional_suite.ts",
+    "test:edu:integrity": "tsx tests/education_data_integrity_suite.ts && tsx tests/education_data_integrity_edge_suite.ts",
+    "test:edu:providers": "tsx tests/authoritative_education_provider_registry_suite.ts",
     "test:audit": "tsx tests/audit_v2_remediation_suite.ts",
-    "test:flight": "tsx tests/duffel_flight_audit_suite.ts"
+    "test:flight": "tsx tests/duffel_flight_audit_suite.ts",
+    "test:kyc": "tsx tests/vendor_kyc_document_upload_suite.ts",
+    "test:branding": "tsx tests/vendor_branding_upload_suite.ts",
+    "test:governance": "tsx tests/vendor_governance_lifecycle_suite.ts",
+    "export:legacy-blob": "tsx scripts/export-legacy-blob.mts",
+    "test:pi-precision": "tsx tests/pi_precision_persistence_suite.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
@@ -25,18 +36,20 @@
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
     "recharts": "^3.10.1",
-    "vite": "^6.2.3"
+    "@neondatabase/serverless": "^1.0.0",
+    "@aws-sdk/client-s3": "^3.901.0"
   },
   "devDependencies": {
     "@types/express": "^4.17.21",
     "@types/node": "^22.14.0",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.5",
-    "autoprefixer": "^10.4.21",
-    "esbuild": "^0.25.0",
+    "autoprefixer": "^10.4.0",
     "tailwindcss": "^4.1.14",
+    "esbuild": "^0.25.0",
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",
-    "vite": "^6.2.3"
+    "vite": "^6.4.3",
+    "@vercel/blob": "^2.6.1"
   }
 }

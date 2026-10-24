@@ -9,6 +9,19 @@ export interface MarketplaceCategoryDef {
   subcategories: string[];
 }
 
+export type SubcategoryListingType = 'product' | 'service' | 'booking' | 'digital';
+
+export interface MarketplaceSubcategoryDef {
+  id: string;
+  categoryId: MarketplaceCategory;
+  name: string;
+  description: string;
+  listingType: SubcategoryListingType;
+  facets: string[];
+  searchTerms: string[];
+}
+
+
 export interface UtilityCategoryDef {
   id: UtilityCategory;
   name: string;
@@ -26,8 +39,6 @@ export interface ServiceCategoryDef {
   name: string;
   description: string;
   iconName: string;
-  popularServices: string[];
-  averagePricePi: number;
 }
 
 export const MARKETPLACE_CATEGORIES: MarketplaceCategoryDef[] = [
@@ -307,6 +318,71 @@ export const MARKETPLACE_CATEGORIES: MarketplaceCategoryDef[] = [
   }
 ];
 
+export const MARKETPLACE_SUBCATEGORY_DEFS: MarketplaceSubcategoryDef[] = MARKETPLACE_CATEGORIES.flatMap((category) =>
+  category.subcategories.map((name) => {
+    const id = name
+      .trim()
+      .toLowerCase()
+      .replace(/&/g, 'and')
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_|_$/g, '');
+    const serviceLike = /service|repair|consult|cleaning|rental|rental|training|tutoring|legal|accounting|marketing|delivery|logistics|catering|photography|video|music|design|construction|travel|booking|car rental/i.test(name);
+    const digitalLike = /software|digital|course|certification|materials|media/i.test(name);
+    const bookingLike = /flight|hotel|bus|train|events|car rental/i.test(name);
+    const listingType: SubcategoryListingType = bookingLike
+      ? 'booking'
+      : digitalLike
+        ? 'digital'
+        : serviceLike
+          ? 'service'
+          : 'product';
+    const facetByCategory: Record<string, string[]> = {
+      phones_mobile: ['brand', 'model', 'condition', 'price', 'stock', 'seller', 'verification'],
+      computers_technology: ['brand', 'model', 'processor', 'memory', 'storage', 'condition', 'price', 'stock', 'seller', 'verification'],
+      electronics: ['brand', 'model', 'condition', 'specifications', 'price', 'stock', 'seller', 'verification'],
+      automotive_transport: ['make', 'model', 'year', 'condition', 'location', 'price', 'availability', 'seller', 'verification'],
+      home_living: ['brand', 'material', 'dimensions', 'condition', 'price', 'stock', 'seller', 'verification'],
+      fashion_beauty: ['brand', 'size', 'color', 'material', 'condition', 'price', 'stock', 'seller', 'verification'],
+      food_groceries: ['brand', 'quantity', 'unit', 'expiry', 'location', 'price', 'stock', 'seller', 'verification'],
+      industrial_construction: ['brand', 'model', 'specification', 'condition', 'capacity', 'price', 'stock', 'seller', 'verification'],
+      agriculture: ['type', 'variety', 'quantity', 'unit', 'condition', 'location', 'price', 'stock', 'seller', 'verification'],
+      education: ['provider', 'level', 'format', 'duration', 'location', 'price', 'availability', 'verification'],
+      professional_services: ['serviceType', 'provider', 'coverage', 'location', 'availability', 'price', 'verification'],
+      travel_transport: ['provider', 'origin', 'destination', 'date', 'availability', 'price', 'verification'],
+      entertainment_creative: ['provider', 'format', 'location', 'date', 'availability', 'price', 'verification'],
+      pets_animals: ['type', 'breed', 'age', 'location', 'availability', 'price', 'seller', 'verification'],
+      baby_kids: ['brand', 'ageRange', 'size', 'condition', 'price', 'stock', 'seller', 'verification'],
+      health_wellness: ['brand', 'type', 'condition', 'size', 'price', 'stock', 'seller', 'verification'],
+      business_office: ['brand', 'model', 'capacity', 'condition', 'price', 'stock', 'seller', 'verification'],
+      other_general: ['type', 'condition', 'price', 'availability', 'seller', 'verification']
+    };
+    const facets = facetByCategory[category.id] || ['type', 'condition', 'price', 'availability', 'seller', 'verification'];
+    return {
+      id: id + '_' + category.id,
+      categoryId: category.id,
+      name,
+      description: `${name} listings within ${category.name}, with authoritative seller, availability, pricing and verification data.`,
+      listingType,
+      facets,
+      searchTerms: [name, category.name]
+    };
+  })
+);
+
+export const getMarketplaceSubcategoryDef = (
+  categoryId?: string,
+  subcategory?: string
+): MarketplaceSubcategoryDef | undefined => {
+  if (!categoryId || !subcategory) return undefined;
+  const canonicalCategory = resolveMarketplaceCategory(categoryId);
+  const normalized = subcategory.trim().toLowerCase();
+  return MARKETPLACE_SUBCATEGORY_DEFS.find(
+    (item) =>
+      item.categoryId === canonicalCategory &&
+      item.name.trim().toLowerCase() === normalized
+  );
+};
+
 export const MARKETPLACE_CATEGORY_ALIASES: Record<string, MarketplaceCategory> = {
   phones_mobile: 'phones_mobile',
   computers_technology: 'computers_technology',
@@ -370,6 +446,9 @@ export const MARKETPLACE_CATEGORY_ALIASES: Record<string, MarketplaceCategory> =
   promotions: 'other_general',
   other: 'other_general',
   general: 'other_general',
+  home: 'home_living',
+  digital: 'computers_technology',
+  digital_assets: 'computers_technology',
   all: 'all'
 };
 
@@ -392,6 +471,12 @@ export const getMarketplaceCategoryDef = (id?: string): MarketplaceCategoryDef |
   return MARKETPLACE_CATEGORIES.find((c) => c.id === canonicalId) || MARKETPLACE_CATEGORIES.find((c) => c.id === id);
 };
 
+export const getMarketplaceSubcategories = (categoryId?: string): MarketplaceSubcategoryDef[] => {
+  if (!categoryId || categoryId === 'all') return [];
+  const canonicalId = resolveMarketplaceCategory(categoryId);
+  return MARKETPLACE_SUBCATEGORY_DEFS.filter((item) => item.categoryId === canonicalId);
+};
+
 export const UTILITY_CATEGORIES: UtilityCategoryDef[] = [
   {
     id: 'airtime',
@@ -402,7 +487,7 @@ export const UTILITY_CATEGORIES: UtilityCategoryDef[] = [
     fieldLabel: 'Mobile Phone Number',
     placeholder: '+234 803 123 4567 or +254 712 345 678',
     badgeText: 'Instant Topup',
-    defaultAmountsUsd: [5, 10, 20, 50]
+    defaultAmountsUsd: []
   },
   {
     id: 'mobile_data',
@@ -461,10 +546,10 @@ export const UTILITY_CATEGORIES: UtilityCategoryDef[] = [
   },
   {
     id: 'exam_cards',
-    name: 'Exam Cards',
-    description: 'Purchase WAEC, NECO, JAMB, NABTEB, and university entrance result checker pin cards.',
+    name: 'Exam Cards & PINs',
+    description: 'Purchase WAEC, NECO, JAMB, NABTEB, and NBAIS result checker pin cards and registration tokens.',
     iconName: 'FileCheck',
-    popularProviders: ['WAEC Direct PIN', 'NECO Result Scratch Card', 'JAMB e-PIN', 'NABTEB Direct'],
+    popularProviders: [],
     fieldLabel: 'Candidate Registration / Email',
     placeholder: 'candidate@examportal.edu',
     badgeText: 'Instant PIN Code',
@@ -472,14 +557,69 @@ export const UTILITY_CATEGORIES: UtilityCategoryDef[] = [
   },
   {
     id: 'education_payments',
-    name: 'Education Payments',
-    description: 'Pay school fees, university tuition deposits, and online course certifications using Pi Coin.',
+    name: 'School Fees & Tuition Engine',
+    description: 'Pay school fees, university tuition deposits, and academic charges across 6 tiers using Pi Coin.',
     iconName: 'GraduationCap',
-    popularProviders: ['Global University Tuition Gateway', 'Coursera Certificate Pass', 'EdX MasterPass', 'Udemy Tech Pass'],
+    popularProviders: [],
     fieldLabel: 'Student Matriculation ID',
     placeholder: 'STU-2026-8812',
     badgeText: 'Official Receipt',
     defaultAmountsUsd: [50, 100, 250, 500]
+  },
+  {
+    id: 'institution_registry',
+    name: 'Institution Registry & Directory',
+    description: 'Search the education registry when authoritative institution data is available.',
+    iconName: 'Building2',
+    popularProviders: [],
+    fieldLabel: 'Search Institution / State',
+    placeholder: 'e.g. Bayero University, Kano State',
+    badgeText: 'Verified Registry',
+    defaultAmountsUsd: [10, 25, 50, 100]
+  },
+  {
+    id: 'admissions_portal',
+    name: 'Admissions & Enrolment Pipeline',
+    description: 'Submit and track multi-institution academic admission applications and acceptance fee clearances.',
+    iconName: 'BookOpen',
+    popularProviders: [],
+    fieldLabel: 'Application Ref Number',
+    placeholder: 'APP-2026-9042',
+    badgeText: 'Admissions Desk',
+    defaultAmountsUsd: [15, 30, 60, 120]
+  },
+  {
+    id: 'receipt_verifier',
+    name: 'Digital Receipt & Clearance Verifier',
+    description: 'Cryptographically verify student tuition clearance certificates, digital bursary stamps, and audit hashes.',
+    iconName: 'ShieldCheck',
+    popularProviders: ['PiNova Verifier', 'Institutional Bursary Clearance', 'Government Audit Gateway'],
+    fieldLabel: 'Receipt or Clearance Hash',
+    placeholder: 'REC-NG-2026-XXXX or Verification Hash',
+    badgeText: 'Zero-Trust Audit',
+    defaultAmountsUsd: [1, 2, 5, 10]
+  },
+  {
+    id: 'scholarships_aid',
+    name: 'Scholarships & Student Grants',
+    description: 'Explore merit scholarships, Pioneer endowment grants, and need-based academic subsidies.',
+    iconName: 'Award',
+    popularProviders: [],
+    fieldLabel: 'Applicant National ID / NIN',
+    placeholder: 'NIN or Student ID',
+    badgeText: 'Financial Aid',
+    defaultAmountsUsd: [5, 10, 20, 50]
+  },
+  {
+    id: 'education_marketplace',
+    name: 'Academic Marketplace & Supplies',
+    description: 'Education resources organized by curriculum, level, grade, subject, and local education system.',
+    iconName: 'ShoppingBag',
+    popularProviders: [],
+    fieldLabel: 'Student Delivery Address',
+    placeholder: 'Campus Hall / Residential Address',
+    badgeText: 'Curated Goods',
+    defaultAmountsUsd: [10, 25, 50, 100]
   },
   {
     id: 'gift_cards',
@@ -598,40 +738,30 @@ export const SERVICE_CATEGORIES: ServiceCategoryDef[] = [
     id: 'consultation',
     name: 'Professional Consultation',
     description: '1-on-1 virtual consultations with verified Pi legal experts, crypto accountants, and tech advisors.',
-    iconName: 'UserCheck',
-    popularServices: ['Pi App Architecture Audit', 'Crypto Tax & Compliance', 'Legal Trademark Advice'],
-    averagePricePi: 25.00
+    iconName: 'UserCheck'
   },
   {
     id: 'freelance_tech',
     name: 'Tech & Design Freelancing',
     description: 'Hire skilled developer pioneers for UI/UX design, React code development, smart contract setup, and translation.',
-    iconName: 'Code',
-    popularServices: ['Full-stack App Development', 'UI/UX Mobile Design', 'Pi SDK Integration'],
-    averagePricePi: 50.00
+    iconName: 'Code'
   },
   {
     id: 'repairs_maintenance',
     name: 'Repairs & Tech Maintenance',
     description: 'Hardware repair bookings, smartphone screen replacement, laptop diagnostics, and solar installation.',
-    iconName: 'Wrench',
-    popularServices: ['Smartphone Screen Repair', 'Laptop Motherboard Service', 'Solar Inverter Setup'],
-    averagePricePi: 35.00
+    iconName: 'Wrench'
   },
   {
     id: 'home_cleaning',
     name: 'Home & Office Services',
     description: 'Book verified local cleaning crews, handyman assistance, plumbing, and HVAC maintenance.',
-    iconName: 'Sparkles',
-    popularServices: ['Residential Deep Clean', 'Handyman Plumbing Service', 'AC Chemical Service'],
-    averagePricePi: 30.00
+    iconName: 'Sparkles'
   },
   {
     id: 'events_photography',
     name: 'Event & Media Services',
     description: 'Book professional photographers, videographers, DJ audio setups, and event coordinators.',
-    iconName: 'Camera',
-    popularServices: ['Product Photography Package', 'Event Drone Videography', 'Brand Logo Animation'],
-    averagePricePi: 45.00
+    iconName: 'Camera'
   }
 ];

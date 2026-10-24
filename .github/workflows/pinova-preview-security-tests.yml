@@ -1,0 +1,55 @@
+name: PiNova Preview FX and Invoice Security Tests
+
+on:
+  push:
+    branches:
+      - migration/neon-durable-storage
+    paths:
+      - "src/**/*.ts"
+      - "src/**/*.tsx"
+      - "server.ts"
+      - "api/**/*.ts"
+      - "scripts/**/*.mjs"
+      - "tests/pinova_fx_service_suite.ts"
+      - "tests/education_payment_authorization_suite.ts"
+      - "tests/pi_payment_verification_suite.ts"
+      - "tests/pi_order_payment_contract_suite.ts"
+      - "package.json"
+      - "package-lock.json"
+      - "tsconfig.json"
+      - "vite.config.ts"
+      - ".github/workflows/pinova-preview-security-tests.yml"
+      - ".github/workflows/legacy-blob-backup.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preview-security-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout preview branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install dependencies
+        # This branch currently has no package-lock.json; npm ci would fail with EUSAGE.
+        run: npm install --no-audit --no-fund
+      - name: FX provider mocked tests
+        run: npm run test:fx
+      - name: Education invoice authorization tests
+        run: npm run test:edu:security
+      - name: Pi payment verification mocked tests
+        run: npm run test:pi:verification
+      - name: Pi order amount precision contract tests
+        run: npx tsx tests/pi_order_payment_contract_suite.ts
+      - name: TypeScript validation
+        run: npm run lint
+      - name: Production build validation
+        run: npm run build

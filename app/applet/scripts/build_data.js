@@ -769,13 +769,13 @@ VALID_CATEGORIES.forEach((cat, index) => {
 const fileHeader = `import { UtilityServiceProvider, PiConversionConfig, ConversionRateLog, UtilityTransactionReceipt } from '../types/utility';
 
 export const INITIAL_PI_CONVERSION_CONFIG: PiConversionConfig = {
-  piRateUsd: 10.00, // Default: 1 Pi = $10.00 USD
+  piRateUsd: 314159.00, // PiNova reference: 1 π = $314,159 USD
   minPurchasePi: 0.000001,
   maxPurchasePi: 1000.00,
   currencyCode: 'USD',
   currencySymbol: '$',
-  autoRateUpdateEnabled: true,
-  autoUpdateSource: 'Pi Market Index Oracle API',
+  autoRateUpdateEnabled: false,
+  autoUpdateSource: 'PiNova Reference Value — Community-Supported Target',
   lastUpdated: new Date().toISOString(),
   updatedBy: 'System Governance Engine'
 };

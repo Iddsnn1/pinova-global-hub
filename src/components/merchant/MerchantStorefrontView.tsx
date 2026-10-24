@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
+import { formatPiAmount } from '../../utils/formatters';
 import { 
   X, 
   ShieldCheck, 
@@ -66,12 +67,56 @@ export const MerchantStorefrontView: React.FC<MerchantStorefrontViewProps> = ({
   const [sortBy, setSortBy] = useState<'featured' | 'rating' | 'price_low' | 'price_high' | 'newest'>('featured');
   const [inStockOnly, setInStockOnly] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
+  const [durableProducts, setDurableProducts] = useState<Product[]>([]);
+  const [catalogLoadState, setCatalogLoadState] = useState<'loading' | 'ready' | 'error'>('loading');
+
+  // Public storefront catalogue is sourced only from the authoritative durable
+  // product API. The API returns active/public listings for unauthenticated users.
+  useEffect(() => {
+    let cancelled = false;
+    const loadDurableCatalog = async () => {
+      setCatalogLoadState('loading');
+      try {
+        const response = await fetch('/api/products', {
+          method: 'GET',
+          headers: { Accept: 'application/json' },
+          cache: 'no-store'
+        });
+        const text = await response.text();
+        if (!response.ok) throw new Error(`CATALOG_HTTP_${response.status}`);
+        const data = JSON.parse(text);
+        const catalog = Array.isArray(data?.products) ? data.products : [];
+        if (!cancelled) {
+          setDurableProducts(catalog as Product[]);
+          setCatalogLoadState('ready');
+        }
+      } catch (error) {
+        console.error('[MerchantStorefrontView] Durable catalog load failed:', error);
+        if (!cancelled) {
+          setDurableProducts([]);
+          setCatalogLoadState('error');
+        }
+      }
+    };
+    loadDurableCatalog();
+    return () => { cancelled = true; };
+  }, [vendor.sellerUsername, vendor.id]);
 
   const vendorProducts = useMemo(() => {
-    return products.filter(
-      (p) => p.sellerId === vendor.id || (p.sellerName || '').toLowerCase() === (vendor.storeName || '').toLowerCase()
-    );
-  }, [products, vendor]);
+    const sellerUsername = String(vendor.sellerUsername || '').trim().replace(/^@/, '').toLowerCase();
+    const sellerId = String(vendor.id || '').trim().toLowerCase();
+    const storeName = String(vendor.storeName || '').trim().toLowerCase();
+
+    return durableProducts.filter((p) => {
+      const productSellerId = String(p.sellerId || '').trim().replace(/^@/, '').toLowerCase();
+      const productSellerName = String(p.sellerName || '').trim().toLowerCase();
+      return (
+        (sellerUsername && productSellerId === sellerUsername) ||
+        (sellerId && productSellerId === sellerId) ||
+        (storeName && productSellerName === storeName)
+      );
+    });
+  }, [durableProducts, vendor]);
 
   const vendorReviews = useMemo(() => {
     const productIds = new Set(vendorProducts.map((p) => p.id));
@@ -121,11 +166,29 @@ export const MerchantStorefrontView: React.FC<MerchantStorefrontViewProps> = ({
     }
   };
 
-  const handleShareStore = () => {
-    if (navigator.clipboard) {
-      navigator.clipboard.writeText(window.location.origin + `?store=${encodeURIComponent(vendor.storeName)}`);
-      setCopiedLink(true);
-      setTimeout(() => setCopiedLink(false), 2500);
+  const handleShareStore = async () => {
+    const storeUrl = window.location.origin + `?store=${encodeURIComponent(vendor.storeName || vendor.sellerUsername || vendor.id)}`;
+    const shareData = {
+      title: vendor.storeName || 'PiNova Merchant Store',
+      text: `Visit ${vendor.storeName || 'this merchant store'} on PiNova Global Hub`,
+      url: storeUrl
+    };
+    try {
+      if (typeof navigator.share === 'function') {
+        await navigator.share(shareData);
+        return;
+      }
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') return;
+    }
+    try {
+      if (navigator.clipboard) {
+        await navigator.clipboard.writeText(storeUrl);
+        setCopiedLink(true);
+        setTimeout(() => setCopiedLink(false), 2500);
+      }
+    } catch (error) {
+      console.warn('[MerchantStorefrontView] Unable to share store link:', error);
     }
   };
 
@@ -213,7 +276,7 @@ export const MerchantStorefrontView: React.FC<MerchantStorefrontViewProps> = ({
               </span>
               <span className="flex items-center gap-1">
                 <Award className="w-3.5 h-3.5 text-emerald-400" />
-                <span className="font-semibold text-slate-700 dark:text-slate-300">{vendor.totalSalesPi.toFixed(2)} π</span> Total Volume
+                <span className="font-semibold text-slate-700 dark:text-slate-300">{formatPiAmount(vendor.totalSalesPi, { minDecimals: 2 })} π</span> Total Volume
               </span>
               {vendor.country && (
                 <span className="flex items-center gap-1">
@@ -246,7 +309,10 @@ export const MerchantStorefrontView: React.FC<MerchantStorefrontViewProps> = ({
           </button>
 
           <button
-            onClick={() => onContactSeller(vendor.sellerUsername)}
+            onClick={() => {
+              const sellerUsername = String(vendor.sellerUsername || '').trim();
+              if (sellerUsername) onContactSeller(sellerUsername);
+            }}
             className="flex-1 sm:flex-initial px-4 py-2.5 rounded-2xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-900 dark:text-slate-100 font-bold text-xs transition-colors flex items-center justify-center gap-1.5 border border-slate-200 dark:border-slate-700 shadow-sm"
           >
             <MessageSquare className="w-4 h-4 text-indigo-400" />
@@ -256,7 +322,7 @@ export const MerchantStorefrontView: React.FC<MerchantStorefrontViewProps> = ({
           <button
             onClick={handleShareStore}
             className="p-2.5 rounded-2xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-colors border border-slate-200 dark:border-slate-700"
-            title="Share Store Link"
+            title="Share Store"
           >
             {copiedLink ? <Check className="w-4 h-4 text-emerald-400" /> : <Share2 className="w-4 h-4" />}
           </button>
@@ -405,7 +471,19 @@ export const MerchantStorefrontView: React.FC<MerchantStorefrontViewProps> = ({
             </div>
 
             {/* Products Grid */}
-            {filteredProducts.length === 0 ? (
+            {catalogLoadState === 'loading' ? (
+              <div className="py-16 text-center space-y-3 rounded-2xl bg-slate-50 dark:bg-slate-800/20 border border-slate-200 dark:border-slate-800">
+                <Package className="w-10 h-10 text-slate-400 mx-auto animate-pulse" />
+                <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">Loading merchant catalogue...</h3>
+                <p className="text-xs text-slate-500 max-w-sm mx-auto">Fetching active listings from the PiNova Durable Product Catalog.</p>
+              </div>
+            ) : catalogLoadState === 'error' ? (
+              <div className="py-16 text-center space-y-3 rounded-2xl bg-slate-50 dark:bg-slate-800/20 border border-red-200 dark:border-red-900/40">
+                <AlertCircle className="w-10 h-10 text-red-400 mx-auto" />
+                <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">Catalogue temporarily unavailable</h3>
+                <p className="text-xs text-slate-500 max-w-sm mx-auto">The merchant catalogue could not be loaded from the authoritative product service.</p>
+              </div>
+            ) : filteredProducts.length === 0 ? (
               <div className="py-16 text-center space-y-3 rounded-2xl bg-slate-50 dark:bg-slate-800/20 border border-slate-200 dark:border-slate-800">
                 <Package className="w-10 h-10 text-slate-400 mx-auto" />
                 <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">No matching products found</h3>

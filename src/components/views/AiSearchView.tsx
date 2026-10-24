@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { formatPiAmount } from '../../utils/formatters';
 import {
   Sparkles,
   Send,
@@ -1708,7 +1709,7 @@ export const AiSearchView: React.FC<AiSearchViewProps> = ({
                                     {p.title}
                                   </h4>
                                   <div className="flex items-center gap-1.5 mt-0.5">
-                                    <span className="font-black text-amber-500">{p.pricePi.toFixed(2)} π</span>
+                                    <span className="font-black text-amber-500">{formatPiAmount(p.pricePi)} π</span>
                                     <span className="text-[10px] text-slate-400">★ {p.rating}</span>
                                   </div>
                                   <div className="flex items-center gap-1 mt-1.5">
@@ -1822,7 +1823,7 @@ export const AiSearchView: React.FC<AiSearchViewProps> = ({
                                     </span>
                                   </div>
                                   <p className="text-[10px] text-slate-400 truncate mt-0.5">
-                                    {o.items?.length || 0} item(s) • Total: {o.totalPi.toFixed(2)} π
+                                    {o.items?.length || 0} item(s) • Total: {formatPiAmount(o.totalPi)} π
                                   </p>
                                 </div>
                                 {onNavigateSection && (

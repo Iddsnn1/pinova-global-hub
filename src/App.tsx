@@ -18,7 +18,8 @@ import {
   Flame,
   ChevronRight,
   Store,
-  AlertTriangle
+  AlertTriangle,
+  ArrowLeft
 } from 'lucide-react';
 
 import { Product, Order, OrderItem, Vendor, Review, Coupon, Notification, Message, PiUser, ProductCategory, PstpOrderStatus, UserRole } from './types';
@@ -48,6 +49,7 @@ import { EnterpriseSecurityView } from './components/views/EnterpriseSecurityVie
 import { DeveloperPlatformView } from './components/views/DeveloperPlatformView';
 import { FutureServicesView } from './components/views/FutureServicesView';
 import { PiDiagnosticView } from './components/PiDiagnosticView';
+import { EducationHub, EducationTab } from './components/education/EducationHub';
 
 import { UniversalSearchModal } from './components/UniversalSearchModal';
 import { PiBrowserBanner } from './components/PiBrowserBanner';
@@ -60,6 +62,7 @@ import { MessagingModal } from './components/MessagingModal';
 import { NotificationCenter } from './components/NotificationCenter';
 import { PstpShieldCenter } from './components/PstpShieldCenter';
 import { SellerStorefrontModal } from './components/SellerStorefrontModal';
+import { MerchantStorefrontView } from './components/merchant/MerchantStorefrontView';
 import { SocialCommunityHub } from './components/social/SocialCommunityHub';
 
 import { PiConversionConfig, ConversionRateLog } from './types/utility';
@@ -67,9 +70,10 @@ import { INITIAL_PI_CONVERSION_CONFIG, INITIAL_CONVERSION_RATE_LOGS } from './da
 
 import { LanguageProvider } from './context/LanguageContext';
 import { LanguageSelectorModal } from './components/i18n/LanguageSelectorModal';
-import { MerchantEcosystemHub } from './components/merchant/MerchantEcosystemHub';
+import { SellerStudioV2 } from './components/seller/SellerStudioV2';
 import { VendorApplicationModal } from './components/vendor/VendorApplicationModal';
 import { formatPiAmount } from './utils/formatters';
+import { vendorAuthenticatedFetch } from './lib/vendorAuthBridge';
 
 function MainAppContent() {
   // Dark mode
@@ -79,6 +83,7 @@ function MainAppContent() {
   const [activeSection, setActiveSection] = useState<MainSection>('home');
   const [selectedMarketplaceCategory, setSelectedMarketplaceCategory] = useState<MarketplaceCategory>('all');
   const [selectedUtilityCategory, setSelectedUtilityCategory] = useState<string>('all');
+  const [selectedEducationTab, setSelectedEducationTab] = useState<EducationTab>('directory');
   
   // Back navigation stack & History tracking
   const [navigationStack, setNavigationStack] = useState<{ section: MainSection; category: MarketplaceCategory }[]>([
@@ -165,6 +170,7 @@ function MainAppContent() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
   const [selectedVendor, setSelectedVendor] = useState<Vendor | null>(null);
+  const [storefrontPageVendor, setStorefrontPageVendor] = useState<Vendor | null>(null);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isVendorApplicationOpen, setIsVendorApplicationOpen] = useState(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
@@ -237,6 +243,38 @@ function MainAppContent() {
     }
   }, [darkMode]);
 
+  // Hydrate the marketplace from the authoritative durable catalog so products
+  // created in Seller Studio are visible to buyers after refresh/login.
+  useEffect(() => {
+    let cancelled = false;
+    const loadPublicCatalog = async () => {
+      try {
+        const response = await fetch('/api/products', {
+          method: 'GET',
+          headers: { Accept: 'application/json' },
+          cache: 'no-store'
+        });
+        const text = await response.text();
+        if (!response.ok || !text) return;
+        const data = JSON.parse(text);
+        const durable = Array.isArray(data?.products) ? data.products as Product[] : [];
+        if (cancelled || durable.length === 0) return;
+
+        setProducts((previous) => {
+          const byId = new Map(previous.map((product) => [String(product.id), product]));
+          for (const product of durable) {
+            byId.set(String(product.id), product);
+          }
+          return Array.from(byId.values());
+        });
+      } catch (error) {
+        console.warn('[Marketplace] Durable product catalog hydration failed:', error);
+      }
+    };
+    loadPublicCatalog();
+    return () => { cancelled = true; };
+  }, []);
+
   // Proactive Pi SDK Initialization on Application Load (Controlled Lifecycle)
   useEffect(() => {
     let active = true;
@@ -246,7 +284,20 @@ function MainAppContent() {
       const path = window.location.pathname || '';
       if (search.includes('tab=pi-diagnostic') || search.includes('view=pi-diagnostic') || path.includes('/pi-diagnostic')) {
         setActiveSection('pi-diagnostic');
+      } else if (path.includes('/seller-studio') || search.includes('section=seller_studio') || search.includes('tab=seller-studio')) {
+        setActiveSection('seller_studio');
       }
+
+      const handlePopState = (e: PopStateEvent) => {
+        const curPath = window.location.pathname || '';
+        const curSearch = window.location.search || '';
+        if (curPath.includes('/seller-studio') || curSearch.includes('section=seller_studio')) {
+          setActiveSection('seller_studio');
+        } else if (e.state?.section) {
+          setActiveSection(e.state.section);
+        }
+      };
+      window.addEventListener('popstate', handlePopState);
     }
 
     // Only proactively initialize the SDK (Pi.init). Authentication is strictly triggered on user gesture.
@@ -382,10 +433,23 @@ function MainAppContent() {
     }
 
     setActiveSection(targetSection);
+    if (typeof window !== 'undefined') {
+      try {
+        if (targetSection === 'seller_studio' && !window.location.pathname.includes('/seller-studio')) {
+          window.history.pushState({ section: 'seller_studio' }, '', '/seller-studio');
+        } else if (targetSection !== 'seller_studio' && window.location.pathname.includes('/seller-studio')) {
+          window.history.pushState({ section: targetSection }, '', '/');
+        }
+      } catch (_) {}
+    }
     if (targetSection === 'marketplace') {
       setSelectedMarketplaceCategory(newCategory as MarketplaceCategory);
     } else if (targetSection === 'utilities') {
       setSelectedUtilityCategory((newCategory && newCategory !== 'all' ? newCategory : 'all') as string);
+    } else if (targetSection === 'education') {
+      if (newCategory && newCategory !== 'all') {
+        setSelectedEducationTab(newCategory as EducationTab);
+      }
     }
     
     // Push onto navigation history stack if distinct
@@ -559,7 +623,7 @@ function MainAppContent() {
       {
         id: `notif-${Date.now()}`,
         title: 'Payment Verified & Order Confirmed',
-        message: `Order ${newOrder.id} for ${newOrder.totalPi.toFixed(2)} π successfully authorized and verified via official Pi Network platform API.`,
+        message: `Order ${newOrder.id} for ${formatPiAmount(newOrder.totalPi, { minDecimals: 2 })} π successfully authorized and verified via official Pi Network platform API.`,
         type: 'order_protection',
         timestamp: new Date().toISOString(),
         read: false
@@ -570,23 +634,43 @@ function MainAppContent() {
     handleNavigateSection('orders');
   };
 
-  // Confirm Receipt & Complete Order
-  const handleConfirmReceipt = (orderId: string) => {
-    setOrders((prev) =>
-      prev.map((o) => (o.id === orderId ? { ...o, escrowStatus: 'released', pstpStatus: 'Completed', updatedAt: new Date().toISOString() } : o))
-    );
-
-    setNotifications((prev) => [
-      {
-        id: `notif-${Date.now()}`,
-        title: 'Order Completed',
-        message: `Order ${orderId} has been confirmed received and funds released to seller. Thank you!`,
-        type: 'order_protection',
-        timestamp: new Date().toISOString(),
-        read: false
-      },
-      ...prev
-    ]);
+  // Confirm Receipt & Release Escrow — server-authoritative.
+  const handleConfirmReceipt = async (orderId: string) => {
+    try {
+      const response = await vendorAuthenticatedFetch(`/api/v1/orders/${encodeURIComponent(orderId)}/confirm-receipt`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' }
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || data?.ok !== true || !data?.order) {
+        throw new Error(data?.error || 'RECEIPT_CONFIRMATION_REJECTED');
+      }
+      handleOrderUpdated(data.order);
+      setNotifications((prev) => [
+        {
+          id: `notif-${Date.now()}`,
+          title: 'Order Completed',
+          message: `Order ${orderId} was completed and PSTP escrow was released after server-verified delivery.`,
+          type: 'order_protection',
+          timestamp: new Date().toISOString(),
+          read: false
+        },
+        ...prev
+      ]);
+    } catch (error) {
+      console.error('[ConfirmReceipt]', error);
+      setNotifications((prev) => [
+        {
+          id: `notif-${Date.now()}`,
+          title: 'Receipt Confirmation Rejected',
+          message: 'Receipt confirmation requires server-verified Delivered status. No escrow funds were released.',
+          type: 'order_protection',
+          timestamp: new Date().toISOString(),
+          read: false
+        },
+        ...prev
+      ]);
+    }
   };
 
   // Request Return
@@ -620,12 +704,62 @@ function MainAppContent() {
   };
 
   // Update Order Lifecycle Status
-  const handleUpdateOrderStatus = (
+  // Seller fulfillment lifecycle is server-authoritative. Never advance seller
+  // milestones by mutating client/localStorage state alone.
+  const handleUpdateOrderStatus = async (
     orderId: string,
     newStatus: PstpOrderStatus,
     noteOrExtra?: string | { trackingNumber?: string; carrier?: string; note?: string }
   ) => {
-    const noteText = typeof noteOrExtra === 'string' ? noteOrExtra : (noteOrExtra?.note || `Order status updated to ${newStatus}`);
+    const sellerLifecycleStatuses: PstpOrderStatus[] = [
+      'Seller Accepted',
+      'Preparing Order',
+      'Packed',
+      'Shipped',
+      'In Transit',
+      'Out for Delivery',
+      'Delivered'
+    ];
+
+    if (sellerLifecycleStatuses.includes(newStatus)) {
+      const noteText = typeof noteOrExtra === 'string'
+        ? noteOrExtra
+        : (noteOrExtra?.note || `Seller advanced fulfillment to ${newStatus}.`);
+      const extraTracking = typeof noteOrExtra === 'object' ? noteOrExtra.trackingNumber : undefined;
+      const extraCarrier = typeof noteOrExtra === 'object' ? noteOrExtra.carrier : undefined;
+
+      try {
+        const response = await vendorAuthenticatedFetch(`/api/v1/orders/${encodeURIComponent(orderId)}/fulfillment`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify({
+            pstpStatus: newStatus,
+            note: noteText,
+            ...(extraTracking ? { trackingNumber: extraTracking } : {}),
+            ...(extraCarrier ? { carrier: extraCarrier } : {})
+          })
+        });
+
+        const raw = await response.text();
+        let data: any = null;
+        try { data = raw ? JSON.parse(raw) : null; } catch { /* fail closed below */ }
+
+        if (!response.ok || data?.ok !== true || !data?.order) {
+          console.error('[Seller Fulfillment] Server rejected lifecycle transition:', response.status, data || raw);
+          return;
+        }
+
+        handleOrderUpdated(data.order as Order);
+      } catch (error) {
+        console.error('[Seller Fulfillment] Server lifecycle request failed:', error);
+      }
+      return;
+    }
+
+    // Non-seller lifecycle actions retain their existing local behavior for now.
+    const noteText = typeof noteOrExtra === 'string'
+      ? noteOrExtra
+      : (noteOrExtra?.note || `Order status updated to ${newStatus}`);
     const extraTracking = typeof noteOrExtra === 'object' ? noteOrExtra.trackingNumber : undefined;
     const extraCarrier = typeof noteOrExtra === 'object' ? noteOrExtra.carrier : undefined;
     setOrders((prev) =>
@@ -702,12 +836,31 @@ function MainAppContent() {
         if (selectedUtilityCategory && selectedUtilityCategory !== 'all') {
           const utilDef = UTILITY_CATEGORIES.find((u) => u.id === selectedUtilityCategory);
           items.push({
-            label: utilDef?.name || selectedUtilityCategory,
+            label: utilDef?.name || (selectedUtilityCategory === 'education' ? 'Education & Examination Portals' : selectedUtilityCategory),
             section: 'utilities',
             category: selectedUtilityCategory as any
           });
         }
         return items;
+      }
+      case 'education': {
+        const tab = selectedEducationTab || 'directory';
+        const tabLabels: Record<string, string> = {
+          directory: 'Global Directory',
+          fees: 'Tuition & Fees',
+          exam_cards: 'Exam Cards & PINs',
+          admissions: 'Admissions Pipeline',
+          verifier: 'Receipt Verifier',
+          scholarships: 'Scholarships & Aid',
+          marketplace: 'Education Supplies',
+          children: 'My Children',
+          admin: 'Institution Portal'
+        };
+        return [
+          { label: 'Global Utilities', section: 'utilities', category: 'all' as any },
+          { label: 'Education & Examination Portals', section: 'education', category: tab as any },
+          ...(tab !== 'directory' ? [{ label: tabLabels[tab] || tab, section: 'education' as MainSection, category: tab as any }] : [])
+        ];
       }
       case 'services':
         return [{ label: 'Services', section: 'services' }];
@@ -853,6 +1006,7 @@ function MainAppContent() {
             onQuickView={(p) => setQuickViewProduct(p)}
             onOpenAiSearch={() => handleNavigateSection('ai_search')}
             onOpenUniversalSearch={handleOpenUniversalSearch}
+            onOpenSellerStudio={() => handleNavigateSection('seller_studio' as any)}
             recentlyViewedProducts={recentlyViewedProducts}
           />
         )}
@@ -987,6 +1141,103 @@ function MainAppContent() {
           />
         )}
 
+        {activeSection === 'education' && (
+          <div className="max-w-7xl mx-auto px-3 sm:px-6 space-y-4 pb-16">
+            <button
+              onClick={() => handleNavigateSection('utilities')}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:text-pink-600 dark:hover:text-pink-400 text-xs font-bold transition-all shadow-sm group"
+            >
+              <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
+              <span>Back to Global Services Ecosystem</span>
+            </button>
+            <EducationHub
+              initialTab={selectedEducationTab}
+              onBackToUtilities={() => handleNavigateSection('utilities')}
+              utilityConfig={utilityConfig}
+              userBalancePi={userBalancePi}
+              buyerUsername={user.username}
+              onTransactionSuccess={(receipt) => {
+                const transactionId = receipt.transactionId || `EDU-TX-${Date.now()}`;
+                const orderId = transactionId.startsWith('ORD-') ? transactionId : `ORD-${transactionId}`;
+                const providerTitle = receipt.providerName || receipt.institutionName || 'Education Portal';
+                const pkgTitle = receipt.packageName ? ` (${receipt.packageName})` : '';
+
+                const newEduOrder: Order = {
+                  id: orderId,
+                  buyerUsername: user.username,
+                  items: [
+                    {
+                      product: {
+                        id: `prod-edu-${Date.now().toString().slice(-4)}`,
+                        title: `${providerTitle}${pkgTitle}`,
+                        description: `Education service fulfillment for ${receipt.studentMatricNumber || receipt.candidateId || user.username}. Category: Education & Examination.`,
+                        pricePi: receipt.amountPi || receipt.piAmount || 0,
+                        category: 'utility',
+                        subcategory: 'education',
+                        images: ['https://images.unsplash.com/photo-1523050854058-8df90110c9f1?auto=format&fit=crop&w=800&q=80'],
+                        stock: 999,
+                        rating: 5.0,
+                        reviewsCount: 1,
+                        sellerId: 'system-education-gateway',
+                        sellerName: providerTitle,
+                        sellerVerified: true,
+                        features: ['Verified Digital Receipt', 'Zero-Trust Verification Enabled'],
+                        shippingWeightKg: 0,
+                        tags: ['education', 'academic', providerTitle]
+                      },
+                      quantity: 1,
+                      customDetails: {
+                        accountNumber: receipt.studentMatricNumber || receipt.candidateId || user.username
+                      }
+                    }
+                  ],
+                  totalPi: receipt.amountPi || receipt.piAmount || 0,
+                  escrowStatus: 'released',
+                  pstpStatus: 'Completed',
+                  piPaymentId: receipt.piPaymentId || `pi_pay_edu_${Date.now()}`,
+                  piTxid: receipt.piTxid || `0x${Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('')}`,
+                  trackingNumber: receipt.receiptNumber || receipt.tokenOrCode || `EDU-REF-${transactionId}`,
+                  carrier: 'Digital Academic Fulfillment',
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString(),
+                  serverVerified: true,
+                  timeline: [
+                    {
+                      status: 'Completed',
+                      timestamp: new Date().toISOString(),
+                      actor: providerTitle,
+                      actorRole: 'seller',
+                      note: `Service fulfilled. Official receipt: ${receipt.receiptNumber || 'Recorded'}`
+                    }
+                  ]
+                };
+
+                setOrders((prev) => {
+                  const updated = [newEduOrder, ...prev];
+                  try {
+                    localStorage.setItem('pinova_user_orders', JSON.stringify(updated));
+                  } catch (e) {
+                    console.warn('Failed to persist orders:', e);
+                  }
+                  return updated;
+                });
+                setUserBalancePi((prev) => Math.max(0, prev - (receipt.amountPi || receipt.piAmount || 0)));
+                setNotifications((prev) => [
+                  {
+                    id: `notif-${Date.now()}`,
+                    title: 'Education Transaction Completed',
+                    message: `Payment of ${formatPiAmount(receipt.amountPi || receipt.piAmount || 0)} π recorded for ${providerTitle}.`,
+                    type: 'order_protection',
+                    timestamp: new Date().toISOString(),
+                    read: false
+                  },
+                  ...prev
+                ]);
+              }}
+            />
+          </div>
+        )}
+
         {activeSection === 'services' && (
           <ServicesView userBalancePi={userBalancePi} />
         )}
@@ -1071,34 +1322,51 @@ function MainAppContent() {
         )}
 
         {activeSection === 'seller_studio' && (
-          <MerchantEcosystemHub
+          <SellerStudioV2
+            user={user}
             products={products}
             orders={orders}
-            coupons={coupons}
-            vendorProfile={
-              vendors.find((v) => v.storeName.toLowerCase() === user.username.toLowerCase()) ||
-              vendors[0] || {
-                id: 'vendor-current',
-                sellerUsername: user.username,
-                storeName: `${user.username}'s Official Store`,
-                bio: 'Verified Pi Pioneer Merchant offering authentic merchandise & trusted local fulfillment.',
+            vendors={vendors}
+            onAddProduct={(newProd) => {
+              const fullProd: Product = {
+                ...newProd,
+                id: `prod_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+                createdAt: new Date().toISOString(),
                 rating: 5.0,
-                reviewsCount: 1,
-                verified: true,
-                totalSalesPi: 140.0,
-                bannerImage: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=1200&q=80',
-                logoImage: 'https://images.unsplash.com/photo-1472851294608-062f824d29cc?auto=format&fit=crop&w=400&q=80',
-                joinedDate: '2025-01-01',
-                shippingCountries: ['Nigeria', 'Global']
-              }
-            }
-            onAddProduct={(newProd) => setProducts((prev) => [newProd, ...prev])}
-            onUpdateFulfillment={(orderId, trackingNumber, carrier) => {
-              handleUpdateOrderStatus(orderId, 'Shipped', { trackingNumber, carrier });
+                reviewsCount: 0,
+                sellerId: user.username,
+                sellerName: user.username,
+                sellerVerified: true
+              };
+              setProducts((prev) => [fullProd, ...prev]);
             }}
-            onCreateCoupon={(newCoupon) => setCoupons((prev) => [newCoupon, ...prev])}
-            onNavigateSection={handleNavigateSection}
-            onOpenVendorApplication={() => setIsVendorApplicationOpen(true)}
+            onProductCreated={(created) => {
+              setProducts((prev) => [
+                created,
+                ...prev.filter((p) => String(p.id) !== String(created.id))
+              ]);
+            }}
+            onUpdateProduct={(updated) => {
+              setProducts((prev) => prev.map((p) => p.id === updated.id ? updated : p));
+            }}
+            onDeleteProduct={(id) => {
+              setProducts((prev) => prev.filter((p) => p.id !== id));
+            }}
+            onUpdateOrderStatus={(orderId, status, trackingNumber, carrier) => {
+              handleUpdateOrderStatus(orderId, status, { trackingNumber, carrier });
+            }}
+            onViewStorefront={(vendorId, vendorOverride) => {
+              const v = vendorOverride || vendors.find((x) => x.id === vendorId || x.sellerUsername === vendorId) || vendors[0];
+              if (v) setSelectedVendor(v);
+            }}
+            onNavigateHome={() => handleNavigateSection('marketplace')}
+            onOpenStorefrontPage={(vendor) => {
+              setSelectedVendor(null);
+              setStorefrontPageVendor(vendor);
+              if (typeof window !== 'undefined') {
+                window.history.pushState({ storefrontPage: true }, '', `?store=${encodeURIComponent(vendor.sellerUsername || vendor.id)}`);
+              }
+            }}
           />
         )}
 
@@ -1277,6 +1545,26 @@ function MainAppContent() {
         />
       )}
 
+      {storefrontPageVendor && (
+        <div className="fixed inset-0 z-[80] bg-white dark:bg-slate-950 overflow-y-auto">
+          <MerchantStorefrontView
+            vendor={storefrontPageVendor}
+            products={products}
+            onClose={() => {
+              setStorefrontPageVendor(null);
+              if (typeof window !== 'undefined') window.history.pushState({}, '', window.location.pathname);
+            }}
+            onSelectProduct={handleSelectProduct}
+            onAddToCart={(p, e) => handleAddToCart(p, 1)}
+            onToggleWishlist={handleToggleWishlist}
+            wishlistProductIds={wishlist.map((w) => w.id)}
+            onInstantBuy={(p, e) => handleInstantBuy(p, 1)}
+            onContactSeller={(sellerUsername) => setActiveChatUser(sellerUsername)}
+            isModal={false}
+          />
+        </div>
+      )}
+
       {selectedVendor && (
         <SellerStorefrontModal
           vendor={selectedVendor}
@@ -1383,6 +1671,47 @@ function MainAppContent() {
           onClose={() => setIsVendorApplicationOpen(false)}
           pioneerUsername={user.username}
           onApplicationSubmitted={(app) => {
+            const logo = (app.storeLogo || app.logoUrl || '').trim() || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=200&q=80';
+            const banner = (app.storeBanner || app.bannerUrl || '').trim() || 'https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1200&q=80';
+
+            setVendors((prev) => {
+              const matchIdx = prev.findIndex(
+                (v) => (v.storeName || '').toLowerCase() === (app.storeName || '').toLowerCase() ||
+                       (v.sellerUsername || '').toLowerCase() === (app.pioneerUsername || '').toLowerCase()
+              );
+              if (matchIdx >= 0) {
+                const updated = [...prev];
+                updated[matchIdx] = {
+                  ...updated[matchIdx],
+                  logoImage: logo,
+                  bannerImage: banner,
+                  bio: app.storeDescription || updated[matchIdx].bio
+                };
+                return updated;
+              } else {
+                const newVendor: Vendor = {
+                  id: app.id || `vendor-${Date.now()}`,
+                  storeName: app.storeName,
+                  sellerUsername: app.pioneerUsername,
+                  bio: app.storeDescription || 'Official Pioneer Merchant Store on PiNova.',
+                  country: app.country,
+                  verified: false,
+                  verificationStatus: 'Unverified',
+                  sellerStatus: 'Probation',
+                  rating: 5.0,
+                  reviewsCount: 0,
+                  totalSalesPi: 0,
+                  logoImage: logo,
+                  bannerImage: banner,
+                  joinedDate: new Date().toISOString().split('T')[0],
+                  shippingCountries: [app.country || 'Global'],
+                  contactEmail: app.contactEmail,
+                  contactPhone: app.contactPhone
+                };
+                return [newVendor, ...prev];
+              }
+            });
+
             setNotifications((prev) => [
               {
                 id: `notif-vendor-app-${Date.now()}`,

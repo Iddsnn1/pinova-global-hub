@@ -1,5 +1,6 @@
 import express from 'express';
 import path from 'path';
+import fs from 'fs';
 import dotenv from 'dotenv';
 import crypto from 'crypto';
 import { GoogleGenAI } from '@google/genai';
@@ -14,11 +15,13 @@ import {
   idempotencyRepo,
   vendorApplicationRepo,
   educationRepo,
-  FlightFulfillmentEntity
+  FlightFulfillmentEntity,
+  orderRepo,
+  productRepo
 } from './src/server/db';
 import { vtuNgAdapter } from './src/server/integrations';
 import { getTaxonomyByCountry, GLOBAL_EDUCATION_TAXONOMIES } from './src/data/educationTaxonomyData';
-import { SEED_MARKETPLACE_ITEMS } from './src/data/educationSeedData';
+import { normalizeCountryCode } from './src/data/countrySubdivisions';
 import {
   authService,
   authenticate,
@@ -33,12 +36,75 @@ import { createRateLimiter } from './src/server/auth/rateLimit';
 import { AuditService } from './src/server/services/AuditService';
 import { EducationClassificationEngine } from './src/server/services/EducationClassificationEngine';
 import { StudentVerificationService } from './src/server/services/StudentVerificationService';
+import { getNigeriaAuthoritativeProviderForCapability } from './src/server/services/AuthoritativeEducationProviderRegistry';
+import { verifyJambCapsAuthorization } from './src/server/services/JambCapsAuthorizationService';
 import { EducationRepository } from './src/server/db/repositories/EducationRepository';
+import { ProductRepository } from './src/server/db/repositories/ProductRepository';
+import { durableProductStorageEnabled, getDurableProduct, listDurableProducts, saveDurableProduct, updateDurableProductAvailability, reserveDurableProductStockBatch, softDeleteDurableProduct, deleteDurableProductBlob } from './src/server/services/DurableProductCatalog';
+import { durableOrderStorageEnabled, getDurableOrder, listDurableOrders, saveDurableOrder, createDurableOrderWithStockReservation, createDurableOrderWithIdempotency, markDurableOrderPaymentVerified, softDeleteDurableOrder } from './src/server/services/DurableOrderStore';
+import { durableVendorStorageEnabled, getDurableVendorApplication, getDurableVendorApplicationByIdentity, listDurableVendorApplications, saveDurableVendorApplication } from './src/server/services/DurableVendorApplicationStore';
+import { objectStorageEnabled, putObject, getObject, deleteObject, publicObjectUrl } from './src/server/services/ObjectStorage';
+import { saveEducationAdmissionDocument, listEducationAdmissionDocuments, educationDocumentStorageEnabled, EDUCATION_DOCUMENT_MAX_BYTES, EDUCATION_DOCUMENT_TYPES } from './src/server/services/EducationDocumentStorage';
+import { quoteFiatToPiReference, signPiNovaFxQuote, verifyPiNovaFxQuoteToken, FxConfigurationError, FxProviderError } from './src/server/services/PiNovaFxService';
 
 dotenv.config();
 
+// Temporary diagnostic: capture the full stack for Node DEP0169 warnings.
+// This does not suppress the warning; it only identifies the exact dependency/call site.
+process.on('warning', (warning) => {
+  if (warning?.name === 'DeprecationWarning' && (warning as NodeJS.ErrnoException)?.code === 'DEP0169') {
+    console.error('[DEP0169 TRACE]', warning.stack || warning.message);
+  }
+});
+
 const app = express();
-const PORT = 3000;
+
+const fxQuoteRateLimiter = createRateLimiter({
+  windowMs: 60_000,
+  maxRequests: 30,
+  message: 'Too many currency quote requests. Please retry shortly.'
+});
+
+export async function authenticateVendorRequest(req: any): Promise<any | null> {
+  const header = req.headers?.authorization || req.headers?.Authorization;
+  const match = typeof header === 'string' ? header.match(/^Bearer\s+(.+)$/i) : null;
+  if (!match?.[1]) return null;
+  return authService.authenticateToken(match[1]);
+}
+
+export async function authenticateVendorAdminRequest(req: any): Promise<any | null> {
+  const user = await authenticateVendorRequest(req);
+  if (!user?.username) return null;
+  const roles = Array.isArray(user.roles) ? user.roles : [];
+  return roles.includes('PLATFORM_ADMIN') || roles.includes('COMPLIANCE_OFFICER') || roles.includes('COMPLIANCE_ADMIN') ? user : null;
+}
+
+async function resolveDurableVendorForAuthenticatedUser(user: any): Promise<any | null> {
+  if (!user) return null;
+  const directUsername = String(user.username || '').trim();
+  if (directUsername) {
+    const direct = await getDurableVendorApplication(directUsername);
+    if (direct) return direct;
+  }
+
+  const uidCandidates = [user.piUid, user.uid, user.id]
+    .map((value) => String(value || '').trim())
+    .filter(Boolean);
+
+  for (const uid of uidCandidates) {
+    const match = await getDurableVendorApplicationByIdentity(directUsername, uid);
+    if (match) return match;
+  }
+
+  return null;
+}
+
+
+// Bind port: In Google AI Studio environment, nginx reverse-proxies port 8080 to internal port 3000 (DEFAULT_APP_PORT=3000).
+// In standalone Cloud Run without nginx proxy, bind directly to process.env.PORT.
+const PORT = process.env.DEFAULT_APP_PORT 
+  ? Number(process.env.DEFAULT_APP_PORT) 
+  : (process.env.NGINX_PORT ? 3000 : (Number(process.env.PORT) || 3000));
 
 app.use(express.json());
 
@@ -58,6 +124,11 @@ const securityEventsRateLimiter = createRateLimiter({ windowMs: 60000, maxReques
 // Vercel Serverless Request URL Restoration Middleware
 app.use((req, res, next) => {
   try {
+    // If req.url is ALREADY a valid /api/ route that is NOT /api/index, keep it intact!
+    if (req.url && req.url.startsWith('/api/') && !req.url.startsWith('/api/index')) {
+      return next();
+    }
+
     let targetPath = '';
     const rawUrl = req.url || '';
 
@@ -71,16 +142,14 @@ app.use((req, res, next) => {
     if (!targetPath && req.query && typeof req.query.__path === 'string') {
       targetPath = req.query.__path;
     } else if (!targetPath && req.headers['x-forwarded-uri']) {
-      targetPath = req.headers['x-forwarded-uri'] as string;
+      const fwd = req.headers['x-forwarded-uri'] as string;
+      if (fwd && !fwd.startsWith('/api/index')) targetPath = fwd;
     } else if (!targetPath && req.headers['x-original-url']) {
-      targetPath = req.headers['x-original-url'] as string;
-    } else if (!targetPath && req.headers['x-matched-path']) {
-      targetPath = req.headers['x-matched-path'] as string;
-    } else if (!targetPath && req.headers['x-invoke-path']) {
-      targetPath = req.headers['x-invoke-path'] as string;
+      const orig = req.headers['x-original-url'] as string;
+      if (orig && !orig.startsWith('/api/index')) targetPath = orig;
     }
 
-    if (targetPath) {
+    if (targetPath && !targetPath.startsWith('/api/index')) {
       if (!targetPath.startsWith('/api')) {
         targetPath = '/api' + (targetPath.startsWith('/') ? targetPath : '/' + targetPath);
       }
@@ -103,15 +172,25 @@ const isProduction = process.env.NODE_ENV === 'production';
 const ALLOWED_CORS_ORIGINS = [
   'http://localhost:3000',
   'http://127.0.0.1:3000',
-  'https://app-cdn.minepi.com'
+  'https://app-cdn.minepi.com',
+  'https://iddsnn.com',
+  'https://www.iddsnn.com'
 ];
 
 app.use((req, res, next) => {
   const origin = req.headers.origin as string | undefined;
   if (origin) {
-    const isPiDomain = origin.endsWith('.minepi.com') || ALLOWED_CORS_ORIGINS.includes(origin) || origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:');
-    if (isPiDomain || !isProduction) {
+    const isAllowedDomain =
+      origin.endsWith('.minepi.com') ||
+      origin === 'https://iddsnn.com' ||
+      origin === 'https://www.iddsnn.com' ||
+      origin.endsWith('.vercel.app') ||
+      ALLOWED_CORS_ORIGINS.includes(origin) ||
+      origin.startsWith('http://localhost:') ||
+      origin.startsWith('http://127.0.0.1:');
+    if (isAllowedDomain || !isProduction) {
       res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Vary', 'Origin');
     }
   } else {
     // Non-browser or local client requests
@@ -119,10 +198,10 @@ app.use((req, res, next) => {
   }
 
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Admin-Key, X-Idempotency-Key, Idempotency-Key');
-  // Allow Pi Browser iframe embedding strictly without wildcard leak
+  res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Admin-Key, X-Idempotency-Key, Idempotency-Key, X-Branding-Type, X-Filename, X-Pioneer-Username, X-Username, Range');
+  // Allow Pi Browser & Google AI Studio iframe embedding strictly without wildcard leak
   res.removeHeader('X-Frame-Options');
-  res.setHeader('Content-Security-Policy', "frame-ancestors 'self' https://*.minepi.com https://app-cdn.minepi.com pi:;");
+  res.setHeader('Content-Security-Policy', "frame-ancestors 'self' https://*.minepi.com https://app-cdn.minepi.com pi: https://ai.studio https://*.google.com https://*.run.app https://localhost.corp.google.com:26001;");
 
   if (req.method === 'OPTIONS') {
     res.sendStatus(200);
@@ -174,7 +253,7 @@ async function checkAdminAuth(req: express.Request): Promise<{ authenticated: bo
   if (token) {
     const user = await authService.authenticateToken(token);
     if (user) {
-      const isAuthorized = user.roles.some((r) => r === 'PLATFORM_ADMIN' || r === 'COMPLIANCE_OFFICER');
+      const isAuthorized = user.roles.some((r) => r === 'PLATFORM_ADMIN' || r === 'COMPLIANCE_OFFICER' || r === 'COMPLIANCE_ADMIN');
       return { authenticated: true, authorized: isAuthorized, user };
     }
   }
@@ -352,6 +431,51 @@ function getGeminiClient(): GoogleGenAI | null {
   });
 }
 
+// Server-side FX quote endpoint. It returns a display/reference quote only;
+// checkout must still use the canonical server-side invoice amount.
+app.post('/api/fx/quote-to-pi', fxQuoteRateLimiter, async (req, res) => {
+  const amount = typeof req.body?.amount === 'number' ? req.body.amount : Number(req.body?.amount);
+  const currency = typeof req.body?.currency === 'string' ? req.body.currency : '';
+
+  try {
+    const quote = await quoteFiatToPiReference(amount, currency);
+    const signedQuote = signPiNovaFxQuote(quote);
+    res.setHeader('Cache-Control', 'no-store');
+    res.status(200).json({ success: true, quote, fxQuoteToken: signedQuote.token, fxQuoteExpiresAt: signedQuote.expiresAt });
+  } catch (error: any) {
+    if (error instanceof RangeError || error instanceof TypeError) {
+      res.status(400).json({
+        success: false,
+        error: 'INVALID_FX_QUOTE_REQUEST',
+        message: error.message
+      });
+      return;
+    }
+    if (error instanceof FxConfigurationError) {
+      res.status(503).json({
+        success: false,
+        error: 'FX_CONVERSION_NOT_CONFIGURED',
+        message: error.message
+      });
+      return;
+    }
+    if (error instanceof FxProviderError) {
+      res.status(502).json({
+        success: false,
+        error: 'FX_PROVIDER_UNAVAILABLE',
+        message: error.message
+      });
+      return;
+    }
+    console.error('[FX quote] Unexpected server-side conversion failure.');
+    res.status(500).json({
+      success: false,
+      error: 'FX_QUOTE_FAILED',
+      message: 'Currency conversion could not be completed.'
+    });
+  }
+});
+
 // System health check - minimal, safe public response without internal metrics
 app.get(['/api/health', '/health'], (req, res) => {
   res.setHeader('Content-Type', 'application/json');
@@ -371,13 +495,54 @@ app.get('/validation-key.txt', (req, res) => {
 // Authentication Endpoints (Phase 1 Remediation)
 app.post(['/api/auth/session', '/api/v1/auth/session'], authRateLimiter, async (req, res) => {
   try {
-    const { accessToken, username, uid, roles } = req.body;
+    const { accessToken } = req.body;
+
+    if (typeof accessToken !== 'string' || !accessToken.trim()) {
+      return res.status(401).json({
+        success: false,
+        error: 'PI_AUTHENTICATION_REQUIRED',
+        message: 'A valid Pi access token is required to establish a Pioneer server session.'
+      });
+    }
+
+    // Never trust username, uid, or roles supplied by the browser. In production,
+    // verify the raw Pi access token against Pi Platform first, then bind the
+    // server session to the identity returned by Pi.
+    const verifiedPiUser = await authService.authenticateToken(accessToken.trim());
+    if (!verifiedPiUser?.username) {
+      return res.status(401).json({
+        success: false,
+        error: 'PI_AUTHENTICATION_INVALID',
+        message: 'Pi authentication could not be verified by the Pi Platform.'
+      });
+    }
+
+    // Optional server-side admin allowlist. This is configuration, not a client claim:
+    // a verified Pi identity must explicitly appear in PINOVA_COMPLIANCE_ADMIN_USERNAMES
+    // before it can receive privileged compliance roles.
+    const configuredAdminUsernames = new Set(
+      String(process.env.PINOVA_COMPLIANCE_ADMIN_USERNAMES || '')
+        .split(',')
+        .map((value) => value.trim().replace(/^@/, '').toLowerCase())
+        .filter(Boolean)
+    );
+    const verifiedUsername = verifiedPiUser.username.trim().replace(/^@/, '').toLowerCase();
+    const configuredComplianceAdmin = configuredAdminUsernames.has(verifiedUsername);
+
+    const adminAuth = await checkAdminAuth(req);
+    const isAuthorizedAdmin =
+      (adminAuth.authenticated && adminAuth.authorized) || configuredComplianceAdmin;
+
+    const sessionRoles = configuredComplianceAdmin
+      ? ['PLATFORM_ADMIN', 'COMPLIANCE_ADMIN'] as const
+      : verifiedPiUser.roles;
+
     const session = await authService.createSession({
-      accessToken,
-      username: username || 'pioneer_user',
-      uid: uid || `pi-uid-${Date.now()}`,
-      roles
-    });
+      username: verifiedPiUser.username,
+      uid: verifiedPiUser.piUid,
+      roles: sessionRoles as any,
+      isAuthorizedAdmin
+    } as any);
 
     res.json({
       success: true,
@@ -502,9 +667,48 @@ app.post(['/api/pstp/audit-logs', '/api/v1/pstp/audit-logs'], authenticate, asyn
 });
 
 // 2. Disputes API (Phase 2 Remediation)
-app.get(['/api/pstp/disputes', '/api/v1/pstp/disputes'], (req, res) => {
-  const disputes = pstpDisputeRepo.getAll();
-  res.json({ success: true, disputes });
+app.get(['/api/pstp/disputes', '/api/v1/pstp/disputes'], authenticate, async (req: AuthenticatedRequest, res) => {
+  const adminAuth = await checkAdminAuth(req);
+  const isAdmin = adminAuth.authenticated && adminAuth.authorized;
+  const currentUser = req.user?.username;
+
+  let disputes = pstpDisputeRepo.getAll();
+  if (isProduction && !isAdmin) {
+    if (!currentUser) {
+      res.status(401).json({ success: false, error: 'UNAUTHORIZED', message: 'Authentication required to view disputes.' });
+      return;
+    }
+    disputes = disputes.filter(
+      (d) =>
+        d.buyerUsername.toLowerCase() === currentUser.toLowerCase() ||
+        d.sellerUsername.toLowerCase() === currentUser.toLowerCase()
+    );
+  }
+  res.json({ success: true, count: disputes.length, disputes });
+});
+
+app.get(['/api/pstp/disputes/:id', '/api/v1/pstp/disputes/:id'], authenticate, async (req: AuthenticatedRequest, res) => {
+  const { id } = req.params;
+  const dispute = pstpDisputeRepo.findById(id);
+  if (!dispute) {
+    res.status(404).json({ success: false, error: 'DISPUTE_NOT_FOUND', message: 'Dispute not found' });
+    return;
+  }
+
+  const adminAuth = await checkAdminAuth(req);
+  const isAdmin = adminAuth.authenticated && adminAuth.authorized;
+  const currentUser = req.user?.username;
+  const isParty = currentUser && (
+    dispute.buyerUsername.toLowerCase() === currentUser.toLowerCase() ||
+    dispute.sellerUsername.toLowerCase() === currentUser.toLowerCase()
+  );
+
+  if (isProduction && !isAdmin && !isParty) {
+    res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Access denied: You are not authorized to view this dispute.' });
+    return;
+  }
+
+  res.json({ success: true, dispute });
 });
 
 app.post(['/api/pstp/disputes', '/api/v1/pstp/disputes'], disputeRateLimiter, authenticate, async (req: AuthenticatedRequest, res) => {
@@ -667,17 +871,813 @@ app.post(['/api/pstp/disputes/:id/resolve', '/api/v1/pstp/disputes/:id/resolve']
   res.json({ success: true, dispute: updatedDispute });
 });
 
-// 3. Vendor Application System Endpoints
-app.get(['/api/vendor/application/:username', '/api/v1/vendor/application/:username'], (req, res) => {
-  const { username } = req.params;
-  const application = vendorApplicationRepo.findByUsername(username);
-  res.json({ success: true, application: application || null });
+// 3. Vendor Application System Endpoints (Secure KYC Storage & AES-256-GCM Encryption)
+
+/**
+ * Resolves the AES-256-GCM 32-byte encryption key from VENDOR_DOCUMENT_ENCRYPTION_KEY.
+ * Strictly requires exactly 64 hexadecimal characters.
+ * Never falls back to plaintext or insecure keys.
+ */
+function getVendorDocumentEncryptionKey(): Buffer | null {
+  const hexKey = process.env.VENDOR_DOCUMENT_ENCRYPTION_KEY;
+  if (!hexKey || typeof hexKey !== 'string') {
+    return null;
+  }
+  const trimmed = hexKey.trim();
+  if (!/^[0-9a-fA-F]{64}$/.test(trimmed)) {
+    return null;
+  }
+  return Buffer.from(trimmed, 'hex');
+}
+
+/**
+ * Resolves the directory for storing encrypted vendor verification documents.
+ * Stored under PINOVA_DATA_DIR/vendor-documents/ with restricted directory permissions.
+ */
+function getVendorDocumentsDir(): string {
+  const base = process.env.PINOVA_DATA_DIR
+    ? path.resolve(process.env.PINOVA_DATA_DIR, 'vendor-documents')
+    : path.resolve(process.cwd(), 'data', 'vendor-documents');
+  try {
+    if (!fs.existsSync(base)) {
+      fs.mkdirSync(base, { recursive: true, mode: 0o700 });
+    }
+  } catch {
+    const fallback = path.resolve('/tmp', 'pinova_data', 'vendor-documents');
+    if (!fs.existsSync(fallback)) {
+      fs.mkdirSync(fallback, { recursive: true, mode: 0o700 });
+    }
+    return fallback;
+  }
+  return base;
+}
+
+/**
+ * Validates magic bytes / file signatures to prevent MIME spoofing.
+ */
+function validateVendorFileSignature(buffer: Buffer, mimeType: string): boolean {
+  if (!buffer || buffer.length < 4) return false;
+  if (mimeType === 'application/pdf') {
+    // %PDF- (0x25 0x50 0x44 0x46 0x2D)
+    return buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46;
+  }
+  if (mimeType === 'image/jpeg') {
+    // 0xFF 0xD8 0xFF
+    return buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+  }
+  if (mimeType === 'image/png') {
+    // 0x89 0x50 0x4E 0x47 0x0D 0x0A 0x1A 0x0A
+    return (
+      buffer.length >= 8 &&
+      buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47 &&
+      buffer[4] === 0x0d && buffer[5] === 0x0a && buffer[6] === 0x1a && buffer[7] === 0x0a
+    );
+  }
+  return false;
+}
+
+/**
+ * Sanitizes original filenames to prevent path traversal or injection.
+ */
+function sanitizeVendorFilename(raw: string): string {
+  const base = path.basename(raw || 'document');
+  const clean = base.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 100);
+  return clean || 'document';
+}
+
+// Raw body parser middleware specifically for vendor document uploads (max 5 MB)
+const vendorDocRawBodyParser = express.raw({
+  type: ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg', 'application/octet-stream'],
+  limit: '5mb'
 });
 
-app.post(['/api/vendor/apply', '/api/v1/vendor/apply'], (req, res) => {
+const handleVendorDocRawBody = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  vendorDocRawBodyParser(req, res, (err: any) => {
+    if (err) {
+      if (err.type === 'entity.too.large' || err.status === 413) {
+        res.status(413).json({
+          success: false,
+          error: 'FILE_TOO_LARGE',
+          message: 'Document exceeds maximum size of 5 MB.'
+        });
+        return;
+      }
+      res.status(400).json({
+        success: false,
+        error: 'INVALID_REQUEST_BODY',
+        message: err.message || 'Failed to parse request body.'
+      });
+      return;
+    }
+    next();
+  });
+};
+
+/**
+ * Resolves the directory for storing public merchant storefront branding assets (logos and banners).
+ * Stored under PINOVA_DATA_DIR/vendor-branding/ with public-readable permissions.
+ */
+function getVendorBrandingDir(): string {
+  const base = process.env.PINOVA_DATA_DIR
+    ? path.resolve(process.env.PINOVA_DATA_DIR, 'vendor-branding')
+    : path.resolve(process.cwd(), 'data', 'vendor-branding');
   try {
+    if (!fs.existsSync(base)) {
+      fs.mkdirSync(base, { recursive: true, mode: 0o755 });
+    }
+  } catch {
+    const fallback = path.resolve('/tmp', 'pinova_data', 'vendor-branding');
+    if (!fs.existsSync(fallback)) {
+      fs.mkdirSync(fallback, { recursive: true, mode: 0o755 });
+    }
+    return fallback;
+  }
+  return base;
+}
+
+/**
+ * Validates magic bytes / file signatures specifically for public storefront branding images.
+ * Supported formats: JPEG, PNG, WebP.
+ * Disallows executable binaries, HTML/script injection, SVG, and PDFs.
+ */
+function validateBrandingImageSignature(buffer: Buffer, mimeType: string): boolean {
+  if (!buffer || buffer.length < 12) return false;
+  if (mimeType === 'image/jpeg') {
+    return buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+  }
+  if (mimeType === 'image/png') {
+    return (
+      buffer.length >= 8 &&
+      buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47 &&
+      buffer[4] === 0x0d && buffer[5] === 0x0a && buffer[6] === 0x1a && buffer[7] === 0x0a
+    );
+  }
+  if (mimeType === 'image/webp') {
+    return (
+      buffer[0] === 0x52 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x46 &&
+      buffer[8] === 0x57 && buffer[9] === 0x45 && buffer[10] === 0x42 && buffer[11] === 0x50
+    );
+  }
+  return false;
+}
+
+// Raw body parser middleware specifically for vendor storefront branding uploads (max 5 MB)
+const vendorBrandingRawBodyParser = express.raw({
+  type: (req: express.Request) => {
+    const ct = (req.headers['content-type'] || '').toLowerCase();
+    return (
+      ct.startsWith('image/') ||
+      ct.startsWith('application/octet-stream') ||
+      ct.includes('png') ||
+      ct.includes('jpeg') ||
+      ct.includes('jpg') ||
+      ct.includes('webp')
+    );
+  },
+  limit: '5mb'
+});
+
+const handleVendorBrandingRawBody = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  // Vercel/serverless adapters may surface an already-read binary request body
+  // as Uint8Array/ArrayBuffer rather than Node Buffer. Normalize it before
+  // invoking express.raw(), otherwise the second parser can see an empty
+  // stream and branding uploads fail with a generic processing error.
+  if (Buffer.isBuffer(req.body)) {
+    return next();
+  }
+  if (req.body instanceof Uint8Array) {
+    (req as any).body = Buffer.from(req.body);
+    return next();
+  }
+  if (req.body instanceof ArrayBuffer) {
+    (req as any).body = Buffer.from(new Uint8Array(req.body));
+    return next();
+  }
+  vendorBrandingRawBodyParser(req, res, (err: any) => {
+    if (err) {
+      if (err.type === 'entity.too.large' || err.status === 413) {
+        res.status(400).json({
+          success: false,
+          error: 'FILE_TOO_LARGE',
+          message: 'Storefront branding image exceeds maximum allowed size of 5 MB.'
+        });
+        return;
+      }
+      res.status(400).json({
+        success: false,
+        error: 'INVALID_REQUEST_BODY',
+        message: err.message || 'Failed to parse request body.'
+      });
+      return;
+    }
+    next();
+  });
+};
+
+// POST /api/vendor/document-upload & /api/v1/vendor/document-upload
+app.post(
+  ['/api/vendor/document-upload', '/api/v1/vendor/document-upload'],
+  authenticate,
+  handleVendorDocRawBody,
+  async (req: AuthenticatedRequest, res) => {
+    try {
+      // 1. Authoritative caller authentication (strict - do NOT trust client-supplied owner)
+      const authUser = req.authenticatedUser || (req as any).user;
+      if (!authUser || !authUser.username) {
+        res.status(401).json({
+          success: false,
+          error: 'UNAUTHORIZED',
+          message: 'Authentication required to upload merchant verification documents.'
+        });
+        return;
+      }
+      const ownerUsername = authUser.username;
+
+      // 2. MIME type validation
+      const rawContentType = (req.headers['content-type'] || '').toString();
+      let mimeType = rawContentType.split(';')[0].trim().toLowerCase();
+      if (mimeType === 'image/jpg') mimeType = 'image/jpeg';
+
+      const allowedMimes = ['application/pdf', 'image/jpeg', 'image/png'];
+      if (!allowedMimes.includes(mimeType)) {
+        res.status(400).json({
+          success: false,
+          error: 'INVALID_MIME_TYPE',
+          message: 'Allowed document types are application/pdf, image/jpeg, and image/png.'
+        });
+        return;
+      }
+
+      // 3. Body validation & size check (max 5 MB)
+      const fileBuffer: Buffer = Buffer.isBuffer(req.body)
+        ? req.body
+        : req.body instanceof Uint8Array
+          ? Buffer.from(req.body)
+          : req.body instanceof ArrayBuffer
+            ? Buffer.from(new Uint8Array(req.body))
+            : Buffer.alloc(0);
+      if (fileBuffer.length === 0) {
+        res.status(400).json({
+          success: false,
+          error: 'EMPTY_FILE',
+          message: 'Document file content is empty or unreadable.'
+        });
+        return;
+      }
+      const maxSizeBytes = 5 * 1024 * 1024;
+      if (fileBuffer.length > maxSizeBytes) {
+        res.status(400).json({
+          success: false,
+          error: 'FILE_TOO_LARGE',
+          message: 'Document exceeds maximum size of 5 MB.'
+        });
+        return;
+      }
+
+      // 4. Validate file signature / magic bytes
+      if (!validateVendorFileSignature(fileBuffer, mimeType)) {
+        res.status(400).json({
+          success: false,
+          error: 'FILE_SIGNATURE_MISMATCH',
+          message: 'File content does not match the declared MIME type signature.'
+        });
+        return;
+      }
+
+      // 5. Check AES-256-GCM encryption key
+      const encryptionKey = getVendorDocumentEncryptionKey();
+      if (!encryptionKey) {
+        res.status(500).json({
+          success: false,
+          error: 'ENCRYPTION_KEY_INVALID_OR_MISSING',
+          message: 'Server encryption key is missing or invalid. Upload cannot proceed.'
+        });
+        return;
+      }
+
+      // 6. Filename & document type extraction
+      const rawFilename = (req.headers['x-filename'] as string) || 'verification_document';
+      let originalFilename = 'verification_document';
+      try {
+        originalFilename = decodeURIComponent(rawFilename);
+      } catch {
+        originalFilename = rawFilename;
+      }
+      const sanitizedFilename = sanitizeVendorFilename(originalFilename);
+
+      const rawDocType = (req.headers['x-document-type'] as string) || 'national_id';
+      const allowedDocTypes = [
+        'national_id',
+        'passport',
+        'business_cert',
+        'utility_bill',
+        'identity_proof',
+        'address_proof',
+        'business_registration',
+        'tax_cert',
+        'store_license'
+      ];
+      const docType = allowedDocTypes.includes(rawDocType) ? rawDocType : 'national_id';
+
+      // 7. AES-256-GCM encryption (12-byte nonce, 16-byte auth tag)
+      const iv = crypto.randomBytes(12);
+      const cipher = crypto.createCipheriv('aes-256-gcm', encryptionKey, iv);
+      const encryptedBytes = Buffer.concat([cipher.update(fileBuffer), cipher.final()]);
+      const authTag = cipher.getAuthTag();
+
+      // 8. Generate cryptographically random document ID
+      const randomDocId = crypto.randomBytes(16).toString('hex');
+
+      // 9. Store encrypted ciphertext and metadata in durable object storage.
+      if (!objectStorageEnabled()) {
+        return res.status(503).json({ success: false, error: 'OBJECT_STORAGE_NOT_CONFIGURED', message: 'Durable encrypted document storage is not configured.' });
+      }
+      await putObject(`vendor-documents/${randomDocId}.enc`, encryptedBytes, 'application/octet-stream');
+      const metadata = {
+        id: randomDocId, originalFilename: sanitizedFilename, mimeType, documentType: docType,
+        owner: ownerUsername.toLowerCase(), uploadedAt: new Date().toISOString(),
+        iv: iv.toString('hex'), authTag: authTag.toString('hex'),
+        encryptedByteLength: encryptedBytes.length, originalSize: fileBuffer.length
+      };
+      await putObject(`vendor-documents/${randomDocId}.meta.json`, JSON.stringify(metadata), 'application/json');
+      res.status(201).json({ success: true, reference: `private://vendor-documents/${randomDocId}` });
+
+    } catch (err: any) {
+      res.status(500).json({
+        success: false,
+        error: 'DOCUMENT_UPLOAD_ERROR',
+        message: 'Internal server error occurred while processing document upload.'
+      });
+    }
+  }
+);
+
+app.get('/api/vendor/product-image', async (req, res) => {
+  try {
+    const pathname = typeof req.query.path === 'string' ? req.query.path : '';
+    if (!/^product-images\/[A-Za-z0-9_-]{1,80}\/[A-Za-z0-9._-]{1,180}$/.test(pathname)) return res.status(400).json({ success: false, error: 'INVALID_IMAGE_PATH' });
+    if (!objectStorageEnabled()) return res.status(503).json({ success: false, error: 'OBJECT_STORAGE_NOT_CONFIGURED' });
+    const object = await getObject(pathname);
+    if (!object) return res.status(404).json({ success: false, error: 'IMAGE_NOT_FOUND' });
+    res.setHeader('Content-Type', object.contentType);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    res.send(Buffer.from(object.body));
+  } catch { res.status(500).json({ success: false, error: 'PRODUCT_IMAGE_READ_ERROR' }); }
+});
+
+// POST /api/vendor/product-image-upload
+// Authenticated merchant product image upload; uses the public catalog Blob store.
+app.post(
+  '/api/vendor/product-image-upload',
+  handleVendorBrandingRawBody,
+  authenticate,
+  async (req: AuthenticatedRequest, res) => {
+    console.info('[PRODUCT_IMAGE_UPLOAD_TRACE]', {
+      path: req.path,
+      method: req.method,
+      vercel: process.env.VERCEL === '1',
+      deployment: process.env.VERCEL_DEPLOYMENT_ID || process.env.VERCEL_URL || null,
+      region: process.env.VERCEL_REGION || null
+    });
+    try {
+      const authUser = req.authenticatedUser || (req as any).user;
+      if (!authUser?.username) {
+        return res.status(401).json({ success: false, error: 'AUTHENTICATION_REQUIRED', message: 'Authenticated Pioneer session required.' });
+      }
+      const merchant = await resolveDurableVendorForAuthenticatedUser(authUser);
+      const canSell = merchant?.status === 'APPROVED' && merchant?.verificationStatus === 'Verified' && merchant?.sellerStatus === 'Active';
+      if (!canSell) {
+        console.warn('[Product Image Upload] merchant access denied', {
+          username: String(authUser.username || '').trim().replace(/^@/, '').toLowerCase(),
+          merchantFound: Boolean(merchant),
+          merchantStatus: merchant?.status || null,
+          verificationStatus: merchant?.verificationStatus || null,
+          sellerStatus: merchant?.sellerStatus || null
+        });
+        return res.status(403).json({ success: false, error: 'MERCHANT_SELLER_ACCESS_REQUIRED', message: 'Server-verified merchant access is required before uploading product images.' });
+      }
+      const rawContentType = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
+      const mimeType = rawContentType === 'image/jpg' ? 'image/jpeg' : rawContentType;
+      const allowedMimes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+      if (!allowedMimes.includes(mimeType)) return res.status(415).json({ success: false, error: 'UNSUPPORTED_IMAGE_TYPE', message: 'Use JPEG, PNG, WebP, or GIF.' });
+      const fileBuffer: Buffer = req.body;
+      if (!Buffer.isBuffer(fileBuffer) || fileBuffer.length === 0) return res.status(400).json({ success: false, error: 'EMPTY_IMAGE' });
+      if (fileBuffer.length > 5 * 1024 * 1024) return res.status(413).json({ success: false, error: 'IMAGE_TOO_LARGE', message: 'Maximum image size is 5 MB.' });
+      const safeUsername = String(authUser.username).replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 80) || 'merchant';
+      const extension = mimeType === 'image/jpeg' ? 'jpg' : mimeType.split('/')[1];
+      const assetId = crypto.randomBytes(12).toString('hex');
+      const pathname = `product-images/${safeUsername}/${Date.now()}-${assetId}.${extension}`;
+      if (!objectStorageEnabled()) return res.status(503).json({ success: false, error: 'OBJECT_STORAGE_NOT_CONFIGURED', message: 'Durable image storage is not configured.' });
+      await putObject(pathname, fileBuffer, mimeType);
+      const url = publicObjectUrl(pathname) || `/api/vendor/product-image?path=${encodeURIComponent(pathname)}`;
+      return res.status(200).json({ success: true, url, pathname, contentType: mimeType, size: fileBuffer.length });
+    } catch (error: any) {
+      console.error('[Product Image Upload]', error);
+      return res.status(500).json({ success: false, error: 'PRODUCT_IMAGE_UPLOAD_FAILED' });
+    }
+  }
+);
+
+// ============================================================================
+// PUBLIC STOREFRONT BRANDING UPLOAD & ASSET RETRIEVAL (PI-HUB BRANDING)
+// Distinct from encrypted KYC document storage: branding is public for buyers
+// ============================================================================
+
+// GET /api/vendor/branding-status & /api/v1/vendor/branding-status
+// Safe diagnostic endpoint verifying branding handler and storage state
+app.get(
+  ['/api/vendor/branding-status', '/api/v1/vendor/branding-status'],
+  (req, res) => {
+    res.json({
+      status: 'ok',
+      runtime: process.env.VERCEL === '1' ? 'vercel' : 'node',
+      brandingRouteLoaded: true,
+      objectStorageConfigured: objectStorageEnabled(),
+      maxFileSize: 5 * 1024 * 1024,
+      allowedFormats: ['image/jpeg', 'image/png', 'image/webp']
+    });
+  }
+);
+
+// POST /api/vendor/branding-upload & /api/v1/vendor/branding-upload
+app.post(
+  ['/api/vendor/branding-upload', '/api/v1/vendor/branding-upload'],
+  handleVendorBrandingRawBody,
+  authenticate,
+  async (req: AuthenticatedRequest, res) => {
+    try {
+      // 1. Authoritative caller authentication (strict - do NOT trust client-supplied owner)
+      let authUser = req.authenticatedUser || (req as any).user;
+      if (!authUser && !isProduction) {
+        const fallback = (req.headers['x-pioneer-username'] || req.headers['x-username']) as string | undefined;
+        if (fallback && typeof fallback === 'string' && fallback.trim()) {
+          authUser = {
+            id: `usr_${fallback.trim().toLowerCase()}`,
+            username: fallback.trim(),
+            roles: ['MERCHANT', 'BUYER']
+          };
+        }
+      }
+
+      if (!authUser || !authUser.username) {
+        res.status(401).json({
+          success: false,
+          error: 'AUTHENTICATION_REQUIRED',
+          message: 'Authentication required to upload merchant storefront branding.'
+        });
+        return;
+      }
+      const ownerUsername = authUser.username;
+
+      // 2. MIME type validation (PNG, JPEG, WebP only; disallow SVG, PDF, Executables, HTML)
+      const rawContentType = (req.headers['content-type'] || '').toString();
+      let mimeType = rawContentType.split(';')[0].trim().toLowerCase();
+      if (mimeType === 'image/jpg') mimeType = 'image/jpeg';
+      const allowedMimes = ['image/jpeg', 'image/png', 'image/webp'];
+      if (!allowedMimes.includes(mimeType)) {
+        res.status(400).json({
+          success: false,
+          error: 'INVALID_MIME_TYPE',
+          message: 'Invalid image format. Allowed branding image types are image/png, image/jpeg, and image/webp.'
+        });
+        return;
+      }
+
+      // 3. File buffer check
+      const fileBuffer: Buffer = req.body;
+      if (!Buffer.isBuffer(fileBuffer) || fileBuffer.length === 0) {
+        res.status(400).json({
+          success: false,
+          error: 'EMPTY_FILE',
+          message: 'Branding image content is empty or unreadable.'
+        });
+        return;
+      }
+
+      // 4. File size limit: 5 MB
+      const maxSizeBytes = 5 * 1024 * 1024;
+      if (fileBuffer.length > maxSizeBytes) {
+        res.status(400).json({
+          success: false,
+          error: 'FILE_TOO_LARGE',
+          message: 'Branding image exceeds maximum allowed size of 5 MB.'
+        });
+        return;
+      }
+
+      // 5. File signature / magic byte validation
+      if (!validateBrandingImageSignature(fileBuffer, mimeType)) {
+        res.status(400).json({
+          success: false,
+          error: 'FILE_SIGNATURE_MISMATCH',
+          message: 'File content does not match the declared image MIME signature. Executable, script, or SVG payloads are strictly forbidden.'
+        });
+        return;
+      }
+
+      // 6. Branding type ('logo' or 'banner')
+      const rawType = ((req.headers['x-branding-type'] as string) || (req.headers['x-asset-type'] as string) || (req.query?.type as string) || 'logo').toLowerCase().trim();
+      const brandingType: 'logo' | 'banner' = rawType.includes('banner') ? 'banner' : 'logo';
+
+      // 7. Safe server-managed filename and asset identifier
+      const ext = mimeType === 'image/png' ? 'png' : mimeType === 'image/webp' ? 'webp' : 'jpg';
+      const randomId = crypto.randomBytes(16).toString('hex');
+      const assetId = `${brandingType}_${randomId}.${ext}`;
+
+      if (!objectStorageEnabled()) {
+        return res.status(503).json({ success: false, error: 'OBJECT_STORAGE_NOT_CONFIGURED', message: 'Durable branding storage is not configured.' });
+      }
+      const brandingPath = `vendor-branding/${assetId}`;
+      await putObject(brandingPath, fileBuffer, mimeType);
+      const assetUrl = `/api/vendor/branding-asset/${assetId}`;
+
+      const rawFilename = (req.headers['x-filename'] as string) || (req.query?.filename as string) || `store_${brandingType}`;
+      let originalFilename = `store_${brandingType}.${ext}`;
+      try { originalFilename = decodeURIComponent(rawFilename); } catch { originalFilename = rawFilename; }
+      const sanitizedFilename = sanitizeVendorFilename(originalFilename);
+      const metadata = {
+        assetId, brandingType, owner: ownerUsername.toLowerCase(), mimeType,
+        originalFilename: sanitizedFilename, size: fileBuffer.length,
+        url: assetUrl, uploadedAt: new Date().toISOString()
+      };
+      await putObject(`vendor-branding-meta/${assetId}.json`, JSON.stringify(metadata), 'application/json');
+
+
+      res.status(201).json({
+        success: true,
+        url: assetUrl,
+        assetId,
+        brandingType,
+        message: `${brandingType === 'logo' ? 'Store logo' : 'Store banner'} uploaded successfully.`
+      });
+    } catch (err: any) {
+      console.error('[Branding Upload Error]:', err);
+      res.status(500).json({
+        success: false,
+        error: 'BRANDING_UPLOAD_ERROR',
+        message: 'Internal server error occurred while processing branding upload.'
+      });
+    }
+  }
+);
+
+// GET /api/vendor/branding-asset/:assetId & /api/v1/vendor/branding-asset/:assetId
+app.get(
+  ['/api/vendor/branding-asset/:assetId', '/api/v1/vendor/branding-asset/:assetId'],
+  async (req, res) => {
+    try {
+      const { assetId } = req.params;
+      if (!assetId || !/^(logo|banner)_[a-f0-9]{32}\.(png|jpg|jpeg|webp)$/i.test(assetId)) {
+        return res.status(400).json({ success: false, error: 'INVALID_ASSET_ID' });
+      }
+      if (!objectStorageEnabled()) return res.status(503).json({ success: false, error: 'OBJECT_STORAGE_NOT_CONFIGURED' });
+      const object = await getObject(`vendor-branding/${assetId}`);
+      if (!object) return res.status(404).json({ success: false, error: 'ASSET_NOT_FOUND' });
+      res.setHeader('Content-Type', object.contentType);
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.setHeader('Cache-Control', 'public, max-age=86400, immutable');
+      res.setHeader('Content-Disposition', 'inline');
+      res.send(Buffer.from(object.body));
+    } catch {
+      res.status(500).json({ success: false, error: 'BRANDING_ASSET_READ_ERROR' });
+    }
+  }
+);
+
+// DELETE /api/vendor/branding-asset/:assetId & /api/v1/vendor/branding-asset/:assetId
+// Authenticated: Only the merchant owner or admin may delete
+app.delete(
+  ['/api/vendor/branding-asset/:assetId', '/api/v1/vendor/branding-asset/:assetId'],
+  authenticate,
+  async (req: AuthenticatedRequest, res) => {
+    try {
+      let authUser = req.authenticatedUser || (req as any).user;
+      if (!authUser && !isProduction) {
+        const fallback = (req.headers['x-pioneer-username'] || req.headers['x-username']) as string | undefined;
+        if (fallback && typeof fallback === 'string' && fallback.trim()) {
+          authUser = {
+            id: `usr_${fallback.trim().toLowerCase()}`,
+            username: fallback.trim(),
+            roles: ['MERCHANT', 'BUYER']
+          };
+        }
+      }
+
+      const adminAuth = await checkAdminAuth(req);
+      const isAdmin = adminAuth.authenticated && adminAuth.authorized;
+
+      if (!authUser && !isAdmin) {
+        res.status(401).json({
+          success: false,
+          error: 'UNAUTHORIZED',
+          message: 'Authentication required to delete storefront branding assets.'
+        });
+        return;
+      }
+
+      const { assetId } = req.params;
+      if (!assetId || !/^(logo|banner)_[a-f0-9]{32}\.(png|jpg|jpeg|webp)$/i.test(assetId)) {
+        res.status(400).json({
+          success: false,
+          error: 'INVALID_ASSET_ID',
+          message: 'Invalid branding asset identifier.'
+        });
+        return;
+      }
+
+      if (!objectStorageEnabled()) return res.status(503).json({ success: false, error: 'OBJECT_STORAGE_NOT_CONFIGURED' });
+
+      // Authorize against durable metadata BEFORE deleting either object.
+      const metadataObject = await getObject(`vendor-branding-meta/${assetId}.json`);
+      if (metadataObject) {
+        try {
+          const meta = JSON.parse(Buffer.from(metadataObject.body).toString('utf8'));
+          const isOwner = authUser?.username && meta.owner && authUser.username.toLowerCase() === meta.owner.toLowerCase();
+          if (!isOwner && !isAdmin) {
+            return res.status(403).json({ success: false, error: 'FORBIDDEN', message: "You are not authorized to remove another vendor's storefront branding asset." });
+          }
+        } catch {
+          return res.status(500).json({ success: false, error: 'BRANDING_METADATA_ERROR', message: 'Branding metadata could not be validated.' });
+        }
+      } else if (!isAdmin) {
+        return res.status(404).json({ success: false, error: 'ASSET_NOT_FOUND' });
+      }
+
+      await deleteObject(`vendor-branding/${assetId}`);
+      await deleteObject(`vendor-branding-meta/${assetId}.json`);
+      const brandingDir = getVendorBrandingDir();
+      const filePath = path.resolve(brandingDir, assetId);
+      const metaPath = path.resolve(brandingDir, `${assetId}.meta.json`);
+
+      if (!filePath.startsWith(brandingDir)) {
+        res.status(403).json({ success: false, error: 'PATH_TRAVERSAL_DETECTED', message: 'Access denied.' });
+        return;
+      }
+
+      // Local filesystem cleanup is best-effort after durable authorization/deletion.
+
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      if (fs.existsSync(metaPath)) fs.unlinkSync(metaPath);
+
+      res.json({
+        success: true,
+        message: 'Branding asset removed successfully.'
+      });
+    } catch (err: any) {
+      res.status(500).json({
+        success: false,
+        error: 'BRANDING_ASSET_DELETE_ERROR',
+        message: 'Failed to delete branding asset.'
+      });
+    }
+  }
+);
+
+// GET /api/vendor/document/:id & /api/v1/vendor/document/:id
+app.get(
+  ['/api/vendor/document/:id', '/api/v1/vendor/document/:id'],
+  authenticate,
+  async (req: AuthenticatedRequest, res) => {
+    try {
+      const authUser = req.authenticatedUser || (req as any).user;
+      const adminAuth = await checkAdminAuth(req);
+      const isAdmin = adminAuth.authenticated && adminAuth.authorized;
+
+      if (!authUser && !isAdmin) {
+        res.status(401).json({
+          success: false,
+          error: 'UNAUTHORIZED',
+          message: 'Authentication required to retrieve verification documents.'
+        });
+        return;
+      }
+
+      const { id } = req.params;
+      if (!id || !/^[a-zA-Z0-9_-]{10,64}$/.test(id)) {
+        res.status(400).json({
+          success: false,
+          error: 'INVALID_DOCUMENT_ID',
+          message: 'Invalid document identifier format.'
+        });
+        return;
+      }
+
+      if (!objectStorageEnabled()) return res.status(503).json({ success: false, error: 'OBJECT_STORAGE_NOT_CONFIGURED' });
+      const metaObject = await getObject(`vendor-documents/${id}.meta.json`);
+      const encryptedObject = await getObject(`vendor-documents/${id}.enc`);
+      if (!metaObject || !encryptedObject) return res.status(404).json({ success: false, error: 'DOCUMENT_NOT_FOUND' });
+
+      let meta: any;
+      try {
+        meta = JSON.parse(Buffer.from(metaObject.body).toString('utf8'));
+      } catch {
+        res.status(500).json({
+          success: false,
+          error: 'DOCUMENT_METADATA_ERROR',
+          message: 'Failed to read document metadata.'
+        });
+        return;
+      }
+
+      // Authorization: Only document owner or authorized compliance/governance admin
+      const callerUsername = authUser?.username?.toLowerCase();
+      const docOwner = meta.owner?.toLowerCase();
+      const isOwner = Boolean(callerUsername && docOwner && callerUsername === docOwner);
+      const isGovernanceAdmin =
+        isAdmin ||
+        Boolean(
+          authUser?.roles &&
+          authUser.roles.some((r: string) =>
+            ['PLATFORM_ADMIN', 'COMPLIANCE_OFFICER', 'COMPLIANCE_ADMIN'].includes(r)
+          )
+        );
+
+      if (!isOwner && !isGovernanceAdmin) {
+        res.status(403).json({
+          success: false,
+          error: 'FORBIDDEN',
+          message: 'Access denied: You do not have permission to retrieve this merchant document.'
+        });
+        return;
+      }
+
+      const encryptionKey = getVendorDocumentEncryptionKey();
+      if (!encryptionKey) {
+        res.status(500).json({
+          success: false,
+          error: 'ENCRYPTION_KEY_INVALID_OR_MISSING',
+          message: 'Server decryption configuration error.'
+        });
+        return;
+      }
+
+      const iv = Buffer.from(meta.iv, 'hex');
+      const authTag = Buffer.from(meta.authTag, 'hex');
+      const encryptedBytes = Buffer.from(encryptedObject.body);
+
+      const decipher = crypto.createDecipheriv('aes-256-gcm', encryptionKey, iv);
+      decipher.setAuthTag(authTag);
+      const decryptedBytes = Buffer.concat([decipher.update(encryptedBytes), decipher.final()]);
+
+      res.setHeader('Content-Type', meta.mimeType || 'application/octet-stream');
+      res.setHeader('Cache-Control', 'private, no-store');
+      const dispositionFilename = (meta.originalFilename || 'verification-document').replace(/[^a-zA-Z0-9._-]/g, '_');
+      res.setHeader('Content-Disposition', `inline; filename="${dispositionFilename}"`);
+      res.send(decryptedBytes);
+    } catch (err: any) {
+      res.status(500).json({
+        success: false,
+        error: 'DOCUMENT_DECRYPTION_ERROR',
+        message: 'Unable to decrypt document or verify authentication tag.'
+      });
+    }
+  }
+);
+
+// GET /api/vendor/application/:username & /api/v1/vendor/application/:username
+app.get(
+  ['/api/vendor/application/:username', '/api/v1/vendor/application/:username'],
+  authenticate,
+  async (req: AuthenticatedRequest, res) => {
+    const { username } = req.params;
+    const adminAuth = await checkAdminAuth(req);
+    const isAdmin = adminAuth.authenticated && adminAuth.authorized;
+    const isOwner = req.user?.username && req.user.username.toLowerCase() === username.toLowerCase();
+
+    if (isProduction && !isAdmin && !isOwner) {
+      res.status(403).json({
+        success: false,
+        error: 'FORBIDDEN',
+        message: 'Access denied: You do not have permission to inspect this vendor application.'
+      });
+      return;
+    }
+
+    const application = vendorApplicationRepo.findByUsername(username);
+    if (!application) {
+      res.json({ success: true, application: null });
+      return;
+    }
+
+    // Protect sensitive document numbers from non-owner/non-admin callers
+    const sanitizedApplication = {
+      ...application,
+      documents: application.documents.map((doc) => ({
+        ...doc,
+        documentNumber: (isAdmin || isOwner) ? doc.documentNumber : undefined
+      }))
+    };
+
+    res.json({ success: true, application: sanitizedApplication });
+  }
+);
+
+// POST /api/vendor/apply & /api/v1/vendor/apply
+app.post(['/api/vendor/apply', '/api/v1/vendor/apply'], authenticate, async (req: AuthenticatedRequest, res) => {
+  try {
+    const effectiveUsername = req.user?.username || req.body?.pioneerUsername;
     const {
-      pioneerUsername,
       pioneerUid,
       storeName,
       sellerType,
@@ -692,16 +1692,19 @@ app.post(['/api/vendor/apply', '/api/v1/vendor/apply'], (req, res) => {
       storeTagline,
       logoUrl,
       bannerUrl,
+      storeLogo,
+      storeBanner,
       businessRegistrationNumber,
       taxId,
       websiteUrl,
       categoriesToSell,
+      requiredDocuments,
       documents,
       policies,
       pstpAgreementAccepted
     } = req.body || {};
 
-    if (!pioneerUsername || !storeName || !contactEmail) {
+    if (!effectiveUsername || !storeName || !contactEmail) {
       res.status(400).json({
         success: false,
         error: 'MISSING_REQUIRED_FIELDS',
@@ -710,13 +1713,66 @@ app.post(['/api/vendor/apply', '/api/v1/vendor/apply'], (req, res) => {
       return;
     }
 
-    const existing = vendorApplicationRepo.findByUsername(pioneerUsername);
+    // Normalize requiredDocuments or documents
+    const rawSubmittedDocs = Array.isArray(requiredDocuments)
+      ? requiredDocuments
+      : Array.isArray(documents)
+      ? documents
+      : [];
+
+    // Reject request if no verification document supplied
+    if (rawSubmittedDocs.length === 0) {
+      res.status(400).json({
+        success: false,
+        error: 'VERIFICATION_DOCUMENT_REQUIRED',
+        message: 'A securely uploaded verification document is required.'
+      });
+      return;
+    }
+
+    // Validate that every document reference starts with private://vendor-documents/
+    // Rejects http://, https://, arbitrary external URLs, base64 data URLs, or fake references
+    const hasInvalidDoc = rawSubmittedDocs.some((doc: any) => {
+      const ref = (doc?.fileUrl || doc?.url || '').trim();
+      return !ref.startsWith('private://vendor-documents/');
+    });
+
+    if (hasInvalidDoc) {
+      res.status(400).json({
+        success: false,
+        error: 'VERIFICATION_DOCUMENT_REQUIRED',
+        message: 'A securely uploaded verification document is required. Public URLs and external references are strictly prohibited.'
+      });
+      return;
+    }
+
+    // Normalize into canonical internal VendorApplicationDoc representation
+    const canonicalDocs = rawSubmittedDocs.map((doc: any, idx: number) => {
+      const rawType = doc.type || doc.docType || 'identity_proof';
+      let mappedType: 'identity_proof' | 'address_proof' | 'business_registration' | 'tax_cert' | 'store_license' = 'identity_proof';
+      if (rawType === 'business_cert' || rawType === 'business_registration') mappedType = 'business_registration';
+      else if (rawType === 'utility_bill' || rawType === 'address_proof') mappedType = 'address_proof';
+      else if (rawType === 'tax_cert') mappedType = 'tax_cert';
+      else if (rawType === 'store_license') mappedType = 'store_license';
+      else mappedType = 'identity_proof';
+
+      return {
+        id: doc.id || `doc_${Date.now()}_${idx}`,
+        docType: mappedType,
+        fileName: sanitizeVendorFilename(doc.name || doc.fileName || 'KYC_Verification_Document'),
+        fileUrl: (doc.fileUrl || doc.url || '').trim(),
+        uploadedAt: doc.uploadedAt || new Date().toISOString(),
+        documentNumber: doc.documentNumber ? String(doc.documentNumber).trim() : undefined
+      };
+    });
+
+    const existing = await getDurableVendorApplication(effectiveUsername);
     const appId = existing?.id || `VAPP-${(countryCode || 'GL').toUpperCase()}-${Date.now().toString().slice(-6)}`;
 
     const applicationRecord = {
       id: appId,
-      pioneerUsername,
-      pioneerUid: pioneerUid || `UID_${pioneerUsername.toUpperCase()}`,
+      pioneerUsername: effectiveUsername,
+      pioneerUid: pioneerUid || `UID_${effectiveUsername.toUpperCase()}`,
       storeName,
       sellerType: (sellerType as any) || 'individual',
       country: country || 'Global',
@@ -728,28 +1784,33 @@ app.post(['/api/vendor/apply', '/api/v1/vendor/apply'], (req, res) => {
       contactTelegram,
       storeDescription: storeDescription || '',
       storeTagline,
-      logoUrl: logoUrl || 'https://images.unsplash.com/photo-1534452203293-494d7ddbf7e0?auto=format&fit=crop&w=200&q=80',
-      bannerUrl: bannerUrl || 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=1200&q=80',
+      logoUrl: (storeLogo || logoUrl || '').trim() || 'https://images.unsplash.com/photo-1534452203293-494d7ddbf7e0?auto=format&fit=crop&w=200&q=80',
+      bannerUrl: (storeBanner || bannerUrl || '').trim() || 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=1200&q=80',
+      storeLogo: (storeLogo || logoUrl || '').trim() || 'https://images.unsplash.com/photo-1534452203293-494d7ddbf7e0?auto=format&fit=crop&w=200&q=80',
+      storeBanner: (storeBanner || bannerUrl || '').trim() || 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=1200&q=80',
       businessRegistrationNumber,
       taxId,
       websiteUrl,
       categoriesToSell: Array.isArray(categoriesToSell) ? categoriesToSell : ['physical'],
-      documents: Array.isArray(documents) ? documents : [],
+      documents: canonicalDocs,
       policies: policies || {
         returnRefundPolicy: '14-day standard return on unused goods under PSTP buyer protection.',
         deliveryShippingPolicy: 'Standard dispatch within 24-48 business hours with tracking.'
       },
       pstpAgreementAccepted: Boolean(pstpAgreementAccepted),
-      status: (existing?.status === 'APPROVED' ? 'APPROVED' : 'PENDING_REVIEW') as any,
+      // Seller application submission can never preserve or create approval.
+      // Merchant activation is exclusively controlled by the server-authoritative
+      // Compliance Queue review endpoint.
+      status: 'PENDING_REVIEW' as any,
       createdAt: existing?.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
 
-    vendorApplicationRepo.save(applicationRecord);
+    await saveDurableVendorApplication(applicationRecord);
 
     pstpAuditRepo.appendLog({
       orderId: appId,
-      actor: pioneerUsername,
+      actor: effectiveUsername,
       actorRole: 'seller',
       action: 'VENDOR_APPLICATION_SUBMITTED',
       details: `Vendor application submitted for store "${storeName}". Type: ${sellerType || 'individual'}`,
@@ -778,7 +1839,13 @@ app.get(['/api/admin/vendor-applications', '/api/v1/admin/vendor-applications'],
     return;
   }
 
-  const applications = vendorApplicationRepo.getAll();
+  // Compliance queue is backed by the same durable private Blob records
+  // that control seller activation. Do not read the ephemeral StorageEngine.
+  if (!durableVendorStorageEnabled()) {
+    res.status(503).json({ success: false, error: 'DURABLE_VENDOR_STORAGE_UNAVAILABLE' });
+    return;
+  }
+  const applications = await listDurableVendorApplications();
   res.json({ success: true, count: applications.length, applications });
 });
 
@@ -793,28 +1860,203 @@ app.post(['/api/admin/vendor-application/:id/review', '/api/v1/admin/vendor-appl
     return;
   }
 
+  if (!durableVendorStorageEnabled()) {
+    res.status(503).json({ success: false, error: 'DURABLE_VENDOR_STORAGE_UNAVAILABLE' });
+    return;
+  }
+
   const { id } = req.params;
   const { status, adminNotes } = req.body || {};
   const reviewedBy = auth.user?.username || 'Admin_Compliance_Lead';
-  const updated = vendorApplicationRepo.updateStatus(id, status, adminNotes, reviewedBy);
+  const allowedStatuses = ['PENDING_REVIEW', 'UNDER_REVIEW', 'APPROVED', 'REJECTED', 'ACTION_REQUIRED'];
+  if (!allowedStatuses.includes(status)) {
+    res.status(400).json({ success: false, error: 'INVALID_VENDOR_STATUS' });
+    return;
+  }
 
-  if (!updated) {
+  const applications = await listDurableVendorApplications();
+  const existing = applications.find((application: any) => application.id === id);
+  if (!existing) {
     res.status(404).json({ success: false, error: 'APPLICATION_NOT_FOUND', message: 'Application not found' });
     return;
   }
+
+  const lifecycle = status === 'APPROVED'
+    ? { verificationStatus: 'Verified', sellerStatus: 'Active' }
+    : status === 'REJECTED'
+      ? { verificationStatus: 'Unverified', sellerStatus: 'Suspended' }
+      : { verificationStatus: 'Pending Verification', sellerStatus: 'Probation' };
+
+  const updated = await saveDurableVendorApplication({
+    ...existing,
+    status,
+    ...lifecycle,
+    adminReviewNotes: adminNotes ?? existing.adminReviewNotes,
+    reviewedBy,
+    reviewedAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  });
 
   auditService.recordPstpAudit({
     orderId: id,
     actor: reviewedBy,
     actorRole: 'admin',
     action: `VENDOR_APPLICATION_${status}`,
-    details: `Application ${id} (${updated.storeName}) status updated to ${status}. Notes: ${adminNotes || 'None'}`,
+    details: `Application ${id} (${updated.storeName || ''}) status updated to ${status}.`,
     ipAddress: req.ip || '127.0.0.1',
     deviceInfo: (req.headers['user-agent'] as string) || 'Admin Console'
   });
 
   res.json({ success: true, application: updated });
 });
+
+// GET /api/vendor/seller/access & /api/v1/vendor/seller/access
+app.get(
+  ['/api/vendor/seller/access', '/api/v1/vendor/seller/access'],
+  authenticate,
+  async (req: AuthenticatedRequest, res: express.Response) => {
+    try {
+      const username = req.user?.username;
+      if (!username) {
+        res.status(401).json({
+          success: false,
+          error: 'UNAUTHORIZED',
+          message: 'Authenticated Pioneer session required.'
+        });
+        return;
+      }
+
+      const application = await getDurableVendorApplication(username);
+      const isApproved = application?.status === 'APPROVED';
+      const access = vendorApplicationRepo.getMerchantAccess(username);
+
+      res.json({
+        success: true,
+        authorized: isApproved,
+        status: application?.status || 'UNREGISTERED',
+        sellerLifecycle: isApproved ? 'ACTIVE' : 'INACTIVE',
+        verified: isApproved,
+        pstpAuthorized: isApproved && Boolean(application?.pstpAgreementAccepted),
+        storeName: application?.storeName || null,
+        applicationId: application?.id || null,
+        access
+      });
+    } catch (err: any) {
+      res.status(500).json({
+        success: false,
+        error: 'SELLER_ACCESS_CHECK_ERROR',
+        message: err.message
+      });
+    }
+  }
+);
+
+// POST /api/vendor/seller/authorize & /api/v1/vendor/seller/authorize
+app.post(
+  ['/api/vendor/seller/authorize', '/api/v1/vendor/seller/authorize'],
+  authenticate,
+  async (req: AuthenticatedRequest, res: express.Response) => {
+    try {
+      const username = req.user?.username;
+      if (!username) {
+        res.status(401).json({
+          success: false,
+          error: 'UNAUTHORIZED',
+          message: 'Authenticated Pioneer session required.'
+        });
+        return;
+      }
+
+      const application = await getDurableVendorApplication(username);
+      if (!application || application.status !== 'APPROVED') {
+        res.status(403).json({
+          success: false,
+          authorized: false,
+          error: 'MERCHANT_NOT_APPROVED',
+          message: 'Seller authorization requires an approved merchant application.'
+        });
+        return;
+      }
+
+      const access = vendorApplicationRepo.getMerchantAccess(username);
+
+      res.json({
+        success: true,
+        authorized: true,
+        sellerLifecycle: 'ACTIVE',
+        verified: true,
+        storeName: application.storeName,
+        applicationId: application.id,
+        access
+      });
+    } catch (err: any) {
+      res.status(500).json({
+        success: false,
+        error: 'SELLER_AUTHORIZE_ERROR',
+        message: err.message
+      });
+    }
+  }
+);
+
+// POST /api/vendor/seller/authorize-pstp & /api/v1/vendor/seller/authorize-pstp
+app.post(
+  ['/api/vendor/seller/authorize-pstp', '/api/v1/vendor/seller/authorize-pstp'],
+  authenticate,
+  async (req: AuthenticatedRequest, res: express.Response) => {
+    try {
+      const username = req.user?.username;
+      if (!username) {
+        res.status(401).json({
+          success: false,
+          error: 'UNAUTHORIZED',
+          message: 'Authenticated Pioneer session required.'
+        });
+        return;
+      }
+
+      const application = await getDurableVendorApplication(username);
+      if (!application || application.status !== 'APPROVED') {
+        res.status(403).json({
+          success: false,
+          authorized: false,
+          error: 'MERCHANT_NOT_APPROVED',
+          message: 'PSTP seller authorization requires an approved merchant application.'
+        });
+        return;
+      }
+
+      if (!application.pstpAgreementAccepted) {
+        res.status(403).json({
+          success: false,
+          authorized: false,
+          error: 'PSTP_AGREEMENT_REQUIRED',
+          message: 'PSTP Escrow Protocol seller agreement must be accepted.'
+        });
+        return;
+      }
+
+      const access = vendorApplicationRepo.getMerchantAccess(username);
+
+      res.json({
+        success: true,
+        authorized: true,
+        pstpAuthorized: true,
+        sellerLifecycle: 'ACTIVE',
+        verified: true,
+        storeName: application.storeName,
+        applicationId: application.id,
+        access
+      });
+    } catch (err: any) {
+      res.status(500).json({
+        success: false,
+        error: 'SELLER_PSTP_AUTHORIZE_ERROR',
+        message: err.message
+      });
+    }
+  }
+);
 
 // 4. Security Events API (Phase 4 Remediation)
 app.get(['/api/pstp/security-events', '/api/v1/pstp/security-events'], async (req, res) => {
@@ -877,18 +2119,19 @@ const handlePostUtilityConfig = async (req: express.Request, res: express.Respon
     return;
   }
 
-  const { piRateUsd, minPurchasePi, maxPurchasePi, reason } = req.body;
-  if (!piRateUsd || Number(piRateUsd) <= 0) {
-    res.status(400).json({ error: 'Pricing rate must be greater than zero' });
-    return;
-  }
+  const { minPurchasePi, maxPurchasePi, reason } = req.body;
 
   const updatedBy = auth.user?.username || 'Platform_Admin';
   const previousConfig = platformConfigRepo.getConfig();
+
+  // The PiNova reference value is a platform-wide reference, not an admin-editable
+  // settlement rate. Native Pi amounts remain canonical across the Hub.
   const updatedConfig = platformConfigRepo.updateConfig({
-    piRateUsd: Number(piRateUsd),
-    minPurchasePi: minPurchasePi ? Number(minPurchasePi) : previousConfig.minPurchasePi,
-    maxPurchasePi: maxPurchasePi ? Number(maxPurchasePi) : previousConfig.maxPurchasePi,
+    piRateUsd: 314159,
+    minPurchasePi: minPurchasePi !== undefined ? Number(minPurchasePi) : previousConfig.minPurchasePi,
+    maxPurchasePi: maxPurchasePi !== undefined ? Number(maxPurchasePi) : previousConfig.maxPurchasePi,
+    autoRateUpdateEnabled: false,
+    autoUpdateSource: 'PiNova Reference Value — Community-Supported Target',
     updatedBy
   });
 
@@ -896,7 +2139,7 @@ const handlePostUtilityConfig = async (req: express.Request, res: express.Respon
     previousRate: previousConfig.piRateUsd,
     newRate: updatedConfig.piRateUsd,
     currency: 'USD',
-    source: reason || 'Pricing updated via Admin Console',
+    source: reason || 'PiNova reference policy reaffirmed via Admin Console',
     updatedBy,
     ipAddress: req.ip || '127.0.0.1'
   });
@@ -1065,6 +2308,30 @@ app.post('/api/v1/utility/electricity/verify', handleElectricityVerify);
 
 // Official Pi Platform API Proxy: Payment Handlers
 
+
+const fetchPiPaymentServerAuthoritative = async (paymentId: string, piApiKey: string): Promise<any | null> => {
+  const cleanPaymentId = String(paymentId || '').trim();
+  if (!cleanPaymentId || !piApiKey) return null;
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000);
+  try {
+    const response = await fetch(`https://api.minepi.com/v2/payments/${encodeURIComponent(cleanPaymentId)}`, {
+      headers: {
+        'Authorization': `Key ${piApiKey}`,
+        'Content-Type': 'application/json'
+      },
+      signal: controller.signal
+    });
+    if (!response.ok) return null;
+    return await response.json();
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+};
+
 const handleApprovePayment = async (req: express.Request, res: express.Response) => {
   const timestamp = new Date().toISOString();
   try {
@@ -1083,6 +2350,19 @@ const handleApprovePayment = async (req: express.Request, res: express.Response)
 
     console.log(`[Pi Approval Started] Payment ID: ${cleanPaymentId} | Endpoint: ${req.path} | Time: ${timestamp} | Network: ${selectedNetwork} | HasKey: ${hasKey}`);
 
+    // Idempotency: Return existing approval if already processed
+    const existingApproval = paymentLedgerRepo.findByPaymentId(cleanPaymentId);
+    if (existingApproval && (existingApproval.status === 'APPROVED' || existingApproval.status === 'COMPLETED')) {
+      console.log(`[Pi Approval Idempotent Replay] Payment ID: ${cleanPaymentId} | Status: ${existingApproval.status}`);
+      res.json({
+        success: true,
+        paymentId: cleanPaymentId,
+        status: existingApproval.status.toLowerCase(),
+        message: 'Payment already approved (idempotent replay)'
+      });
+      return;
+    }
+
     // In production: Strictly enforce valid API key & do not allow dev payment bypass
     if (isProduction) {
       if (!hasKey) {
@@ -1091,6 +2371,56 @@ const handleApprovePayment = async (req: express.Request, res: express.Response)
           success: false,
           error: 'PI_SERVER_CREDENTIAL_MISSING',
           message: 'Pi Platform API key (PI_API_KEY or PI_SERVER_KEY) is missing in server environment variables. Real payments cannot be approved without credentials.'
+        });
+        return;
+      }
+
+      // Re-read the payment from Pi before approval. This prevents a caller from
+      // approving an unknown/cancelled payment identifier without first proving
+      // that the payment exists in this app's Pi Platform account.
+      const paymentData = await fetchPiPaymentServerAuthoritative(cleanPaymentId, piApiKey);
+      if (!paymentData) {
+        res.status(502).json({
+          success: false,
+          error: 'PI_PAYMENT_LOOKUP_FAILED',
+          message: 'Unable to retrieve the payment from Pi Platform before approval.'
+        });
+        return;
+      }
+      if (paymentData?.status?.cancelled === true || paymentData?.status?.user_cancelled === true) {
+        res.status(409).json({
+          success: false,
+          error: 'PI_PAYMENT_ALREADY_CANCELLED',
+          message: 'Cancelled Pi payments cannot be approved.'
+        });
+        return;
+      }
+      const paymentAmount = Number(paymentData?.amount);
+      if (!Number.isFinite(paymentAmount) || paymentAmount <= 0) {
+        res.status(409).json({
+          success: false,
+          error: 'PI_PAYMENT_INVALID_AMOUNT',
+          message: 'Pi Platform returned an invalid payment amount.'
+        });
+        return;
+      }
+      if (paymentData?.status?.developer_completed === true) {
+        paymentLedgerRepo.recordCompletion(cleanPaymentId, paymentData?.transaction?.txid || undefined);
+        res.json({
+          success: true,
+          paymentId: cleanPaymentId,
+          status: 'completed',
+          message: 'Payment is already completed on Pi Platform.'
+        });
+        return;
+      }
+      if (paymentData?.status?.developer_approved === true) {
+        paymentLedgerRepo.recordApproval(cleanPaymentId);
+        res.json({
+          success: true,
+          paymentId: cleanPaymentId,
+          status: 'approved',
+          message: 'Payment is already approved on Pi Platform.'
         });
         return;
       }
@@ -1205,6 +2535,20 @@ const handleCompletePayment = async (req: express.Request, res: express.Response
 
     console.log(`[Pi Completion Started] Payment ID: ${cleanPaymentId} | Endpoint: ${req.path} | Time: ${timestamp} | Network: ${selectedNetwork}`);
 
+    // Idempotency: Return existing completion if already processed
+    const existingCompletion = paymentLedgerRepo.findByPaymentId(cleanPaymentId);
+    if (existingCompletion && existingCompletion.status === 'COMPLETED') {
+      console.log(`[Pi Completion Idempotent Replay] Payment ID: ${cleanPaymentId} | Txid: ${cleanTxid}`);
+      res.json({
+        success: true,
+        paymentId: cleanPaymentId,
+        txid: existingCompletion.txid || cleanTxid,
+        status: 'completed',
+        message: 'Payment already completed (idempotent replay)'
+      });
+      return;
+    }
+
     // In production: Strictly enforce valid API key & do not allow dev payment bypass
     if (isProduction) {
       if (!hasKey) {
@@ -1213,6 +2557,44 @@ const handleCompletePayment = async (req: express.Request, res: express.Response
           success: false,
           error: 'PI_SERVER_CREDENTIAL_MISSING',
           message: 'Pi Platform API key (PI_API_KEY or PI_SERVER_KEY) is missing in server environment variables. Real payments cannot be completed without credentials.'
+        });
+        return;
+      }
+
+      // Re-read the payment from Pi before completion so the server never
+      // completes a cancelled/unknown payment or accepts a conflicting txid.
+      const paymentData = await fetchPiPaymentServerAuthoritative(cleanPaymentId, piApiKey);
+      if (!paymentData) {
+        res.status(502).json({
+          success: false,
+          error: 'PI_PAYMENT_LOOKUP_FAILED',
+          message: 'Unable to retrieve the payment from Pi Platform before completion.'
+        });
+        return;
+      }
+      if (paymentData?.status?.cancelled === true || paymentData?.status?.user_cancelled === true) {
+        res.status(409).json({
+          success: false,
+          error: 'PI_PAYMENT_ALREADY_CANCELLED',
+          message: 'Cancelled Pi payments cannot be completed.'
+        });
+        return;
+      }
+      const platformTxid = String(paymentData?.transaction?.txid || '').trim();
+      if (platformTxid && platformTxid !== cleanTxid) {
+        res.status(409).json({
+          success: false,
+          error: 'PI_TRANSACTION_ID_MISMATCH',
+          message: 'The supplied transaction ID does not match the Pi Platform payment.'
+        });
+        return;
+      }
+      const paymentAmount = Number(paymentData?.amount);
+      if (!Number.isFinite(paymentAmount) || paymentAmount <= 0) {
+        res.status(409).json({
+          success: false,
+          error: 'PI_PAYMENT_INVALID_AMOUNT',
+          message: 'Pi Platform returned an invalid payment amount.'
         });
         return;
       }
@@ -1407,16 +2789,17 @@ const handleGetPaymentConfig = (req: express.Request, res: express.Response) => 
   });
 };
 
-app.post(['/api/v2/payments/approve', '/api/pi-payment/approve', '/api/v1/pi-payment/approve'], handleApprovePayment);
-app.post(['/api/v2/payments/complete', '/api/pi-payment/complete', '/api/v1/pi-payment/complete'], handleCompletePayment);
-app.post(['/api/v2/payments/incomplete', '/api/pi-payment/incomplete', '/api/v1/pi-payment/incomplete'], handleIncompletePayment);
-app.post(['/api/v2/payments/cancel', '/api/pi-payment/cancel', '/api/v1/pi-payment/cancel'], handleCancelPayment);
-app.get(['/api/v2/payments/verify/:paymentId', '/api/pi-payment/verify/:paymentId', '/api/v2/pi/payments/verify', '/api/v2/payments/verify', '/api/pi-payment/verify'], handleVerifyPayment);
+app.post(['/api/v2/payments/approve', '/api/pi-payment/approve', '/api/v1/pi-payment/approve'], paymentRateLimiter, handleApprovePayment);
+app.post(['/api/v2/payments/complete', '/api/pi-payment/complete', '/api/v1/pi-payment/complete'], paymentRateLimiter, handleCompletePayment);
+app.post(['/api/v2/payments/incomplete', '/api/pi-payment/incomplete', '/api/v1/pi-payment/incomplete'], paymentRateLimiter, handleIncompletePayment);
+app.post(['/api/v2/payments/cancel', '/api/pi-payment/cancel', '/api/v1/pi-payment/cancel'], paymentRateLimiter, handleCancelPayment);
+app.get(['/api/v2/payments/verify/:paymentId', '/api/pi-payment/verify/:paymentId', '/api/v2/pi/payments/verify', '/api/v2/payments/verify', '/api/pi-payment/verify'], paymentRateLimiter, handleVerifyPayment);
 app.get(['/api/v2/payments/config', '/api/pi-payment/config', '/api/v2/pi/config', '/api/v2/pi/diagnostic', '/api/pi/diagnostic'], handleGetPaymentConfig);
 
 // Server-side Utility Fulfillment & Verification Endpoint
-app.post('/api/v2/utility/fulfill', async (req, res) => {
-  const { paymentId, txid, category, country, countryCode, providerId, accountNumber, fiatAmount, piAmount, packageName, idempotencyKey } = req.body;
+app.post('/api/v2/utility/fulfill', paymentRateLimiter, async (req, res) => {
+  const { paymentId, txid, category, country, countryCode, providerId, accountNumber, fiatAmount, fiatCurrency, piAmount, packageName, idempotencyKey } = req.body;
+  const fxQuoteToken = req.body?.fxQuoteToken ?? req.body?.metadata?.fxQuoteToken;
 
   if (!paymentId) {
     res.status(400).json({ success: false, error: 'Missing paymentId parameter' });
@@ -1427,7 +2810,7 @@ app.post('/api/v2/utility/fulfill', async (req, res) => {
   if (isNaN(numericFiatAmount) || !isFinite(numericFiatAmount) || numericFiatAmount <= 0) {
     const numPi = Number(piAmount);
     if (numPi > 0) {
-      const cfgRate = platformConfigRepo.getConfig().piRateUsd || 10.0;
+      const cfgRate = platformConfigRepo.getConfig().piRateUsd || 314159;
       numericFiatAmount = numPi * cfgRate;
     }
   }
@@ -1481,10 +2864,33 @@ app.post('/api/v2/utility/fulfill', async (req, res) => {
     }
   }
 
-  // Idempotency check: If this paymentId or idempotencyKey was already fulfilled, return cached record
-  const existingKey = idempotencyKey || paymentId;
+  // Idempotency replay must match the original operation payload, not merely its key.
+  const existingKey = String(idempotencyKey || paymentId).trim();
   const existingTransaction = utilityFulfillmentRepo.findByKey(existingKey);
   if (existingTransaction) {
+    const incomingPi = Number(piAmount);
+    const storedPi = Number(existingTransaction.piAmount);
+    const incomingTxid = String(txid || '').trim();
+    const storedTxid = String(existingTransaction.txid || '').trim();
+    const payloadMismatch =
+      String(existingTransaction.paymentId || '') !== String(paymentId) ||
+      (incomingTxid !== '' && storedTxid !== '' && incomingTxid !== storedTxid) ||
+      String(existingTransaction.category || '').trim().toLowerCase() !== String(category || '').trim().toLowerCase() ||
+      String(existingTransaction.providerId || '').trim() !== String(providerId || '').trim() ||
+      String(existingTransaction.accountNumber || '').trim() !== String(accountNumber || '').trim() ||
+      String(existingTransaction.packageName || '').trim() !== String(packageName || '').trim() ||
+      Number(existingTransaction.fiatAmount) !== numericFiatAmount ||
+      String(existingTransaction.metadata?.fiatCurrency || '').trim().toUpperCase() !== String(fiatCurrency || '').trim().toUpperCase() ||
+      !Number.isFinite(incomingPi) || !Number.isFinite(storedPi) ||
+      incomingPi.toFixed(12) !== storedPi.toFixed(12);
+    if (payloadMismatch) {
+      res.status(409).json({
+        success: false,
+        error: 'IDEMPOTENCY_KEY_CONFLICT',
+        message: 'This idempotency key or payment has already been used with different fulfillment details.'
+      });
+      return;
+    }
     console.log(`[Utility Fulfillment] Idempotent replay for Payment ID: ${existingKey}`);
     res.json({
       success: true,
@@ -1492,6 +2898,63 @@ app.post('/api/v2/utility/fulfill', async (req, res) => {
       data: existingTransaction
     });
     return;
+  }
+
+  // Pi amounts are compared as integer pico-Pi units to avoid floating-point rounding.
+  const parsePicoPi = (value: unknown): bigint | null => {
+    // Pi SDK values arrive as JS numbers; normalize those to 12 decimal places
+    // before strict parsing so small values rendered in exponent notation remain valid.
+    const normalized = typeof value === 'number'
+      ? (Number.isFinite(value) && value > 0 && Number(value.toFixed(12)) === value ? value.toFixed(12) : '')
+      : String(value ?? '').trim();
+    if (!/^\d+(?:\.\d{1,12})?$/.test(normalized)) return null;
+    const [whole, fraction = ''] = normalized.split('.');
+    try {
+      return BigInt(whole) * 1_000_000_000_000n + BigInt((fraction + '0'.repeat(12)).slice(0, 12));
+    } catch {
+      return null;
+    }
+  };
+  const requestedPicoPi = parsePicoPi(piAmount);
+  if (requestedPicoPi === null || requestedPicoPi <= 0n) {
+    res.status(400).json({
+      success: false,
+      error: 'INVALID_PI_AMOUNT',
+      message: 'A valid positive Pi amount with no more than 12 decimal places is required.'
+    });
+    return;
+  }
+
+  // Airtime/data fulfillment must be bound to a signed, short-lived server FX quote.
+  // The token binds fiat amount + currency + exact pico-Pi amount; never re-price at fulfillment.
+  const normalizedCategoryForFx = String(category || '').trim().toLowerCase();
+  if (['airtime', 'mobile_data', 'data'].includes(normalizedCategoryForFx)) {
+    let signedQuote;
+    try {
+      signedQuote = verifyPiNovaFxQuoteToken(fxQuoteToken);
+    } catch (error) {
+      if (error instanceof FxConfigurationError) {
+        res.status(503).json({ success: false, error: 'FX_QUOTE_SIGNING_NOT_CONFIGURED', message: 'Secure currency quote verification is not configured. Utility fulfillment is paused.' });
+        return;
+      }
+      throw error;
+    }
+    const quotePicoPi = signedQuote ? parsePicoPi(signedQuote.referencePiAmount) : null;
+    const normalizedCurrency = String(fiatCurrency || '').trim().toUpperCase();
+    if (
+      !signedQuote ||
+      signedQuote.currency !== normalizedCurrency ||
+      signedQuote.amount !== numericFiatAmount ||
+      quotePicoPi === null ||
+      quotePicoPi !== requestedPicoPi
+    ) {
+      res.status(400).json({
+        success: false,
+        error: 'FX_QUOTE_INVALID_OR_MISMATCHED',
+        message: 'A valid, unexpired server-signed FX quote matching the fiat amount, currency, and Pi amount is required. No utility fulfillment was started.'
+      });
+      return;
+    }
   }
 
   // Authoritative Pi Payment Verification
@@ -1503,6 +2966,18 @@ app.post('/api/v2/utility/fulfill', async (req, res) => {
       success: false,
       status: 'VERIFICATION_FAILED',
       message: 'Server verification failed. Payment is not confirmed on Pi Platform.'
+    });
+    return;
+  }
+
+  const verifiedPiAmount = verification.paymentData?.amount;
+  const verifiedPicoPi = parsePicoPi(verifiedPiAmount);
+  if (verifiedPicoPi === null || verifiedPicoPi <= 0n || verifiedPicoPi !== requestedPicoPi) {
+    console.warn(`[Utility Fulfillment] Verified Pi amount mismatch or unavailable for Payment ID: ${paymentId}`);
+    res.status(400).json({
+      success: false,
+      error: 'PI_AMOUNT_MISMATCH',
+      message: 'The Pi Platform-verified amount does not match the requested utility payment amount.'
     });
     return;
   }
@@ -1615,12 +3090,18 @@ app.post('/api/v2/utility/fulfill', async (req, res) => {
     category: category || 'utility',
     providerId: providerId || 'unknown',
     accountNumber: accountNumber || '',
-    fiatAmount: Number(numericFiatAmount.toFixed(2)),
-    piAmount: Number(Number(piAmount || 0).toFixed(4)),
+    // Preserve the exact fiat amount used by the signed FX quote for idempotent replay checks.
+    fiatAmount: numericFiatAmount,
+    // Persist the authoritative verified amount without truncating precision to four decimals.
+    piAmount: Number((Number(verifiedPiAmount)).toFixed(12)),
     packageName: packageName || 'Utility Payment',
     timestamp: new Date().toISOString(),
     providerReference: providerRef,
-    metadata: fulfillmentMetadata
+    metadata: {
+      ...(fulfillmentMetadata || {}),
+      fiatCurrency: String(fiatCurrency || '').trim().toUpperCase(),
+      countryCode: String(countryCode || '').trim().toUpperCase()
+    }
   };
 
   utilityFulfillmentRepo.recordTransaction(existingKey, resultRecord);
@@ -1717,9 +3198,18 @@ app.post('/api/v2/utility/vtu/webhook', (req, res) => {
 // 1. Institution Directory & Verification Registry
 app.get('/api/education/institutions', (req, res) => {
   try {
-    const { countryCode, tier, institutionType, isPublic, search, verificationStatus } = req.query;
+    const { countryCode, country, state, tier, institutionType, isPublic, search, verificationStatus } = req.query;
     const filter: any = {};
-    if (countryCode) filter.countryCode = String(countryCode);
+
+    // Support both countryCode and country, preferring countryCode
+    const rawCountry = (countryCode !== undefined && countryCode !== '')
+      ? String(countryCode)
+      : (country !== undefined && country !== '' ? String(country) : undefined);
+
+    if (rawCountry) {
+      filter.countryCode = normalizeCountryCode(rawCountry);
+    }
+    if (state) filter.state = String(state);
     if (tier) filter.tier = String(tier);
     if (institutionType) filter.institutionType = String(institutionType);
     if (isPublic !== undefined) filter.isPublic = isPublic === 'true';
@@ -1751,6 +3241,85 @@ app.get('/api/education/institutions/:id', (req, res) => {
   }
 });
 
+// Academic Hierarchy Endpoints (Cascading Faculties/Schools -> Departments -> Programmes)
+app.get('/api/education/institutions/:id/faculties', (req, res) => {
+  try {
+    const inst = educationRepo.getInstitutionById(req.params.id);
+    if (!inst) {
+      res.status(404).json({ success: false, error: 'INSTITUTION_NOT_FOUND', message: `Institution ${req.params.id} not found` });
+      return;
+    }
+    const faculties = educationRepo.getFacultiesByInstitution(req.params.id);
+    res.json({
+      success: true,
+      institutionId: req.params.id,
+      institutionName: inst.name,
+      count: faculties.length,
+      faculties
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: 'FACULTIES_FETCH_FAILED', message: err.message });
+  }
+});
+
+app.get('/api/education/institutions/:id/faculties/:facultyId/departments', (req, res) => {
+  try {
+    const faculty = educationRepo.getFacultyById(req.params.id, req.params.facultyId);
+    if (!faculty) {
+      res.status(404).json({ success: false, error: 'FACULTY_NOT_FOUND', message: `Faculty ${req.params.facultyId} not found` });
+      return;
+    }
+    const departments = educationRepo.getDepartmentsByFaculty(req.params.id, req.params.facultyId);
+    res.json({
+      success: true,
+      institutionId: req.params.id,
+      facultyId: req.params.facultyId,
+      facultyName: faculty.name,
+      unitType: faculty.unitType || 'faculty',
+      count: departments.length,
+      departments
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: 'DEPARTMENTS_FETCH_FAILED', message: err.message });
+  }
+});
+
+app.get('/api/education/institutions/:id/faculties/:facultyId/departments/:deptId/programmes', (req, res) => {
+  try {
+    const dept = educationRepo.getDepartmentById(req.params.id, req.params.facultyId, req.params.deptId);
+    if (!dept) {
+      res.status(404).json({ success: false, error: 'DEPARTMENT_NOT_FOUND', message: `Department ${req.params.deptId} not found` });
+      return;
+    }
+    const programmes = educationRepo.getProgrammesByDepartment(req.params.id, req.params.facultyId, req.params.deptId);
+    res.json({
+      success: true,
+      institutionId: req.params.id,
+      facultyId: req.params.facultyId,
+      departmentId: req.params.deptId,
+      departmentName: dept.name,
+      count: programmes.length,
+      programmes
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: 'PROGRAMMES_FETCH_FAILED', message: err.message });
+  }
+});
+
+app.get('/api/education/institutions/:id/programmes', (req, res) => {
+  try {
+    const programmes = educationRepo.getAllProgrammesByInstitution(req.params.id);
+    res.json({
+      success: true,
+      institutionId: req.params.id,
+      count: programmes.length,
+      programmes
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: 'ALL_PROGRAMMES_FETCH_FAILED', message: err.message });
+  }
+});
+
 // 2. Global Education Taxonomy / Classification (Phase 6 Remediation)
 app.get(['/api/education/taxonomy', '/api/education/taxonomy/:countryCode?'], (req, res) => {
   try {
@@ -1766,6 +3335,14 @@ app.get(['/api/education/taxonomy', '/api/education/taxonomy/:countryCode?'], (r
     }
 
     const taxonomy = classificationEngine.getTaxonomy(countryCode);
+    if (!taxonomy) {
+      res.status(404).json({
+        success: false,
+        error: 'TAXONOMY_NOT_CONFIGURED',
+        message: 'No authoritative education taxonomy is configured for this country.'
+      });
+      return;
+    }
     res.json({
       success: true,
       countryCode: taxonomy.countryCode,
@@ -1777,7 +3354,7 @@ app.get(['/api/education/taxonomy', '/api/education/taxonomy/:countryCode?'], (r
 });
 
 // 3. Student Identity & Verification Engine (Phase 7 Remediation)
-app.post('/api/education/students/verify', studentVerifyRateLimiter, authenticate, (req: AuthenticatedRequest, res) => {
+app.post('/api/education/students/verify', studentVerifyRateLimiter, authenticate, async (req: AuthenticatedRequest, res) => {
   try {
     const { studentId, matricOrRegistrationNumber, institutionId, countryCode, claimedFullName, nationalStudentNumber } = req.body;
     if (!studentId && !matricOrRegistrationNumber) {
@@ -1789,7 +3366,7 @@ app.post('/api/education/students/verify', studentVerifyRateLimiter, authenticat
       return;
     }
 
-    const verificationResult = studentVerificationService.verifyStudent({
+    const verificationResult = await studentVerificationService.verifyStudent({
       studentId,
       matricOrRegistrationNumber,
       institutionId,
@@ -1807,20 +3384,27 @@ app.post('/api/education/students/verify', studentVerifyRateLimiter, authenticat
   }
 });
 
-app.post('/api/education/institutions/:id/verify-accreditation', studentVerifyRateLimiter, (req, res) => {
+app.post('/api/education/institutions/:id/verify-accreditation', studentVerifyRateLimiter, authenticate, async (req: AuthenticatedRequest, res) => {
   try {
     const { id } = req.params;
     const { countryCode, registryNumber } = req.body;
-    const result = studentVerificationService.verifyInstitution(id, countryCode || 'NG', registryNumber);
+    const result = await studentVerificationService.verifyInstitution(id, countryCode || 'NG', registryNumber);
     res.json({ success: true, accreditation: result });
   } catch (err: any) {
     res.status(500).json({ success: false, error: 'ACCREDITATION_CHECK_FAILED', message: err.message });
   }
 });
 
-app.get('/api/education/students/:id', (req, res) => {
+app.get('/api/education/students/:id', authenticate, (req: AuthenticatedRequest, res) => {
   try {
-    const student = educationRepo.getStudentById(req.params.id);
+    const requestedId = String(req.params.id || '').trim();
+    const roles = req.user?.roles || [];
+    const isAdmin = roles.some((r: string) => ['PLATFORM_ADMIN', 'BURSAR', 'FINANCE_ADMIN', 'INSTITUTION_ADMIN'].includes(r));
+    if (!isAdmin && ![String(req.user?.id || ''), String(req.user?.username || '')].includes(requestedId)) {
+      res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Student access requires the authenticated student context.' });
+      return;
+    }
+    const student = educationRepo.getStudentById(requestedId);
     if (!student) {
       res.status(404).json({ success: false, error: 'STUDENT_NOT_FOUND' });
       return;
@@ -1831,19 +3415,93 @@ app.get('/api/education/students/:id', (req, res) => {
   }
 });
 
-app.get('/api/education/guardians/:id/children', (req, res) => {
+app.get('/api/education/guardians/me/children', authenticate, (req: AuthenticatedRequest, res) => {
   try {
-    const children = educationRepo.getGuardianChildrenSummaries(req.params.id);
+    const guardianId = String(req.user?.guardianId || req.user?.username || req.user?.id || '').trim();
+    if (!guardianId) {
+      res.status(401).json({ success: false, error: 'AUTHENTICATION_CONTEXT_REQUIRED', message: 'Authenticated guardian context is required.' });
+      return;
+    }
+    const children = educationRepo.getGuardianChildrenSummaries(guardianId);
+    res.json({ success: true, count: children.length, children });
+  } catch {
+    res.status(500).json({ success: false, error: 'GUARDIAN_CHILDREN_FETCH_FAILED', message: 'Unable to load guardian children.' });
+  }
+});
+
+app.get('/api/education/guardians/:id/children', authenticate, (req: AuthenticatedRequest, res) => {
+  try {
+    const requestedGuardianId = String(req.params.id || '').trim();
+    const currentUser = String(req.user?.username || '').trim();
+    const currentUserId = String(req.user?.id || '').trim();
+    const roles = req.user?.roles || [];
+    const isGlobalAdmin = roles.some((r: string) => ['PLATFORM_ADMIN', 'BURSAR', 'FINANCE_ADMIN'].includes(r));
+    const isInstitutionAdmin = roles.includes('INSTITUTION_ADMIN');
+    const ownsGuardian = Boolean(
+      isGlobalAdmin ||
+      (currentUser && requestedGuardianId.toLowerCase() === currentUser.toLowerCase()) ||
+      (currentUserId && requestedGuardianId === currentUserId) ||
+      (req.user?.guardianId && requestedGuardianId.toLowerCase() === String(req.user.guardianId).toLowerCase())
+    );
+    if (!ownsGuardian) {
+      res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Guardian child access requires the authenticated guardian context.' });
+      return;
+    }
+    const children = educationRepo.getGuardianChildrenSummaries(requestedGuardianId);
+    if (isInstitutionAdmin) {
+      const institutionId = String(req.user?.institutionId || '').trim();
+      if (!institutionId) {
+        res.status(403).json({ success: false, error: 'INSTITUTION_SCOPE_REQUIRED', message: 'Institution administrator scope is required.' });
+        return;
+      }
+      const scopedChildren = children.filter((child) => child.institutionId === institutionId);
+      res.json({ success: true, count: scopedChildren.length, children: scopedChildren });
+      return;
+    }
     res.json({ success: true, count: children.length, children });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: 'GUARDIAN_CHILDREN_FETCH_FAILED', message: err.message });
+    res.status(500).json({ success: false, error: 'GUARDIAN_CHILDREN_FETCH_FAILED', message: 'Unable to load guardian children.' });
   }
 });
 
 // 4. Invoices & Authoritative School Fees Engine (Phase 5 & 11 Remediation)
-app.get('/api/education/invoices', (req, res) => {
+app.get('/api/education/invoices', authenticate, (req: AuthenticatedRequest, res) => {
   try {
     const { studentId, institutionId, status, guardianId } = req.query;
+    const currentUser = req.user?.username;
+    const currentUserId = req.user?.id;
+    const roles = req.user?.roles || [];
+    const isGlobalAdmin = roles.some((r: string) => ['PLATFORM_ADMIN', 'BURSAR', 'FINANCE_ADMIN'].includes(r));
+    const requestedInstitution = institutionId ? String(institutionId) : undefined;
+    const isInstitutionStaff = Boolean(
+      roles.includes('INSTITUTION_ADMIN') &&
+      req.user?.institutionId &&
+      (!requestedInstitution || req.user.institutionId === requestedInstitution)
+    );
+    const requestedGuardian = guardianId ? String(guardianId) : undefined;
+    const ownsGuardianFilter = Boolean(
+      requestedGuardian &&
+      ((currentUser && requestedGuardian.toLowerCase() === currentUser.toLowerCase()) ||
+       (currentUserId && requestedGuardian === currentUserId) ||
+       (req.user?.guardianId && requestedGuardian.toLowerCase() === req.user.guardianId.toLowerCase()))
+    );
+    const ownsStudentFilter = Boolean(
+      studentId &&
+      ((currentUser && String(studentId).toLowerCase() === currentUser.toLowerCase()) ||
+       (currentUserId && String(studentId) === currentUserId) ||
+       false)
+    );
+
+    if (!isGlobalAdmin && !isInstitutionStaff && !ownsGuardianFilter && !ownsStudentFilter) {
+      res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Invoice access requires an authorized student, guardian, or institution context.' });
+      return;
+    }
+
+    if (isInstitutionStaff && requestedInstitution && req.user?.institutionId !== requestedInstitution) {
+      res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Institution administrator access is limited to the authenticated institution.' });
+      return;
+    }
+
     const filter: any = {};
     if (studentId) filter.studentId = String(studentId);
     if (institutionId) filter.institutionId = String(institutionId);
@@ -1857,11 +3515,27 @@ app.get('/api/education/invoices', (req, res) => {
   }
 });
 
-app.get('/api/education/invoices/:id', (req, res) => {
+app.get('/api/education/invoices/:id', authenticate, (req: AuthenticatedRequest, res) => {
   try {
     const invoice = educationRepo.getInvoiceById(req.params.id);
     if (!invoice) {
       res.status(404).json({ success: false, error: 'INVOICE_NOT_FOUND' });
+      return;
+    }
+    const roles = req.user?.roles || [];
+    const isGlobalAdmin = roles.some((r: string) => ['PLATFORM_ADMIN', 'BURSAR', 'FINANCE_ADMIN'].includes(r));
+    const currentUser = req.user?.username;
+    const currentUserId = req.user?.id;
+    const authorized = isGlobalAdmin ||
+      Boolean(roles.includes('INSTITUTION_ADMIN') && req.user?.institutionId && req.user.institutionId === invoice.institutionId) ||
+      Boolean(currentUser && invoice.guardianId && invoice.guardianId.toLowerCase() === currentUser.toLowerCase()) ||
+      Boolean(currentUserId && invoice.guardianId === currentUserId) ||
+      Boolean(req.user?.guardianId && invoice.guardianId && req.user.guardianId.toLowerCase() === invoice.guardianId.toLowerCase()) ||
+      Boolean(currentUser && invoice.studentId && invoice.studentId.toLowerCase() === currentUser.toLowerCase()) ||
+      Boolean(currentUserId && invoice.studentId === currentUserId) ||
+      false;
+    if (!authorized) {
+      res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Access denied to this invoice.' });
       return;
     }
     res.json({ success: true, invoice });
@@ -1870,33 +3544,15 @@ app.get('/api/education/invoices/:id', (req, res) => {
   }
 });
 
-// Authoritative fee calculation endpoint (prevents client-side price tampering)
-app.post('/api/education/invoices/calculate', (req, res) => {
-  try {
-    const { items, subtotal, discountAmount, taxAmount } = req.body;
-    let computedSubtotal = Number(subtotal) || 0;
-
-    if (Array.isArray(items) && items.length > 0) {
-      computedSubtotal = items.reduce((acc: number, item: any) => {
-        const itemAmount = Number(item.amount || item.unitPrice || 0);
-        const itemQty = Number(item.quantity || 1);
-        return acc + (itemAmount * itemQty);
-      }, 0);
-    }
-
-    const totals = EducationRepository.calculateInvoiceTotals({
-      subtotal: computedSubtotal,
-      discount: Number(discountAmount) || 0,
-      tax: Number(taxAmount) || 0
-    });
-
-    res.json({
-      success: true,
-      totals
-    });
-  } catch (err: any) {
-    res.status(400).json({ success: false, error: 'CALCULATION_ERROR', message: err.message });
-  }
+// Fee calculation is intentionally not an authoritative pricing source.
+// Provider-backed invoices must exist before PiNova can quote or settle an education fee.
+app.post('/api/education/invoices/calculate', authenticate, (req: AuthenticatedRequest, res) => {
+  res.status(503).json({
+    success: false,
+    error: 'PROVIDER_INTEGRATION_REQUIRED',
+    availability: 'UNAVAILABLE',
+    message: 'Education fee calculation is unavailable until an authorized institution/provider fee catalog is connected. Client-supplied prices are never treated as authoritative.'
+  });
 });
 
 // Apply Scholarship to Invoice (Requires Financial/Institutional Admin Role)
@@ -1910,11 +3566,17 @@ app.post('/api/education/invoices/:id/apply-scholarship', authenticate, requireR
       return;
     }
 
-    const updatedInvoice = educationRepo.applyScholarshipToInvoice(id, scholarshipId, notes);
-    res.json({
-      success: true,
-      message: 'Scholarship credit applied to invoice',
-      invoice: updatedInvoice
+    const actorUsername = String(req.user?.username || '').trim();
+    if (!actorUsername) {
+      res.status(401).json({ success: false, error: 'AUTHENTICATION_REQUIRED', message: 'Authenticated actor is required.' });
+      return;
+    }
+
+    res.status(503).json({
+      success: false,
+      error: 'PROVIDER_INTEGRATION_REQUIRED',
+      availability: 'UNAVAILABLE',
+      message: 'Scholarship credits cannot be applied until an authorized scholarship provider/catalog integration is connected.'
     });
   } catch (err: any) {
     res.status(400).json({ success: false, error: 'SCHOLARSHIP_APPLICATION_FAILED', message: err.message });
@@ -1927,7 +3589,7 @@ app.post('/api/education/invoices/pay', paymentRateLimiter, authenticate, async 
     const {
       invoiceId,
       amountPaid,
-      currency = 'USD',
+      currency = 'PI',
       piAmount,
       piPaymentId,
       piTxid,
@@ -1961,32 +3623,163 @@ app.post('/api/education/invoices/pay', paymentRateLimiter, authenticate, async 
       res.status(400).json({
         success: false,
         error: 'AMOUNT_EXCEEDS_BALANCE',
-        message: `Amount $${numericAmount} exceeds current outstanding balance of $${invoice.outstandingBalance.toFixed(2)}`
+        message: `Amount ${numericAmount.toFixed(12)} π exceeds current outstanding balance of ${invoice.outstandingBalance.toFixed(12)} π`
       });
       return;
     }
 
-    // Pi Network server verification: Check if paymentId was completed on ledger
-    if (piPaymentId) {
-      const ledgerEntry = paymentLedgerRepo.findByPaymentId(piPaymentId);
-      if (ledgerEntry && ledgerEntry.status === 'FAILED') {
-        res.status(400).json({ success: false, error: 'PI_PAYMENT_FAILED_ON_LEDGER', message: 'The referenced Pi payment failed verification.' });
+    // Enforce invoice ownership in production and for authenticated callers
+    const currentUser = req.user?.username;
+    const currentUserId = req.user?.id;
+    const userRoles = req.user?.roles || [];
+    const isPlatformAdmin = userRoles.includes('PLATFORM_ADMIN') || userRoles.includes('BURSAR') || userRoles.includes('FINANCE_ADMIN');
+    const isInstitutionStaff = Boolean(userRoles.includes('INSTITUTION_ADMIN') && req.user?.institutionId && req.user.institutionId === invoice.institutionId);
+    const isGuardianOwner = Boolean(
+      (currentUser && invoice.guardianId && invoice.guardianId.toLowerCase() === currentUser.toLowerCase()) ||
+      (currentUserId && invoice.guardianId && invoice.guardianId === currentUserId) ||
+      (req.user?.guardianId && invoice.guardianId && req.user.guardianId.toLowerCase() === invoice.guardianId.toLowerCase())
+    );
+    const isStudentOwner = Boolean(
+      (currentUser && invoice.studentId && invoice.studentId.toLowerCase() === currentUser.toLowerCase()) ||
+      (currentUserId && invoice.studentId && invoice.studentId === currentUserId) ||
+      (currentUser && invoice.studentName && invoice.studentName.toLowerCase() === currentUser.toLowerCase()) ||
+      ((req.user as any)?.studentId && invoice.studentId && (req.user as any).studentId.toLowerCase() === invoice.studentId.toLowerCase())
+    );
+    const isInvoiceOwner = isGuardianOwner || isStudentOwner;
+
+    if (isProduction && !isPlatformAdmin && !isInstitutionStaff && !isInvoiceOwner) {
+      res.status(403).json({
+        success: false,
+        error: 'FORBIDDEN',
+        message: 'Access denied: You are not authorized to settle or pay this invoice.'
+      });
+      return;
+    }
+
+    // Pi Network authoritative server verification
+    if (paymentMethod === 'PI_NETWORK') {
+      if (!piPaymentId) {
+        res.status(400).json({
+          success: false,
+          error: 'MISSING_PI_PAYMENT_ID',
+          message: 'Authoritative Pi payment ID is required for Pi Network payment settlement.'
+        });
+        return;
+      }
+      const verification = await verifyPiPaymentAuthoritative(piPaymentId);
+      if (!verification.verified) {
+        res.status(400).json({
+          success: false,
+          error: 'PI_PAYMENT_UNVERIFIED',
+          message: verification.message || 'The referenced Pi payment could not be verified on the authoritative ledger.'
+        });
+        return;
+      }
+      const paymentData = verification.paymentData;
+      const authoritativePiAmount = Number(paymentData?.amount);
+      const authoritativeTxid = String(paymentData?.transaction?.txid || '').trim();
+      const authoritativeUserUid = String(paymentData?.user_uid || '').trim();
+      const authenticatedPiUid = String((req.user as any)?.piUid || '').trim();
+      const direction = String(paymentData?.direction || '').trim();
+      const expectedNetwork = process.env.VITE_PI_ENV === 'production' || process.env.PI_SANDBOX_MODE === 'false'
+        ? 'Pi Network'
+        : 'Pi Testnet';
+
+      if (!authoritativeUserUid || !authenticatedPiUid || authoritativeUserUid !== authenticatedPiUid) {
+        res.status(403).json({
+          success: false,
+          error: 'PI_PAYMENT_USER_MISMATCH',
+          message: 'The verified Pi payment belongs to a different authenticated Pioneer.'
+        });
+        return;
+      }
+
+      if (direction !== 'user_to_app') {
+        res.status(400).json({
+          success: false,
+          error: 'PI_PAYMENT_DIRECTION_INVALID',
+          message: 'The verified Pi payment is not a user-to-app payment.'
+        });
+        return;
+      }
+
+      if (String(paymentData?.network || '').trim() !== expectedNetwork) {
+        res.status(400).json({
+          success: false,
+          error: 'PI_PAYMENT_NETWORK_MISMATCH',
+          message: 'The verified Pi payment network does not match the application environment.'
+        });
+        return;
+      }
+      if (!Number.isFinite(authoritativePiAmount) || authoritativePiAmount <= 0) {
+        res.status(400).json({
+          success: false,
+          error: 'PI_AMOUNT_UNAVAILABLE',
+          message: 'The verified Pi payment did not contain an authoritative Pi amount.'
+        });
+        return;
+      }
+      // A fiat-denominated invoice cannot be settled from an arbitrary
+      // client-side USD/NGN amount against a Pi payment without an
+      // authoritative FX/fee provider. Only a Pi-denominated invoice can
+      // be settled directly from the verified Pi amount.
+      if (String(invoice.currency || '').trim().toUpperCase() !== 'PI') {
+        res.status(503).json({
+          success: false,
+          error: 'PI_FX_PROVIDER_REQUIRED',
+          availability: 'UNAVAILABLE',
+          message: 'This invoice is denominated in fiat. An authorized fee/FX provider is required before a Pi amount can be derived and settled.'
+        });
+        return;
+      }
+
+      if (Math.abs(numericAmount - authoritativePiAmount) > 0.00000001) {
+        res.status(400).json({
+          success: false,
+          error: 'PI_AMOUNT_MISMATCH',
+          message: 'The requested settlement amount does not match the authoritative Pi payment amount.'
+        });
+        return;
+      }
+
+      req.body.piAmount = authoritativePiAmount;
+      req.body.piTxid = authoritativeTxid || undefined;
+    } else if (piPaymentId) {
+      const verification = await verifyPiPaymentAuthoritative(piPaymentId);
+      if (!verification.verified) {
+        res.status(400).json({
+          success: false,
+          error: 'PI_PAYMENT_UNVERIFIED',
+          message: verification.message || 'The referenced Pi payment could not be verified on the authoritative ledger.'
+        });
         return;
       }
     }
 
     // Authoritatively derive payer username
-    const payerUsername = req.user?.username || req.body.payerUsername || 'pioneer_parent';
-    const effectiveIdempotencyKey = idempotencyKey || piPaymentId || `IDEMP-EDU-${invoiceId}-${Date.now()}`;
+    if (paymentMethod !== 'PI_NETWORK') {
+      res.status(400).json({ success: false, error: 'UNSUPPORTED_PAYMENT_METHOD', message: 'Education fee settlement currently supports only authoritative Pi Network payments.' });
+      return;
+    }
+    if (!idempotencyKey && !piPaymentId) {
+      res.status(400).json({ success: false, error: 'MISSING_IDEMPOTENCY_KEY', message: 'A client idempotency key or authoritative Pi payment ID is required.' });
+      return;
+    }
+    const payerUsername = req.user?.username;
+    if (!payerUsername) {
+      res.status(401).json({ success: false, error: 'AUTHENTICATED_USERNAME_REQUIRED', message: 'Authenticated payer identity is required.' });
+      return;
+    }
+    const effectiveIdempotencyKey = idempotencyKey || piPaymentId;
 
     // Execute atomic settlement in repository with canonical SHA-256 digest creation
     const result = educationRepo.recordPayment({
       invoiceId,
       amountPaid: numericAmount,
       currency,
-      piAmount: Number(piAmount || (numericAmount * 0.00000318).toFixed(6)),
+      piAmount: Number(req.body.piAmount),
       piPaymentId,
-      piTxid,
+      piTxid: req.body.piTxid,
       paymentMethod,
       payerUsername,
       idempotencyKey: effectiveIdempotencyKey
@@ -2014,6 +3807,52 @@ app.post('/api/education/invoices/pay', paymentRateLimiter, authenticate, async 
   } catch (err: any) {
     console.error('[Education Payment] Processing error:', err.message);
     res.status(500).json({ success: false, error: 'PAYMENT_PROCESSING_FAILED', message: err.message });
+  }
+});
+
+// 5b. Get Payment History for Specific Invoice (Ownership Protected)
+app.get('/api/education/invoices/:id/payments', authenticate, (req: AuthenticatedRequest, res) => {
+  try {
+    const { id } = req.params;
+    const invoice = educationRepo.getInvoiceById(id);
+    if (!invoice) {
+      res.status(404).json({ success: false, error: 'INVOICE_NOT_FOUND', message: `Invoice ${id} not found` });
+      return;
+    }
+
+    const currentUser = req.user?.username;
+    const currentUserId = req.user?.id;
+    const userRoles = req.user?.roles || [];
+    const isPlatformAdmin = userRoles.includes('PLATFORM_ADMIN') || userRoles.includes('BURSAR') || userRoles.includes('FINANCE_ADMIN');
+    const isInstitutionStaff = Boolean(userRoles.includes('INSTITUTION_ADMIN') && req.user?.institutionId && req.user.institutionId === invoice.institutionId);
+
+    const isGuardianOwner = Boolean(
+      (currentUser && invoice.guardianId && invoice.guardianId.toLowerCase() === currentUser.toLowerCase()) ||
+      (currentUserId && invoice.guardianId && invoice.guardianId === currentUserId) ||
+      (req.user?.guardianId && invoice.guardianId && req.user.guardianId.toLowerCase() === invoice.guardianId.toLowerCase())
+    );
+    const isStudentOwner = Boolean(
+      (currentUser && invoice.studentId && invoice.studentId.toLowerCase() === currentUser.toLowerCase()) ||
+      (currentUserId && invoice.studentId && invoice.studentId === currentUserId) ||
+      (currentUser && invoice.studentName && invoice.studentName.toLowerCase() === currentUser.toLowerCase()) ||
+      ((req.user as any)?.studentId && invoice.studentId && (req.user as any).studentId.toLowerCase() === invoice.studentId.toLowerCase())
+    );
+    const isAuthorized = isPlatformAdmin || isInstitutionStaff || isGuardianOwner || isStudentOwner;
+
+    if (isProduction && !isAuthorized) {
+      res.status(403).json({
+        success: false,
+        error: 'FORBIDDEN',
+        message: 'Access denied: You are not authorized to view payment history for this invoice.'
+      });
+      return;
+    }
+
+    const payments = educationRepo.getPaymentsByInvoiceId(id);
+    res.json(payments);
+  } catch (err: any) {
+    console.error('[Education Payments History] Error:', err.message);
+    res.status(500).json({ success: false, error: 'SERVER_ERROR', message: err.message });
   }
 });
 
@@ -2046,12 +3885,7 @@ app.get('/api/education/receipts/:receiptNumber/verify', receiptVerifyRateLimite
       academicSession: verification.receipt.academicSession,
       termOrSemester: verification.receipt.termOrSemester,
       educationLevel: verification.receipt.educationLevel,
-      amountPaid: verification.receipt.amountPaid,
-      currency: verification.receipt.currency,
-      piAmount: verification.receipt.piAmount,
-      paymentDate: verification.receipt.paymentDate,
       verifiedByServer: verification.receipt.verifiedByServer,
-      chargeDescription: verification.receipt.chargeDescription,
       publicSummary: verification.receipt.publicSafeSummary
     });
   } catch (err: any) {
@@ -2059,27 +3893,54 @@ app.get('/api/education/receipts/:receiptNumber/verify', receiptVerifyRateLimite
   }
 });
 
-app.get('/api/education/receipts/:receiptNumber', (req, res) => {
+app.get('/api/education/receipts/:receiptNumber', authenticate, (req: AuthenticatedRequest, res) => {
   try {
     const receipt = educationRepo.getReceiptByNumber(req.params.receiptNumber);
     if (!receipt) {
       res.status(404).json({ success: false, error: 'RECEIPT_NOT_FOUND' });
       return;
     }
+    const roles = req.user?.roles || [];
+    const isAdmin = roles.some((r: string) => ['PLATFORM_ADMIN', 'BURSAR', 'FINANCE_ADMIN', 'INSTITUTION_ADMIN'].includes(r));
+    const userRefs = [String(req.user?.id || ''), String(req.user?.username || ''), ''].map(v => v.trim().toLowerCase()).filter(Boolean);
+    if (!isAdmin && (!receipt.studentId || !userRefs.includes(receipt.studentId.trim().toLowerCase()))) {
+      res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Receipt access requires the authenticated student context.' });
+      return;
+    }
     res.json({ success: true, receipt });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: 'RECEIPT_FETCH_FAILED', message: err.message });
+    res.status(500).json({ success: false, error: 'RECEIPT_FETCH_FAILED', message: 'Unable to retrieve receipt.' });
   }
 });
 
 // 7. Admissions & Application Pipeline (Phase 5 & 10 Remediation)
-app.get('/api/education/admissions', (req, res) => {
+app.get('/api/education/admissions', authenticate, (req: AuthenticatedRequest, res) => {
   try {
     const { institutionId, status, applicantEmail } = req.query;
+    const roles = req.user?.roles || [];
+    const isGlobalAdmin = roles.some((r: string) => ['PLATFORM_ADMIN', 'COMPLIANCE_OFFICER'].includes(r));
+    const isInstitutionAdmin = roles.includes('INSTITUTION_ADMIN');
+    const currentUsername = String(req.user?.username || '').trim().toLowerCase();
+    if (!isGlobalAdmin && !isInstitutionAdmin && !currentUsername) {
+      res.status(401).json({ success: false, error: 'AUTHENTICATION_CONTEXT_REQUIRED', message: 'Authenticated applicant context is required.' });
+      return;
+    }
+    if (!isGlobalAdmin && !isInstitutionAdmin && applicantEmail && String(applicantEmail).trim().toLowerCase() !== currentUsername) {
+      res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Admission access is limited to the authenticated applicant.' });
+      return;
+    }
     const filter: any = {};
+    if (isInstitutionAdmin && (!req.user?.institutionId || !institutionId || req.user.institutionId !== String(institutionId))) {
+      res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Institution administrator access is limited to the authenticated institution.' });
+      return;
+    }
     if (institutionId) filter.institutionId = String(institutionId);
     if (status) filter.status = String(status);
-    if (applicantEmail) filter.applicantEmail = String(applicantEmail);
+    if (applicantEmail) {
+      filter.applicantEmail = String(applicantEmail);
+    } else if (!isGlobalAdmin && !isInstitutionAdmin) {
+      filter.applicantEmail = currentUsername;
+    }
 
     const list = educationRepo.getAdmissions(filter);
     res.json({ success: true, count: list.length, applications: list });
@@ -2088,35 +3949,208 @@ app.get('/api/education/admissions', (req, res) => {
   }
 });
 
-app.post('/api/education/admissions/apply', authenticate, (req: AuthenticatedRequest, res) => {
+app.get('/api/education/admissions/documents', authenticate, async (req: AuthenticatedRequest, res) => {
   try {
-    const appData = req.body;
-    if (!appData.institutionId || !appData.applicantFullName || !appData.programmeName) {
-      res.status(400).json({ success: false, error: 'MISSING_REQUIRED_FIELDS' });
+    const username = String(req.user?.username || '').trim();
+    if (!username) {
+      res.status(401).json({ success: false, error: 'AUTHENTICATION_CONTEXT_REQUIRED' });
+      return;
+    }
+    const applicationId = typeof req.query.applicationId === 'string' ? req.query.applicationId.trim() : undefined;
+    if (applicationId) {
+      const admission = educationRepo.getAdmissionById(applicationId);
+      const owner = String(admission?.applicantEmail || '').trim().toLowerCase();
+      const current = username.toLowerCase();
+      const roles = req.user?.roles || [];
+      const isGlobalAdmin = roles.some((r) => ['PLATFORM_ADMIN', 'COMPLIANCE_OFFICER'].includes(r));
+      const isInstitutionAdmin = roles.includes('INSTITUTION_ADMIN');
+      if (!admission) {
+        res.status(404).json({ success: false, error: 'ADMISSION_NOT_FOUND' });
+        return;
+      }
+      if (isInstitutionAdmin) {
+        if (!req.user?.institutionId || req.user.institutionId !== admission.institutionId) {
+          res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Institution administrator document access is limited to the authenticated institution.' });
+          return;
+        }
+        res.status(403).json({ success: false, error: 'DOCUMENT_SCOPE_UNAVAILABLE', message: 'Institution-scoped academic document listing is not enabled yet.' });
+        return;
+      }
+      if (!isGlobalAdmin && owner !== current) {
+        res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Document access is limited to the authenticated applicant.' });
+        return;
+      }
+    }
+    const documents = await listEducationAdmissionDocuments(username, applicationId);
+    res.json({ success: true, count: documents.length, documents, availability: educationDocumentStorageEnabled() ? 'AVAILABLE' : 'UNAVAILABLE' });
+  } catch (err: any) {
+    res.status(503).json({ success: false, error: 'EDUCATION_DOCUMENTS_UNAVAILABLE', message: err?.message || 'Academic document storage is unavailable.' });
+  }
+});
+
+app.post(
+  '/api/education/admissions/documents/upload',
+  authenticate,
+  express.raw({ type: ['application/pdf', 'image/jpeg', 'image/png'], limit: EDUCATION_DOCUMENT_MAX_BYTES }),
+  async (req: AuthenticatedRequest, res) => {
+    try {
+      const username = String(req.user?.username || '').trim();
+      if (!username) {
+        res.status(401).json({ success: false, error: 'AUTHENTICATION_CONTEXT_REQUIRED' });
+        return;
+      }
+      if (!educationDocumentStorageEnabled()) {
+        res.status(503).json({ success: false, error: 'EDUCATION_DOCUMENT_STORAGE_UNAVAILABLE', availability: 'UNAVAILABLE' });
+        return;
+      }
+
+      const documentType = String(req.header('x-document-type') || '').trim() as any;
+      const fileName = String(req.header('x-file-name') || 'academic-document').trim();
+      const applicationId = String(req.header('x-application-id') || '').trim() || undefined;
+      const contentType = String(req.header('content-type') || '').split(';')[0].trim().toLowerCase();
+      const bytes = req.body instanceof Buffer ? new Uint8Array(req.body) : new Uint8Array();
+
+      if (!EDUCATION_DOCUMENT_TYPES.includes(documentType)) {
+        res.status(400).json({ success: false, error: 'EDUCATION_DOCUMENT_TYPE_INVALID' });
+        return;
+      }
+      if (!bytes.length) {
+        res.status(400).json({ success: false, error: 'EDUCATION_DOCUMENT_EMPTY' });
+        return;
+      }
+
+      if (applicationId) {
+        const admission = educationRepo.getAdmissionById(applicationId);
+        const owner = String(admission?.applicantEmail || '').trim().toLowerCase();
+        const current = username.toLowerCase();
+        const roles = req.user?.roles || [];
+        const isGlobalAdmin = roles.some((r) => ['PLATFORM_ADMIN', 'COMPLIANCE_OFFICER'].includes(r));
+        const isInstitutionAdmin = roles.includes('INSTITUTION_ADMIN');
+        if (!admission) {
+          res.status(404).json({ success: false, error: 'ADMISSION_NOT_FOUND' });
+          return;
+        }
+        if (isInstitutionAdmin) {
+          res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Institution administrators cannot upload academic documents on behalf of applicants.' });
+          return;
+        }
+        if (!isGlobalAdmin && owner !== current) {
+          res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Document upload is limited to the authenticated applicant.' });
+          return;
+        }
+      }
+
+      const document = await saveEducationAdmissionDocument({
+        ownerUsername: username,
+        applicationId,
+        documentType,
+        fileName,
+        contentType,
+        bytes
+      });
+      res.status(201).json({ success: true, document });
+    } catch (err: any) {
+      const message = String(err?.message || 'Academic document upload failed.');
+      const status = message.includes('INVALID') || message.includes('EMPTY') ? 400 : 503;
+      res.status(status).json({ success: false, error: 'EDUCATION_DOCUMENT_UPLOAD_FAILED', message });
+    }
+  }
+);
+
+app.post('/api/education/admissions/apply', authenticate, async (req: AuthenticatedRequest, res) => {
+  try {
+    const appData = req.body || {};
+    const authenticatedUsername = String(req.user?.username || '').trim();
+    if (!appData.institutionId || !appData.applicantFullName || !appData.programmeName || !authenticatedUsername) {
+      res.status(400).json({ success: false, error: 'MISSING_REQUIRED_FIELDS', message: 'Institution, programme, applicant name, and authenticated applicant context are required.' });
       return;
     }
 
-    const application = educationRepo.submitAdmissionApplication({
-      ...appData,
-      applicantEmail: req.user?.username ? `${req.user.username}@pinova.hub` : appData.applicantEmail || 'applicant@pinova.hub',
-      applicationFeePaid: Boolean(appData.applicationFeePaid),
-      documents: appData.documents || []
-    });
+    const submittedEmail = String(appData.applicantEmail || '').trim();
+    if (submittedEmail && submittedEmail.toLowerCase() !== authenticatedUsername.toLowerCase()) {
+      res.status(403).json({ success: false, error: 'APPLICANT_CONTEXT_MISMATCH', message: 'Applicant identity must match the authenticated Pioneer session.' });
+      return;
+    }
 
-    res.json({ success: true, message: 'Admission application submitted successfully', application });
+    const jambAuthorization = await verifyJambCapsAuthorization({
+      candidateReference: String(appData.jambCandidateReference || ''),
+      institutionId: String(appData.institutionId),
+      programmeId: String(appData.programmeId || ''),
+      operation: 'ADMISSION_PROCESSING'
+    });
+    if (!jambAuthorization.authorized) {
+      res.status(503).json({
+        success: false,
+        error: 'JAMB_CAPS_AUTHORIZATION_REQUIRED',
+        availability: jambAuthorization.availability,
+        provider: 'JAMB_CAPS',
+        message: jambAuthorization.message
+      });
+      return;
+    }
+
+    res.status(503).json({
+      success: false,
+      error: 'ADMISSION_PROVIDER_INTEGRATION_REQUIRED',
+      availability: 'UNAVAILABLE',
+      provider: 'JAMB_CAPS',
+      message: 'JAMB CAPS authorization was verified, but authoritative institution admission processing is not connected. No admission record was created.'
+    });
+    return;
   } catch (err: any) {
     res.status(500).json({ success: false, error: 'ADMISSION_SUBMISSION_FAILED', message: err.message });
   }
 });
 
 // Admissions State Machine Transition (Requires Institution Admin or Compliance Officer)
-app.post('/api/education/admissions/:id/status', authenticate, requireRole(['PLATFORM_ADMIN', 'INSTITUTION_ADMIN', 'COMPLIANCE_OFFICER']), (req: AuthenticatedRequest, res) => {
+app.post('/api/education/admissions/:id/status', authenticate, requireRole(['PLATFORM_ADMIN', 'INSTITUTION_ADMIN', 'COMPLIANCE_OFFICER']), async (req: AuthenticatedRequest, res) => {
   try {
     const { id } = req.params;
     const { status, reason } = req.body;
 
     if (!status) {
       res.status(400).json({ success: false, error: 'MISSING_STATUS', message: 'Status field is required' });
+      return;
+    }
+
+    const admissionForAuthorization = educationRepo.getAdmissionById(id);
+    if (!admissionForAuthorization) {
+      res.status(404).json({ success: false, error: 'APPLICATION_NOT_FOUND' });
+      return;
+    }
+
+    const statusRoles = req.user?.roles || [];
+    const isGlobalAdmissionsAdmin = statusRoles.some((role) =>
+      ['PLATFORM_ADMIN', 'COMPLIANCE_OFFICER', 'COMPLIANCE_ADMIN'].includes(role)
+    );
+    const isInstitutionAdmissionsAdmin = statusRoles.includes('INSTITUTION_ADMIN');
+    if (
+      isInstitutionAdmissionsAdmin &&
+      !isGlobalAdmissionsAdmin &&
+      (!req.user?.institutionId || req.user.institutionId !== admissionForAuthorization.institutionId)
+    ) {
+      res.status(403).json({
+        success: false,
+        error: 'FORBIDDEN',
+        message: 'Institution administrator access is limited to the authenticated institution.'
+      });
+      return;
+    }
+
+    const jambAuthorization = await verifyJambCapsAuthorization({
+      candidateReference: String(admissionForAuthorization?.jambCandidateReference || ''),
+      institutionId: admissionForAuthorization?.institutionId,
+      programmeId: admissionForAuthorization?.programmeId,
+      operation: 'ADMISSION_STATUS'
+    });
+    if (!jambAuthorization.authorized) {
+      res.status(503).json({
+        success: false,
+        error: 'JAMB_CAPS_AUTHORIZATION_REQUIRED',
+        availability: jambAuthorization.availability,
+        provider: 'JAMB_CAPS',
+        message: jambAuthorization.message
+      });
       return;
     }
 
@@ -2133,11 +4167,56 @@ app.post('/api/education/admissions/:id/status', authenticate, requireRole(['PLA
   }
 });
 
-app.post('/api/education/admissions/:id/offer/accept', (req, res) => {
+app.post('/api/education/admissions/:id/offer/accept', authenticate, async (req: AuthenticatedRequest, res) => {
   try {
-    const updated = educationRepo.acceptAdmissionOffer(req.params.id);
-    if (!updated) {
+    const admission = educationRepo.getAdmissionById(req.params.id);
+    if (!admission) {
       res.status(404).json({ success: false, error: 'APPLICATION_NOT_FOUND' });
+      return;
+    }
+
+    const currentUser = String(req.user?.username || '').trim().toLowerCase();
+    const applicantEmail = String(admission.applicantEmail || '').trim().toLowerCase();
+    const isOwner = Boolean(currentUser && applicantEmail && applicantEmail === currentUser);
+    const offerRoles = req.user?.roles || [];
+    const isGlobalAdmin = offerRoles.includes('PLATFORM_ADMIN');
+    const isInstitutionAdmin = offerRoles.includes('INSTITUTION_ADMIN');
+    const institutionScopedAdmin = Boolean(
+      isInstitutionAdmin &&
+      req.user?.institutionId &&
+      req.user.institutionId === admission.institutionId
+    );
+    const isAdmin = isGlobalAdmin || institutionScopedAdmin;
+
+    if (!isAdmin && !isOwner) {
+      res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Access denied: You are not authorized to accept this offer.' });
+      return;
+    }
+
+    const jambAuthorization = await verifyJambCapsAuthorization({
+      candidateReference: String(admission.jambCandidateReference || ''),
+      institutionId: admission.institutionId,
+      programmeId: admission.programmeId,
+      operation: 'ADMISSION_STATUS'
+    });
+    if (!jambAuthorization.authorized) {
+      res.status(503).json({
+        success: false,
+        error: 'JAMB_CAPS_AUTHORIZATION_REQUIRED',
+        availability: jambAuthorization.availability,
+        provider: 'JAMB_CAPS',
+        message: jambAuthorization.message
+      });
+      return;
+    }
+
+    const updated = educationRepo.acceptAdmissionOffer(req.params.id, req.user?.username);
+    if (!updated) {
+      res.status(409).json({
+        success: false,
+        error: 'OFFER_ACCEPTANCE_REQUIRES_VERIFIED_PROVIDER',
+        message: 'Admission offer acceptance is unavailable until the authoritative institution admissions provider and any required acceptance-fee settlement are verified.'
+      });
       return;
     }
     res.json({ success: true, message: 'Admission offer accepted', application: updated });
@@ -2151,6 +4230,16 @@ app.get('/api/education/scholarships', (req, res) => {
   try {
     const { tier, countryCode } = req.query;
     const scholarships = educationRepo.getScholarships(tier as string, countryCode as string);
+    if (scholarships.length === 0) {
+      res.json({
+        success: true,
+        count: 0,
+        scholarships: [],
+        availability: 'PROVIDER_INTEGRATION_REQUIRED',
+        message: 'Scholarship listings are unavailable until a verified scholarship provider/catalog is connected.'
+      });
+      return;
+    }
     res.json({ success: true, count: scholarships.length, scholarships });
   } catch (err: any) {
     res.status(500).json({ success: false, error: 'SCHOLARSHIPS_FETCH_FAILED', message: err.message });
@@ -2159,28 +4248,46 @@ app.get('/api/education/scholarships', (req, res) => {
 
 app.post('/api/education/scholarships', authenticate, requireRole(['PLATFORM_ADMIN', 'INSTITUTION_ADMIN']), (req: AuthenticatedRequest, res) => {
   try {
-    const scholarship = educationRepo.createScholarship(req.body);
-    res.json({ success: true, message: 'Scholarship created successfully', scholarship });
+    const actorUsername = String(req.user?.username || '').trim();
+    if (!actorUsername) {
+      res.status(401).json({ success: false, error: 'AUTHENTICATION_REQUIRED', message: 'Authenticated actor is required.' });
+      return;
+    }
+    res.status(503).json({
+      success: false,
+      error: 'PROVIDER_INTEGRATION_REQUIRED',
+      availability: 'UNAVAILABLE',
+      message: 'Scholarship creation is unavailable until an authorized scholarship provider/catalog integration is connected.'
+    });
   } catch (err: any) {
     res.status(400).json({ success: false, error: 'SCHOLARSHIP_CREATION_FAILED', message: err.message });
   }
 });
 
 // 9. Education Marketplace Products
+// Production safety: no static/seed catalog is exposed. Real listings must come from
+// an authenticated provider/catalog integration before they are displayed.
 app.get('/api/education/marketplace', (req, res) => {
-  try {
-    const { category, tier } = req.query;
-    let items = SEED_MARKETPLACE_ITEMS;
-    if (category && category !== 'all') {
-      items = items.filter((i) => i.category === category);
-    }
-    if (tier && tier !== 'all') {
-      items = items.filter((i) => i.tier === tier);
-    }
-    res.json({ success: true, count: items.length, items });
-  } catch (err: any) {
-    res.status(500).json({ success: false, error: 'MARKETPLACE_FETCH_FAILED', message: err.message });
-  }
+  // Provider contract is intentionally explicit so the future catalog can filter by
+  // global level and country-specific education-system metadata without coupling the
+  // marketplace to Nigeria-only grade names.
+  const marketplaceFilter = {
+    category: typeof req.query.category === 'string' ? req.query.category : undefined,
+    tier: typeof req.query.tier === 'string' ? req.query.tier : undefined,
+    countryCode: typeof req.query.countryCode === 'string' ? req.query.countryCode : undefined,
+    educationLevelId: typeof req.query.educationLevelId === 'string' ? req.query.educationLevelId : undefined,
+    gradeLevel: typeof req.query.gradeLevel === 'string' ? req.query.gradeLevel : undefined,
+    curriculumId: typeof req.query.curriculumId === 'string' ? req.query.curriculumId : undefined,
+    subject: typeof req.query.subject === 'string' ? req.query.subject : undefined
+  };
+  void marketplaceFilter;
+  res.json({
+    success: true,
+    count: 0,
+    items: [],
+    availability: 'PROVIDER_INTEGRATION_REQUIRED',
+    message: 'Education marketplace listings are unavailable until a verified provider catalog is connected.'
+  });
 });
 
 // 10. School Administrator Portal Endpoints (Phase 10 Remediation)
@@ -2201,7 +4308,52 @@ app.post('/api/education/admin/institutions/:id/verify', async (req, res) => {
       res.status(400).json({ success: false, error: 'MISSING_VERIFICATION_STATUS' });
       return;
     }
-    const updated = educationRepo.verifyInstitution(req.params.id, status, notes);
+
+    const requestedStatus = String(status).trim().toUpperCase();
+    const authoritativeStatuses = new Set(['VERIFIED', 'VERIFIED_WITH_LIMITATIONS']);
+
+    // Administrative access alone must never create an authoritative accreditation claim.
+    // Positive verification requires a configured official provider and a successful
+    // provider-backed verification result for this exact institution.
+    if (authoritativeStatuses.has(requestedStatus)) {
+      const providers = getNigeriaAuthoritativeProviderForCapability('INSTITUTION_REGISTRY');
+      const configuredProvider = providers.find((provider) => provider.integrationStatus === 'CONFIGURED');
+
+      if (!configuredProvider) {
+        res.status(503).json({
+          success: false,
+          error: 'PROVIDER_INTEGRATION_REQUIRED',
+          availability: 'UNAVAILABLE',
+          provider: providers.map((provider) => provider.id),
+          message: 'Institution verification cannot be marked as authoritative until an authorized NUC/NBTE institution registry integration is configured.'
+        });
+        return;
+      }
+
+      const verification = await studentVerificationService.verifyInstitution(
+        req.params.id,
+        'NG',
+        typeof req.body.registryNumber === 'string' ? req.body.registryNumber : undefined
+      );
+
+      if (!verification.accredited) {
+        res.status(409).json({
+          success: false,
+          error: 'AUTHORITATIVE_VERIFICATION_FAILED',
+          provider: verification.authority,
+          status: verification.status,
+          message: 'The configured authoritative provider did not return a positive verification result. No authoritative status was written.'
+        });
+        return;
+      }
+    }
+
+    if (!['VERIFIED', 'VERIFIED_WITH_LIMITATIONS', 'SUSPENDED', 'REJECTED'].includes(requestedStatus)) {
+      res.status(400).json({ success: false, error: 'INVALID_VERIFICATION_STATUS' });
+      return;
+    }
+
+    const updated = educationRepo.verifyInstitution(req.params.id, requestedStatus as any, notes);
     if (!updated) {
       res.status(404).json({ success: false, error: 'INSTITUTION_NOT_FOUND' });
       return;
@@ -2219,8 +4371,32 @@ app.get('/api/education/admin/institutions/:id/analytics', async (req, res) => {
     return;
   }
 
+  if (!auth.authorized) {
+    res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Admin privileges required.' });
+    return;
+  }
+
+  const requestedInstitutionId = String(req.params.id || '').trim();
+  const authRoles = auth.user?.roles || [];
+  const isGlobalAdmin = authRoles.some((role) =>
+    ['PLATFORM_ADMIN', 'COMPLIANCE_OFFICER', 'COMPLIANCE_ADMIN', 'BURSAR', 'FINANCE_ADMIN'].includes(role)
+  );
+  const isInstitutionAdmin = authRoles.includes('INSTITUTION_ADMIN');
+  if (
+    isInstitutionAdmin &&
+    !isGlobalAdmin &&
+    (!auth.user?.institutionId || auth.user.institutionId !== requestedInstitutionId)
+  ) {
+    res.status(403).json({
+      success: false,
+      error: 'FORBIDDEN',
+      message: 'Institution administrator access is limited to the authenticated institution.'
+    });
+    return;
+  }
+
   try {
-    const analytics = educationRepo.getInstitutionAnalytics(req.params.id);
+    const analytics = educationRepo.getInstitutionAnalytics(requestedInstitutionId);
     res.json({ success: true, analytics });
   } catch (err: any) {
     res.status(500).json({ success: false, error: 'ANALYTICS_FAILED', message: err.message });
@@ -3949,6 +6125,110 @@ app.post('/api/v1/flight/revalidate', flightRateLimiter(60), handleFlightRevalid
 app.post('/api/flight/book', flightRateLimiter(10), handleFlightBook);
 app.post('/api/v1/flight/book', flightRateLimiter(10), handleFlightBook);
 
+// Process error handlers for production resilience
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[Unhandled Rejection at Promise]:', reason);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('[Uncaught Exception]:', err);
+});
+
+app.get('/api/products', async (req, res) => {
+  try {
+    const q = typeof req.query.q === 'string' ? req.query.q : '';
+    const category = typeof req.query.category === 'string' ? req.query.category : undefined;
+    const products = await listDurableProducts({ q, activeOnly: true, category: category as any });
+    res.json({ ok: true, products });
+  } catch (error: any) {
+    console.error('[products-api] GET failed', error);
+    res.status(500).json({ ok: false, error: 'PRODUCT_API_FAILED' });
+  }
+});
+
+app.post('/api/products', authenticate, async (req: AuthenticatedRequest, res) => {
+  try {
+    if (!req.user?.username) {
+      return res.status(401).json({ ok: false, error: 'INVALID_SESSION' });
+    }
+
+    if (!durableVendorStorageEnabled()) {
+      return res.status(503).json({ ok: false, error: 'DURABLE_VENDOR_STORAGE_UNAVAILABLE' });
+    }
+
+    const durableMerchant = await getDurableVendorApplication(req.user.username);
+    const canSell =
+      durableMerchant?.status === 'APPROVED' &&
+      durableMerchant?.verificationStatus === 'Verified' &&
+      durableMerchant?.sellerStatus === 'Active';
+
+    if (!canSell) {
+      console.warn('[products-api] durable merchant access denied', {
+        username: String(req.user.username).trim().replace(/^@/, '').toLowerCase(),
+        matchedMerchant: Boolean(durableMerchant),
+        merchantStatus: durableMerchant?.status || null,
+        verificationStatus: durableMerchant?.verificationStatus || null,
+        sellerStatus: durableMerchant?.sellerStatus || null
+      });
+      return res.status(403).json({ ok: false, error: 'MERCHANT_SELLER_ACCESS_REQUIRED' });
+    }
+
+    const body = req.body || {};
+    const stock = Number.isInteger(body.stock) && body.stock >= 0 ? body.stock : 0;
+    const title = String(body.title || '').trim();
+    const description = String(body.description || '').trim();
+    const pricePi = Number(body.pricePi ?? 0);
+
+    if (!title || !description || !Number.isFinite(pricePi) || pricePi < 0) {
+      return res.status(400).json({ ok: false, error: 'INVALID_PRODUCT_INPUT' });
+    }
+
+    const product = {
+      id: `prd_${Date.now()}_${crypto.randomBytes(5).toString('hex')}`,
+      title,
+      description,
+      pricePi,
+      category: body.category || 'physical',
+      marketplaceCategory: String(body.marketplaceCategory || '').trim() || undefined,
+      subcategory: String(body.subcategory || ''),
+      educationLevelId: typeof body.educationLevelId === 'string' ? body.educationLevelId.trim() || undefined : undefined,
+      educationTier: typeof body.educationTier === 'string' ? body.educationTier.trim() || undefined : undefined,
+      educationGradeLevel: typeof body.educationGradeLevel === 'string' ? body.educationGradeLevel.trim() || undefined : undefined,
+      educationCountryCode: typeof body.educationCountryCode === 'string' ? body.educationCountryCode.trim().toUpperCase() || undefined : undefined,
+      educationCurriculumId: typeof body.educationCurriculumId === 'string' ? body.educationCurriculumId.trim() || undefined : undefined,
+      educationSubjects: Array.isArray(body.educationSubjects) ? body.educationSubjects.filter((value: unknown): value is string => typeof value === 'string' && value.trim().length > 0).map((value: string) => value.trim()) : undefined,
+      images: Array.isArray(body.images) ? body.images.filter(Boolean) : [],
+      stock,
+      rating: 0,
+      reviewsCount: 0,
+      sellerId: String(req.user.username).trim(),
+      sellerName: String(req.user.username).trim(),
+      sellerDisplayName: 'PiNova Global Hub',
+      sellerVerified: false,
+      features: Array.isArray(body.features) ? body.features.filter(Boolean) : [],
+      specs: body.specs,
+      productType: body.productType,
+      fulfillmentType: body.fulfillmentType,
+      availabilityStatus: stock > 0 ? 'in_stock' : 'out_of_stock',
+      tags: Array.isArray(body.tags) ? body.tags.filter(Boolean) : [],
+      // Verified/Active merchants may publish products immediately; product purchase APIs
+      // already require isActive and stock, so an approved merchant must not create a
+      // permanently invisible catalog item with no moderation workflow behind it.
+      isActive: stock > 0,
+      moderationStatus: 'APPROVED'
+    };
+
+    const saved = await saveDurableProduct(product as any);
+    return res.status(201).json({ ok: true, product: saved });
+  } catch (error: any) {
+    console.error('[products-api] POST failed', error);
+    return res.status(500).json({
+      ok: false,
+      error: error?.message || 'PRODUCT_API_FAILED'
+    });
+  }
+});
+
 // Catch-all 404 Handler for ALL /api endpoints - Guarantees JSON response, never HTML
 app.use('/api', (req, res) => {
   res.setHeader('Content-Type', 'application/json');
@@ -3961,17 +6241,22 @@ app.use('/api', (req, res) => {
 
 // Global Error Handling Middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  console.error('[Global API Error Handler]:', err);
+  console.error('[Global API Error Handler]:', err.message || err);
   res.setHeader('Content-Type', 'application/json');
+  const safeMessage = isProduction ? 'Internal Server Error' : (err.message || 'Internal Server Error');
   res.status(err.status || 500).json({
     success: false,
-    error: err.message || 'Internal Server Error',
+    error: safeMessage,
     path: req.path
   });
 });
 
 async function startServer() {
-  if (process.env.NODE_ENV !== 'production') {
+  const distPath = path.join(process.cwd(), 'dist');
+  const hasDist = fs.existsSync(path.join(distPath, 'index.html'));
+  const isProduction = process.env.NODE_ENV === 'production' || (hasDist && process.env.NODE_ENV !== 'development');
+
+  if (!isProduction) {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
@@ -3979,7 +6264,6 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
     app.get('*', (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
@@ -3991,8 +6275,19 @@ async function startServer() {
   });
 }
 
-startServer().catch(err => {
-  console.error('Failed to start server:', err);
-});
+const isVercelServerless = process.env.VERCEL === '1' || Boolean(process.env.VERCEL_ENV) || Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME);
 
+if (!isVercelServerless) {
+  startServer().catch(err => {
+    console.error('Failed to start server:', err);
+  });
+}
+
+export { authService, vendorApplicationRepo, ProductRepository, pstpAuditRepo, orderRepo, productRepo, paymentLedgerRepo, idempotencyRepo };
+export { VendorApplicationRepository } from './src/server/db/repositories/VendorApplicationRepository';
 export default app;
+
+
+export { durableProductStorageEnabled, getDurableProduct, listDurableProducts, saveDurableProduct, updateDurableProductAvailability, reserveDurableProductStockBatch, softDeleteDurableProduct, deleteDurableProductBlob };
+export { durableOrderStorageEnabled, getDurableOrder, listDurableOrders, saveDurableOrder, createDurableOrderWithStockReservation, createDurableOrderWithIdempotency, markDurableOrderPaymentVerified, softDeleteDurableOrder };
+export { durableVendorStorageEnabled, getDurableVendorApplication, getDurableVendorApplicationByIdentity, listDurableVendorApplications, saveDurableVendorApplication };

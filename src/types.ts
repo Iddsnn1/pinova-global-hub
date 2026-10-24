@@ -23,13 +23,24 @@ export interface Product {
   description: string;
   pricePi: number;
   category: ProductCategory;
+  /** Canonical marketplace taxonomy category (separate from fulfillment/product type). */
+  marketplaceCategory?: string;
   subcategory: string;
+  /** Education Marketplace metadata; populated for education listings. */
+  educationLevelId?: string;
+  educationTier?: import('./types/education').EducationTier;
+  educationGradeLevel?: string;
+  educationCountryCode?: string;
+  educationCurriculumId?: string;
+  educationSubjects?: string[];
   images: string[];
   stock: number;
   rating: number;
   reviewsCount: number;
   sellerId: string;
   sellerName: string;
+  /** Global platform-facing seller label; does not replace merchant/legal identity. */
+  sellerDisplayName?: string;
   sellerVerified: boolean;
   features: string[];
   specs?: Record<string, string>;
@@ -400,6 +411,8 @@ export interface Coupon {
   minSpendPi: number;
   active: boolean;
   expiresAt: string;
+  sellerUsername?: string;
+  storeName?: string | null;
 }
 
 export interface Notification {
@@ -595,6 +608,8 @@ export interface VendorApplication {
   storeTagline?: string;
   logoUrl?: string;
   bannerUrl?: string;
+  storeLogo?: string;
+  storeBanner?: string;
   businessRegistrationNumber?: string;
   taxId?: string;
   websiteUrl?: string;

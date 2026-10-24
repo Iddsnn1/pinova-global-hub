@@ -1,35 +1,470 @@
+import { list as listPrivateBlobs, get as getPrivateBlob } from '@vercel/blob';
 import type { IncomingMessage, ServerResponse } from 'http';
 import { createRequire } from 'module';
+import path from 'path';
+import crypto from 'crypto';
 
-const require = createRequire(import.meta.url);
+// IMPORTANT: keep dist/server.cjs lazy. Vercel wraps this handler as CommonJS,
+// and importing the server bundle at module scope can crash the function before
+// /api/health or any isolated route gets a chance to respond.
+process.env.VERCEL = process.env.VERCEL || '1';
+
+declare const require: any;
+
+type ServerModule = {
+  authenticateVendorRequest: (req: any) => Promise<any>;
+  getDurableVendorApplication: (username: string) => Promise<any>;
+  listDurableVendorApplications: () => Promise<any[]>;
+  durableVendorStorageEnabled: () => boolean;
+  durableProductStorageEnabled: () => boolean;
+  listDurableProducts: (options?: any) => Promise<any[]>;
+  saveDurableProduct: (product: any) => Promise<any>;
+  default?: any;
+};
+
+let serverModule: ServerModule | null = null;
+
+function getServerModule(): ServerModule {
+  if (serverModule) return serverModule;
+
+  try {
+    const runtimeRequire = typeof require === 'function'
+      ? require
+      : createRequire(path.resolve(process.cwd(), 'api/index.js'));
+    const mod = runtimeRequire('../dist/server.cjs');
+    // Preserve named server exports. The bundled CommonJS module also has a
+    // default Express app, but selecting mod.default here drops durable
+    // product/vendor service exports and causes runtime "...is not a function"
+    // failures in Vercel serverless routes.
+    serverModule = (mod && (
+      typeof mod.durableProductStorageEnabled === 'function' ||
+      typeof mod.authenticateVendorRequest === 'function'
+    ) ? mod : mod?.default) as ServerModule;
+    return serverModule;
+  } catch (error: any) {
+    console.error('[Vercel Handler] Error loading server module:', {
+      name: error?.name,
+      message: error?.message
+    });
+    throw new Error(`Failed to load server module: ${error?.message || String(error)}`);
+  }
+}
+
+const authenticateRequest = (req: any) => getServerModule().authenticateVendorRequest(req);
+const getDurableVendorApplication = (username: string) => getServerModule().getDurableVendorApplication(username);
+const listDurableVendorApplications = () => getServerModule().listDurableVendorApplications();
+const durableVendorStorageEnabled = () => getServerModule().durableVendorStorageEnabled();
+const durableProductStorageEnabled = () => getServerModule().durableProductStorageEnabled();
+const listDurableProducts = (options?: any) => getServerModule().listDurableProducts(options);
+const saveDurableProduct = (product: any) => getServerModule().saveDurableProduct(product);
 
 function getApp() {
-  try {
-    const mod = require('../dist/server.cjs');
-    return mod.default || mod;
-  } catch (err1: any) {
-    try {
-      const mod = require('../server');
-      return mod.default || mod;
-    } catch (err2: any) {
-      console.error('[Vercel Handler] Error loading server module:', { err1: err1?.message, err2: err2?.message });
-      throw new Error(`Failed to load server module: ${err1?.message || String(err1)}`);
-    }
+  const mod = getServerModule();
+  if (typeof mod.default === 'function') return mod.default;
+  throw new Error('Server application export unavailable');
+}
+
+function getBearerToken(req: IncomingMessage): string | null {
+  const raw = Array.isArray(req.headers.authorization) ? req.headers.authorization[0] : req.headers.authorization;
+  if (!raw) return null;
+  return raw.startsWith('Bearer ') ? raw.slice(7).trim() : raw.trim();
+}
+
+async function resolveApprovedMerchant(username: string, pioneerUid?: string | string[] | null): Promise<any | null> {
+  // Merchant identity is durable and may arrive from Pi as either "name" or "@name".
+  // Normalize both sides before falling back to the verified Pioneer UID.
+  const rawUsername = String(username || '').trim();
+  const target = rawUsername.replace(/^@/, '').toLowerCase();
+  const direct = rawUsername ? await getDurableVendorApplication(rawUsername) : null;
+  if (direct) return direct;
+
+  const uidCandidates = (Array.isArray(pioneerUid) ? pioneerUid : [pioneerUid])
+    .map((value) => String(value || '').trim())
+    .filter(Boolean);
+  if (!target && !uidCandidates.length) return null;
+
+  const entries = await listDurableVendorApplications();
+  return entries.find((application: any) => {
+    const storedUsername = String(application?.pioneerUsername || '').trim().replace(/^@/, '').toLowerCase();
+    const storedUid = String(application?.pioneerUid || '').trim();
+    return (target && storedUsername === target) || (storedUid && uidCandidates.includes(storedUid));
+  }) || null;
+}
+
+function repairMarketplaceCategory(product: any): string {
+  const current = String(product?.marketplaceCategory || '').trim();
+  const haystack = [
+    product?.title,
+    product?.description,
+    product?.subcategory,
+    ...(Array.isArray(product?.tags) ? product.tags : [])
+  ].filter(Boolean).join(' ').toLowerCase();
+
+  // Only auto-repair strong, unambiguous legacy category signals.
+  if (current === 'phones_mobile') {
+    if (/\b(agricultur|farm|farmer|seed|fertili[sz]er|livestock|crop|harvest|poultry|cattle|goat|maize|rice|wheat)\b/i.test(haystack)) return 'agriculture';
+    if (/\b(fashion|beauty|clothing|apparel|dress|shoe|shoes|bag|jewelry|jewellery|watch|cosmetic|makeup|skincare)\b/i.test(haystack)) return 'fashion_beauty';
   }
+
+  const aliases: Record<string, string> = {
+    phones_mobile: 'phones_mobile', smartphones: 'phones_mobile', phones: 'phones_mobile', mobile: 'phones_mobile',
+    computers_technology: 'computers_technology', computers: 'computers_technology', technology: 'computers_technology', laptops: 'computers_technology',
+    electronics: 'electronics', automotive_transport: 'automotive_transport', automotive: 'automotive_transport',
+    home_living: 'home_living', home: 'home_living',
+    fashion_beauty: 'fashion_beauty', fashion: 'fashion_beauty', beauty: 'fashion_beauty', clothing: 'fashion_beauty', apparel: 'fashion_beauty',
+    food_groceries: 'food_groceries', food: 'food_groceries', groceries: 'food_groceries',
+    industrial_construction: 'industrial_construction', tools: 'industrial_construction', construction: 'industrial_construction',
+    agriculture: 'agriculture', education: 'education', professional_services: 'professional_services',
+    travel_transport: 'travel_transport', entertainment_creative: 'entertainment_creative', pets_animals: 'pets_animals',
+    baby_kids: 'baby_kids', health_wellness: 'health_wellness', business_office: 'business_office', other_general: 'other_general'
+  };
+  const normalized = current.toLowerCase().trim().replace(/[\s&-]+/g, '_');
+  return aliases[normalized] || 'other_general';
+}
+
+async function migrateEligibleCatalogVisibility(): Promise<{ migrated: string[]; skipped: string[] }> {
+  const migrated: string[] = [];
+  const skipped: string[] = [];
+  const records = await listDurableProducts({ includeDeleted: true });
+
+  for (const product of records) {
+    // One-time repair is deliberately fail-closed:
+    // never resurrect deleted/archived products, never publish zero-stock items,
+    // and only repair products owned by a currently approved/verified/active merchant.
+    if (product.isDeleted === true || Number(product.stock ?? 0) <= 0) {
+      skipped.push(String(product.id));
+      continue;
+    }
+
+    const sellerId = String(product.sellerId || '').trim();
+    if (!sellerId) {
+      skipped.push(String(product.id));
+      continue;
+    }
+
+    // Category repair is a data-integrity correction, not a visibility grant.
+    // Apply an unambiguous legacy taxonomy repair before merchant-status checks
+    // so a stale seller-session/identity lookup cannot leave a product stranded
+    // in Phones & Mobile. This does not change isActive, moderation, or deletion.
+    const repairedMarketplaceCategory = repairMarketplaceCategory(product);
+    const needsCategoryRepair =
+      String(product.marketplaceCategory || '').trim() !== repairedMarketplaceCategory;
+
+    if (needsCategoryRepair && product.isActive === true && product.sellerVerified === true) {
+      await saveDurableProduct({
+        ...product,
+        marketplaceCategory: repairedMarketplaceCategory
+      });
+      product.marketplaceCategory = repairedMarketplaceCategory;
+      migrated.push(String(product.id));
+    }
+
+    const merchant = await resolveApprovedMerchant(sellerId, [
+      product.sellerId,
+      (product as any).sellerUid,
+      (product as any).pioneerUid
+    ]);
+    const canSell = merchant?.status === 'APPROVED'
+      && merchant?.verificationStatus === 'Verified'
+      && merchant?.sellerStatus === 'Active';
+
+    if (!canSell) {
+      skipped.push(String(product.id));
+      continue;
+    }
+
+    // Global marketplace branding is display-only. Preserve sellerName as the
+    // merchant/store identity used for ownership, storefront routing and records.
+    if (product.isActive === true && product.sellerVerified === true &&
+        String(product.sellerDisplayName || '').trim() !== 'PiNova Global Hub') {
+      await saveDurableProduct({
+        ...product,
+        sellerDisplayName: 'PiNova Global Hub'
+      });
+      product.sellerDisplayName = 'PiNova Global Hub';
+      migrated.push(String(product.id));
+    }
+
+    const expectedAvailability = Number(product.stock ?? 0) > 0 ? 'in_stock' : 'out_of_stock';
+    const needsVisibilityRepair =
+      product.isActive !== true ||
+      String(product.moderationStatus || '').toUpperCase() !== 'APPROVED' ||
+      String(product.availabilityStatus || '').toLowerCase() !== expectedAvailability;
+
+    if (!needsVisibilityRepair) {
+      continue;
+    }
+
+    await saveDurableProduct({
+      ...product,
+      marketplaceCategory: repairedMarketplaceCategory,
+      isDeleted: false,
+      isActive: true,
+      moderationStatus: 'APPROVED',
+      availabilityStatus: Number(product.stock ?? 0) > 0 ? 'in_stock' : 'out_of_stock'
+    });
+    migrated.push(String(product.id));
+  }
+
+  return { migrated, skipped };
+}
+
+async function handleDurableProducts(req: any, res: any): Promise<boolean> {
+  const parsed = new URL(req.url || '/', 'http://localhost');
+  const pathname = parsed.pathname;
+  const isProductRoute =
+    pathname === '/api/products' ||
+    pathname === '/api/v1/products' ||
+    pathname.startsWith('/api/v1/products/') ||
+    pathname.startsWith('/api/products/') ||
+    req.url?.includes('__path=/products');
+  if (!isProductRoute) return false;
+
+  if (!durableProductStorageEnabled()) {
+    return res.status(503).json({ ok: false, error: 'DURABLE_PRODUCT_STORAGE_UNAVAILABLE' });
+  }
+
+  const id = pathname.startsWith('/api/v1/products/')
+    ? decodeURIComponent(pathname.slice('/api/v1/products/'.length).split('/')[0])
+    : pathname.startsWith('/api/products/')
+      ? decodeURIComponent(pathname.slice('/api/products/'.length).split('/')[0])
+      : '';
+
+  if (req.method === 'GET') {
+    // Catalog reads are read-only. Data repairs/imports must be executed by an
+    // explicit migration task, never as a side effect of a public GET request.
+    // This keeps catalog latency predictable and prevents concurrent requests
+    // from scanning or mutating the durable catalog.
+
+
+    if (id) {
+      const product = (await listDurableProducts({ includeDeleted: false })).find((item) => item.id === id);
+      if (!product || product.isActive !== true) return res.status(404).json({ ok: false, error: 'PRODUCT_NOT_FOUND' });
+      return res.json({ ok: true, product });
+    }
+    const q = parsed.searchParams.get('q') || '';
+    const category = parsed.searchParams.get('category') || undefined;
+
+    // Public catalog: only active products. Authenticated merchants can also
+    // see their own pending/inactive products in Seller Studio after refresh.
+    const viewer = await authenticateRequest(req);
+    const viewerUsername = String(viewer?.username || '').trim();
+    const viewerMerchant = viewerUsername
+      ? await resolveApprovedMerchant(viewerUsername, [viewer?.piUid, viewer?.id])
+      : null;
+    const canonicalSellerId = String(viewerMerchant?.pioneerUsername || viewerUsername).trim().replace(/^@/, '');
+    const products = viewerUsername
+      ? (await listDurableProducts({ includeDeleted: false, category: category as any, q }))
+          .filter((product: any) =>
+            String(product?.sellerId || '').trim().replace(/^@/, '').toLowerCase() === canonicalSellerId.toLowerCase()
+          )
+      : await listDurableProducts({
+          activeOnly: true,
+          category: category as any,
+          q
+        });
+    return res.json({ ok: true, products });
+  }
+
+  if (req.method !== 'POST' && req.method !== 'PATCH' && req.method !== 'DELETE') {
+    return res.status(405).json({ ok: false, error: 'METHOD_NOT_ALLOWED' });
+  }
+
+  const user = await authenticateRequest(req);
+  if (!user?.username) return res.status(401).json({ ok: false, error: 'INVALID_SESSION' });
+
+  const durableMerchant = await resolveApprovedMerchant(user.username, [user.piUid, user.id]);
+  const canSell = durableMerchant?.status === 'APPROVED'
+    && durableMerchant?.verificationStatus === 'Verified'
+    && durableMerchant?.sellerStatus === 'Active';
+  if (!canSell) {
+    return res.status(403).json({ ok: false, error: 'MERCHANT_SELLER_ACCESS_REQUIRED' });
+  }
+
+  if (req.method === 'POST') {
+    const body = req.body || {};
+    const stock = Number.isInteger(body.stock) && body.stock >= 0 ? body.stock : 0;
+    const title = String(body.title || '').trim();
+    const description = String(body.description || '').trim();
+    const pricePi = Number(body.pricePi ?? 0);
+    const marketplaceCategory = repairMarketplaceCategory({
+      marketplaceCategory: body.marketplaceCategory
+    });
+    const allowedMarketplaceCategories = new Set([
+      'phones_mobile', 'computers_technology', 'electronics', 'automotive_transport',
+      'home_living', 'fashion_beauty', 'food_groceries', 'industrial_construction',
+      'agriculture', 'education', 'professional_services', 'travel_transport',
+      'entertainment_creative', 'pets_animals', 'baby_kids', 'health_wellness',
+      'business_office', 'other_general'
+    ]);
+    if (!title || !description || !Number.isFinite(pricePi) || pricePi < 0 ||
+        !String(body.marketplaceCategory || '').trim() ||
+        !allowedMarketplaceCategories.has(marketplaceCategory)) {
+      return res.status(400).json({ ok: false, error: 'INVALID_MARKETPLACE_CATEGORY' });
+    }
+
+    const product = {
+      id: `prd_${Date.now()}_${crypto.randomBytes(5).toString('hex')}`,
+      title, description, pricePi,
+      category: body.category || 'physical',
+      marketplaceCategory,
+      subcategory: String(body.subcategory || ''),
+      images: Array.isArray(body.images) ? body.images.filter(Boolean) : [],
+      stock, rating: 0, reviewsCount: 0,
+      // Keep one canonical merchant identity even when Pi sessions expose
+      // an alternate Pioneer username (for example @pi_pioneer_01).
+      sellerId: String(durableMerchant.pioneerUsername || user.username).trim().replace(/^@/, ''),
+      sellerName: String(durableMerchant.storeName || user.username).trim(),
+      sellerDisplayName: 'PiNova Global Hub',
+      sellerVerified: true,
+      features: Array.isArray(body.features) ? body.features.filter(Boolean) : [],
+      specs: body.specs,
+      productType: body.productType,
+      fulfillmentType: body.fulfillmentType,
+      availabilityStatus: stock > 0 ? 'in_stock' : 'out_of_stock',
+      tags: Array.isArray(body.tags) ? body.tags.filter(Boolean) : [],
+      // Verified/Active merchants may publish products immediately; product purchase APIs
+      // already require isActive and stock, so an approved merchant must not create a
+      // permanently invisible catalog item with no moderation workflow behind it.
+      isActive: stock > 0,
+      moderationStatus: 'APPROVED'
+    };
+    const saved = await saveDurableProduct(product as any);
+    return res.status(201).json({ ok: true, product: saved });
+  }
+
+  if (!id) return res.status(400).json({ ok: false, error: 'PRODUCT_ID_REQUIRED' });
+  const existing = (await listDurableProducts({ includeDeleted: true })).find((item) => item.id === id);
+  if (!existing || existing.isDeleted === true) return res.status(404).json({ ok: false, error: 'PRODUCT_NOT_FOUND' });
+  const canonicalOwner = String(durableMerchant.pioneerUsername || user.username).trim().replace(/^@/, '').toLowerCase();
+  const existingOwner = String(existing.sellerId || '').trim().replace(/^@/, '').toLowerCase();
+  if (existingOwner !== canonicalOwner) {
+    return res.status(403).json({ ok: false, error: 'PRODUCT_OWNERSHIP_REQUIRED' });
+  }
+
+  if (req.method === 'DELETE') {
+    await saveDurableProduct({ ...existing, isDeleted: true, isActive: false });
+    return res.json({ ok: true, deleted: true });
+  }
+
+  const body = req.body || {};
+  const nextStock = Number((body as any).stock ?? existing.stock);
+  const next = {
+    ...existing,
+    ...body,
+    id: existing.id,
+    sellerId: existing.sellerId,
+    sellerName: existing.sellerName,
+    sellerDisplayName: 'PiNova Global Hub',
+    sellerVerified: true,
+    isDeleted: false,
+    // The merchant is already compliance-approved; keep edited in-stock listings
+    // publicly purchasable because this deployment has no separate product-moderation queue.
+    isActive: nextStock > 0,
+    availabilityStatus: nextStock > 0 ? 'in_stock' : 'out_of_stock',
+    moderationStatus: 'APPROVED'
+  };
+  const saved = await saveDurableProduct(next as any);
+  return res.json({ ok: true, product: saved });
+}
+
+async function handleVendorStatus(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
+  const pathname = new URL(req.url || '/', 'http://localhost').pathname;
+  if (pathname !== '/api/vendor/status' && pathname !== '/vendor/status') return false;
+
+  res.setHeader('Content-Type', 'application/json');
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type, X-Pioneer-Username');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+
+  if (req.method === 'OPTIONS') {
+    res.statusCode = 204;
+    res.end();
+    return true;
+  }
+
+  if (req.method !== 'GET') {
+    res.statusCode = 405;
+    res.end(JSON.stringify({ success: false, error: 'METHOD_NOT_ALLOWED' }));
+    return true;
+  }
+
+  const token = getBearerToken(req);
+  if (!token) {
+    res.statusCode = 401;
+    res.end(JSON.stringify({ success: false, error: 'AUTHENTICATION_REQUIRED' }));
+    return true;
+  }
+
+  try {
+    const user = await authenticateRequest(req as any);
+    if (!user?.username) {
+      res.statusCode = 401;
+      res.end(JSON.stringify({ success: false, error: 'INVALID_SESSION' }));
+      return true;
+    }
+
+    // Legacy /api/vendor/status must never read the ephemeral VendorApplicationRepository.
+    // Vercel production normally rewrites this route to the durable handler, but this
+    // fallback is intentionally kept aligned with the same durable compliance source
+    // so routing changes cannot resurrect a stale approval/status authority.
+    const application = await getDurableVendorApplication(user.username);
+    const status = application?.status || 'UNREGISTERED';
+    const verified = application?.verificationStatus === 'Verified';
+    const sellerActive = application?.sellerStatus === 'Active';
+
+    res.statusCode = 200;
+    res.end(JSON.stringify({
+      success: true,
+      status,
+      verified,
+      pstpAuthorized: verified && sellerActive && status === 'APPROVED',
+      sellerLifecycle: sellerActive && status === 'APPROVED' ? 'ACTIVE' : 'INACTIVE',
+      storeName: application?.storeName || null,
+      application: application ? {
+        id: application.id,
+        storeName: application.storeName,
+        storeDescription: application.storeDescription,
+        storeLogo: application.storeLogo || application.logoUrl || '',
+        storeBanner: application.storeBanner || application.bannerUrl || '',
+        status: application.status,
+        verificationStatus: application.verificationStatus,
+        sellerStatus: application.sellerStatus,
+        pstpAgreementAccepted: application.pstpAgreementAccepted
+      } : null
+    }));
+  } catch (error: any) {
+    console.error('[vendor/status] isolated handler failed', {
+      name: error?.name,
+      message: error?.message,
+      stack: error?.stack
+    });
+    res.statusCode = 500;
+    res.end(JSON.stringify({ success: false, error: 'VENDOR_STATUS_UNAVAILABLE' }));
+  }
+
+  return true;
 }
 
 let cachedApp: any = null;
 
-export default function handler(req: IncomingMessage, res: ServerResponse) {
+export default async function handler(req: IncomingMessage, res: ServerResponse) {
   const reqUrl = req.url || '';
 
-  // Isolated validation key endpoint
+  if (req.method === 'OPTIONS') {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Admin-Key, X-Idempotency-Key, Idempotency-Key, X-Branding-Type, X-Asset-Type, X-Filename, X-Pioneer-Username, X-Username, Range');
+    res.statusCode = 200;
+    res.end();
+    return;
+  }
+
   const rawUrl = req.url || '';
   const decodedUrl = decodeURIComponent(rawUrl).toLowerCase();
 
-  if (
-    decodedUrl.includes('validation-key')
-  ) {
+  if (decodedUrl.includes('validation-key')) {
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.statusCode = 200;
@@ -37,7 +472,9 @@ export default function handler(req: IncomingMessage, res: ServerResponse) {
     return;
   }
 
-  // Isolated zero-dependency health endpoint execution
+  if (await handleVendorStatus(req, res)) return;
+  if (await handleDurableProducts(req, res)) return;
+
   if (
     reqUrl === '/api/health' ||
     reqUrl === '/health' ||
@@ -49,14 +486,10 @@ export default function handler(req: IncomingMessage, res: ServerResponse) {
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.statusCode = 200;
-    res.end(JSON.stringify({
-      status: 'ok',
-      runtime: 'vercel'
-    }));
+    res.end(JSON.stringify({ status: 'ok', runtime: 'vercel' }));
     return;
   }
 
-  // Isolated diagnostic endpoint
   if (
     reqUrl === '/api/debug/runtime' ||
     reqUrl === '/debug/runtime' ||
@@ -68,16 +501,10 @@ export default function handler(req: IncomingMessage, res: ServerResponse) {
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.statusCode = 200;
-    res.end(JSON.stringify({
-      ok: true,
-      runtime: 'vercel',
-      nodeVersion: process.version,
-      requestUrl: reqUrl
-    }));
+    res.end(JSON.stringify({ ok: true, runtime: 'vercel', nodeVersion: process.version, requestUrl: reqUrl }));
     return;
   }
 
-  // Normalize URL if Vercel rewrite passed __path query parameter
   if (req.url) {
     try {
       const parsedUrl = new URL(req.url, 'http://localhost');
@@ -85,9 +512,7 @@ export default function handler(req: IncomingMessage, res: ServerResponse) {
       if (pathQuery) {
         let cleanPath = pathQuery;
         if (!cleanPath.startsWith('/')) cleanPath = '/' + cleanPath;
-        if (!cleanPath.startsWith('/api/') && cleanPath !== '/api') {
-          cleanPath = '/api' + cleanPath;
-        }
+        if (!cleanPath.startsWith('/api/') && cleanPath !== '/api') cleanPath = '/api' + cleanPath;
         parsedUrl.searchParams.delete('__path');
         const searchStr = parsedUrl.searchParams.toString();
         req.url = cleanPath + (searchStr ? '?' + searchStr : '');
@@ -98,23 +523,12 @@ export default function handler(req: IncomingMessage, res: ServerResponse) {
   }
 
   try {
-    if (!cachedApp) {
-      cachedApp = getApp();
-    }
+    if (!cachedApp) cachedApp = getApp();
     return cachedApp(req, res);
   } catch (err: any) {
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.statusCode = 500;
-    res.end(JSON.stringify({
-      success: false,
-      error: 'SERVER_HANDLER_EXCEPTION',
-      message: err?.message || String(err),
-      stack: err?.stack || null
-    }));
+    res.end(JSON.stringify({ success: false, error: 'SERVER_HANDLER_EXCEPTION', message: 'An unexpected internal server error occurred.' }));
   }
 }
-
-
-
-

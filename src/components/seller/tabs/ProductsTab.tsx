@@ -1,0 +1,392 @@
+import React, { useEffect, useMemo, useState } from 'react';
+import { formatPiAmount } from '../../../utils/formatters';
+import { Package, Plus, Search, Edit3, Trash2, X, Loader2, AlertCircle, CheckCircle2, RefreshCw } from 'lucide-react';
+import { Product, ProductCategory } from '../../../types';
+import { MARKETPLACE_CATEGORIES } from '../../../data/categoryData';
+import { createSellerProduct, updateSellerProduct, deleteSellerProduct } from '../../../lib/productApi';
+import { vendorAuthenticatedFetch } from '../../../lib/vendorAuthBridge';
+
+interface ProductsTabProps {
+  products: Product[];
+  onOpenAddProduct?: () => void;
+  onProductCreated?: (product: Product) => void;
+  openCreateOnMount?: boolean;
+  onCreateFormOpened?: () => void;
+  onEditProduct: (product: Product) => void;
+  onDeleteProduct: (productId: string) => void;
+}
+
+type ProductDraft = { title: string; description: string; category: ProductCategory; marketplaceCategory: string; subcategory: string; pricePi: string; stock: string; imageUrl: string; educationTier: string; educationLevelId: string; educationGradeLevel: string; educationCountryCode: string; educationCurriculumId: string; educationSubjects: string };
+const EMPTY_DRAFT: ProductDraft = { title: '', description: '', category: 'physical', marketplaceCategory: MARKETPLACE_CATEGORIES[0]?.id || 'other_general', subcategory: '', pricePi: '', stock: '0', imageUrl: '', educationTier: '', educationLevelId: '', educationGradeLevel: '', educationCountryCode: '', educationCurriculumId: '', educationSubjects: '' };
+
+export const ProductsTab: React.FC<ProductsTabProps> = ({ products, openCreateOnMount = false, onCreateFormOpened, onProductCreated, onEditProduct, onDeleteProduct }) => {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [stockFilter, setStockFilter] = useState<'all' | 'in_stock' | 'out_of_stock'>('all');
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [editingProductId, setEditingProductId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<ProductDraft>(EMPTY_DRAFT);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
+  const [createdProducts, setCreatedProducts] = useState<Product[]>([]);
+  const [serverProducts, setServerProducts] = useState<Product[]>([]);
+  const [isLoadingServerProducts, setIsLoadingServerProducts] = useState(false);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+
+  const refreshServerProducts = async () => {
+    setIsLoadingServerProducts(true);
+    setSubmitError(null);
+    try {
+      // Catalog reads are server-authoritative but do not require a fresh Pi/vendor authentication round-trip.
+      // Seller mutations remain protected by vendorAuthenticatedFetch; this keeps catalog refresh fast and deterministic.
+      const response = await fetch('/api/products', { method: 'GET', headers: { Accept: 'application/json' }, cache: 'no-store' });
+      const text = await response.text();
+      if (!response.ok) {
+        let data: any = null;
+        try { data = text ? JSON.parse(text) : null; } catch {}
+        throw new Error(data?.error || `PRODUCT_CATALOG_HTTP_${response.status}`);
+      }
+      const data = text ? JSON.parse(text) : null;
+      if (!Array.isArray(data?.products)) throw new Error('PRODUCT_CATALOG_INVALID_RESPONSE');
+      setServerProducts(data.products);
+      setSubmitSuccess(`Catalog refreshed • ${data.products.length} server product${data.products.length === 1 ? '' : 's'}`);
+    } catch (error: any) {
+      console.warn('[ProductsTab] Failed to refresh durable catalog:', error);
+      setSubmitError(String(error?.message || 'Unable to refresh the server catalog.'));
+    } finally {
+      setIsLoadingServerProducts(false);
+    }
+  };
+
+  useEffect(() => {
+    void refreshServerProducts();
+  }, []);
+
+  const visibleProducts = useMemo(() => {
+    // The server catalog is authoritative. Legacy parent-state records can lack
+    // a durable id; never render such a duplicate when the server has the same
+    // merchant/title record, otherwise Edit can open the id-less legacy card.
+    const canonical = [...serverProducts, ...createdProducts];
+    const canonicalKeys = new Set(canonical.map(product => {
+      const seller = String(product.sellerId || '').trim().replace(/^@/, '').toLowerCase();
+      const title = String(product.title || '').trim().toLowerCase();
+      return `${seller}\u0000${title}`;
+    }));
+    const merged = new Map<string, Product>();
+    for (const product of products) {
+      const id = String(product.id || '').trim();
+      const seller = String(product.sellerId || '').trim().replace(/^@/, '').toLowerCase();
+      const title = String(product.title || '').trim().toLowerCase();
+      const key = `${seller}\u0000${title}`;
+      if (!id && canonicalKeys.has(key)) continue;
+      merged.set(id || `legacy:${key}`, product);
+    }
+    for (const product of canonical) {
+      const id = String(product.id || '').trim();
+      if (id) merged.set(id, product);
+    }
+    return Array.from(merged.values());
+  }, [createdProducts, products, serverProducts]);
+  const filteredProducts = visibleProducts.filter(product => {
+    const q = searchQuery.toLowerCase();
+    const matchesSearch = String(product.title || '').toLowerCase().includes(q) || String(product.description || '').toLowerCase().includes(q) || String(product.id || '').toLowerCase().includes(q);
+    const productMarketplaceCategory = product.marketplaceCategory || '';
+    const matchesCategory = selectedCategory === 'all' || productMarketplaceCategory === selectedCategory;
+    const matchesStock = stockFilter === 'all' || (stockFilter === 'in_stock' && product.stock > 0) || (stockFilter === 'out_of_stock' && (!product.stock || product.stock <= 0));
+    return matchesSearch && matchesCategory && matchesStock;
+  });
+  const categories = MARKETPLACE_CATEGORIES;
+  const categoryCount = MARKETPLACE_CATEGORIES.length;
+
+  const openCreateForm = (product?: Product) => {
+    // Never treat SKU/productId aliases as the durable server identity.
+    // Edit must use the canonical Product.id returned by the durable catalog.
+    const durableProductId = product ? String(product.id || '').trim() : '';
+    setEditingProduct(product || null);
+    setEditingProductId(durableProductId || null);
+    setDraft(product ? {
+      title: product.title || '',
+      description: product.description || '',
+      category: product.category || 'physical',
+      marketplaceCategory: product.marketplaceCategory || MARKETPLACE_CATEGORIES[0]?.id || 'other_general',
+      subcategory: product.subcategory || '',
+      pricePi: String(product.pricePi ?? ''),
+      stock: String(product.stock ?? 0),
+      imageUrl: product.images?.[0] || '',
+      educationTier: product.educationTier || '',
+      educationLevelId: product.educationLevelId || '',
+      educationGradeLevel: product.educationGradeLevel || '',
+      educationCountryCode: product.educationCountryCode || '',
+      educationCurriculumId: product.educationCurriculumId || '',
+      educationSubjects: Array.isArray(product.educationSubjects) ? product.educationSubjects.join(', ') : ''
+    } : EMPTY_DRAFT);
+    setImageFile(null);
+    setImagePreview(product?.images?.[0] || null);
+    setSubmitError(null);
+    setSubmitSuccess(null);
+    setIsCreateOpen(true);
+  };
+
+  useEffect(() => {
+    if (!openCreateOnMount) return;
+    openCreateForm();
+    onCreateFormOpened?.();
+  }, [openCreateOnMount, onCreateFormOpened]);
+  const closeCreateForm = () => { if (!isSubmitting && !isUploadingImage) { setIsCreateOpen(false); setImageFile(null); setImagePreview(null); } };
+  const resolveDurableProductForEdit = async (product: Product): Promise<Product> => {
+    const currentId = String(product.id || '').trim();
+    if (currentId) return product;
+
+    // The UI may contain a legacy/ephemeral catalog object without its durable id.
+    // Refresh from the server and match only on stable catalog attributes; never
+    // invent an id or promote a SKU into a durable product identity.
+    const response = await vendorAuthenticatedFetch(
+      `/api/products?q=${encodeURIComponent(String(product.title || '').trim())}`,
+      { method: 'GET' }
+    );
+    const text = await response.text();
+    let data: any = null;
+    try { data = text ? JSON.parse(text) : null; } catch {
+      throw new Error('PRODUCT_CATALOG_INVALID_RESPONSE');
+    }
+    if (!response.ok) {
+      throw new Error(data?.error || `PRODUCT_CATALOG_HTTP_${response.status}`);
+    }
+
+    const candidates = Array.isArray(data?.products)
+      ? data.products.filter((item: any) => {
+          const sameTitle = String(item?.title || '').trim() === String(product.title || '').trim();
+          const sameSeller = !product.sellerId ||
+            String(item?.sellerId || '').trim().replace(/^@/, '').toLowerCase() ===
+            String(product.sellerId || '').trim().replace(/^@/, '').toLowerCase();
+          return sameTitle && sameSeller && String(item?.id || '').trim();
+        })
+      : [];
+
+    if (candidates.length !== 1) {
+      throw new Error(candidates.length === 0
+        ? 'PRODUCT_ID_MISSING'
+        : 'PRODUCT_ID_AMBIGUOUS');
+    }
+
+    return candidates[0] as Product;
+  };
+
+  const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] || null;
+    if (!file) return;
+    const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    if (!allowed.includes(file.type)) {
+      setSubmitError('Product image must be JPEG, PNG, WebP, or GIF.');
+      event.target.value = '';
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setSubmitError('Product image must be 5 MB or smaller.');
+      event.target.value = '';
+      return;
+    }
+    setSubmitError(null);
+    setImageFile(file);
+    setImagePreview(URL.createObjectURL(file));
+  };
+  const removeImage = () => {
+    setImageFile(null);
+    setImagePreview(null);
+  };
+
+  const submitProduct = async (event: React.FormEvent) => {
+    event.preventDefault(); setSubmitError(null); setSubmitSuccess(null);
+    const title = draft.title.trim(), description = draft.description.trim(), pricePi = Number(draft.pricePi), stock = Number(draft.stock);
+    if (!title) return setSubmitError('Product title is required.');
+    if (!description) return setSubmitError('Product description is required.');
+    if (!Number.isFinite(pricePi) || pricePi <= 0) return setSubmitError('Enter a valid Pi price greater than 0.');
+    if (!Number.isInteger(stock) || stock < 0) return setSubmitError('Inventory must be a whole number of 0 or more.');
+    const isEducationListing = draft.marketplaceCategory === 'education';
+    if (isEducationListing && !draft.educationTier) return setSubmitError('Select the education level this learning material serves.');
+    setIsSubmitting(true);
+    try {
+      let uploadedImageUrl = draft.imageUrl.trim();
+      if (imageFile) {
+        setIsUploadingImage(true);
+        const uploadResponse = await vendorAuthenticatedFetch('/api/vendor/product-image-upload', {
+          method: 'POST',
+          headers: { 'Content-Type': imageFile.type, 'X-Filename': encodeURIComponent(imageFile.name) },
+          body: imageFile
+        });
+        const uploadText = await uploadResponse.text();
+        let uploadData: any = null;
+        try { uploadData = uploadText ? JSON.parse(uploadText) : null; } catch { uploadData = null; }
+        if (!uploadResponse.ok || !uploadData?.url) {
+          const uploadError = uploadData?.error || `IMAGE_UPLOAD_FAILED_HTTP_${uploadResponse.status}`;
+          throw new Error(uploadError === 'MERCHANT_SELLER_ACCESS_REQUIRED' ? 'Seller access denied. Complete merchant verification before uploading product images.' : uploadError);
+        }
+        uploadedImageUrl = uploadData.url;
+        setIsUploadingImage(false);
+      }
+      // editingProductId is the explicit mode switch. A stale parent product object
+      // must never turn a fresh "Add Product" form into an Edit request.
+      const isEditMode = Boolean(editingProductId);
+      const durableEditId = String(editingProductId || '').trim();
+      if (isEditMode && !durableEditId) throw new Error('PRODUCT_ID_MISSING');
+      const result = isEditMode
+        ? await updateSellerProduct(durableEditId, { title, description, pricePi, category: draft.category, marketplaceCategory: draft.marketplaceCategory, subcategory: draft.subcategory.trim(), images: uploadedImageUrl ? [uploadedImageUrl] : (editingProduct?.images || []), stock,
+          educationTier: isEducationListing && draft.educationTier ? (draft.educationTier as Product['educationTier']) : undefined,
+          educationLevelId: isEducationListing ? draft.educationLevelId.trim() || undefined : undefined,
+          educationGradeLevel: isEducationListing ? draft.educationGradeLevel.trim() || undefined : undefined,
+          educationCountryCode: isEducationListing ? draft.educationCountryCode.trim().toUpperCase() || undefined : undefined,
+          educationCurriculumId: isEducationListing ? draft.educationCurriculumId.trim() || undefined : undefined,
+          educationSubjects: isEducationListing ? draft.educationSubjects.split(',').map(s => s.trim()).filter(Boolean) : undefined,
+          productType: draft.category === 'physical' ? 'physical' : draft.category === 'digital' ? 'digital' : 'service' })
+        : await createSellerProduct({ title, description, pricePi, category: draft.category, marketplaceCategory: draft.marketplaceCategory, subcategory: draft.subcategory.trim(), images: uploadedImageUrl ? [uploadedImageUrl] : [], stock,
+          educationTier: isEducationListing && draft.educationTier
+              ? (draft.educationTier as Product['educationTier'])
+              : undefined,
+          educationLevelId: isEducationListing ? draft.educationLevelId.trim() || undefined : undefined,
+          educationGradeLevel: isEducationListing ? draft.educationGradeLevel.trim() || undefined : undefined,
+          educationCountryCode: isEducationListing ? draft.educationCountryCode.trim().toUpperCase() || undefined : undefined,
+          educationCurriculumId: isEducationListing ? draft.educationCurriculumId.trim() || undefined : undefined,
+          educationSubjects: isEducationListing ? draft.educationSubjects.split(',').map(s => s.trim()).filter(Boolean) : undefined,
+          features: [], tags: [], productType: draft.category === 'physical' ? 'physical' : draft.category === 'digital' ? 'digital' : 'service' });
+      if (!result.ok || !result.product) {
+        if (result.status === 403 && result.error === 'MERCHANT_SELLER_ACCESS_REQUIRED') setSubmitError('Seller access denied. Complete merchant verification and activate your store before publishing products.');
+        else if (result.status === 401) setSubmitError('Authentication is required. Reconnect your Pi account and try again.');
+        else setSubmitError(result.error || 'Product creation failed.');
+        return;
+      }
+      if (isEditMode) {
+        setCreatedProducts(prev => prev.map(product => product.id === result.product!.id ? result.product! : product));
+        setServerProducts(prev => [result.product!, ...prev.filter(product => product.id !== result.product!.id)]);
+        onEditProduct(result.product!);
+        setSubmitSuccess(`Product updated successfully: ${result.product.title}`);
+      } else {
+        setCreatedProducts(prev => [result.product!, ...prev]);
+        setServerProducts(prev => [result.product!, ...prev.filter(product => product.id !== result.product!.id)]);
+        setSubmitSuccess(`Product created successfully: ${result.product!.title}`);
+      }
+      setEditingProduct(null);
+      setEditingProductId(null);
+      setDraft(EMPTY_DRAFT);
+      setImageFile(null);
+      setImagePreview(null);
+      window.setTimeout(() => setIsCreateOpen(false), 900);
+    } catch (error: any) {
+      console.error('[ProductsTab] Product creation failed:', error);
+      const message = String(error?.message || '').trim();
+      if (message === 'PRODUCT_ID_MISSING') {
+        setSubmitError('Product ID is missing from this catalog record. Refresh Seller Studio and reopen Edit so the durable product identity can be loaded.');
+      } else if (message === 'MERCHANT_SELLER_ACCESS_REQUIRED') {
+        setSubmitError('Server-verified merchant access is required. Please refresh Seller Studio and verify that your store is Active.');
+      } else if (message === 'AUTHENTICATION_REQUIRED' || message === 'INVALID_SESSION') {
+        setSubmitError('Your verified Pi session has expired. Refresh Seller Studio and reconnect your Pi account.');
+      } else if (message) {
+        setSubmitError(message);
+      } else {
+        setSubmitError('Unable to complete product submission. Please try again.');
+      }
+    } finally { setIsUploadingImage(false); setIsSubmitting(false); }
+  };
+
+  const handleEditProduct = async (product: Product) => {
+    if (isSubmitting || isUploadingImage) return;
+    setSubmitError(null);
+    try {
+      // Prefer the already-loaded authoritative server record. This prevents an
+      // id-less legacy parent record from ever reaching the edit form.
+      const legacySeller = String(product.sellerId || '').trim().replace(/^@/, '').toLowerCase();
+      const legacyTitle = String(product.title || '').trim().toLowerCase();
+      const serverMatch = serverProducts.find(item => {
+        const seller = String(item.sellerId || '').trim().replace(/^@/, '').toLowerCase();
+        return String(item.id || '').trim() &&
+          String(item.title || '').trim().toLowerCase() === legacyTitle &&
+          (!legacySeller || seller === legacySeller);
+      });
+      const durableProduct = serverMatch || await resolveDurableProductForEdit(product);
+      openCreateForm(durableProduct);
+    } catch (error: any) {
+      const message = String(error?.message || '').trim();
+      if (message === 'PRODUCT_ID_AMBIGUOUS') {
+        setSubmitError('More than one server product matches this catalog record. Refresh Seller Studio and reopen Edit so the exact durable product can be selected.');
+      } else if (message === 'PRODUCT_ID_MISSING') {
+        setSubmitError('Product ID is missing from this catalog record and the server catalog could not resolve it. Refresh Seller Studio and reopen Edit.');
+      } else {
+        setSubmitError(message || 'Unable to load the server-verified product record.');
+      }
+    }
+  };
+
+  const handleArchiveProduct = async (product: Product) => {
+    if (isSubmitting) return;
+    const confirmed = window.confirm(`Archive product \"${product.title}\"?`);
+    if (!confirmed) return;
+    setIsSubmitting(true);
+    setSubmitError(null);
+    try {
+      const result = await deleteSellerProduct(product.id);
+      if (!result.ok) throw new Error(result.error || 'PRODUCT_DELETE_FAILED');
+      setServerProducts(prev => prev.filter(item => item.id !== product.id));
+      setCreatedProducts(prev => prev.filter(item => item.id !== product.id));
+      onDeleteProduct(product.id);
+      setSubmitSuccess(`Product archived successfully: ${product.title}`);
+    } catch (error: any) {
+      setSubmitError(String(error?.message || 'Unable to archive product. Please try again.'));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6" id="seller-products-tab">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div><h3 className="text-lg font-bold text-neutral-900 dark:text-neutral-100 flex items-center gap-2"><Package className="w-5 h-5 text-purple-600 dark:text-purple-400" />Product Catalog</h3><p className="text-xs text-neutral-500 mt-0.5">Manage your listings, inventory quantities, and Pi pricing</p></div>
+        <div className="flex items-center gap-2 shrink-0">
+          <button id="refresh-products-btn" type="button" onClick={() => void refreshServerProducts()} disabled={isLoadingServerProducts} className="px-3 py-2.5 rounded-xl border border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-200 text-xs font-semibold flex items-center justify-center gap-2 disabled:opacity-50">
+            <RefreshCw className={`w-4 h-4 ${isLoadingServerProducts ? 'animate-spin' : ''}`} />{isLoadingServerProducts ? 'Refreshing…' : 'Refresh Products'}
+          </button>
+          <button id="add-product-btn" onClick={() => openCreateForm()} className="px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold flex items-center justify-center gap-2 transition-colors shadow-xs shrink-0"><Plus className="w-4 h-4" />Add Product</button>
+        </div>
+      </div>
+
+      <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-2xl p-4 shadow-xs"><div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="relative"><Search className="w-4 h-4 absolute left-3 top-3 text-neutral-400" /><input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search products by title or ID..." className="w-full pl-9 pr-3.5 py-2 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-neutral-50/50 dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 text-xs focus:outline-none focus:ring-2 focus:ring-purple-500/30" /></div>
+        <select value={selectedCategory} onChange={e => setSelectedCategory(e.target.value)} className="w-full px-3 py-2 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-neutral-50/50 dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 text-xs"><option value="all">All Categories ({visibleProducts.length})</option>{categories.map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}</select>
+        <select value={stockFilter} onChange={e => setStockFilter(e.target.value as 'all' | 'in_stock' | 'out_of_stock')} className="w-full px-3 py-2 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-neutral-50/50 dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 text-xs"><option value="all">All Stock Levels</option><option value="in_stock">In Stock</option><option value="out_of_stock">Out of Stock</option></select>
+      </div></div>
+
+      {filteredProducts.length === 0 ? <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-2xl py-16 px-6 text-center shadow-xs"><div className="w-14 h-14 rounded-2xl bg-purple-500/10 text-purple-600 flex items-center justify-center mx-auto mb-4"><Package className="w-7 h-7" /></div><h4 className="text-base font-bold">No products in store yet</h4><p className="text-xs text-neutral-500 max-w-md mx-auto mt-1.5">Create a product with verified seller access to begin receiving customer orders with Pi and PSTP Escrow.</p><button onClick={() => openCreateForm()} className="mt-5 px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold inline-flex items-center gap-2"><Plus className="w-4 h-4" />Add Your First Product</button></div> :
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">{filteredProducts.map(product => <div key={product.id} className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-2xl p-4 flex flex-col justify-between shadow-xs"><div><div className="flex items-start gap-3 mb-3"><div className="w-16 h-16 rounded-xl bg-neutral-100 dark:bg-neutral-800 overflow-hidden shrink-0 border border-neutral-200 dark:border-neutral-700">{product.images?.[0] ? <img src={product.images[0]} alt={product.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : <Package className="w-7 h-7 m-5 text-neutral-400" />}</div><div className="min-w-0 flex-1"><div className="flex items-center gap-1.5 mb-1"><span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-purple-500/10 text-purple-600 uppercase">{product.marketplaceCategory ? (MARKETPLACE_CATEGORIES.find(c => c.id === product.marketplaceCategory)?.name || product.marketplaceCategory) : (product.category || 'General')}</span><span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${product.stock > 0 ? 'bg-emerald-500/10 text-emerald-600' : 'bg-rose-500/10 text-rose-600'}`}>{product.stock > 0 ? 'In Stock' : 'Out of Stock'}</span></div><h5 className="text-sm font-bold truncate">{product.title}</h5><p className="text-[11px] text-neutral-500 truncate mt-0.5">SKU: {product.id}</p></div></div><div className="bg-neutral-50 dark:bg-neutral-800/60 rounded-xl p-2.5 flex items-center justify-between mb-3 text-xs"><div><span className="text-neutral-500 text-[11px] block">Price</span><span className="font-bold">{formatPiAmount(product.pricePi, { minDecimals: 2 })} π</span></div><div className="text-right"><span className="text-neutral-500 text-[11px] block">Inventory</span><span>{product.stock ?? 0} units</span></div></div></div><div className="pt-3 border-t border-neutral-100 dark:border-neutral-800 flex items-center justify-end gap-2"><button onClick={() => void handleEditProduct(product)} className="px-3 py-1.5 rounded-lg border border-neutral-200 dark:border-neutral-700 text-xs font-medium flex items-center gap-1.5"><Edit3 className="w-3.5 h-3.5" />Edit</button><button onClick={() => handleArchiveProduct(product)} disabled={isSubmitting} className="px-3 py-1.5 rounded-lg border border-rose-200 dark:border-rose-900/40 text-rose-600 text-xs font-medium flex items-center gap-1.5 disabled:opacity-50"><Trash2 className="w-3.5 h-3.5" />Archive</button></div></div>)}</div>}
+
+      {isCreateOpen && <div className="fixed inset-0 z-[70] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-3" role="dialog" aria-modal="true"><div className="w-full max-w-2xl max-h-[92vh] overflow-y-auto bg-white dark:bg-neutral-900 rounded-2xl border border-neutral-200 dark:border-neutral-800 shadow-2xl"><div className="sticky top-0 z-10 flex items-center justify-between px-5 py-4 border-b border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900"><div><h3 className="text-base font-bold">{editingProduct ? 'Edit Store Product' : 'Create Store Product'}</h3><p className="text-xs text-neutral-500 mt-0.5">Server-verified merchant access is required before publishing.</p></div><button onClick={closeCreateForm} disabled={isSubmitting} className="p-2 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800"><X className="w-5 h-5" /></button></div><form onSubmit={submitProduct} className="p-5 space-y-4">
+        {submitError && <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700 flex gap-2"><AlertCircle className="w-4 h-4 shrink-0" /><span>{submitError}</span></div>}
+        {submitSuccess && <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-700 flex gap-2"><CheckCircle2 className="w-4 h-4 shrink-0" /><span>{submitSuccess}</span></div>}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <label className="sm:col-span-2 text-xs font-semibold">Product Title *<input required value={draft.title} onChange={e => setDraft(d => ({...d, title: e.target.value}))} className="mt-1.5 w-full rounded-xl border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 px-3 py-2.5 text-sm" placeholder="e.g. Flagship Smartphone" /></label>
+          <label className="sm:col-span-2 text-xs font-semibold">Description *<textarea required value={draft.description} onChange={e => setDraft(d => ({...d, description: e.target.value}))} rows={3} className="mt-1.5 w-full rounded-xl border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 px-3 py-2.5 text-sm resize-none" placeholder="Describe the product accurately." /></label>
+          <label className="text-xs font-semibold">Product Type *<select value={draft.category} onChange={e => setDraft(d => ({...d, category: e.target.value as ProductCategory}))} className="mt-1.5 w-full rounded-xl border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 px-3 py-2.5 text-sm"><option value="physical">Physical</option><option value="digital">Digital</option><option value="service">Service</option><option value="airtime">Airtime</option><option value="utility">Utility</option><option value="giftcard">Gift Card</option></select></label>
+          <label className="text-xs font-semibold">Marketplace Category *<select required value={draft.marketplaceCategory} onChange={e => setDraft(d => ({...d, marketplaceCategory: e.target.value}))} className="mt-1.5 w-full rounded-xl border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 px-3 py-2.5 text-sm">{MARKETPLACE_CATEGORIES.map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}</select></label>
+          <label className="text-xs font-semibold">Subcategory<input value={draft.subcategory} onChange={e => setDraft(d => ({...d, subcategory: e.target.value}))} className="mt-1.5 w-full rounded-xl border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 px-3 py-2.5 text-sm" placeholder="Optional" /></label>
+          {draft.marketplaceCategory === 'education' && <div className="sm:col-span-2 rounded-2xl border border-purple-200 dark:border-purple-900/50 bg-purple-50/50 dark:bg-purple-950/20 p-4 space-y-3">
+            <div><p className="text-xs font-bold text-purple-800 dark:text-purple-200">Education Marketplace classification</p><p className="text-[11px] text-neutral-500 mt-0.5">Map this material to a global education level. Country-specific grade and curriculum labels remain optional.</p></div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label className="text-xs font-semibold">Education Level *<select required value={draft.educationTier} onChange={e => setDraft(d => ({...d, educationTier: e.target.value}))} className="mt-1.5 w-full rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-3 py-2.5 text-sm"><option value="">Select level</option><option value="early_childhood">Early Childhood / Nursery</option><option value="primary">Primary</option><option value="secondary">Secondary</option><option value="tertiary">Higher Education / University</option><option value="technical_vocational">Technical & Vocational</option><option value="professional_continuing">Professional & Continuing</option></select></label>
+              <label className="text-xs font-semibold">Country Code<input value={draft.educationCountryCode} onChange={e => setDraft(d => ({...d, educationCountryCode: e.target.value}))} maxLength={2} className="mt-1.5 w-full rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-3 py-2.5 text-sm uppercase" placeholder="e.g. NG, US, GB" /></label>
+              <label className="text-xs font-semibold">Grade / Year / Class<input value={draft.educationGradeLevel} onChange={e => setDraft(d => ({...d, educationGradeLevel: e.target.value}))} className="mt-1.5 w-full rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-3 py-2.5 text-sm" placeholder="e.g. Primary 4, Grade 4, Year 6" /></label>
+              <label className="text-xs font-semibold">Curriculum / System ID<input value={draft.educationCurriculumId} onChange={e => setDraft(d => ({...d, educationCurriculumId: e.target.value}))} className="mt-1.5 w-full rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-3 py-2.5 text-sm" placeholder="e.g. national, Cambridge, IB" /></label>
+              <label className="sm:col-span-2 text-xs font-semibold">Subjects / Fields<input value={draft.educationSubjects} onChange={e => setDraft(d => ({...d, educationSubjects: e.target.value}))} className="mt-1.5 w-full rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-3 py-2.5 text-sm" placeholder="e.g. Mathematics, Science" /></label>
+            </div>
+          </div>}
+          <label className="text-xs font-semibold">Price (π) *<input required type="number" min="0.000001" step="0.000001" value={draft.pricePi} onChange={e => setDraft(d => ({...d, pricePi: e.target.value}))} className="mt-1.5 w-full rounded-xl border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 px-3 py-2.5 text-sm" placeholder="10" /></label>
+          <label className="text-xs font-semibold">Inventory *<input required type="number" min="0" step="1" value={draft.stock} onChange={e => setDraft(d => ({...d, stock: e.target.value}))} className="mt-1.5 w-full rounded-xl border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 px-3 py-2.5 text-sm" placeholder="5" /></label>
+          <div className="sm:col-span-2 rounded-2xl border border-dashed border-neutral-300 dark:border-neutral-700 bg-neutral-50/70 dark:bg-neutral-800/50 p-4">
+            <div className="flex items-center justify-between gap-3 mb-2"><div><p className="text-xs font-semibold">Product Image</p><p className="text-[11px] text-neutral-500">Upload JPEG, PNG, WebP or GIF · max 5 MB</p></div>{imageFile && <button type="button" onClick={removeImage} disabled={isSubmitting} className="text-xs font-semibold text-rose-600">Remove</button>}</div>
+            {imagePreview ? <div className="flex items-center gap-3"><img src={imagePreview} alt="Product preview" className="w-24 h-24 rounded-xl object-cover border border-neutral-200 dark:border-neutral-700" /><div className="min-w-0"><p className="text-xs font-semibold truncate">{imageFile?.name}</p><p className="text-[11px] text-neutral-500 mt-1">{imageFile ? (imageFile.size / 1024 / 1024).toFixed(2) : '0'} MB</p></div></div> : <label className="cursor-pointer flex items-center justify-center min-h-24 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 hover:border-purple-400 transition-colors"><input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={handleImageChange} className="sr-only" /><span className="text-xs font-semibold text-purple-600">Choose product image</span></label>}
+          </div>
+        </div><div className="pt-2 flex flex-col-reverse sm:flex-row sm:justify-end gap-2"><button type="button" onClick={closeCreateForm} disabled={isSubmitting} className="px-4 py-2.5 rounded-xl border border-neutral-200 dark:border-neutral-700 text-xs font-semibold">Cancel</button><button id="submit-product-btn" type="submit" disabled={isSubmitting} className="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 disabled:opacity-60 text-white text-xs font-semibold flex items-center justify-center gap-2">{isUploadingImage ? <><Loader2 className="w-4 h-4 animate-spin" />Uploading image...</> : isSubmitting ? <><Loader2 className="w-4 h-4 animate-spin" />Submitting...</> : <><CheckCircle2 className="w-4 h-4" />{editingProduct ? 'Save Changes' : 'Submit Product'}</>}</button></div>
+      </form></div></div>}
+    </div>
+  );
+};

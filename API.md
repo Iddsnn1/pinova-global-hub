@@ -86,7 +86,7 @@ Retrieves current marketplace platform pricing configuration and audit log.
   {
     "success": true,
     "config": {
-      "piRateUsd": 10.0,
+      "piRateUsd": 314159.0,
       "minPurchasePi": 0.1,
       "maxPurchasePi": 1000.0,
       "currencySymbol": "$",

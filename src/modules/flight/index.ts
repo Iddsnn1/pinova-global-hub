@@ -58,7 +58,7 @@ export async function searchFlights(
         const fiat = typeof off.fareAmountFiat === 'number' ? off.fareAmountFiat : parseFloat(off.fareAmountFiat) || 0;
         const taxes = typeof off.taxesAndFeesFiat === 'number' ? off.taxesAndFeesFiat : Math.round(fiat * 0.14);
         const base = typeof off.baseFareFiat === 'number' ? off.baseFareFiat : Math.max(0, fiat - taxes);
-        const pi = piRateUsd > 0 ? Number((fiat / piRateUsd).toFixed(7)) : 0;
+        const pi = Number.isFinite(fiat) && fiat > 0 ? Number((fiat / 314159).toFixed(12)) : 0;
 
         return {
           offerId: off.offerId,

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { formatPiAmount } from '../../utils/formatters';
 import { 
   Package, 
   Truck, 
@@ -69,11 +70,8 @@ export const BuyerOrderHub: React.FC<BuyerOrderHubProps> = ({
       return orderBuyer === userLower || (userLower === '' && orderBuyer !== '');
     });
 
-    // 2. If matched has results, return them. If user is DemoBuyer or default demo Pioneer, return all available
-    if (matched.length > 0) return matched;
-    
-    // Fallback: If no strict username match, display user's orders or sample orders so users never see a false "No Orders Found"
-    return orders;
+    // Fail closed: never display another buyer's orders or demo/sample orders.
+    return matched;
   }, [orders, buyerUsername]);
 
   // Selected Order State
@@ -114,6 +112,12 @@ export const BuyerOrderHub: React.FC<BuyerOrderHubProps> = ({
     }
   }, [initialOrderId, orders]);
 
+  const formatTimelineDate = (timestamp: unknown) => {
+    if (typeof timestamp !== 'string' || !timestamp.trim()) return 'Time unavailable';
+    const date = new Date(timestamp);
+    return Number.isNaN(date.getTime()) ? 'Time unavailable' : date.toLocaleDateString();
+  };
+
   // Copy helper
   const handleCopy = (text: string, fieldId: string) => {
     if (!text) return;
@@ -138,7 +142,7 @@ export const BuyerOrderHub: React.FC<BuyerOrderHubProps> = ({
       if (!matchesSearch) return false;
 
       if (statusFilter === 'active') {
-        return ['Pending Payment', 'Payment Verified', 'Seller Accepted', 'Processing', 'Preparing Shipment', 'Packed', 'Shipped', 'In Transit', 'Out for Delivery'].includes(o.pstpStatus);
+        return ['Pending Payment', 'Payment Verified', 'Seller Accepted', 'Preparing Order', 'Packed', 'Shipped', 'In Transit', 'Out for Delivery'].includes(o.pstpStatus);
       }
       if (statusFilter === 'completed') {
         return ['Delivered', 'Buyer Confirmation', 'Completed'].includes(o.pstpStatus);
@@ -166,11 +170,11 @@ export const BuyerOrderHub: React.FC<BuyerOrderHubProps> = ({
     const term = directLookupInput.trim().toLowerCase();
     if (!term) return;
 
-    const matched = orders.find(o => 
-      o.id.toLowerCase() === term ||
-      (o.trackingNumber || '').toLowerCase() === term ||
-      (o.piPaymentId || '').toLowerCase() === term ||
-      (o.piTxid || '').toLowerCase() === term
+    const matched = buyerOrders.find(o => 
+      (o?.id || '').toLowerCase() === term ||
+      (o?.trackingNumber || '').toLowerCase() === term ||
+      (o?.piPaymentId || '').toLowerCase() === term ||
+      (o?.piTxid || '').toLowerCase() === term
     );
 
     if (matched) {
@@ -183,78 +187,62 @@ export const BuyerOrderHub: React.FC<BuyerOrderHubProps> = ({
   };
 
   const handleConfirmOrderReceipt = (order: Order) => {
+    // The server decides whether receipt confirmation and escrow release are allowed.
+    // Do not mutate lifecycle state locally.
+    if (order.pstpStatus !== 'Delivered') return;
     if (onConfirmReceipt) {
       onConfirmReceipt(order.id);
     }
-    const { updatedOrder } = service.lifecycleManager.transitionState(
-      order,
-      'Completed',
-      buyerUsername || order.buyerUsername,
-      'buyer',
-      'Buyer explicitly confirmed order receipt and satisfied condition.'
-    );
-    if (onOrderUpdated) onOrderUpdated(updatedOrder);
   };
 
-  const handleCreateReturn = (e: React.FormEvent) => {
+  const handleCreateReturn = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!activeOrder) return;
-    
-    if (onRequestReturn) {
-      onRequestReturn(activeOrder.id, `${returnReason}: ${returnDesc}`);
+    if (!activeOrder || !canRequestBuyerException) return;
+    const note = `Buyer requested return & refund. Reason: ${returnReason} - ${returnDesc}`;
+    try {
+      const response = await fetch(`/api/v1/orders/${encodeURIComponent(activeOrder.id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ pstpStatus: 'Refund Requested', note })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || data?.ok !== true || !data?.order) throw new Error(data?.error || 'RETURN_REQUEST_REJECTED');
+      onOrderUpdated?.(data.order as Order);
+      setReturnSuccessNote('Return request submitted to the server for review. No escrow release was performed.');
+      setReturnDesc('');
+    } catch {
+      setReturnSuccessNote('Return request could not be submitted. No local order state was changed.');
     }
-
-    service.returnRefundManager.createReturnRequest(
-      activeOrder.id,
-      buyerUsername || activeOrder.buyerUsername,
-      activeOrder.items[0]?.product?.sellerName || 'Vendor',
-      returnReason,
-      returnDesc,
-      activeOrder.totalPi
-    );
-
-    const { updatedOrder } = service.lifecycleManager.transitionState(
-      activeOrder,
-      'Refund Requested',
-      buyerUsername || activeOrder.buyerUsername,
-      'buyer',
-      `Buyer requested return & refund. Reason: ${returnReason} - ${returnDesc}`
-    );
-
-    if (onOrderUpdated) onOrderUpdated(updatedOrder);
-    setReturnSuccessNote('Return request successfully filed and transmitted to seller and PiNova arbitration.');
-    setReturnDesc('');
   };
 
-  const handleCreateDispute = (e: React.FormEvent) => {
+  const handleCreateDispute = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!activeOrder) return;
-
-    if (onOpenDispute) {
-      onOpenDispute(activeOrder.id, `${disputeReason}: ${disputeDesc}`);
+    if (!activeOrder || !canRequestBuyerException) return;
+    const note = `Buyer raised official dispute: ${disputeReason} - ${disputeDesc}`;
+    try {
+      const response = await fetch(`/api/v1/orders/${encodeURIComponent(activeOrder.id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ pstpStatus: 'Disputed', note })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || data?.ok !== true || !data?.order) throw new Error(data?.error || 'DISPUTE_REQUEST_REJECTED');
+      onOrderUpdated?.(data.order as Order);
+      setDisputeSuccessNote('Dispute submitted to the server for review. No escrow release was performed.');
+      setDisputeDesc('');
+    } catch {
+      setDisputeSuccessNote('Dispute could not be submitted. No local order state was changed.');
     }
-
-    service.disputeManager.openDispute(
-      activeOrder.id,
-      buyerUsername || activeOrder.buyerUsername,
-      activeOrder.items[0]?.product?.sellerName || 'Vendor',
-      disputeReason,
-      disputeDesc,
-      activeOrder.totalPi
-    );
-
-    const { updatedOrder } = service.lifecycleManager.transitionState(
-      activeOrder,
-      'Disputed',
-      buyerUsername || activeOrder.buyerUsername,
-      'buyer',
-      `Buyer raised official dispute: ${disputeReason}`
-    );
-
-    if (onOrderUpdated) onOrderUpdated(updatedOrder);
-    setDisputeSuccessNote('Official dispute opened. PiNova Arbitration Team and Seller have been notified.');
-    setDisputeDesc('');
   };
+
+  const canRequestBuyerException = Boolean(
+    activeOrder &&
+    activeOrder.serverVerified === true &&
+    activeOrder.pstpStatus !== 'Completed' &&
+    activeOrder.escrowStatus !== 'released' &&
+    activeOrder.pstpStatus !== 'Refund Requested' &&
+    activeOrder.pstpStatus !== 'Disputed'
+  );
 
   // Dynamic Milestones calculation
   const isPhysical = activeOrder?.items.some(i => i.product?.category === 'physical');
@@ -267,35 +255,32 @@ export const BuyerOrderHub: React.FC<BuyerOrderHubProps> = ({
     if (!activeOrder) return [];
 
     if (isDigitalOrUtility) {
+      const timeline = Array.isArray(activeOrder.timeline) ? activeOrder.timeline : [];
+      const eventFor = (...statuses: PstpOrderStatus[]) =>
+        timeline.find((event) => statuses.includes(event.status));
+
       return [
         {
-          title: 'Order Placed & Pi Authorized',
+          title: 'Order Placed',
           status: 'Pending Payment',
-          completed: true,
+          completed: Boolean(activeOrder.createdAt),
           active: activeOrder.pstpStatus === 'Pending Payment',
           timestamp: activeOrder.createdAt,
-          location: 'Pi Network Platform Gateway'
+          location: 'PiNova Order System'
         },
         {
           title: 'Pi Payment Server-Verified',
           status: 'Payment Verified',
-          completed: ['Payment Verified', 'Completed', 'Delivered'].includes(activeOrder.pstpStatus),
+          completed: ['Payment Verified', 'Seller Accepted', 'Preparing Order', 'Packed', 'Shipped', 'In Transit', 'Out for Delivery', 'Delivered', 'Completed'].includes(activeOrder.pstpStatus),
           active: activeOrder.pstpStatus === 'Payment Verified',
-          timestamp: activeOrder.updatedAt,
+          timestamp: eventFor('Payment Verified')?.timestamp,
           location: 'PiNova PSTP Protection Server'
-        },
-        {
-          title: 'Instant Electronic Key / Token Dispatch',
-          status: 'Completed',
-          completed: ['Delivered', 'Completed'].includes(activeOrder.pstpStatus),
-          active: ['Delivered', 'Completed'].includes(activeOrder.pstpStatus),
-          timestamp: activeOrder.updatedAt,
-          location: 'Secure Digital Delivery Server'
         }
-      ];
+      ].filter((milestone) => milestone.completed || milestone.active || milestone.timestamp);
     }
 
-    // Physical milestones
+    // Physical milestones are derived strictly from the order's recorded timeline.
+    // Do not manufacture timestamps, carrier locations, or tracking codes for future states.
     const statusOrder: PstpOrderStatus[] = [
       'Pending Payment',
       'Payment Verified',
@@ -310,57 +295,89 @@ export const BuyerOrderHub: React.FC<BuyerOrderHubProps> = ({
     ];
 
     const currentStatusIdx = statusOrder.indexOf(activeOrder.pstpStatus);
+    const timeline = Array.isArray(activeOrder.timeline) ? activeOrder.timeline : [];
 
-    return [
+    const eventFor = (...statuses: PstpOrderStatus[]) =>
+      timeline.find((event) => statuses.includes(event.status));
+
+    const milestones = [
       {
-        title: 'Order Authorized & Escrow Locked',
-        status: 'Pending Payment',
-        completed: currentStatusIdx >= 0,
-        active: activeOrder.pstpStatus === 'Pending Payment',
-        timestamp: activeOrder.createdAt,
-        location: 'Pi Platform Non-Custodial Gateway'
+        title: 'Payment Verified',
+        status: 'Payment Verified' as PstpOrderStatus,
+        completed: currentStatusIdx >= 1,
+        active: activeOrder.pstpStatus === 'Payment Verified',
+        timestamp: eventFor('Payment Verified')?.timestamp,
+        location: 'PiNova PSTP Protection Server'
       },
       {
-        title: 'Seller Confirmed & Item Packed',
-        status: 'Packed',
-        completed: currentStatusIdx >= 4 || ['Shipped', 'In Transit', 'Out for Delivery', 'Delivered', 'Completed'].includes(activeOrder.pstpStatus),
-        active: ['Seller Accepted', 'Preparing Order', 'Packed'].includes(activeOrder.pstpStatus),
-        timestamp: activeOrder.timeline?.find(t => t.status === 'Packed' || t.status === 'Seller Accepted')?.timestamp || activeOrder.updatedAt,
-        location: activeOrder.items[0]?.product?.sellerName || 'Merchant Warehouse'
+        title: 'Seller Accepted',
+        status: 'Seller Accepted' as PstpOrderStatus,
+        completed: currentStatusIdx >= 2,
+        active: activeOrder.pstpStatus === 'Seller Accepted',
+        timestamp: eventFor('Seller Accepted')?.timestamp,
+        location: activeOrder.items[0]?.product?.sellerName
       },
       {
-        title: 'Dispatched with Carrier',
-        status: 'Shipped',
-        completed: currentStatusIdx >= 5 || ['In Transit', 'Out for Delivery', 'Delivered', 'Completed'].includes(activeOrder.pstpStatus),
+        title: 'Preparing Order',
+        status: 'Preparing Order' as PstpOrderStatus,
+        completed: currentStatusIdx >= 3,
+        active: activeOrder.pstpStatus === 'Preparing Order',
+        timestamp: eventFor('Preparing Order')?.timestamp,
+        location: activeOrder.items[0]?.product?.sellerName
+      },
+      {
+        title: 'Packed',
+        status: 'Packed' as PstpOrderStatus,
+        completed: currentStatusIdx >= 4,
+        active: activeOrder.pstpStatus === 'Packed',
+        timestamp: eventFor('Packed')?.timestamp,
+        location: activeOrder.items[0]?.product?.sellerName
+      },
+      {
+        title: 'Shipped',
+        status: 'Shipped' as PstpOrderStatus,
+        completed: currentStatusIdx >= 5,
         active: activeOrder.pstpStatus === 'Shipped',
-        timestamp: activeOrder.timeline?.find(t => t.status === 'Shipped')?.timestamp || activeOrder.updatedAt,
-        location: `${activeOrder.carrier || 'Logistics Hub'} (${activeOrder.trackingNumber || 'PNV-SAF-9912'})`
+        timestamp: eventFor('Shipped')?.timestamp,
+        location: activeOrder.carrier
       },
       {
-        title: 'In Transit / Hub Transfer',
-        status: 'In Transit',
-        completed: currentStatusIdx >= 6 || ['Out for Delivery', 'Delivered', 'Completed'].includes(activeOrder.pstpStatus),
+        title: 'In Transit',
+        status: 'In Transit' as PstpOrderStatus,
+        completed: currentStatusIdx >= 6,
         active: activeOrder.pstpStatus === 'In Transit',
-        timestamp: activeOrder.updatedAt,
-        location: 'Regional Transit Sorting Facility'
+        timestamp: eventFor('In Transit')?.timestamp
       },
       {
         title: 'Out for Delivery',
-        status: 'Out for Delivery',
-        completed: currentStatusIdx >= 7 || ['Delivered', 'Completed'].includes(activeOrder.pstpStatus),
+        status: 'Out for Delivery' as PstpOrderStatus,
+        completed: currentStatusIdx >= 7,
         active: activeOrder.pstpStatus === 'Out for Delivery',
-        timestamp: activeOrder.updatedAt,
-        location: 'Local Delivery Courier Vehicle'
+        timestamp: eventFor('Out for Delivery')?.timestamp
       },
       {
-        title: 'Delivered to Recipient',
-        status: 'Delivered',
-        completed: currentStatusIdx >= 8 || activeOrder.pstpStatus === 'Completed',
+        title: 'Delivered',
+        status: 'Delivered' as PstpOrderStatus,
+        completed: currentStatusIdx >= 8,
         active: activeOrder.pstpStatus === 'Delivered',
-        timestamp: activeOrder.updatedAt,
-        location: activeOrder.shippingAddress ? `${activeOrder.shippingAddress.city}, ${activeOrder.shippingAddress.country}` : 'Destination Address'
+        timestamp: eventFor('Delivered')?.timestamp,
+        location: activeOrder.shippingAddress
+          ? `${activeOrder.shippingAddress.city}, ${activeOrder.shippingAddress.country}`
+          : undefined
+      },
+      {
+        title: 'Completed / PSTP Released',
+        status: 'Completed' as PstpOrderStatus,
+        completed: currentStatusIdx >= 9,
+        active: activeOrder.pstpStatus === 'Completed',
+        timestamp: eventFor('Completed')?.timestamp,
+        location: 'PiNova PSTP Protection Server'
       }
     ];
+
+    return milestones.filter((milestone) =>
+      milestone.completed || milestone.active || milestone.timestamp
+    );
   }, [activeOrder, isDigitalOrUtility]);
 
   // If no orders at all exist in the entire system
@@ -536,7 +553,7 @@ export const BuyerOrderHub: React.FC<BuyerOrderHubProps> = ({
                       {o.id}
                     </span>
                     <span className="text-xs font-black text-purple-600 dark:text-purple-400">
-                      {o.totalPi.toFixed(2)} π
+                      {formatPiAmount(o.totalPi)} π
                     </span>
                   </div>
 
@@ -594,12 +611,12 @@ export const BuyerOrderHub: React.FC<BuyerOrderHubProps> = ({
                     <ShieldCheck className="w-3.5 h-3.5" /> PSTP Escrow Protected
                   </span>
                   <span>•</span>
-                  <span>Total: <strong className="text-amber-400">{activeOrder.totalPi.toFixed(2)} π</strong></span>
+                  <span>Total: <strong className="text-amber-400">{formatPiAmount(activeOrder.totalPi)} π</strong></span>
                 </div>
               </div>
 
               {/* Confirm Receipt Action Button */}
-              {(activeOrder.pstpStatus === 'Delivered' || activeOrder.pstpStatus === 'Shipped') && (
+              {activeOrder.pstpStatus === 'Delivered' && (
                 <button
                   onClick={() => handleConfirmOrderReceipt(activeOrder)}
                   className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black flex items-center gap-2 shadow-lg shadow-emerald-900/30 transition-all hover:scale-105 shrink-0"
@@ -649,15 +666,15 @@ export const BuyerOrderHub: React.FC<BuyerOrderHubProps> = ({
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">Logistics Carrier:</span>
-                        <span className="text-xs font-black text-slate-900 dark:text-slate-100">{activeOrder.carrier || 'Safaricom Express Logistics'}</span>
+                        <span className="text-xs font-black text-slate-900 dark:text-slate-100">{activeOrder.carrier || 'Carrier not recorded'}</span>
                       </div>
                       <div className="flex items-center gap-2 text-xs">
                         <span className="text-slate-400">Tracking Code:</span>
                         <span className="font-mono font-bold text-purple-600 dark:text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20">
-                          {activeOrder.trackingNumber || 'PNV-SAF-993821'}
+                          {activeOrder.trackingNumber || 'Not recorded'}
                         </span>
                         <button
-                          onClick={() => handleCopy(activeOrder.trackingNumber || 'PNV-SAF-993821', 'tracking')}
+                          onClick={() => handleCopy(activeOrder.trackingNumber, 'tracking')}
                           className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
                           title="Copy tracking code"
                         >
@@ -669,10 +686,14 @@ export const BuyerOrderHub: React.FC<BuyerOrderHubProps> = ({
                     <div className="text-left sm:text-right space-y-0.5">
                       <div className="text-[11px] text-slate-400 font-medium">Estimated Arrival</div>
                       <div className="text-xs sm:text-sm font-black text-slate-900 dark:text-slate-100">
-                        {activeOrder.pstpStatus === 'Delivered' || activeOrder.pstpStatus === 'Completed' ? 'Delivered' : '1 - 3 Business Days'}
+                        {activeOrder.pstpStatus === 'Delivered' || activeOrder.pstpStatus === 'Completed'
+  ? 'Delivered'
+  : activeOrder.trackingNumber
+    ? 'Carrier ETA unavailable'
+    : 'Not available until shipment is recorded'}
                       </div>
                       <div className="text-[10px] text-emerald-500 font-bold flex items-center sm:justify-end gap-1">
-                        <CheckCircle2 className="w-3 h-3" /> Security Seal Verified
+                        <ShieldCheck className="w-3 h-3" /> Server-verified order record
                       </div>
                     </div>
                   </div>
@@ -720,7 +741,9 @@ export const BuyerOrderHub: React.FC<BuyerOrderHubProps> = ({
                               {m.title}
                             </h5>
                             <span className="text-[10px] font-mono text-slate-400">
-                              {new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              {m.timestamp && !Number.isNaN(new Date(m.timestamp).getTime())
+  ? new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  : 'Time unavailable'}
                             </span>
                           </div>
 
@@ -755,7 +778,7 @@ export const BuyerOrderHub: React.FC<BuyerOrderHubProps> = ({
                             {tl.note && <p className="text-slate-400 text-[10px] mt-0.5 italic">{tl.note}</p>}
                           </div>
                           <span className="text-slate-400 text-[10px] shrink-0">
-                            {new Date(tl.timestamp).toLocaleDateString()}
+                            {formatTimelineDate(tl.timestamp)}
                           </span>
                         </div>
                       ))}
@@ -808,7 +831,7 @@ export const BuyerOrderHub: React.FC<BuyerOrderHubProps> = ({
                           </div>
                         </div>
                         <div className="text-xs font-black text-purple-600 dark:text-purple-400 shrink-0">
-                          {(((item.product?.discountPercent ? item.product.pricePi * (1 - item.product.discountPercent / 100) : item.product?.pricePi || 0) + (item.customDetails?.variant?.priceDeltaPi || 0)) * item.quantity).toFixed(2)} π
+                          {formatPiAmount((((item.product?.discountPercent ? item.product.pricePi * (1 - item.product.discountPercent / 100) : item.product?.pricePi || 0) + (item.customDetails?.variant?.priceDeltaPi || 0)) * item.quantity))} π
                         </div>
                       </div>
                     ))}
@@ -851,13 +874,13 @@ export const BuyerOrderHub: React.FC<BuyerOrderHubProps> = ({
                       <div className="flex justify-between items-center">
                         <span className="text-slate-400 font-medium">Payment ID:</span>
                         <span className="font-mono font-bold text-purple-600 dark:text-purple-400 truncate max-w-[150px]">
-                          {activeOrder.piPaymentId || 'PI-PAY-VERIFIED-01'}
+                          {activeOrder.piPaymentId || 'Not recorded'}
                         </span>
                       </div>
                       <div className="flex justify-between items-center">
                         <span className="text-slate-400 font-medium">Pi TxID:</span>
                         <span className="font-mono font-bold text-amber-500 truncate max-w-[150px]">
-                          {activeOrder.piTxid || '0x9a2f3b8c...SETTLED'}
+                          {activeOrder.piTxid || 'Not recorded'}
                         </span>
                       </div>
                       <div className="flex justify-between items-center pt-1 border-t border-slate-100 dark:border-slate-800">
@@ -913,10 +936,10 @@ export const BuyerOrderHub: React.FC<BuyerOrderHubProps> = ({
                             <div className="text-[11px] text-slate-500 mt-1 flex items-center gap-2">
                               <span>License Code:</span>
                               <span className="font-mono bg-amber-500/10 text-amber-600 dark:text-amber-300 px-2 py-0.5 rounded font-bold border border-amber-500/20">
-                                {i.product?.digitalKey || `PNV-KEY-${activeOrder.id.slice(-6)}-${idx + 1}`}
+                                {i.product?.digitalKey || 'Not recorded'}
                               </span>
                               <button
-                                onClick={() => handleCopy(i.product?.digitalKey || `PNV-KEY-${activeOrder.id.slice(-6)}-${idx + 1}`, `item-key-${idx}`)}
+                                onClick={() => i.product?.digitalKey && handleCopy(i.product.digitalKey, `item-key-${idx}`)}
                                 className="p-1 text-slate-400 hover:text-slate-600"
                               >
                                 {copiedField === `item-key-${idx}` ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
@@ -986,7 +1009,7 @@ export const BuyerOrderHub: React.FC<BuyerOrderHubProps> = ({
                           <tr key={idx}>
                             <td className="p-2.5 font-medium">{it.title}</td>
                             <td className="p-2.5 text-center">{it.quantity}</td>
-                            <td className="p-2.5 text-right font-bold text-purple-600 dark:text-purple-400">{it.totalPi.toFixed(2)} π</td>
+                            <td className="p-2.5 text-right font-bold text-purple-600 dark:text-purple-400">{formatPiAmount(it.totalPi)} π</td>
                           </tr>
                         ))}
                       </tbody>
@@ -1003,7 +1026,7 @@ export const BuyerOrderHub: React.FC<BuyerOrderHubProps> = ({
                     </div>
                     <div className="text-right">
                       <div className="text-slate-400 text-xs">Total Settled</div>
-                      <div className="text-xl font-black text-amber-500">{receipt.totalPi.toFixed(2)} π</div>
+                      <div className="text-xl font-black text-amber-500">{formatPiAmount(receipt.totalPi)} π</div>
                     </div>
                   </div>
                 </div>
@@ -1013,7 +1036,11 @@ export const BuyerOrderHub: React.FC<BuyerOrderHubProps> = ({
             {/* TAB 5: RETURN & REFUND */}
             {activeTab === 'return' && (
               <div className="space-y-4">
-                {returnSuccessNote ? (
+                {!canRequestBuyerException && !returnSuccessNote ? (
+                  <div className="p-4 rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300 text-xs font-bold">
+                    Return/refund requests require a server-verified payment and an order that has not been completed or escrow-released.
+                  </div>
+                ) : returnSuccessNote ? (
                   <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-xs font-bold flex items-center gap-2">
                     <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
                     <span>{returnSuccessNote}</span>
@@ -1066,7 +1093,11 @@ export const BuyerOrderHub: React.FC<BuyerOrderHubProps> = ({
             {/* TAB 6: DISPUTE ARBITRATION PORTAL */}
             {activeTab === 'dispute' && (
               <div className="space-y-4">
-                {disputeSuccessNote ? (
+                {!canRequestBuyerException && !disputeSuccessNote ? (
+                  <div className="p-4 rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300 text-xs font-bold">
+                    Disputes require a server-verified payment and an order that has not been completed or escrow-released.
+                  </div>
+                ) : disputeSuccessNote ? (
                   <div className="p-4 rounded-2xl bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800 text-purple-800 dark:text-purple-300 text-xs font-bold flex items-center gap-2">
                     <ShieldAlert className="w-5 h-5 text-purple-600 shrink-0" />
                     <span>{disputeSuccessNote}</span>
