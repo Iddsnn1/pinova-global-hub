@@ -11,6 +11,9 @@ function getConnectionString(): string {
   let value = String(process.env.DATABASE_URL || '').trim();
   if (!value) return '';
 
+  // Vercel env values must contain one connection string only. If a multiline
+  // connection snippet was pasted, ignore subsequent comments/variables.
+  value = value.split(/\r?\n/, 1)[0].trim();
   value = value.replace(/^DATABASE_URL\s*=\s*/i, '').trim();
 
   if (
