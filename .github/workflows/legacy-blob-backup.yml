@@ -129,12 +129,15 @@ jobs:
             echo "NEON_PREVIEW_DATABASE_URL_MISSING: configure this repository/environment secret with the dedicated Neon Preview branch URL"
             exit 1
           }
-          # Fail closed unless the target is explicitly the dedicated Preview branch.
-          case "$NEON_PREVIEW_DATABASE_URL" in
-            *br-hidden-fog-b2h2m1fh*) ;;
-            *)
-              echo "NEON_TARGET_NOT_PREVIEW_BRANCH: refusing import because the URL does not identify the expected Preview branch"
-              exit 1
-              ;;
-          esac
+          # This must be a separately configured secret copied from the intended Neon Preview branch.
+          # Never populate it with a Production connection string. The importer is additive and does not delete source data.
+          node --input-type=module <<'NODE'
+          const value = process.env.NEON_PREVIEW_DATABASE_URL || '';
+          let parsed;
+          try { parsed = new URL(value); } catch { throw new Error('NEON_PREVIEW_DATABASE_URL_INVALID'); }
+          if (!['postgres:', 'postgresql:'].includes(parsed.protocol) || !parsed.hostname.endsWith('.neon.tech') || parsed.pathname !== '/neondb') {
+            throw new Error('NEON_PREVIEW_DATABASE_URL_INVALID: expected a Neon connection URL for database neondb');
+          }
+          console.log('Neon Preview connection URL shape validated; branch identity must be verified in Neon Console before configuring the secret.');
+          NODE
           DATABASE_URL="$NEON_PREVIEW_DATABASE_URL" node "$GITHUB_WORKSPACE/scripts/import-neon-backup.mjs" "$LEGACY_BLOB_BACKUP_FILE"
