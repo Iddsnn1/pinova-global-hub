@@ -19,6 +19,7 @@ on:
       - "tsconfig.json"
       - "vite.config.ts"
       - ".github/workflows/pinova-preview-security-tests.yml"
+      - ".github/workflows/legacy-blob-backup.yml"
   workflow_dispatch:
 
 permissions:
