@@ -1,11 +1,13 @@
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
 
 function config() {
-  const endpoint = String(process.env.OBJECT_STORAGE_ENDPOINT || '').trim();
+  // Keep explicit OBJECT_STORAGE_* overrides for existing providers, while
+  // supporting Neon Object Storage's standard AWS-compatible environment.
+  const endpoint = String(process.env.OBJECT_STORAGE_ENDPOINT || process.env.AWS_ENDPOINT_URL_S3 || '').trim();
   const bucket = String(process.env.OBJECT_STORAGE_BUCKET || '').trim();
-  const region = String(process.env.OBJECT_STORAGE_REGION || 'auto').trim();
-  const accessKeyId = String(process.env.OBJECT_STORAGE_ACCESS_KEY_ID || '').trim();
-  const secretAccessKey = String(process.env.OBJECT_STORAGE_SECRET_ACCESS_KEY || '').trim();
+  const region = String(process.env.OBJECT_STORAGE_REGION || process.env.AWS_REGION || 'auto').trim();
+  const accessKeyId = String(process.env.OBJECT_STORAGE_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID || '').trim();
+  const secretAccessKey = String(process.env.OBJECT_STORAGE_SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY || '').trim();
   if (!endpoint || !bucket || !accessKeyId || !secretAccessKey) {
     throw new Error('OBJECT_STORAGE_NOT_CONFIGURED');
   }
@@ -27,16 +29,16 @@ function client() {
 
 export function objectStorageEnabled(): boolean {
   return Boolean(
-    process.env.OBJECT_STORAGE_ENDPOINT &&
+    (process.env.OBJECT_STORAGE_ENDPOINT || process.env.AWS_ENDPOINT_URL_S3) &&
     process.env.OBJECT_STORAGE_BUCKET &&
-    process.env.OBJECT_STORAGE_ACCESS_KEY_ID &&
-    process.env.OBJECT_STORAGE_SECRET_ACCESS_KEY
+    (process.env.OBJECT_STORAGE_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID) &&
+    (process.env.OBJECT_STORAGE_SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY)
   );
 }
 
 export async function putObject(pathname: string, body: Uint8Array | string, contentType = 'application/octet-stream') {
   const { c, s3 } = client();
-  const key = pathname.replace(/^\/+/, '');
+  const key = pathname.replace(/^\\/+/, '');
   await s3.send(new PutObjectCommand({
     Bucket: c.bucket,
     Key: key,
@@ -50,7 +52,7 @@ export async function putObject(pathname: string, body: Uint8Array | string, con
 export async function getObject(pathname: string): Promise<{ body: Uint8Array; contentType: string } | null> {
   const { c, s3 } = client();
   try {
-    const out = await s3.send(new GetObjectCommand({ Bucket: c.bucket, Key: pathname.replace(/^\/+/, '') }));
+    const out = await s3.send(new GetObjectCommand({ Bucket: c.bucket, Key: pathname.replace(/^\\/+/, '') }));
     if (!out.Body) return null;
     const bytes = new Uint8Array(await out.Body.transformToByteArray());
     return { body: bytes, contentType: out.ContentType || 'application/octet-stream' };
@@ -63,7 +65,7 @@ export async function getObject(pathname: string): Promise<{ body: Uint8Array; c
 
 export async function deleteObject(pathname: string): Promise<void> {
   const { c, s3 } = client();
-  await s3.send(new DeleteObjectCommand({ Bucket: c.bucket, Key: pathname.replace(/^\/+/, '') }));
+  await s3.send(new DeleteObjectCommand({ Bucket: c.bucket, Key: pathname.replace(/^\\/+/, '') }));
 }
 
 export async function listObjects(prefix: string): Promise<string[]> {
@@ -73,7 +75,7 @@ export async function listObjects(prefix: string): Promise<string[]> {
   do {
     const out = await s3.send(new ListObjectsV2Command({
       Bucket: c.bucket,
-      Prefix: prefix.replace(/^\/+/, ''),
+      Prefix: prefix.replace(/^\\/+/, ''),
       ContinuationToken
     }));
     for (const item of out.Contents || []) if (item.Key) keys.push(item.Key);
@@ -83,7 +85,7 @@ export async function listObjects(prefix: string): Promise<string[]> {
 }
 
 export function publicObjectUrl(pathname: string): string {
-  const base = String(process.env.OBJECT_STORAGE_PUBLIC_BASE_URL || '').trim().replace(/\/+$/, '');
+  const base = String(process.env.OBJECT_STORAGE_PUBLIC_BASE_URL || '').trim().replace(/\\/+$/, '');
   if (!base) return '';
-  return `${base}/${pathname.replace(/^\/+/, '').split('/').map(encodeURIComponent).join('/')}`;
+  return `${base}/${pathname.replace(/^\\/+/, '').split('/').map(encodeURIComponent).join('/')}`;
 }
