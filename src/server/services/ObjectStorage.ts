@@ -87,5 +87,5 @@ export async function listObjects(prefix: string): Promise<string[]> {
 export function publicObjectUrl(pathname: string): string {
   const base = String(process.env.OBJECT_STORAGE_PUBLIC_BASE_URL || '').trim().replace(/\/+$/, '');
   if (!base) return '';
-  return \`\${base}/\${pathname.replace(/^\/+/, '').split('/').map(encodeURIComponent).join('/')}\`;
+  return `${base}/${pathname.replace(/^\/+/, '').split('/').map(encodeURIComponent).join('/')}`;
 }
