@@ -218,10 +218,10 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
             <Package className="w-4 h-4 text-purple-500" />
           </div>
           <div className="text-2xl md:text-3xl font-bold text-neutral-900 dark:text-neutral-100">
-            {products.length}
+            {isStatusUnavailable ? '—' : products.length}
           </div>
           <p className="text-xs text-neutral-500 mt-1">
-            {products.filter(p => p.stock > 0).length} in stock
+            {isStatusUnavailable ? 'Waiting for server data' : `${products.filter(p => p.stock > 0).length} in stock`}
           </p>
         </div>
 
@@ -235,10 +235,10 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
             <Clock className="w-4 h-4 text-amber-500" />
           </div>
           <div className="text-2xl md:text-3xl font-bold text-neutral-900 dark:text-neutral-100">
-            {pendingOrders.length}
+            {isStatusUnavailable ? '—' : pendingOrders.length}
           </div>
           <p className="text-xs text-neutral-500 mt-1">
-            Requires fulfillment
+            {isStatusUnavailable ? 'Waiting for server data' : 'Requires fulfillment'}
           </p>
         </div>
 
@@ -252,10 +252,10 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
             <CheckCircle2 className="w-4 h-4 text-emerald-500" />
           </div>
           <div className="text-2xl md:text-3xl font-bold text-neutral-900 dark:text-neutral-100">
-            {completedOrders.length}
+            {isStatusUnavailable ? '—' : completedOrders.length}
           </div>
           <p className="text-xs text-neutral-500 mt-1">
-            Verified delivered
+            {isStatusUnavailable ? 'Waiting for server data' : 'Verified delivered'}
           </p>
         </div>
 
@@ -269,10 +269,10 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
             <span className="text-amber-500 font-bold text-base">π</span>
           </div>
           <div className="text-2xl md:text-3xl font-bold text-neutral-900 dark:text-neutral-100">
-            {totalPiVolume.toFixed(2)}
+            {isStatusUnavailable ? '—' : totalPiVolume.toFixed(2)}
           </div>
           <p className="text-xs text-neutral-500 mt-1">
-            PSTP protected
+            {isStatusUnavailable ? 'Waiting for server data' : 'PSTP protected'}
           </p>
         </div>
       </div>
@@ -474,12 +474,12 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
               <ShoppingBag className="w-6 h-6" />
             </div>
             <h5 className="text-sm font-bold text-neutral-800 dark:text-neutral-200">
-              No orders yet
+              {isStatusUnavailable ? 'Order data temporarily unavailable' : 'No orders yet'}
             </h5>
             <p className="text-xs text-neutral-500 dark:text-neutral-400 max-w-sm mx-auto mt-1">
-              Orders will appear here after customers purchase from your store. Publish products to begin receiving Pi orders.
+              {isStatusUnavailable ? 'The server could not verify your store records. This does not mean your orders were deleted. Please try again later.' : 'Orders will appear here after customers purchase from your store. Publish products to begin receiving Pi orders.'}
             </p>
-            {products.length === 0 && (
+            {!isStatusUnavailable && products.length === 0 && (
               <button
                 onClick={onAddProduct}
                 className="mt-4 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold inline-flex items-center gap-1.5 transition-colors"
