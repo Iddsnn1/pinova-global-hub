@@ -15,7 +15,12 @@ function getServerModule(): ServerModule {
   if (serverModule) return serverModule;
   const runtimeRequire = createRequire(path.resolve(process.cwd(), 'api/vendor/apply-durable.js'));
   const mod = runtimeRequire('../../dist/server.cjs');
-  serverModule = (mod?.default || mod) as ServerModule;
+  // Keep named exports when the CommonJS bundle exposes durable services alongside
+  // its default Express app. Selecting mod.default unconditionally drops them.
+  serverModule = (mod && (
+    typeof mod.durableVendorStorageEnabled === 'function' ||
+    typeof mod.authenticateVendorRequest === 'function'
+  ) ? mod : mod?.default) as ServerModule;
   return serverModule;
 }
 
@@ -51,7 +56,7 @@ export default async function handler(req: any, res: any) {
     const returnRefundPolicy = String(policies.returnRefundPolicy || '').trim();
     const deliveryShippingPolicy = String(policies.deliveryShippingPolicy || '').trim();
     const pstpAgreementAccepted = body.pstpAgreementAccepted === true;
-    const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail);
+    const emailValid = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(contactEmail);
 
     const missingFields: string[] = [];
     if (!storeName) missingFields.push('storeName');
