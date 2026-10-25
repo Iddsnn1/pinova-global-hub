@@ -181,7 +181,7 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
     sellerLifecycle: string;
     storeName: string | null;
   }>({
-    status: 'UNREGISTERED',
+    status: 'STATUS_UNAVAILABLE',
     verified: false,
     pstpAuthorized: false,
     sellerLifecycle: 'INACTIVE',
@@ -222,7 +222,7 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
       if (res.ok) {
         const data = await res.json();
         setServerStatus({
-          status: data.status || 'UNREGISTERED',
+          status: data.status || 'STATUS_UNAVAILABLE',
           verified: !!data.verified,
           pstpAuthorized: !!data.pstpAuthorized,
           sellerLifecycle: data.sellerLifecycle || (data.verified ? 'ACTIVE' : 'INACTIVE'),
@@ -241,9 +241,25 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
             }));
           }
         }
+      } else {
+        // A failed authoritative status check is not proof that the merchant is unregistered.
+        setServerStatus({
+          status: 'STATUS_UNAVAILABLE',
+          verified: false,
+          pstpAuthorized: false,
+          sellerLifecycle: 'INACTIVE',
+          storeName: null
+        });
       }
     } catch (err) {
       console.warn('[SellerStudioV2] Failed to fetch server status:', err);
+      setServerStatus({
+        status: 'STATUS_UNAVAILABLE',
+        verified: false,
+        pstpAuthorized: false,
+        sellerLifecycle: 'INACTIVE',
+        storeName: null
+      });
     } finally {
       setIsLoadingStatus(false);
     }
@@ -284,6 +300,14 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
         <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-500/15 text-amber-700 dark:text-amber-400 flex items-center gap-1.5 border border-amber-500/20">
           <AlertTriangle className="w-3.5 h-3.5" />
           <span>Action Required</span>
+        </span>
+      );
+    }
+    if (s === 'STATUS_UNAVAILABLE') {
+      return (
+        <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-500/15 text-amber-700 dark:text-amber-400 flex items-center gap-1.5 border border-amber-500/20">
+          <AlertTriangle className="w-3.5 h-3.5" />
+          <span>Status temporarily unavailable</span>
         </span>
       );
     }
