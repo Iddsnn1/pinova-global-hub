@@ -60,6 +60,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
   // Truthful calculations based strictly on real state
   const isApproved = serverStatus.status === 'APPROVED';
   const isPending = serverStatus.status === 'PENDING_REVIEW' || serverStatus.status === 'UNDER_REVIEW';
+  const isStatusUnavailable = serverStatus.status === 'STATUS_UNAVAILABLE';
   const isUnregistered = serverStatus.status === 'UNREGISTERED' || !serverStatus.status;
   const isActionRequired = serverStatus.status === 'ACTION_REQUIRED';
   const isRejected = serverStatus.status === 'REJECTED';
@@ -75,8 +76,19 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
 
   return (
     <div className="space-y-6" id="seller-overview-tab">
+      {/* Do not mislabel a storage/API outage as a missing merchant registration. */}
+      {isStatusUnavailable && (
+        <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-5 md:p-6 flex items-start gap-3">
+          <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+          <div>
+            <h3 className="text-base font-bold text-neutral-900 dark:text-neutral-100">Merchant status temporarily unavailable</h3>
+            <p className="text-sm text-neutral-600 dark:text-neutral-400 mt-1">We could not verify your registration from the authoritative server. Your existing onboarding is not confirmed missing. Please try again later; do not submit a duplicate application while this check is unavailable.</p>
+          </div>
+        </div>
+      )}
+
       {/* Onboarding / Verification Alert Banner */}
-      {isUnregistered && (
+      {isUnregistered && !isStatusUnavailable && (
         <div className="bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border border-amber-500/30 rounded-2xl p-5 md:p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div className="flex items-start gap-4">
             <div className="w-12 h-12 rounded-xl bg-amber-500/20 text-amber-500 flex items-center justify-center shrink-0">
