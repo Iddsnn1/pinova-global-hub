@@ -56,7 +56,7 @@ export default async function handler(req: any, res: any) {
     const returnRefundPolicy = String(policies.returnRefundPolicy || '').trim();
     const deliveryShippingPolicy = String(policies.deliveryShippingPolicy || '').trim();
     const pstpAgreementAccepted = body.pstpAgreementAccepted === true;
-    const emailValid = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(contactEmail);
+    const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail);
 
     const missingFields: string[] = [];
     if (!storeName) missingFields.push('storeName');
