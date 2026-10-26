@@ -1,13 +1,9 @@
 import {
   authenticateVendorRequest as authenticateRequest,
   getDurableVendorApplication,
-  listDurableVendorApplications,
+  getDurableVendorApplicationByIdentity,
   durableVendorStorageEnabled
 } from '../../dist/server.cjs';
-
-function normalizeIdentity(value: unknown): string {
-  return String(value || '').trim().replace(/^@/, '').toLowerCase();
-}
 
 function publicApplicationSummary(application: any) {
   if (!application) return null;
@@ -46,20 +42,18 @@ export default async function handler(req: any, res: any) {
       return res.status(503).json({ success: false, error: 'DURABLE_VENDOR_STORAGE_UNAVAILABLE' });
     }
 
-    // Prefer the authenticated username; if it has changed since onboarding,
-    // resolve only by the authenticated Pi UID as the seller routes do.
-    let application = await getDurableVendorApplication(user.username);
+    // Match the same server-side identity resolution used by seller routes.
+    // Never trust a username or UID supplied in the request body/query.
+    const username = String(user.username).trim();
+    let application = await getDurableVendorApplication(username);
     if (!application) {
-      const uidCandidates = [user.piUid, user.id]
+      const uidCandidates = [user.piUid, user.uid, user.id]
         .map((value: unknown) => String(value || '').trim())
         .filter(Boolean);
 
-      if (uidCandidates.length) {
-        const applications = await listDurableVendorApplications();
-        application = applications.find((candidate: any) => {
-          const storedUid = String(candidate?.pioneerUid || '').trim();
-          return storedUid && uidCandidates.includes(storedUid);
-        }) || null;
+      for (const uid of uidCandidates) {
+        application = await getDurableVendorApplicationByIdentity(username, uid);
+        if (application) break;
       }
     }
 
