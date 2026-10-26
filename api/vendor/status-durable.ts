@@ -1,8 +1,8 @@
+import { authenticateVendorRequest as authenticateRequest } from '../../dist/server.cjs';
 import {
-  authenticateVendorRequest as authenticateRequest,
   getDurableVendorApplicationByIdentity,
   durableVendorStorageEnabled
-} from '../../dist/server.cjs';
+} from '../../src/server/services/DurableVendorApplicationStore';
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'GET') return res.status(405).json({ success: false, error: 'METHOD_NOT_ALLOWED' });
