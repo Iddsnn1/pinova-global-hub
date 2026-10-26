@@ -56,7 +56,7 @@ export default async function handler(req: any, res: any) {
     const returnRefundPolicy = String(policies.returnRefundPolicy || '').trim();
     const deliveryShippingPolicy = String(policies.deliveryShippingPolicy || '').trim();
     const pstpAgreementAccepted = body.pstpAgreementAccepted === true;
-    const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail);
+    const emailValid = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(contactEmail);
 
     const missingFields: string[] = [];
     if (!storeName) missingFields.push('storeName');
@@ -101,7 +101,9 @@ export default async function handler(req: any, res: any) {
       pstpAgreementAccepted,
       id: existing?.id || `VAPP-${String(body.countryCode || 'GL').slice(0, 2).toUpperCase()}-${Date.now().toString().slice(-8)}`,
       pioneerUsername: effectiveUsername,
-      pioneerUid: user.id || body.pioneerUid,
+      // Store only the authenticated server identity. Never trust a client-supplied UID.
+      // Pi UID is stable across display-username changes; internal user.id is fallback only.
+      pioneerUid: user.piUid || user.id,
       status,
       verificationStatus: 'Pending Verification',
       sellerStatus: 'Probation',
