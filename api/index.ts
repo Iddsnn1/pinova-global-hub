@@ -409,7 +409,16 @@ async function handleVendorStatus(req: IncomingMessage, res: ServerResponse): Pr
     // Vercel production normally rewrites this route to the durable handler, but this
     // fallback is intentionally kept aligned with the same durable compliance source
     // so routing changes cannot resurrect a stale approval/status authority.
-    const application = await getDurableVendorApplication(user.username);
+    // Resolve the durable record using the authenticated session identity. The
+    // session username can differ in casing or include a leading @; when that
+    // happens, resolveApprovedMerchant checks normalized durable usernames and
+    // then the verified Pioneer UID candidates. Never use client-supplied owner
+    // headers as an identity fallback here.
+    const application = await resolveApprovedMerchant(user.username, [
+      user.piUid,
+      user.uid,
+      user.id
+    ]);
     const status = application?.status || 'UNREGISTERED';
     const verified = application?.verificationStatus === 'Verified';
     const sellerActive = application?.sellerStatus === 'Active';
