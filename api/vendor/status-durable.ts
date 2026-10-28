@@ -1,39 +1,39 @@
-import { authenticateVendorRequest as authenticateRequest } from '../../dist/server.cjs';
 import {
+  authenticateVendorRequest as authenticateRequest,
   getDurableVendorApplication,
   getDurableVendorApplicationByIdentity,
   durableVendorStorageEnabled
-} from '../../src/server/services/DurableVendorApplicationStore';
+} from '../../dist/server.cjs';
 
 async function resolveAuthenticatedApplication(user: any): Promise<any | null> {
   const rawUsername = String(user?.username || '').trim();
   const normalizedUsername = rawUsername.replace(/^@/, '').toLowerCase();
 
-  // Read vendor application records from the Neon-backed service directly.
-  // Do not use the similarly named legacy Blob helpers exported by dist/server.cjs.
+  // The server bundle exports the Neon-backed durable vendor store. Use its
+  // identity-aware lookup and avoid importing unbundled TypeScript at runtime.
   if (rawUsername) {
     const direct = await getDurableVendorApplication(rawUsername);
     if (direct) return direct;
   }
 
-  // Only use identifiers from the authenticated session; never trust client-supplied
-  // owner/username headers as an identity fallback.
+  // Only authenticated session identifiers are eligible for identity fallback.
   const uidCandidates = [user?.piUid, user?.uid, user?.id]
     .map((value) => String(value || '').trim())
     .filter(Boolean);
 
   for (const uid of uidCandidates) {
-    const byIdentity = await getDurableVendorApplicationByIdentity('', uid);
-    if (byIdentity) {
-      const storedUsername = String(byIdentity?.pioneerUsername || '')
-        .trim()
-        .replace(/^@/, '')
-        .toLowerCase();
-      const storedUid = String(byIdentity?.pioneerUid || '').trim();
-      if ((normalizedUsername && storedUsername === normalizedUsername) ||
-          (storedUid && uidCandidates.includes(storedUid))) {
-        return byIdentity;
-      }
+    const application = await getDurableVendorApplicationByIdentity('', uid);
+    if (!application) continue;
+
+    const storedUsername = String(application?.pioneerUsername || '')
+      .trim()
+      .replace(/^@/, '')
+      .toLowerCase();
+    const storedUid = String(application?.pioneerUid || '').trim();
+
+    if ((normalizedUsername && storedUsername === normalizedUsername) ||
+        (storedUid && uidCandidates.includes(storedUid))) {
+      return application;
     }
   }
 
