@@ -1,38 +1,43 @@
+import { authenticateVendorRequest as authenticateRequest } from '../../dist/server.cjs';
 import {
-  authenticateVendorRequest as authenticateRequest,
   getDurableVendorApplication,
-  listDurableVendorApplications,
+  getDurableVendorApplicationByIdentity,
   durableVendorStorageEnabled
-} from '../../dist/server.cjs';
+} from '../../src/server/services/DurableVendorApplicationStore';
 
 async function resolveAuthenticatedApplication(user: any): Promise<any | null> {
   const rawUsername = String(user?.username || '').trim();
   const normalizedUsername = rawUsername.replace(/^@/, '').toLowerCase();
 
-  // Prefer the canonical durable username lookup.
+  // Read vendor application records from the Neon-backed service directly.
+  // Do not use the similarly named legacy Blob helpers exported by dist/server.cjs.
   if (rawUsername) {
     const direct = await getDurableVendorApplication(rawUsername);
     if (direct) return direct;
   }
 
-  // Pi sessions can expose an alternate username representation. Resolve only
-  // against the authenticated session's UID and durable application records;
-  // never trust client-supplied owner/username headers as an identity fallback.
+  // Only use identifiers from the authenticated session; never trust client-supplied
+  // owner/username headers as an identity fallback.
   const uidCandidates = [user?.piUid, user?.uid, user?.id]
     .map((value) => String(value || '').trim())
     .filter(Boolean);
-  if (!normalizedUsername && uidCandidates.length === 0) return null;
 
-  const applications = await listDurableVendorApplications();
-  return applications.find((application: any) => {
-    const storedUsername = String(application?.pioneerUsername || '')
-      .trim()
-      .replace(/^@/, '')
-      .toLowerCase();
-    const storedUid = String(application?.pioneerUid || '').trim();
-    return (normalizedUsername && storedUsername === normalizedUsername) ||
-      (storedUid && uidCandidates.includes(storedUid));
-  }) || null;
+  for (const uid of uidCandidates) {
+    const byIdentity = await getDurableVendorApplicationByIdentity('', uid);
+    if (byIdentity) {
+      const storedUsername = String(byIdentity?.pioneerUsername || '')
+        .trim()
+        .replace(/^@/, '')
+        .toLowerCase();
+      const storedUid = String(byIdentity?.pioneerUid || '').trim();
+      if ((normalizedUsername && storedUsername === normalizedUsername) ||
+          (storedUid && uidCandidates.includes(storedUid))) {
+        return byIdentity;
+      }
+    }
+  }
+
+  return null;
 }
 
 export default async function handler(req: any, res: any) {
