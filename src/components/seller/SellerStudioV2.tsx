@@ -189,6 +189,7 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
   });
 
   const [applicationData, setApplicationData] = useState<any>(null);
+  const [statusDiagnostic, setStatusDiagnostic] = useState<string | null>(null);
 
   // Find matching vendor profile or build fallback
   const userUsername = (user?.username || '').toLowerCase();
@@ -219,8 +220,9 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
     setIsLoadingStatus(true);
     try {
       const res = await vendorAuthenticatedFetch('/api/vendor/status');
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        const data = await res.json();
+        setStatusDiagnostic(null);
         setServerStatus({
           status: data.status || 'STATUS_UNAVAILABLE',
           verified: !!data.verified,
@@ -242,6 +244,17 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
           }
         }
       } else {
+        // Show only sanitized diagnostics supplied by the server; never expose credentials.
+        const diagnostic = data?.diagnostic;
+        const parts = [
+          typeof data?.error === 'string' ? data.error : `HTTP_${res.status}`,
+          typeof diagnostic?.stage === 'string' ? diagnostic.stage : null,
+          typeof diagnostic?.errorCode === 'string' ? diagnostic.errorCode : null,
+          typeof diagnostic?.errorName === 'string' ? diagnostic.errorName : null,
+          typeof diagnostic?.requestId === 'string' ? `request ${diagnostic.requestId}` : null
+        ].filter(Boolean);
+        setStatusDiagnostic(parts.join(' · '));
+        console.warn('[SellerStudioV2] Authoritative status failed', { status: res.status, diagnostic: diagnostic || null, error: data?.error || null });
         // A failed authoritative status check is not proof that the merchant is unregistered.
         setServerStatus({
           status: 'STATUS_UNAVAILABLE',
@@ -252,6 +265,7 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
         });
       }
     } catch (err) {
+      setStatusDiagnostic(err instanceof Error ? `NETWORK_ERROR · ${err.name}` : 'NETWORK_ERROR');
       console.warn('[SellerStudioV2] Failed to fetch server status:', err);
       setServerStatus({
         status: 'STATUS_UNAVAILABLE',
@@ -362,6 +376,13 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
 
   return (
     <div className="min-h-screen bg-neutral-50/80 dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100 pb-16" id="seller-studio-v2">
+      {statusDiagnostic && (
+        <div role="status" className="mx-auto mt-3 max-w-7xl px-3 sm:px-6 lg:px-8">
+          <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+            <strong>Merchant status diagnostic:</strong> {statusDiagnostic}
+          </div>
+        </div>
+      )}
       {/* Top Main Navbar */}
       <header className="sticky top-0 z-40 bg-white/95 dark:bg-neutral-900/95 backdrop-blur-md border-b border-neutral-200 dark:border-neutral-800 shadow-2xs">
         <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-14 sm:h-16 flex items-center justify-between gap-2 sm:gap-4">
