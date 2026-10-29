@@ -175,12 +175,21 @@ const requireManifestRecord = (bucket, record, index) => {
   return entry;
 };
 const decimalString = (value, field) => {
+  // Legacy Blob records may store decimal prices as JSON numbers rather than strings.
+  // Convert only finite, non-negative numbers whose ordinary string form is decimal.
+  // Reject exponent notation and invalid values rather than rounding monetary values.
+  let v;
   if (typeof value === 'string') {
-    const v = value.trim();
-    if (!/^\d+(?:\.\d+)?$/.test(v)) throw new Error(`${field} must be a non-negative decimal string`);
-    return v;
+    v = value.trim();
+  } else if (typeof value === 'number' && Number.isFinite(value) && value >= 0) {
+    v = String(value);
+  } else {
+    throw new Error(`${field} must be a non-negative decimal string or finite decimal number`);
   }
-  throw new Error(`${field} must be a non-negative decimal string`);
+  if (!/^\d+(?:\.\d+)?$/.test(v)) {
+    throw new Error(`${field} must be a non-negative decimal string or finite decimal number`);
+  }
+  return v;
 };
 
 // Validate the entire payload and existing-ID conflicts before the first write.
