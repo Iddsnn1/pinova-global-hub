@@ -1289,11 +1289,21 @@ app.post(
 app.get(
   ['/api/vendor/branding-status', '/api/v1/vendor/branding-status'],
   (req, res) => {
+    const storageConfig = {
+      endpointConfigured: Boolean(String(process.env.OBJECT_STORAGE_ENDPOINT || process.env.AWS_ENDPOINT_URL_S3 || '').trim()),
+      bucketConfigured: Boolean(String(process.env.OBJECT_STORAGE_BUCKET || '').trim()),
+      accessKeyConfigured: Boolean(String(process.env.OBJECT_STORAGE_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID || '').trim()),
+      secretKeyConfigured: Boolean(String(process.env.OBJECT_STORAGE_SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY || '').trim())
+    };
     res.json({
+      success: true,
       status: 'ok',
       runtime: process.env.VERCEL === '1' ? 'vercel' : 'node',
+      deploymentCommit: process.env.VERCEL_GIT_COMMIT_SHA || null,
+      deploymentBranch: process.env.VERCEL_GIT_COMMIT_REF || null,
       brandingRouteLoaded: true,
       objectStorageConfigured: objectStorageEnabled(),
+      storageConfig,
       maxFileSize: 5 * 1024 * 1024,
       allowedFormats: ['image/jpeg', 'image/png', 'image/webp']
     });
