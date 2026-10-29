@@ -81,6 +81,17 @@ async function run() {
   const previousSecret = process.env.PINOVA_FX_QUOTE_SECRET;
   process.env.PINOVA_FX_QUOTE_SECRET = 'test-only-fx-quote-secret-which-is-long-enough';
   try {
+    // The server must not sign an internally inconsistent quote, even when the
+    // caller is trusted code: fiat, USD, and Pi-reference amounts must agree.
+    assert.throws(
+      () => signPiNovaFxQuote({ ...oneDollar, amountUsd: 2 }),
+      TypeError
+    );
+    assert.throws(
+      () => signPiNovaFxQuote({ ...oneDollar, referencePiAmount: oneDollar.referencePiAmount + 1 }),
+      TypeError
+    );
+
     const signed = signPiNovaFxQuote(oneDollar, 1_800_000_000_000);
     const verified = verifyPiNovaFxQuoteToken(signed.token, 1_800_000_001_000);
     assert.ok(verified);
