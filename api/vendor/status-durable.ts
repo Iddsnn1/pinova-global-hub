@@ -69,7 +69,32 @@ export default async function handler(req: any, res: any) {
       access
     });
   } catch (error: any) {
-    console.error('[durable-vendor-status]', error);
-    return res.status(500).json({ success: false, error: 'SELLER_ACCESS_CHECK_ERROR' });
+    // Keep the client response safe: never return raw database errors or credentials.
+    // The structured fields let Preview diagnostics distinguish configuration,
+    // authentication, and durable lookup failures without exposing secrets.
+    const errorName = typeof error?.name === 'string' ? error.name.slice(0, 80) : 'UnknownError';
+    const errorCode = typeof error?.code === 'string' && /^[A-Z0-9_]{1,64}$/.test(error.code)
+      ? error.code
+      : null;
+    console.error('[durable-vendor-status]', {
+      name: errorName,
+      code: errorCode,
+      requestId: req.headers?.['x-vercel-id'] || null,
+      deploymentCommit: process.env.VERCEL_GIT_COMMIT_SHA || null,
+      deploymentBranch: process.env.VERCEL_GIT_COMMIT_REF || null
+    });
+    return res.status(500).json({
+      success: false,
+      error: 'SELLER_ACCESS_CHECK_ERROR',
+      diagnostic: {
+        stage: 'durable_status_lookup',
+        errorName,
+        errorCode,
+        durableStorageConfigured: durableVendorStorageEnabled(),
+        deploymentCommit: process.env.VERCEL_GIT_COMMIT_SHA || null,
+        deploymentBranch: process.env.VERCEL_GIT_COMMIT_REF || null,
+        requestId: req.headers?.['x-vercel-id'] || null
+      }
+    });
   }
 }
