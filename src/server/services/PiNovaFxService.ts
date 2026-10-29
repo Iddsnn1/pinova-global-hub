@@ -164,7 +164,47 @@ function stableQuotePayload(quote: PiNovaFxQuote, expiresAt: number): string {
   });
 }
 
+function assertConsistentFxQuote(quote: PiNovaFxQuote): void {
+  if (
+    !quote ||
+    typeof quote.currency !== 'string' ||
+    !CURRENCY_CODE.test(quote.currency) ||
+    !Number.isFinite(quote.amount) ||
+    quote.amount <= 0 ||
+    quote.amount > 1_000_000_000 ||
+    !Number.isFinite(quote.amountUsd) ||
+    quote.amountUsd <= 0 ||
+    !Number.isFinite(quote.usdToCurrencyRate) ||
+    quote.usdToCurrencyRate <= 0 ||
+    quote.usdToCurrencyRate > 1_000_000_000 ||
+    !Number.isFinite(quote.referencePiAmount) ||
+    quote.referencePiAmount <= 0 ||
+    !Number.isFinite(quote.referenceRateUsdPerPi) ||
+    quote.referenceRateUsdPerPi !== PI_REFERENCE_RATE_USD ||
+    !Number.isFinite(Date.parse(quote.retrievedAt))
+  ) {
+    throw new TypeError('FX quote contains invalid or unsupported values.');
+  }
+
+  const expectedUsd = quote.currency === 'USD'
+    ? quote.amount
+    : quote.amount / quote.usdToCurrencyRate;
+  const expectedPi = calculatePiReferenceFromUsd(quote.amountUsd);
+  const tolerance = Math.max(1e-12, Math.abs(expectedUsd) * 1e-12);
+
+  if (
+    Math.abs(quote.amountUsd - expectedUsd) > tolerance ||
+    quote.referencePiAmount !== expectedPi ||
+    (quote.currency === 'USD' && (quote.usdToCurrencyRate !== 1 || quote.source !== 'identity-usd')) ||
+    (quote.currency !== 'USD' && quote.source !== 'currencyapi.com')
+  ) {
+    throw new TypeError('FX quote fiat, USD, and Pi reference amounts do not match.');
+  }
+}
+
 export function signPiNovaFxQuote(quote: PiNovaFxQuote, nowMs = Date.now()): SignedPiNovaFxQuote {
+  assertConsistentFxQuote(quote);
+  if (!Number.isFinite(nowMs)) throw new TypeError('FX quote signing time must be finite.');
   const expiresAtMs = nowMs + 5 * 60 * 1000;
   const payload = stableQuotePayload(quote, expiresAtMs);
   const encoded = Buffer.from(payload, 'utf8').toString('base64url');
