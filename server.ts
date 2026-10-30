@@ -44,6 +44,7 @@ import { durableProductStorageEnabled, getDurableProduct, listDurableProducts, s
 import { durableOrderStorageEnabled, getDurableOrder, listDurableOrders, saveDurableOrder, createDurableOrderWithStockReservation, createDurableOrderWithIdempotency, markDurableOrderPaymentVerified, softDeleteDurableOrder } from './src/server/services/DurableOrderStore';
 import { durableVendorStorageEnabled, getDurableVendorApplication, getDurableVendorApplicationByIdentity, listDurableVendorApplications, saveDurableVendorApplication } from './src/server/services/DurableVendorApplicationStore';
 import { objectStorageEnabled, putObject, getObject, deleteObject, publicObjectUrl } from './src/server/services/ObjectStorage';
+import { vendorDocumentStorageEnabled, putVendorDocument, getVendorDocument } from './src/server/services/VendorDocumentStorage';
 import { saveEducationAdmissionDocument, listEducationAdmissionDocuments, educationDocumentStorageEnabled, EDUCATION_DOCUMENT_MAX_BYTES, EDUCATION_DOCUMENT_TYPES } from './src/server/services/EducationDocumentStorage';
 import { quoteFiatToPiReference, signPiNovaFxQuote, verifyPiNovaFxQuoteToken, FxConfigurationError, FxProviderError } from './src/server/services/PiNovaFxService';
 
@@ -1189,17 +1190,17 @@ app.post(
       const randomDocId = crypto.randomBytes(16).toString('hex');
 
       // 9. Store encrypted ciphertext and metadata in durable object storage.
-      if (!objectStorageEnabled()) {
-        return res.status(503).json({ success: false, error: 'OBJECT_STORAGE_NOT_CONFIGURED', message: 'Durable encrypted document storage is not configured.' });
+      if (!vendorDocumentStorageEnabled()) {
+        return res.status(503).json({ success: false, error: 'VENDOR_DOCUMENT_STORAGE_NOT_CONFIGURED', message: 'Private encrypted KYC document storage is not configured.' });
       }
-      await putObject(`vendor-documents/${randomDocId}.enc`, encryptedBytes, 'application/octet-stream');
+      await putVendorDocument(`vendor-documents/${randomDocId}.enc`, encryptedBytes, 'application/octet-stream');
       const metadata = {
         id: randomDocId, originalFilename: sanitizedFilename, mimeType, documentType: docType,
         owner: ownerUsername.toLowerCase(), uploadedAt: new Date().toISOString(),
         iv: iv.toString('hex'), authTag: authTag.toString('hex'),
         encryptedByteLength: encryptedBytes.length, originalSize: fileBuffer.length
       };
-      await putObject(`vendor-documents/${randomDocId}.meta.json`, JSON.stringify(metadata), 'application/json');
+      await putVendorDocument(`vendor-documents/${randomDocId}.meta.json`, JSON.stringify(metadata), 'application/json');
       res.status(201).json({ success: true, reference: `private://vendor-documents/${randomDocId}` });
 
     } catch (err: any) {
@@ -1573,9 +1574,9 @@ app.get(
         return;
       }
 
-      if (!objectStorageEnabled()) return res.status(503).json({ success: false, error: 'OBJECT_STORAGE_NOT_CONFIGURED' });
-      const metaObject = await getObject(`vendor-documents/${id}.meta.json`);
-      const encryptedObject = await getObject(`vendor-documents/${id}.enc`);
+      if (!vendorDocumentStorageEnabled()) return res.status(503).json({ success: false, error: 'VENDOR_DOCUMENT_STORAGE_NOT_CONFIGURED' });
+      const metaObject = await getVendorDocument(`vendor-documents/${id}.meta.json`);
+      const encryptedObject = await getVendorDocument(`vendor-documents/${id}.enc`);
       if (!metaObject || !encryptedObject) return res.status(404).json({ success: false, error: 'DOCUMENT_NOT_FOUND' });
 
       let meta: any;
