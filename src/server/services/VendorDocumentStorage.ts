@@ -37,7 +37,7 @@ export function vendorDocumentStorageEnabled(): boolean {
 
 export async function putVendorDocument(pathname: string, body: Uint8Array | string, contentType: string) {
   const { c, s3 } = client();
-  const key = pathname.replace(/^\\/+/, '');
+  const key = pathname.replace(/^\/+/, '');
   await s3.send(new PutObjectCommand({
     Bucket: c.bucket, Key: key, Body: body, ContentType: contentType, CacheControl: 'no-store'
   }));
@@ -46,7 +46,7 @@ export async function putVendorDocument(pathname: string, body: Uint8Array | str
 export async function getVendorDocument(pathname: string): Promise<{ body: Uint8Array; contentType: string } | null> {
   const { c, s3 } = client();
   try {
-    const out = await s3.send(new GetObjectCommand({ Bucket: c.bucket, Key: pathname.replace(/^\\/+/, '') }));
+    const out = await s3.send(new GetObjectCommand({ Bucket: c.bucket, Key: pathname.replace(/^\/+/, '') }));
     if (!out.Body) return null;
     return { body: new Uint8Array(await out.Body.transformToByteArray()), contentType: out.ContentType || 'application/octet-stream' };
   } catch (error: any) {
