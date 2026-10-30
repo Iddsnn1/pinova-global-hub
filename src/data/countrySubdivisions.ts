@@ -77,3 +77,213 @@ export function resolveSubdivisionCode(countryCode: string, subdivisionNameOrCod
   // Generate standard prefix if not in map
   return `${(countryCode || 'GL').toUpperCase()}-${norm.replace(/[^A-Za-z0-9]/g, '').substring(0, 3).toUpperCase()}`;
 }
+
+/**
+ * Normalizes any country input (ISO-2 code, ISO-3 code, or full country name)
+ * into a standardized 2-letter uppercase ISO country code.
+ * If 'ALL' or 'GLOBAL' is provided, returns 'ALL'.
+ * If an invalid or unresolvable country is provided, returns the trimmed uppercase string
+ * so downstream queries will safely yield 0 results instead of skipping the filter.
+ */
+export function normalizeCountryCode(countryOrCode?: string): string | undefined {
+  if (!countryOrCode) return undefined;
+  const trimmed = countryOrCode.trim();
+  if (!trimmed) return undefined;
+  const upper = trimmed.toUpperCase();
+  if (upper === 'ALL' || upper === 'GLOBAL') {
+    return 'ALL';
+  }
+
+  const info = getCountryInfo(trimmed);
+  if (info) {
+    return info.code;
+  }
+
+  return upper;
+}
+
+/**
+ * Authoritative parent-region to sub-entity / county / alias relationships.
+ * Allows standardized regions (like UK 'South East England') to cleanly resolve
+ * institutions located in specific counties (like 'Oxfordshire').
+ */
+export const SUBDIVISION_PARENT_MAP: Record<string, Record<string, string[]>> = {
+  GB: {
+    'South East England': [
+      'Oxfordshire',
+      'Berkshire',
+      'Buckinghamshire',
+      'Hampshire',
+      'Isle of Wight',
+      'Kent',
+      'Surrey',
+      'East Sussex',
+      'West Sussex',
+      'Oxford',
+      'Reading',
+      'Brighton',
+      'Southampton',
+      'Portsmouth'
+    ],
+    'Greater London': [
+      'London',
+      'City of London',
+      'Westminster',
+      'Camden',
+      'Greenwich',
+      'Kensington',
+      'Islington'
+    ],
+    'North West England': [
+      'Lancashire',
+      'Greater Manchester',
+      'Merseyside',
+      'Cheshire',
+      'Cumbria',
+      'Manchester',
+      'Liverpool'
+    ],
+    'West Midlands': [
+      'West Midlands County',
+      'Staffordshire',
+      'Warwickshire',
+      'Worcestershire',
+      'Shropshire',
+      'Herefordshire',
+      'Birmingham',
+      'Coventry',
+      'Wolverhampton'
+    ],
+    'South West England': [
+      'Bristol',
+      'Cornwall',
+      'Devon',
+      'Dorset',
+      'Gloucestershire',
+      'Somerset',
+      'Wiltshire'
+    ],
+    'East of England': [
+      'Bedfordshire',
+      'Cambridgeshire',
+      'Essex',
+      'Hertfordshire',
+      'Norfolk',
+      'Suffolk',
+      'Cambridge'
+    ],
+    'East Midlands': [
+      'Derbyshire',
+      'Leicestershire',
+      'Lincolnshire',
+      'Northamptonshire',
+      'Nottinghamshire',
+      'Rutland'
+    ],
+    'Yorkshire and the Humber': [
+      'North Yorkshire',
+      'South Yorkshire',
+      'West Yorkshire',
+      'East Riding of Yorkshire',
+      'Leeds',
+      'Sheffield'
+    ],
+    'North East England': [
+      'County Durham',
+      'Northumberland',
+      'Tyne and Wear',
+      'Newcastle',
+      'Sunderland'
+    ],
+    'Scotland': [
+      'Edinburgh',
+      'Glasgow',
+      'Aberdeen',
+      'Dundee',
+      'Inverness',
+      'Highlands'
+    ],
+    'Wales': [
+      'Cardiff',
+      'Swansea',
+      'Newport',
+      'Wrexham'
+    ],
+    'Northern Ireland': [
+      'Belfast',
+      'Derry',
+      'Lisburn',
+      'Newry',
+      'Antrim',
+      'Down'
+    ]
+  },
+  NG: {
+    'Federal Capital Territory': ['FCT', 'Abuja', 'Federal Capital Territory (Abuja)', 'F.C.T.'],
+    'Lagos': ['Lagos State'],
+    'Kano': ['Kano State']
+  },
+  US: {
+    'California': ['CA', 'Calif.'],
+    'New York': ['NY'],
+    'Texas': ['TX'],
+    'Massachusetts': ['MA'],
+    'Washington': ['WA'],
+    'Illinois': ['IL']
+  },
+  GH: {
+    'Greater Accra': ['Accra', 'Accra Metropolis', 'Legon'],
+    'Ashanti': ['Kumasi']
+  }
+};
+
+/**
+ * Normalizes or resolves whether a candidate state/county/subdivision matches or belongs
+ * to a target subdivision or parent region for a given country.
+ */
+export function matchesSubdivision(
+  countryCode: string | undefined,
+  candidateSubdivision: string | undefined,
+  targetSubdivision: string | undefined
+): boolean {
+  if (!targetSubdivision || targetSubdivision.toLowerCase() === 'all') return true;
+  if (!candidateSubdivision) return false;
+
+  const target = targetSubdivision.trim().toLowerCase();
+  const candidate = candidateSubdivision.trim().toLowerCase();
+
+  // 1. Direct case-insensitive match
+  if (target === candidate) return true;
+
+  // 2. Check parent-region and alias relationships
+  const cCode = countryCode ? normalizeCountryCode(countryCode) : undefined;
+  if (cCode && SUBDIVISION_PARENT_MAP[cCode]) {
+    const countryMap = SUBDIVISION_PARENT_MAP[cCode];
+
+    // Check if target is a parent region containing candidate
+    for (const [parentRegion, children] of Object.entries(countryMap)) {
+      if (parentRegion.toLowerCase() === target) {
+        if (children.some((c) => c.toLowerCase() === candidate)) {
+          return true;
+        }
+      }
+      // Check if candidate is a parent region and target is a child
+      if (parentRegion.toLowerCase() === candidate) {
+        if (children.some((c) => c.toLowerCase() === target)) {
+          return true;
+        }
+      }
+    }
+  }
+
+  // 3. Check subdivision code resolution (e.g. NG-KN vs Kano, US-CA vs California)
+  if (cCode) {
+    const resolvedCandidateCode = resolveSubdivisionCode(cCode, candidateSubdivision).toLowerCase();
+    const resolvedTargetCode = resolveSubdivisionCode(cCode, targetSubdivision).toLowerCase();
+    if (resolvedCandidateCode && resolvedTargetCode && resolvedCandidateCode === resolvedTargetCode) {
+      return true;
+    }
+  }
+
+  return false;
+}

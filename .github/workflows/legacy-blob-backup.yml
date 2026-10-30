@@ -1,0 +1,113 @@
+name: Legacy Blob Backup
+
+on:
+  workflow_dispatch:
+    inputs:
+      import_to_neon:
+        description: 'After export validation, idempotently import the backup into the dedicated Neon Preview branch'
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    environment: LEGACY_BLOB_BACKUP
+    permissions:
+      contents: read
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout migration branch
+        uses: actions/checkout@v6
+        with:
+          ref: migration/neon-durable-storage
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22.x'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Verify private legacy Blob credential
+        env:
+          PRIVATE_BLOB_READ_WRITE_TOKEN: ${{ secrets.PRIVATE_BLOB_READ_WRITE_TOKEN }}
+          PRIVATE_BLOB_STORE_ID: ${{ secrets.PRIVATE_BLOB_STORE_ID }}
+        run: |
+          set -euo pipefail
+          test -n "${PRIVATE_BLOB_READ_WRITE_TOKEN:-}" || {
+            echo "LEGACY_BLOB_TOKEN_MISSING: production PRIVATE_BLOB_READ_WRITE_TOKEN is unavailable"
+            exit 1
+          }
+          test "${PRIVATE_BLOB_STORE_ID:-}" = "store_zypKOROZmcB8ihIX" || {
+            echo "LEGACY_BLOB_STORE_MISMATCH: expected store_zypKOROZmcB8ihIX"
+            exit 1
+          }
+          echo "Legacy Blob credential target verified: ${PRIVATE_BLOB_STORE_ID}"
+          echo "Credential source: Vercel Production environment"
+
+      - name: Export legacy Blob data (read-only operations)
+        env:
+          PRIVATE_BLOB_READ_WRITE_TOKEN: ${{ secrets.PRIVATE_BLOB_READ_WRITE_TOKEN }}
+          PRIVATE_BLOB_STORE_ID: ${{ secrets.PRIVATE_BLOB_STORE_ID }}
+          LEGACY_BLOB_BACKUP_FILE: /tmp/pinova-legacy-blob-backup.json
+        run: |
+          set -euo pipefail
+          test "${PRIVATE_BLOB_STORE_ID:-}" = "store_zypKOROZmcB8ihIX" || {
+            echo "LEGACY_BLOB_STORE_MISMATCH: expected store_zypKOROZmcB8ihIX"
+            exit 1
+          }
+          test -n "${PRIVATE_BLOB_READ_WRITE_TOKEN:-}" || {
+            echo "LEGACY_BLOB_TOKEN_MISSING: production PRIVATE_BLOB_READ_WRITE_TOKEN is required"
+            exit 1
+          }
+          npm run export:legacy-blob
+
+      - name: Validate export backup before any Neon write
+        env:
+          LEGACY_BLOB_BACKUP_FILE: /tmp/pinova-legacy-blob-backup.json
+        run: |
+          set -euo pipefail
+          test -s "$LEGACY_BLOB_BACKUP_FILE" || { echo "LEGACY_BLOB_BACKUP_MISSING"; exit 1; }
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const file = process.env.LEGACY_BLOB_BACKUP_FILE;
+          const backup = JSON.parse(fs.readFileSync(file, 'utf8'));
+          if (backup.schemaVersion !== 2) throw new Error('BACKUP_SCHEMA_INVALID');
+          if (!Array.isArray(backup.manifest)) throw new Error('BACKUP_MANIFEST_REQUIRED');
+          const collections = ['products','orders','vendorApplications','orderFulfillment'];
+          const total = collections.reduce((n,k) => n + (Array.isArray(backup[k]) ? backup[k].length : 0), 0);
+          if (backup.manifest.length !== total) throw new Error('BACKUP_MANIFEST_COUNT_MISMATCH');
+          for (const entry of backup.manifest) {
+            if (!entry || entry.status !== 'exported' || !entry.recordId || !entry.sha256 || !entry.sourceSha256) throw new Error('BACKUP_MANIFEST_INVALID_ENTRY');
+          }
+          console.log(JSON.stringify({validated:true, schemaVersion:backup.schemaVersion, manifest:backup.manifest.length}, null, 2));
+          NODE
+
+      - name: Import validated backup into Neon Preview only
+        if: ${{ inputs.import_to_neon == true }}
+        env:
+          NEON_PREVIEW_DATABASE_URL: ${{ secrets.NEON_PREVIEW_DATABASE_URL }}
+          LEGACY_BLOB_BACKUP_FILE: /tmp/pinova-legacy-blob-backup.json
+        run: |
+          set -euo pipefail
+          test -n "${NEON_PREVIEW_DATABASE_URL:-}" || {
+            echo "NEON_PREVIEW_DATABASE_URL_MISSING: configure this repository/environment secret with the dedicated Neon Preview branch URL"
+            exit 1
+          }
+          # This must be a separately configured secret copied from the intended Neon Preview branch.
+          # Never populate it with a Production connection string. The importer is additive and does not delete source data.
+          node --input-type=module <<'NODE'
+          const value = process.env.NEON_PREVIEW_DATABASE_URL || '';
+          let parsed;
+          try { parsed = new URL(value); } catch { throw new Error('NEON_PREVIEW_DATABASE_URL_INVALID'); }
+          if (!['postgres:', 'postgresql:'].includes(parsed.protocol) || !parsed.hostname.endsWith('.neon.tech') || parsed.pathname !== '/neondb') {
+            throw new Error('NEON_PREVIEW_DATABASE_URL_INVALID: expected a Neon connection URL for database neondb');
+          }
+          console.log('Neon Preview connection URL shape validated; branch identity must be verified in Neon Console before configuring the secret.');
+          NODE
+          DATABASE_URL="$NEON_PREVIEW_DATABASE_URL" node "$GITHUB_WORKSPACE/scripts/import-neon-backup.mjs" "$LEGACY_BLOB_BACKUP_FILE"

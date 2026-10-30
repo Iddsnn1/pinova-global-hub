@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { formatPiAmount } from '../utils/formatters';
 import { X, Trash2, ShoppingBag, ShieldCheck, Tag, ArrowRight, Check } from 'lucide-react';
 import { OrderItem, Coupon } from '../types';
 
@@ -25,6 +26,37 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null);
   const [couponError, setCouponError] = useState('');
   const [shippingCountry, setShippingCountry] = useState('United States');
+  const [serverCoupons, setServerCoupons] = useState<Coupon[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/vendor/promos', { cache: 'no-store' });
+        const data = await res.json().catch(() => null);
+        if (!cancelled && res.ok && Array.isArray(data?.promos)) {
+          setServerCoupons(data.promos.map((promo: any) => ({
+            code: String(promo.code || '').toUpperCase(),
+            discountPercent: Number(promo.discountPercent),
+            minSpendPi: Number(promo.minPurchasePi),
+            active: promo.active === true,
+            expiresAt: String(promo.expiresAt || ''),
+            sellerUsername: promo.sellerUsername,
+            storeName: promo.storeName ?? null
+          })));
+        }
+      } catch {
+        // Server coupons are optional; keep legacy coupon source available.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const availableCoupons = useMemo(() => {
+    const merged = new Map<string, Coupon>();
+    [...coupons, ...serverCoupons].forEach((coupon) => merged.set(coupon.code.toUpperCase(), coupon));
+    return [...merged.values()];
+  }, [coupons, serverCoupons]);
 
   if (!isOpen) return null;
 
@@ -35,17 +67,35 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
     return acc + price * item.quantity;
   }, 0);
 
-  const discountAmount = appliedCoupon ? (subtotalPi * appliedCoupon.discountPercent) / 100 : 0;
+  const eligibleCouponSubtotal = appliedCoupon?.sellerUsername
+    ? cartItems.reduce((acc, item) => {
+        if (item.product.sellerId !== appliedCoupon.sellerUsername) return acc;
+        const price = item.product.discountPercent
+          ? item.product.pricePi * (1 - item.product.discountPercent / 100)
+          : item.product.pricePi;
+        return acc + price * item.quantity;
+      }, 0)
+    : subtotalPi;
+  const discountAmount = appliedCoupon ? (eligibleCouponSubtotal * appliedCoupon.discountPercent) / 100 : 0;
   const totalPi = Math.max(0, subtotalPi - discountAmount);
 
   const handleApplyCoupon = () => {
     setCouponError('');
-    const matched = coupons.find((c) => c.code.toUpperCase() === couponCode.trim().toUpperCase() && c.active);
+    const matched = availableCoupons.find((c) => c.code.toUpperCase() === couponCode.trim().toUpperCase() && c.active && Date.parse(c.expiresAt) > Date.now());
     if (!matched) {
       setCouponError('Invalid coupon code');
       return;
     }
-    if (subtotalPi < matched.minSpendPi) {
+    const eligibleSubtotal = matched.sellerUsername
+      ? cartItems.reduce((acc, item) => {
+          if (item.product.sellerId !== matched.sellerUsername) return acc;
+          const price = item.product.discountPercent
+            ? item.product.pricePi * (1 - item.product.discountPercent / 100)
+            : item.product.pricePi;
+          return acc + price * item.quantity;
+        }, 0)
+      : subtotalPi;
+    if (eligibleSubtotal < matched.minSpendPi) {
       setCouponError(`Minimum spend of ${matched.minSpendPi} π required`);
       return;
     }
@@ -114,7 +164,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
 
                       <div className="flex items-center justify-between mt-2">
                         <span className="font-black text-amber-500 text-sm">
-                          {(itemPrice * item.quantity).toFixed(2)} π
+                          {formatPiAmount((itemPrice * item.quantity))} π
                         </span>
 
                         <div className="flex items-center border border-slate-300 dark:border-slate-700 rounded-lg overflow-hidden bg-white dark:bg-slate-900">
@@ -207,13 +257,13 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
               <div className="space-y-2 text-xs text-slate-600 dark:text-slate-400 border-t border-slate-200 dark:border-slate-800 pt-3">
                 <div className="flex justify-between">
                   <span>Subtotal</span>
-                  <span className="font-bold text-slate-900 dark:text-slate-100">{subtotalPi.toFixed(2)} π</span>
+                  <span className="font-bold text-slate-900 dark:text-slate-100">{formatPiAmount(subtotalPi)} π</span>
                 </div>
 
                 {discountAmount > 0 && (
                   <div className="flex justify-between text-emerald-500 font-semibold">
                     <span>Discount ({appliedCoupon?.code})</span>
-                    <span>-{discountAmount.toFixed(2)} π</span>
+                    <span>-{formatPiAmount(discountAmount)} π</span>
                   </div>
                 )}
 
@@ -224,7 +274,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
 
                 <div className="flex justify-between text-base font-black text-slate-900 dark:text-slate-100 pt-2 border-t border-slate-200 dark:border-slate-800">
                   <span>Total Order Amount</span>
-                  <span className="text-amber-500 text-lg">{totalPi.toFixed(2)} π</span>
+                  <span className="text-amber-500 text-lg">{formatPiAmount(totalPi)} π</span>
                 </div>
               </div>
 

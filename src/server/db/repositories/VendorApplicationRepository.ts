@@ -2,6 +2,8 @@ import { StorageEngine } from '../StorageEngine';
 
 export type VendorApplicationStatus = 'PENDING_REVIEW' | 'UNDER_REVIEW' | 'APPROVED' | 'REJECTED' | 'ACTION_REQUIRED';
 export type SellerType = 'individual' | 'business';
+export type MerchantVerificationStatus = 'Verified' | 'Pending Verification' | 'Unverified' | 'Suspended';
+export type MerchantSellerStatus = 'Active' | 'Inactive' | 'Probation' | 'Suspended';
 
 export interface VendorApplicationDoc {
   id: string;
@@ -9,6 +11,7 @@ export interface VendorApplicationDoc {
   fileName: string;
   fileUrl: string;
   uploadedAt: string;
+  documentNumber?: string;
 }
 
 export interface VendorApplicationEntity {
@@ -28,6 +31,8 @@ export interface VendorApplicationEntity {
   storeTagline?: string;
   logoUrl?: string;
   bannerUrl?: string;
+  storeLogo?: string;
+  storeBanner?: string;
   businessRegistrationNumber?: string;
   taxId?: string;
   websiteUrl?: string;
@@ -40,6 +45,9 @@ export interface VendorApplicationEntity {
   };
   pstpAgreementAccepted: boolean;
   status: VendorApplicationStatus;
+  /** Authoritative merchant lifecycle derived from governance status. */
+  verificationStatus: MerchantVerificationStatus;
+  sellerStatus: MerchantSellerStatus;
   adminReviewNotes?: string;
   reviewedBy?: string;
   reviewedAt?: string;
@@ -47,57 +55,12 @@ export interface VendorApplicationEntity {
   updatedAt: string;
 }
 
-const INITIAL_VENDOR_APPLICATIONS: VendorApplicationEntity[] = [
-  {
-    id: 'VAPP-NG-9081',
-    pioneerUsername: 'pi_artisan_hub',
-    pioneerUid: 'UID_99812_ARTISAN',
-    storeName: 'Pi Artisan Crafts & Heritage',
-    sellerType: 'business',
-    country: 'Nigeria',
-    countryCode: 'NG',
-    stateRegion: 'Kano',
-    city: 'Kano Municipal',
-    contactEmail: 'artisan@pinova.hub',
-    contactPhone: '+234 803 111 2233',
-    contactTelegram: '@pi_artisan',
-    storeDescription: 'Handcrafted authentic leathercraft, artisanal textiles, and heritage memorabilia.',
-    storeTagline: 'Preserving African Heritage on the Pi Blockchain',
-    logoUrl: 'https://images.unsplash.com/photo-1544816155-12df9643f363?auto=format&fit=crop&w=200&q=80',
-    bannerUrl: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=1200&q=80',
-    businessRegistrationNumber: 'RC-1049283-NG',
-    taxId: 'TIN-99482711',
-    categoriesToSell: ['physical', 'giftcard'],
-    documents: [
-      {
-        id: 'doc_id_1',
-        docType: 'business_registration',
-        fileName: 'CAC_Certificate_ArtisanCrafts.pdf',
-        fileUrl: 'https://images.unsplash.com/photo-1568602471122-7832951cc4c5?auto=format&fit=crop&w=400&q=80',
-        uploadedAt: new Date(Date.now() - 86400000 * 2).toISOString()
-      },
-      {
-        id: 'doc_id_2',
-        docType: 'identity_proof',
-        fileName: 'National_ID_Slip.pdf',
-        fileUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80',
-        uploadedAt: new Date(Date.now() - 86400000 * 2).toISOString()
-      }
-    ],
-    policies: {
-      returnRefundPolicy: '14-day hassle-free return for unwashed items with PSTP buyer guarantee.',
-      deliveryShippingPolicy: 'Standard express dispatch within 24-48 business hours across Nigeria & West Africa.',
-      warrantyTerms: '6-month craftsmanship guarantee on leather goods.'
-    },
-    pstpAgreementAccepted: true,
-    status: 'APPROVED',
-    adminReviewNotes: 'Verified against CAC business registry and verified Pioneer KYC credentials.',
-    reviewedBy: 'PiNova Chief Compliance Officer',
-    reviewedAt: new Date(Date.now() - 86400000).toISOString(),
-    createdAt: new Date(Date.now() - 86400000 * 3).toISOString(),
-    updatedAt: new Date(Date.now() - 86400000).toISOString()
-  }
-];
+type VendorApplicationInput = Omit<VendorApplicationEntity, 'verificationStatus' | 'sellerStatus'> &
+  Partial<Pick<VendorApplicationEntity, 'verificationStatus' | 'sellerStatus'>>;
+
+// Production starts with no synthetic merchant/KYC records. Real applications
+// are created through the authoritative vendor onboarding flow.
+const INITIAL_VENDOR_APPLICATIONS: VendorApplicationEntity[] = [];
 
 export class VendorApplicationRepository {
   private engine: StorageEngine<VendorApplicationEntity>;
@@ -111,42 +74,132 @@ export class VendorApplicationRepository {
   }
 
   public getAll(): VendorApplicationEntity[] {
-    return this.engine.getAll();
+    return this.engine.getAll().map(app => this.ensureLifecycle(app));
   }
 
   public findById(id: string): VendorApplicationEntity | undefined {
-    return this.engine.get(id);
+    const app = this.engine.get(id);
+    return app ? this.ensureLifecycle(app) : undefined;
   }
 
   public findByUsername(username: string): VendorApplicationEntity | undefined {
-    const list = this.engine.getAll();
+    const list = this.getAll();
     return list.find(app => app.pioneerUsername.toLowerCase() === username.toLowerCase());
   }
 
-  public save(application: VendorApplicationEntity): VendorApplicationEntity {
-    this.engine.set(application.id, application);
-    return application;
+  private ensureLifecycle(app: VendorApplicationEntity): VendorApplicationEntity {
+    if (!app.verificationStatus || !app.sellerStatus) {
+      const lifecycle = this.lifecycleForStatus(app.status);
+      app.verificationStatus = app.verificationStatus ?? lifecycle.verificationStatus;
+      app.sellerStatus = app.sellerStatus ?? lifecycle.sellerStatus;
+    }
+    return app;
   }
 
+  public save(application: VendorApplicationInput): VendorApplicationEntity {
+    // This legacy repository is read-compatible only. Merchant activation is
+    // exclusively owned by the durable Compliance Queue. No local repository
+    // caller may create or preserve an APPROVED merchant state.
+    if (application.status === 'APPROVED') {
+      throw new Error('MERCHANT_APPROVAL_MUST_USE_COMPLIANCE_QUEUE');
+    }
+
+    const lifecycle = this.lifecycleForStatus(application.status);
+    const normalized: VendorApplicationEntity = {
+      ...application,
+      verificationStatus: lifecycle.verificationStatus,
+      sellerStatus: lifecycle.sellerStatus
+    };
+
+    this.engine.set(normalized.id, normalized);
+    return normalized;
+  }
+
+  /**
+   * Legacy compatibility helper for non-approval lifecycle updates.
+   *
+   * IMPORTANT: APPROVED is intentionally rejected here. The only supported
+   * merchant approval mutation is the authenticated durable Compliance Queue
+   * review endpoint.
+   */
   public updateStatus(
     id: string,
     status: VendorApplicationStatus,
     adminNotes?: string,
     reviewedBy?: string
   ): VendorApplicationEntity | undefined {
+    if (status === 'APPROVED') {
+      throw new Error('MERCHANT_APPROVAL_MUST_USE_COMPLIANCE_QUEUE');
+    }
+
     const existing = this.engine.get(id);
     if (!existing) return undefined;
 
+    const lifecycle = this.lifecycleForStatus(status);
     const updated: VendorApplicationEntity = {
       ...existing,
       status,
+      verificationStatus: lifecycle.verificationStatus,
+      sellerStatus: lifecycle.sellerStatus,
       adminReviewNotes: adminNotes ?? existing.adminReviewNotes,
-      reviewedBy: reviewedBy ?? 'Platform Compliance Lead',
+      reviewedBy: reviewedBy ?? 'Legacy Governance Read-Only',
       reviewedAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
 
     this.engine.set(id, updated);
     return updated;
+  }
+
+  public getMerchantAccess(username: string): {
+    applicationFound: boolean;
+    applicationStatus: VendorApplicationStatus | null;
+    verificationStatus: MerchantVerificationStatus;
+    sellerStatus: MerchantSellerStatus;
+    canSell: boolean;
+    canReceivePstpOrders: boolean;
+  } {
+    const application = this.findByUsername(username);
+    if (!application) {
+      return {
+        applicationFound: false,
+        applicationStatus: null,
+        verificationStatus: 'Unverified',
+        sellerStatus: 'Inactive',
+        canSell: false,
+        canReceivePstpOrders: false
+      };
+    }
+
+    const canSell = application.status === 'APPROVED'
+      && application.verificationStatus === 'Verified'
+      && application.sellerStatus === 'Active';
+
+    return {
+      applicationFound: true,
+      applicationStatus: application.status,
+      verificationStatus: application.verificationStatus,
+      sellerStatus: application.sellerStatus,
+      canSell,
+      canReceivePstpOrders: canSell && application.pstpAgreementAccepted
+    };
+  }
+
+  private lifecycleForStatus(status: VendorApplicationStatus): {
+    verificationStatus: MerchantVerificationStatus;
+    sellerStatus: MerchantSellerStatus;
+  } {
+    switch (status) {
+      case 'APPROVED':
+        return { verificationStatus: 'Verified', sellerStatus: 'Active' };
+      case 'REJECTED':
+        return { verificationStatus: 'Unverified', sellerStatus: 'Suspended' };
+      case 'ACTION_REQUIRED':
+        return { verificationStatus: 'Pending Verification', sellerStatus: 'Probation' };
+      case 'UNDER_REVIEW':
+      case 'PENDING_REVIEW':
+      default:
+        return { verificationStatus: 'Pending Verification', sellerStatus: 'Probation' };
+    }
   }
 }

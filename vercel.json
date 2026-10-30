@@ -2,6 +2,11 @@
   "version": 2,
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
+  "functions": {
+    "api/index.ts": {
+      "includeFiles": "dist/server.cjs"
+    }
+  },
   "rewrites": [
     {
       "source": "/validation-key.txt",
@@ -10,6 +15,54 @@
     {
       "source": "/validation-key",
       "destination": "/api/index?__path=/validation-key.txt"
+    },
+    {
+      "source": "/api/v1/products",
+      "destination": "/api/index?__path=/products"
+    },
+    {
+      "source": "/api/v1/products/(.*)",
+      "destination": "/api/index?__path=/products"
+    },
+    {
+      "source": "/api/products",
+      "destination": "/api/index?__path=/products"
+    },
+    {
+      "source": "/api/vendor/apply",
+      "destination": "/api/vendor/apply-durable"
+    },
+    {
+      "source": "/api/vendor/status",
+      "destination": "/api/vendor/status-durable"
+    },
+    {
+      "source": "/api/vendor/seller/access",
+      "destination": "/api/vendor/seller-access-durable"
+    },
+    {
+      "source": "/api/vendor/seller/authorize",
+      "destination": "/api/vendor/seller-authorize-durable"
+    },
+    {
+      "source": "/api/admin/vendor-applications",
+      "destination": "/api/admin/vendor-applications-durable"
+    },
+    {
+      "source": "/api/admin/vendor-application/(.*)/review",
+      "destination": "/api/admin/vendor-review-durable?id=$1"
+    },
+    {
+      "source": "/api/v1/orders",
+      "destination": "/api/orders"
+    },
+    {
+      "source": "/api/v1/orders/(.*)",
+      "destination": "/api/orders"
+    },
+    {
+      "source": "/api/v1/carriers/dhl/webhook",
+      "destination": "/api/orders/carriers/dhl/webhook"
     },
     {
       "source": "/api/(.*)",
@@ -51,7 +104,7 @@
         },
         {
           "key": "Access-Control-Allow-Headers",
-          "value": "X-Requested-With, Content-Type, Authorization"
+          "value": "Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Admin-Key, X-Idempotency-Key, Idempotency-Key, X-Branding-Type, X-Asset-Type, X-Filename, X-Pioneer-Username, X-Username, Range"
         },
         {
           "key": "Content-Security-Policy",

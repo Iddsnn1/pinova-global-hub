@@ -27,6 +27,7 @@ export function createAuthMiddlewares(authService: AuthorizationService) {
         const user = await authService.verifyToken(token);
         if (user) {
           req.authenticatedUser = user;
+          (req as any).user = user;
         }
       }
     } catch (err) {

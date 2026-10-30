@@ -357,7 +357,7 @@ export function searchInstitutions(
     country: p.country,
     countryCode: p.countryCode || 'GLOBAL',
     state: p.state,
-    availableServices: p.designations || ['Student Fee Payment', 'Tuition Clearance'],
+    availableServices: p.designations || [],
     matchedAliases: p.institutionAliases,
     packages: p.packages
   }));
