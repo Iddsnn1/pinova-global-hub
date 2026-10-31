@@ -11,7 +11,7 @@ on:
       - "server.ts"
       - "api/**/*.ts"
       - "scripts/**/*.mjs"
-      - "tests/pinova_fx_service_suite.ts"
+      - "tests/**/*.ts"
       - "tests/education_payment_authorization_suite.ts"
       - "tests/pi_payment_verification_suite.ts"
       - "tests/pi_order_payment_contract_suite.ts"
