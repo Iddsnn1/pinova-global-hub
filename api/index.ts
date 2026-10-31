@@ -3,6 +3,7 @@ import type { IncomingMessage, ServerResponse } from 'http';
 import { createRequire } from 'module';
 import path from 'path';
 import crypto from 'crypto';
+import { neonDatabaseEnabled, verifyNeonDatabaseConnection } from '../src/server/db/NeonDatabase';
 
 // IMPORTANT: keep dist/server.cjs lazy. Vercel wraps this handler as CommonJS,
 // and importing the server bundle at module scope can crash the function before
@@ -492,10 +493,59 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     reqUrl.includes('__path=/health') ||
     reqUrl.includes('__path=%2Fhealth')
   ) {
-    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-store');
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.statusCode = 200;
-    res.end(JSON.stringify({ status: 'ok', runtime: 'vercel' }));
+
+    const databaseConfigured = neonDatabaseEnabled();
+    const databaseReachable = databaseConfigured
+      ? await verifyNeonDatabaseConnection()
+      : false;
+    const objectStorageConfigured = Boolean(
+      process.env.AWS_ACCESS_KEY_ID &&
+      process.env.AWS_SECRET_ACCESS_KEY &&
+      process.env.AWS_ENDPOINT_URL_S3 &&
+      process.env.AWS_REGION &&
+      process.env.OBJECT_STORAGE_BUCKET
+    );
+    const vendorKycStorageConfigured = Boolean(
+      objectStorageConfigured &&
+      process.env.VENDOR_DOCUMENT_BUCKET &&
+      String(process.env.VENDOR_DOCUMENT_ENCRYPTION_KEY || '').trim().length >= 64
+    );
+    const sessionSecretConfigured = String(
+      process.env.JWT_SECRET || process.env.SESSION_SECRET || ''
+    ).trim().length >= 32;
+    const piPlatformConfigured = Boolean(process.env.PI_API_KEY);
+    const piSandboxMode =
+      process.env.PI_SANDBOX_MODE !== 'false' &&
+      process.env.PI_SANDBOX_MODE !== '0' &&
+      process.env.VITE_PI_ENV !== 'production';
+
+    const checks = {
+      databaseConfigured,
+      databaseReachable,
+      objectStorageConfigured,
+      vendorKycStorageConfigured,
+      sessionSecretConfigured,
+      piPlatformConfigured,
+      piSandboxMode
+    };
+    const ready =
+      databaseReachable &&
+      objectStorageConfigured &&
+      vendorKycStorageConfigured &&
+      sessionSecretConfigured &&
+      piPlatformConfigured;
+
+    res.statusCode = ready ? 200 : 503;
+    res.end(JSON.stringify({
+      status: ready ? 'ok' : 'degraded',
+      readiness: ready ? 'ready' : 'not_ready',
+      runtime: 'vercel',
+      nodeVersion: process.version,
+      checks
+    }));
     return;
   }
 
