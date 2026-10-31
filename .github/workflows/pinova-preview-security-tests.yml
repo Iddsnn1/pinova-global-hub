@@ -34,11 +34,11 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout preview branch
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ github.ref }}
       - name: Set up Node.js 22
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: "22"
       - name: Install dependencies
@@ -54,6 +54,8 @@ jobs:
         run: npx tsx tests/pi_order_payment_contract_suite.ts
       - name: Vendor branding upload security tests
         run: npm run test:branding
+      - name: Complete application regression suite
+        run: npm test
       - name: TypeScript validation
         run: npm run lint
       - name: Production build validation
