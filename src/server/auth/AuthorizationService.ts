@@ -122,7 +122,7 @@ export class AuthorizationService {
     if (this.revokedSessionEngine.get(token)) return null;
 
     // 1. Check Server Machine Secrets (Admin scripts / API keys)
-    const adminSecret = process.env.ADMIN_API_KEY || process.env.PI_API_KEY || process.env.PI_SERVER_KEY;
+    const adminSecret = (process.env.ADMIN_API_KEY || '').trim();
     if (adminSecret && adminSecret !== 'YOUR_PI_PLATFORM_API_KEY' && adminSecret !== 'MY_PI_API_KEY' && token === adminSecret) {
       const roles: UserRole[] = ['PLATFORM_ADMIN', 'COMPLIANCE_ADMIN'];
       return {
