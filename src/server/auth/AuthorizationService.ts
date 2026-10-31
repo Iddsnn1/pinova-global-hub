@@ -14,7 +14,11 @@ export class AuthorizationService {
     this.userRepo = userRepo || new UserIdentityRepository();
     this.sessionEngine = new StorageEngine<SessionEntity>('user_sessions', 'token');
     this.revokedSessionEngine = new StorageEngine<{ token: string; revokedAt: string }>('revoked_sessions', 'token');
-    this.secretKey = process.env.JWT_SECRET || process.env.SESSION_SECRET || 'pinova-sec-auth-v2-master-key';
+    const configuredSecret = (process.env.JWT_SECRET || process.env.SESSION_SECRET || '').trim();
+    if (process.env.NODE_ENV === 'production' && configuredSecret.length < 32) {
+      throw new Error('AUTH_SESSION_SECRET_REQUIRED: Configure JWT_SECRET or SESSION_SECRET with at least 32 random characters.');
+    }
+    this.secretKey = configuredSecret || 'pinova-development-only-session-secret';
   }
 
   public getUserRepo(): UserIdentityRepository {
