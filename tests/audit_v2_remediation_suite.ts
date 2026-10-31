@@ -43,6 +43,25 @@ async function runTestSuite() {
   const userRepo = new UserIdentityRepository();
   const authService = new AuthorizationService(userRepo);
 
+  // Pi Platform API credentials must never authenticate as application administrators.
+  const originalPiApiKey = process.env.PI_API_KEY;
+  const originalAdminApiKey = process.env.ADMIN_API_KEY;
+  try {
+    process.env.PI_API_KEY = 'pi-platform-server-key-test-only';
+    delete process.env.ADMIN_API_KEY;
+    const piKeyIdentity = await authService.authenticateToken('pi-platform-server-key-test-only');
+    assert(piKeyIdentity === null, 'Scenario 1.0a: Pi Platform API key cannot grant application administrator access');
+
+    process.env.ADMIN_API_KEY = 'dedicated-admin-key-test-only';
+    const adminKeyIdentity = await authService.authenticateToken('dedicated-admin-key-test-only');
+    assert(adminKeyIdentity?.roles.includes('PLATFORM_ADMIN') === true, 'Scenario 1.0b: Dedicated ADMIN_API_KEY retains explicit machine-admin access');
+  } finally {
+    if (originalPiApiKey === undefined) delete process.env.PI_API_KEY;
+    else process.env.PI_API_KEY = originalPiApiKey;
+    if (originalAdminApiKey === undefined) delete process.env.ADMIN_API_KEY;
+    else process.env.ADMIN_API_KEY = originalAdminApiKey;
+  }
+
   // 1.1 Session Creation & Identity Binding
   const pioneerSession = await authService.createSession({
     username: 'pioneer_alice',
@@ -85,6 +104,10 @@ async function runTestSuite() {
   // These guards ensure the fail-closed authorization contracts remain present in server.ts.
   const serverSource = await import('fs/promises').then((fs) => fs.readFile(path.join(process.cwd(), 'server.ts'), 'utf8'));
   const authTypeSource = await import('fs/promises').then((fs) => fs.readFile(path.join(process.cwd(), 'src/server/auth/types.ts'), 'utf8'));
+  const piSdkSource = await import('fs/promises').then((fs) => fs.readFile(path.join(process.cwd(), 'src/lib/piSdk.ts'), 'utf8'));
+  const authorizationSource = await import('fs/promises').then((fs) => fs.readFile(path.join(process.cwd(), 'src/server/auth/AuthorizationService.ts'), 'utf8'));
+  assert(!authorizationSource.includes('process.env.ADMIN_API_KEY || process.env.PI_API_KEY'), 'Scenario 1.0c: Pi server key is isolated from privileged authorization');
+  assert(piSdkSource.includes('if (!metaEnv.PROD)'), 'Scenario 1.0d: Browser network overrides are disabled in deployed builds');
   assert(authTypeSource.includes('institutionId?: string'), 'Scenario 1.11: Authenticated user carries institution binding');
   assert(serverSource.includes('DOCUMENT_SCOPE_UNAVAILABLE'), 'Scenario 1.12: Institution document access fails closed when scoped listing is unavailable');
   const documentListRouteStart = serverSource.indexOf("app.get('/api/education/admissions/documents'");
