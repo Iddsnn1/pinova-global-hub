@@ -549,6 +549,11 @@ export function getPiEnvironmentDetails(): PiEnvironmentDetails {
     };
   }
 
+  // Build-time environment is authoritative. Browser-controlled overrides are
+  // allowed only in non-production builds; never let query strings or localStorage
+  // switch a deployed Preview/Production app between Pi Testnet and Mainnet.
+  const metaEnv = (import.meta as any).env || {};
+  if (!metaEnv.PROD) {
   // 1. Explicit Local Storage Override (allows manual test toggle from Diagnostic UI)
   try {
     const override = localStorage.getItem(
@@ -628,8 +633,9 @@ export function getPiEnvironmentDetails(): PiEnvironmentDetails {
     };
   }
 
-  // 3. Build & Runtime Environment Variables
-  const metaEnv = (import.meta as any).env || {};
+  }
+
+  // 3. Build & Runtime Environment Variables (authoritative for deployed builds)
 
   const rawEnv =
     metaEnv.VITE_PI_ENV !== undefined
