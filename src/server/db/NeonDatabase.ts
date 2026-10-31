@@ -51,3 +51,18 @@ export function getNeonSql() {
   if (!cachedSql) cachedSql = neon(connectionString);
   return cachedSql;
 }
+
+/**
+ * Performs a lightweight read-only connectivity check for readiness probes.
+ * Never logs or returns the database connection string.
+ */
+export async function verifyNeonDatabaseConnection(): Promise<boolean> {
+  if (!neonDatabaseEnabled()) return false;
+  try {
+    const sql = getNeonSql();
+    const rows = await sql`SELECT 1 AS ok`;
+    return Array.isArray(rows) && Number((rows[0] as any)?.ok) === 1;
+  } catch {
+    return false;
+  }
+}
