@@ -1,11 +1,11 @@
 {
-  "name": "react-example",
+  "name": "pinova-global-hub",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "scripts": {
     "dev": "NODE_ENV=development tsx server.ts",
-    "build": "node scripts/forensic-clean-seller-studio-fallback.mjs && node scripts/patch-express-query-url.mjs && vite build && node scripts/patch-vendor-branding-blob.mjs && esbuild server.ts --bundle --platform=node --format=cjs --packages=bundle --sourcemap --outfile=dist/server.cjs",
+    "build": "node scripts/forensic-clean-demo-defaults.mjs && node scripts/forensic-clean-seller-studio-fallback.mjs && node scripts/patch-express-query-url.mjs && vite build && node scripts/patch-vendor-branding-blob.mjs && esbuild server.ts --bundle --platform=node --format=cjs --packages=bundle --sourcemap --outfile=dist/server.cjs",
     "start": "node dist/server.cjs",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",

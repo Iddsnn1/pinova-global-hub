@@ -87,12 +87,48 @@ async function runTestSuite() {
   const authTypeSource = await import('fs/promises').then((fs) => fs.readFile(path.join(process.cwd(), 'src/server/auth/types.ts'), 'utf8'));
   assert(authTypeSource.includes('institutionId?: string'), 'Scenario 1.11: Authenticated user carries institution binding');
   assert(serverSource.includes('DOCUMENT_SCOPE_UNAVAILABLE'), 'Scenario 1.12: Institution document access fails closed when scoped listing is unavailable');
-  assert(serverSource.includes('INSTITUTION_ADMIN') && serverSource.includes('req.user?.institutionId === admission.institutionId'), 'Scenario 1.13: Institution admin document access is institution-scoped');
-  assert(serverSource.includes('INSTITUTION_ADMIN') && serverSource.includes('cannot upload documents on behalf of applicants'), 'Scenario 1.14: Institution admin cannot impersonate applicant document uploads');
+  const documentListRouteStart = serverSource.indexOf("app.get('/api/education/admissions/documents'");
+  const documentUploadRouteStart = serverSource.indexOf("app.post(\n  '/api/education/admissions/documents/upload'");
+  const admissionApplyRouteStart = serverSource.indexOf("app.post('/api/education/admissions/apply'");
+  const admissionStatusRouteStart = serverSource.indexOf("app.post('/api/education/admissions/:id/status'");
+  const offerAcceptRouteStart = serverSource.indexOf("app.post('/api/education/admissions/:id/offer/accept'");
+  const scholarshipRouteStart = serverSource.indexOf("// 8. Scholarships & Financial Aid");
+  const documentListRoute = documentListRouteStart >= 0 && documentUploadRouteStart > documentListRouteStart
+    ? serverSource.slice(documentListRouteStart, documentUploadRouteStart)
+    : '';
+  const documentUploadRoute = documentUploadRouteStart >= 0 && admissionApplyRouteStart > documentUploadRouteStart
+    ? serverSource.slice(documentUploadRouteStart, admissionApplyRouteStart)
+    : '';
+  const admissionStatusRoute = admissionStatusRouteStart >= 0 && offerAcceptRouteStart > admissionStatusRouteStart
+    ? serverSource.slice(admissionStatusRouteStart, offerAcceptRouteStart)
+    : '';
+  const offerAcceptRoute = offerAcceptRouteStart >= 0 && scholarshipRouteStart > offerAcceptRouteStart
+    ? serverSource.slice(offerAcceptRouteStart, scholarshipRouteStart)
+    : '';
+
+  assert(
+    documentListRoute.includes("roles.includes('INSTITUTION_ADMIN')") &&
+      documentListRoute.includes('req.user.institutionId !== admission.institutionId') &&
+      documentListRoute.includes('DOCUMENT_SCOPE_UNAVAILABLE'),
+    'Scenario 1.13: Institution admin document access is institution-scoped and fails closed when scoped listing is unavailable'
+  );
+  assert(
+    documentUploadRoute.includes("roles.includes('INSTITUTION_ADMIN')") &&
+      documentUploadRoute.includes('cannot upload academic documents on behalf of applicants'),
+    'Scenario 1.14: Institution admin cannot impersonate applicant document uploads'
+  );
   assert(serverSource.includes('req.user?.institutionId !== requestedInstitution'), 'Scenario 1.15: Institution invoice access rejects cross-institution requests');
   assert(serverSource.includes('requestedGuardianId') && serverSource.includes('scopedChildren'), 'Scenario 1.16: Guardian children endpoint enforces caller ownership/institution scope');
-  assert(serverSource.includes('req.user?.institutionId === admission.institutionId') && serverSource.includes('offer/accept'), 'Scenario 1.17: Admission offer acceptance enforces institution scope');
-  assert(serverSource.includes('req.user?.institutionId === admission.institutionId') && serverSource.includes('admissions/:id/status'), 'Scenario 1.18: Admission status mutation enforces institution scope');
+  assert(
+    offerAcceptRoute.includes('req.user.institutionId === admission.institutionId') &&
+      offerAcceptRoute.includes('if (!isAdmin && !isOwner)'),
+    'Scenario 1.17: Admission offer acceptance enforces institution scope and applicant ownership'
+  );
+  assert(
+    admissionStatusRoute.includes('req.user.institutionId !== admissionForAuthorization.institutionId') &&
+      admissionStatusRoute.includes('res.status(403)'),
+    'Scenario 1.18: Admission status mutation rejects cross-institution administrators'
+  );
 
   // --- 2. PSTP DISPUTE RESOLUTION & SECURITY ---
   console.log('\n--- SECTION 2: PSTP DISPUTE SECURITY & STATE MACHINE AUDIT ---');
