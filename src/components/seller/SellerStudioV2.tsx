@@ -769,6 +769,7 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
             {activeTab === 'products' && (
               <ProductsTab
                 products={products}
+                sellerUsername={userUsername}
                 openCreateOnMount={openProductForm}
                 onCreateFormOpened={() => setOpenProductForm(false)}
                 onEditProduct={(prod) => {
