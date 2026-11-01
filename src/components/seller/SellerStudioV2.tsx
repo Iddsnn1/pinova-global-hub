@@ -98,8 +98,7 @@ interface NavItem {
 
 export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
   user,
-  products: _initialProducts,
-  vendors = [],
+    vendors = [],
   onAddProduct,
   onProductCreated,
   onUpdateProduct,
