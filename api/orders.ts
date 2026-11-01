@@ -70,7 +70,11 @@ function sellerOrderView(order: Order, username: string): Order | null {
   // A mixed-seller checkout is visible to each seller only as their own line items.
   // Recalculate the seller subtotal so another merchant's catalog/value is not exposed.
   const sellerSubtotal = sellerItems.reduce((sum, item) => {
-    const unitPrice = Number(item.product?.pricePi || 0) +
+    const discountPercent = Number(item.product?.discountPercent || 0);
+    const discountMultiplier = Number.isFinite(discountPercent) && discountPercent > 0
+      ? Math.max(0, 1 - discountPercent / 100)
+      : 1;
+    const unitPrice = (Number(item.product?.pricePi || 0) * discountMultiplier) +
       Number(item.customDetails?.variant?.priceDeltaPi || 0);
     return sum + (Number.isFinite(unitPrice) ? unitPrice : 0) * Math.max(0, Number(item.quantity) || 0);
   }, 0);
