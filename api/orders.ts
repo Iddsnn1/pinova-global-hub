@@ -59,10 +59,22 @@ function normalizeUsername(value: unknown): string {
 }
 
 
-function sellerOwnsOrder(order: Order, username: string): boolean {
+function sellerOrderView(order: Order, username: string): Order | null {
   const seller = normalizeUsername(username);
-  if (!seller) return false;
-  return order.items.length > 0 && order.items.every((item) => normalizeUsername(item.product?.sellerId) === seller);
+  if (!seller) return null;
+  const sellerItems = (Array.isArray(order.items) ? order.items : []).filter(
+    (item) => normalizeUsername(item.product?.sellerId) === seller
+  );
+  if (!sellerItems.length) return null;
+
+  // A mixed-seller checkout is visible to each seller only as their own line items.
+  // Recalculate the seller subtotal so another merchant's catalog/value is not exposed.
+  const sellerSubtotal = sellerItems.reduce((sum, item) => {
+    const unitPrice = Number(item.product?.pricePi || 0) +
+      Number(item.customDetails?.variant?.priceDeltaPi || 0);
+    return sum + (Number.isFinite(unitPrice) ? unitPrice : 0) * Math.max(0, Number(item.quantity) || 0);
+  }, 0);
+  return { ...order, items: sellerItems, totalPi: Number(sellerSubtotal.toFixed(12)) };
 }
 
 async function getApprovedActiveMerchant(user: any): Promise<any | null> {
@@ -464,7 +476,9 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
           const merchant = await getApprovedActiveMerchant(user);
           if (!merchant) return json(res, 403, { ok: false, error: 'ACTIVE_VERIFIED_MERCHANT_REQUIRED' });
           const merchantUsername = normalizeUsername(merchant.pioneerUsername);
-          const orders = (await listDurableOrders()).filter((order) => sellerOwnsOrder(order, merchantUsername));
+          const orders = (await listDurableOrders())
+            .map((order) => sellerOrderView(order, merchantUsername))
+            .filter((order): order is Order => order !== null);
           return json(res, 200, { ok: true, role: 'seller', merchantUsername, orders });
         }
         return json(res, 200, { ok: true, orders: await listDurableOrders(user.username) });
