@@ -53,8 +53,13 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({ products: _legacyProdu
       }
       const data = text ? JSON.parse(text) : null;
       if (!Array.isArray(data?.products)) throw new Error('PRODUCT_CATALOG_INVALID_RESPONSE');
-      setServerProducts(data.products);
-      setSubmitSuccess(`Catalog refreshed • ${data.products.length} server product${data.products.length === 1 ? '' : 's'}`);
+      const canonicalUsername = sellerUsername.trim().replace(/^@/, '').toLowerCase();
+      const ownedProducts = data.products.filter((product: Product) =>
+        String(product?.sellerId || '').trim().replace(/^@/, '').toLowerCase() === canonicalUsername
+      );
+      setServerProducts(ownedProducts);
+      setCreatedProducts([]);
+      setSubmitSuccess(`Your catalog is up to date • ${ownedProducts.length} product${ownedProducts.length === 1 ? '' : 's'}`);
     } catch (error: any) {
       console.warn('[ProductsTab] Failed to refresh durable catalog:', error);
       setSubmitError(String(error?.message || 'Unable to refresh the server catalog.'));
@@ -68,30 +73,16 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({ products: _legacyProdu
   }, []);
 
   const visibleProducts = useMemo(() => {
-    // The server catalog is authoritative. Legacy parent-state records can lack
-    // a durable id; never render such a duplicate when the server has the same
-    // merchant/title record, otherwise Edit can open the id-less legacy card.
-    const canonical = [...serverProducts, ...createdProducts];
-    const canonicalKeys = new Set(canonical.map(product => {
-      const seller = String(product.sellerId || '').trim().replace(/^@/, '').toLowerCase();
-      const title = String(product.title || '').trim().toLowerCase();
-      return `${seller}\u0000${title}`;
-    }));
+    const canonicalUsername = sellerUsername.trim().replace(/^@/, '').toLowerCase();
     const merged = new Map<string, Product>();
-    for (const product of products) {
+    for (const product of [...serverProducts, ...createdProducts]) {
+      const owner = String(product.sellerId || '').trim().replace(/^@/, '').toLowerCase();
       const id = String(product.id || '').trim();
-      const seller = String(product.sellerId || '').trim().replace(/^@/, '').toLowerCase();
-      const title = String(product.title || '').trim().toLowerCase();
-      const key = `${seller}\u0000${title}`;
-      if (!id && canonicalKeys.has(key)) continue;
-      merged.set(id || `legacy:${key}`, product);
-    }
-    for (const product of canonical) {
-      const id = String(product.id || '').trim();
-      if (id) merged.set(id, product);
+      if (owner !== canonicalUsername || !id) continue;
+      merged.set(id, product);
     }
     return Array.from(merged.values());
-  }, [createdProducts, products, serverProducts]);
+  }, [createdProducts, sellerUsername, serverProducts]);
   const filteredProducts = visibleProducts.filter(product => {
     const q = searchQuery.toLowerCase();
     const matchesSearch = String(product.title || '').toLowerCase().includes(q) || String(product.description || '').toLowerCase().includes(q) || String(product.id || '').toLowerCase().includes(q);
