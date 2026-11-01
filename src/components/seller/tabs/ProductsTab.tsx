@@ -20,7 +20,7 @@ interface ProductsTabProps {
 type ProductDraft = { title: string; description: string; category: ProductCategory; marketplaceCategory: string; subcategory: string; pricePi: string; stock: string; imageUrl: string; educationTier: string; educationLevelId: string; educationGradeLevel: string; educationCountryCode: string; educationCurriculumId: string; educationSubjects: string };
 const EMPTY_DRAFT: ProductDraft = { title: '', description: '', category: 'physical', marketplaceCategory: MARKETPLACE_CATEGORIES[0]?.id || 'other_general', subcategory: '', pricePi: '', stock: '0', imageUrl: '', educationTier: '', educationLevelId: '', educationGradeLevel: '', educationCountryCode: '', educationCurriculumId: '', educationSubjects: '' };
 
-export const ProductsTab: React.FC<ProductsTabProps> = ({ products: _legacyProducts, sellerUsername, openCreateOnMount = false, onCreateFormOpened, onProductCreated, onEditProduct, onDeleteProduct }) => {
+export const ProductsTab: React.FC<ProductsTabProps> = ({ sellerUsername, openCreateOnMount = false, onCreateFormOpened, onProductCreated, onEditProduct, onDeleteProduct }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [stockFilter, setStockFilter] = useState<'all' | 'in_stock' | 'out_of_stock'>('all');
@@ -42,6 +42,7 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({ products: _legacyProdu
     setIsLoadingServerProducts(true);
     setSubmitError(null);
     try {
+      if (!sellerUsername?.trim()) throw new Error('SELLER_IDENTITY_UNAVAILABLE');
       // Catalog reads are server-authoritative but do not require a fresh Pi/vendor authentication round-trip.
       // Seller mutations remain protected by vendorAuthenticatedFetch; this keeps catalog refresh fast and deterministic.
       const response = await vendorAuthenticatedFetch('/api/products', { method: 'GET', cache: 'no-store' });
