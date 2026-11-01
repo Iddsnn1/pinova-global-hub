@@ -98,8 +98,7 @@ interface NavItem {
 
 export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
   user,
-  products,
-  orders,
+  products: _initialProducts,
   vendors = [],
   onAddProduct,
   onProductCreated,
@@ -839,7 +838,7 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
             {/* 7. Financials & Invoices */}
             {activeTab === 'payments' && (
               <PaymentsTab
-                orders={orders}
+                orders={sellerOrders}
                 serverPstpAuthorized={serverStatus.pstpAuthorized}
               />
             )}
