@@ -284,6 +284,20 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
     fetchAuthoritativeStatus();
   }, [fetchAuthoritativeStatus]);
 
+  useEffect(() => {
+    let active = true;
+    void vendorAuthenticatedFetch('/api/orders?role=seller', { method: 'GET', cache: 'no-store' })
+      .then(async (response) => {
+        const data = await response.json().catch(() => ({}));
+        if (!active) return;
+        setSellerOrders(response.ok && Array.isArray(data?.orders) ? data.orders : []);
+      })
+      .catch(() => { if (active) setSellerOrders([]); });
+    return () => { active = false; };
+  }, [userUsername]);
+
+
+
   // Handle Order Fulfillment Action
   const handleUpdateFulfillment = (orderId: string, trackingNumber: string, carrier: string) => {
     if (onUpdateOrderStatus) {
@@ -348,7 +362,7 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
     { id: 'multi_store', label: 'Multi-Store Manager', icon: Store, category: 'operations' },
     { id: 'products', label: 'Products & Catalog', icon: Package, category: 'operations', count: products.length },
     { id: 'inventory', label: 'Inventory & Warehouses', icon: Boxes, category: 'operations' },
-    { id: 'orders', label: 'Orders & Fulfillment', icon: ShoppingBag, category: 'operations', count: orders.length },
+    { id: 'orders', label: 'Orders & Fulfillment', icon: ShoppingBag, category: 'operations', count: sellerOrders.length },
     { id: 'bulk_csv', label: 'Bulk CSV Tools', icon: FileSpreadsheet, category: 'operations' },
 
     // Finance & Growth
@@ -364,7 +378,7 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
     { id: 'policies', label: 'Store Policies', icon: FileText, category: 'trust' },
     { id: 'security', label: 'Security & Audit Logs', icon: Lock, category: 'trust' },
     { id: 'help', label: 'Merchant Support', icon: HelpCircle, category: 'trust' }
-  ], [products.length, orders.length]);
+  ], [products.length, sellerOrders.length]);
 
   const currentTabItem = navItems.find(item => item.id === activeTab) || navItems[0];
   const CurrentIcon = currentTabItem.icon;
@@ -741,7 +755,7 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
                 serverStatus={serverStatus}
                 vendorProfile={vendorProfile}
                 products={products}
-                orders={orders}
+                orders={sellerOrders}
                 onNavigateTab={(tab) => handleSelectTab(tab as SellerStudioTabId)}
                 onOpenOnboarding={() => setIsOnboardingOpen(true)}
                 onAddProduct={() => {
@@ -833,7 +847,7 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
 
             {/* 10. Customer CRM */}
             {activeTab === 'customers' && (
-              <CustomersTab orders={orders} />
+              <CustomersTab orders={sellerOrders} />
             )}
 
             {/* 11. Marketing & Promos */}
