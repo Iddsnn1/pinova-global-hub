@@ -1,16 +1,38 @@
-import {
-  authenticateVendorRequest as authenticateRequest,
-  getDurableVendorApplication,
-  getDurableVendorApplicationByIdentity,
-  durableVendorStorageEnabled
-} from '../../dist/server.cjs';
+import { createRequire } from 'module';
+import path from 'path';
+
+type ServerModule = {
+  authenticateVendorRequest: (req: any) => Promise<any>;
+  getDurableVendorApplication: (username: string) => Promise<any>;
+  getDurableVendorApplicationByIdentity: (username: string, pioneerUid?: string | null) => Promise<any>;
+  durableVendorStorageEnabled: () => boolean;
+};
+
+let serverModule: ServerModule | null = null;
+
+function getServerModule(): ServerModule {
+  if (serverModule) return serverModule;
+  const runtimeRequire = createRequire(path.resolve(process.cwd(), 'api/vendor/status-durable.js'));
+  const mod = runtimeRequire('../../dist/server.cjs');
+  // Match apply-durable: preserve named exports when the bundle exposes them
+  // alongside its default Express app.
+  serverModule = (mod && (
+    typeof mod.durableVendorStorageEnabled === 'function' ||
+    typeof mod.authenticateVendorRequest === 'function'
+  ) ? mod : mod?.default) as ServerModule;
+  return serverModule;
+}
+
+const authenticateRequest = (req: any) => getServerModule().authenticateVendorRequest(req);
+const getDurableVendorApplication = (username: string) => getServerModule().getDurableVendorApplication(username);
+const getDurableVendorApplicationByIdentity = (username: string, pioneerUid?: string | null) =>
+  getServerModule().getDurableVendorApplicationByIdentity(username, pioneerUid);
+const durableVendorStorageEnabled = () => getServerModule().durableVendorStorageEnabled();
 
 async function resolveAuthenticatedApplication(user: any): Promise<any | null> {
   const rawUsername = String(user?.username || '').trim();
   const normalizedUsername = rawUsername.replace(/^@/, '').toLowerCase();
 
-  // The server bundle exports the Neon-backed durable vendor store. Use its
-  // identity-aware lookup and avoid importing unbundled TypeScript at runtime.
   if (rawUsername) {
     const direct = await getDurableVendorApplication(rawUsername);
     if (direct) return direct;
