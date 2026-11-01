@@ -69,19 +69,39 @@ export interface EducationProgramme {
   credentialAwarded: string; // e.g., "B.Sc.", "HND", "SSCE", "Diploma", "Certification"
   tuitionPerPeriod: number;
   currency: string;
+  feePeriod?: 'per semester' | 'per session' | 'per term' | 'per year' | 'per programme' | string;
+  feeSchedule?: {
+    tuition: number;
+    registration?: number;
+    examination?: number;
+    laboratory?: number;
+    library?: number;
+    technology?: number;
+    association?: number;
+    accommodation?: number;
+  };
   admissionRequirements: string[];
   description?: string;
+}
+
+export interface AcademicDepartment {
+  id: string;
+  name: string;
+  code?: string;
+  verificationStatus?: 'VERIFIED' | 'PARTIALLY_VERIFIED' | 'UNVERIFIED';
+  programmes: EducationProgramme[];
 }
 
 export interface UniversityFaculty {
   id: string;
   name: string;
-  departments: {
-    id: string;
-    name: string;
-    programmes: EducationProgramme[];
-  }[];
+  code?: string;
+  unitType?: 'faculty' | 'school' | 'college' | 'division' | 'institute';
+  verificationStatus?: 'VERIFIED' | 'PARTIALLY_VERIFIED' | 'UNVERIFIED';
+  departments: AcademicDepartment[];
 }
+
+export type HierarchyVerificationStatus = 'VERIFIED' | 'PARTIALLY_VERIFIED' | 'PENDING' | 'NOT_APPLICABLE';
 
 export interface InstitutionProfile {
   id: string;
@@ -117,6 +137,7 @@ export interface InstitutionProfile {
   activeSessions: AcademicSessionConfig[];
   programmes?: EducationProgramme[];
   faculties?: UniversityFaculty[];
+  hierarchyVerificationStatus?: HierarchyVerificationStatus;
   featuredBadge?: string;
   overviewDescription: string;
 }
@@ -169,6 +190,7 @@ export interface StudentIdentity {
 }
 
 export interface GuardianChildSummary {
+  guardianId?: string;
   studentId: string;
   fullName: string;
   institutionId: string;
@@ -256,6 +278,7 @@ export interface EducationInvoice {
   amountPaid: number;
   outstandingBalance: number;
   currency: string;
+  countryCode?: string;
   dueDate: string;
   issuedDate?: string;
   status: InvoicePaymentStatus;
@@ -346,6 +369,8 @@ export interface AdmissionDocument {
   fileSizeKb: number;
   uploadedAt: string;
   verificationStatus: 'verified' | 'pending' | 'rejected';
+  applicationId?: string | null;
+  sha256?: string;
 }
 
 export interface AdmissionApplication {
@@ -359,6 +384,8 @@ export interface AdmissionApplication {
   applicantFullName: string;
   applicantEmail: string;
   applicantPhone: string;
+  /** Candidate reference used only for authoritative JAMB CAPS verification. */
+  jambCandidateReference?: string;
   guardianName?: string;
   guardianPhone?: string;
   dateOfBirth: string;
@@ -401,15 +428,37 @@ export interface ScholarshipOpportunity {
 }
 
 // Education Marketplace
+export type EducationMarketplaceCategory =
+  | 'textbook'
+  | 'uniform'
+  | 'supplies'
+  | 'software'
+  | 'course'
+  | 'exam_prep'
+  | 'digital_course'
+  | 'hardware';
+
 export interface EducationMarketplaceItem {
   id: string;
   title: string;
-  category: 'textbook' | 'uniform' | 'supplies' | 'software' | 'course' | 'exam_prep';
+  category: EducationMarketplaceCategory;
   publisherOrProvider: string;
   fiatPrice: number;
   currency: string;
   piPrice: number;
   tier: EducationTier;
+  /** Canonical country-neutral education level ID, mapped from the seller's country system. */
+  educationLevelId?: string;
+  /** Local grade/year/class label, e.g. Primary 4, Grade 4, Year 6, JSS 2. */
+  gradeLevel?: string;
+  /** ISO 3166-1 alpha-2 country code for the product's education-system mapping. */
+  countryCode?: string;
+  /** Curriculum/system identifier, e.g. national, Cambridge, IB, American. */
+  curriculumId?: string;
+  /** Subjects/fields this material supports. */
+  subjects?: string[];
+  /** Multiple canonical tiers when a material intentionally spans levels. */
+  applicableTiers?: EducationTier[];
   rating: number;
   reviewsCount: number;
   imageUrl: string;

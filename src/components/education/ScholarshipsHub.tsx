@@ -20,7 +20,6 @@ export const ScholarshipsHub: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [selectedTier, setSelectedTier] = useState('all');
   const [selectedScholarship, setSelectedScholarship] = useState<ScholarshipOpportunity | null>(null);
-  const [appliedList, setAppliedList] = useState<string[]>([]);
   const [applicationNotice, setApplicationNotice] = useState<string | null>(null);
 
   useEffect(() => {
@@ -41,12 +40,9 @@ export const ScholarshipsHub: React.FC = () => {
     }
   };
 
-  const handleApply = (sch: ScholarshipOpportunity) => {
-    if (!appliedList.includes(sch.id)) {
-      setAppliedList([...appliedList, sch.id]);
-      setApplicationNotice(`Application for "${sch.title}" submitted with your verified learner credentials!`);
-      setTimeout(() => setApplicationNotice(null), 4000);
-    }
+  const handleApply = (_sch: ScholarshipOpportunity) => {
+    setApplicationNotice('Scholarship applications are unavailable until a verified scholarship provider and server-side application workflow are connected. No application was submitted.');
+    setTimeout(() => setApplicationNotice(null), 5000);
   };
 
   return (
@@ -100,7 +96,7 @@ export const ScholarshipsHub: React.FC = () => {
           ))
         ) : (
           scholarships.map((sch) => {
-            const hasApplied = appliedList.includes(sch.id);
+            const hasApplied = false;
 
             return (
               <div
@@ -160,11 +156,11 @@ export const ScholarshipsHub: React.FC = () => {
 
                   <button
                     onClick={() => handleApply(sch)}
-                    disabled={hasApplied}
+                    disabled
                     className={`px-4 py-2 rounded-xl font-bold text-xs transition flex items-center gap-1.5 ${
                       hasApplied
                         ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
-                        : 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-md shadow-amber-500/10'
+                        : 'bg-slate-800 text-slate-400 border border-slate-700 cursor-not-allowed'
                     }`}
                   >
                     {hasApplied ? (
@@ -174,7 +170,7 @@ export const ScholarshipsHub: React.FC = () => {
                       </>
                     ) : (
                       <>
-                        <span>Apply For Grant</span>
+                        <span>Provider Application Required</span>
                         <ChevronRight className="w-3.5 h-3.5" />
                       </>
                     )}

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { formatPiAmount } from '../utils/formatters';
 import { 
   Search, 
   X, 
@@ -78,7 +79,7 @@ export const UniversalSearchModal: React.FC<UniversalSearchModalProps> = ({
       const descStr = (p.description || '').toLowerCase();
       const catStr = (p.category || '').toLowerCase();
       const subcatStr = (p.subcategory || '').toLowerCase();
-      const sellerStr = (p.sellerName || '').toLowerCase();
+      const sellerStr = (p.sellerDisplayName || p.sellerName || '').toLowerCase();
       const tagsArr = Array.isArray(p.tags) ? p.tags : [];
 
       return (
@@ -151,22 +152,8 @@ export const UniversalSearchModal: React.FC<UniversalSearchModalProps> = ({
     }));
   }, [trimmed]);
 
-  // Search Services
-  const sampleServices = [
-    { id: 'srv-1', title: 'Pi Network App & Smart Contract Dev', provider: 'CryptoCode Solutions', category: 'freelance_tech', pricePi: 150.00, rating: 4.9 },
-    { id: 'srv-2', title: 'Pi Merchant Accounting & Tax Legal Settle', provider: 'Pioneer Legal Group', category: 'consultation', pricePi: 45.00, rating: 5.0 },
-    { id: 'srv-3', title: 'Hardware POS & Crypto Terminal Repair', provider: 'TechFix Global', category: 'repairs_maintenance', pricePi: 30.00, rating: 4.8 },
-    { id: 'srv-4', title: 'Professional Web Design & UI/UX Audit', provider: 'Studio PiNova Design', category: 'freelance_tech', pricePi: 65.00, rating: 4.95 }
-  ];
-
-  const filteredServices = useMemo(() => {
-    if (!trimmed) return sampleServices;
-    return sampleServices.filter(s => 
-      (s.title || '').toLowerCase().includes(trimmed) ||
-      (s.provider || '').toLowerCase().includes(trimmed) ||
-      (s.category || '').toLowerCase().includes(trimmed)
-    );
-  }, [trimmed]);
+  // Services are server-backed only. No synthetic provider listings are exposed.
+  const filteredServices = useMemo(() => [], []);
 
   // Search Orders
   const filteredOrders = useMemo(() => {
@@ -533,7 +520,7 @@ export const UniversalSearchModal: React.FC<UniversalSearchModalProps> = ({
                       </p>
                       <div className="flex items-center justify-between pt-1">
                         <span className="text-xs font-black text-amber-500">
-                          {prod.pricePi.toFixed(2)} π
+                          {formatPiAmount(prod.pricePi)} π
                         </span>
                         <button
                           onClick={(e) => {
@@ -618,7 +605,7 @@ export const UniversalSearchModal: React.FC<UniversalSearchModalProps> = ({
                     <div>
                       <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100">{srv.title}</h4>
                       <p className="text-[11px] text-slate-500">By {srv.provider} • Rating: ⭐ {srv.rating}</p>
-                      <p className="text-xs font-black text-amber-500 mt-0.5">{srv.pricePi.toFixed(2)} π</p>
+                      <p className="text-xs font-black text-amber-500 mt-0.5">{formatPiAmount(srv.pricePi)} π</p>
                     </div>
                     <button className="px-3 py-1.5 bg-blue-600 text-white text-xs font-bold rounded-xl whitespace-nowrap">
                       Book Service
@@ -702,7 +689,7 @@ export const UniversalSearchModal: React.FC<UniversalSearchModalProps> = ({
                       <span className="px-2 py-0.5 rounded-full bg-purple-950 text-purple-300 font-bold text-[10px]">
                         {ord.pstpStatus}
                       </span>
-                      <span className="font-black text-amber-500">{ord.totalPi.toFixed(2)} π</span>
+                      <span className="font-black text-amber-500">{formatPiAmount(ord.totalPi)} π</span>
                     </div>
                   </div>
                 ))}

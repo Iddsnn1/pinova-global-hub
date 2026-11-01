@@ -144,7 +144,7 @@ export class VendorPayoutEngine {
   generatePayoutReport(vendorId: string, vendorName: string, orders: Order[]): VendorPayoutReport {
     const vendorOrders = orders.filter((o) => (o as any).sellerId === vendorId || (o as any).vendorId === vendorId || true);
     const grossSalesPi = vendorOrders.reduce((acc, o) => acc + o.totalPi, 0) + 850.0;
-    const platformFeePi = grossSalesPi * 0.02; // 2% platform governance fee
+    const platformFeePi = grossSalesPi * 0.02;
     const netPayoutPi = grossSalesPi - platformFeePi;
 
     return {
@@ -182,7 +182,7 @@ export class ProductComparisonEngine {
         pricePi: p.pricePi,
         rating: p.rating,
         stock: p.stock,
-        seller: p.sellerName,
+        seller: p.sellerDisplayName || p.sellerName,
         category: p.category,
         features: p.features
       }))
@@ -255,7 +255,7 @@ export class SeoMetadataGenerator {
         availability: product.stock > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
         seller: {
           '@type': 'Organization',
-          name: product.sellerName
+          name: product.sellerDisplayName || product.sellerName
         }
       },
       aggregateRating: product.reviewsCount > 0 ? {
@@ -291,7 +291,7 @@ export class BulkProductManager {
       `"${p.sellerName.replace(/"/g, '""')}"`,
       `"${(p.tags || []).join(',')}"`
     ]);
-    return [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+    return [headers.join(','), ...rows.map((r) => r.join(','))].join('\\n');
   }
 
   duplicateProduct(product: Product): Product {
@@ -405,8 +405,8 @@ export class SearchDiscoveryEngine {
 export class MultiCurrencyReferenceCalculator {
   // Administrator controlled reference rates for user estimation convenience (1 Pi = X Currency)
   private referenceRates: Record<string, { symbol: string; rate: number }> = {
-    USD: { symbol: '$', rate: 314.159 },
-    EUR: { symbol: '€', rate: 290.50 },
+    // PiNova fixed reference: 1 π = $314,159 USD. Display/reference only.
+    USD: { symbol: '$', rate: 314159 },
     NGN: { symbol: '₦', rate: 450000.0 },
     KES: { symbol: 'KSh', rate: 40500.0 },
     VND: { symbol: '₫', rate: 7800000.0 },

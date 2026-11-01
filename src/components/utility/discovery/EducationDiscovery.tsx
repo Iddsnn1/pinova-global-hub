@@ -30,7 +30,6 @@ import {
 } from '../../../types/utility';
 import { searchInstitutions } from '../../../lib/utility/serviceDiscovery';
 import { LocationSelector } from './LocationSelector';
-import { createPiPayment } from '../../../lib/piSdk';
 import { DigitalReceiptModal } from '../DigitalReceiptModal';
 import { formatPiAmount, calculateAuthoritativePiAmount } from '../../../utils/formatters';
 
@@ -191,90 +190,18 @@ export const EducationDiscovery: React.FC<EducationDiscoveryProps> = ({
       return;
     }
     setIsValidatingAccount(true);
-    setErrorMessage(null);
-
-    setTimeout(() => {
-      setIsValidatingAccount(false);
-      setIsAccountVerified(true);
-      if (!studentFullName) {
-        setStudentFullName(`${buyerUsername} (Portal Verified)`);
-      }
-    }, 450);
+    setIsAccountVerified(false);
+    setErrorMessage(
+      'Live student/account verification is not configured for this institution. No verification claim will be made.'
+    );
+    setIsValidatingAccount(false);
   };
 
   // Process Pi Payment for Tuition / Fee Clearance
   const handleProcessPayment = async () => {
-    if (!selectedInstitution) {
-      setErrorMessage('Please select an educational institution.');
-      return;
-    }
-    if (!selectedEducationService) {
-      setErrorMessage('Please select an education clearance fee type.');
-      return;
-    }
-    if (!accountNumber.trim()) {
-      setErrorMessage('Please provide the student matriculation / registration ID.');
-      return;
-    }
-    if (effectiveFiatAmount <= 0 || effectivePiAmount <= 0) {
-      setErrorMessage('Please specify a valid fee deposit amount.');
-      return;
-    }
-    if (userBalancePi < effectivePiAmount) {
-      setErrorMessage(`Insufficient balance: You need ${formatPiAmount(effectivePiAmount)} π but have ${formatPiAmount(userBalancePi)} π.`);
-      return;
-    }
-
-    setIsProcessingPayment(true);
-    setErrorMessage(null);
-
-    try {
-      const memo = `PiNova Education Clearance: ${selectedInstitution.name} - ${selectedEducationService} (${accountNumber.trim()})`;
-      const metadata = {
-        category: 'education',
-        providerId: selectedInstitution.id,
-        institutionName: selectedInstitution.name,
-        serviceName: selectedEducationService,
-        accountNumber: accountNumber.trim(),
-        fiatAmount: effectiveFiatAmount,
-        countryCode: selectedCountryCode,
-        state: selectedState
-      };
-
-      const payment = await createPiPayment({
-        amountPi: effectivePiAmount,
-        memo,
-        metadata
-      });
-
-      const receipt: UtilityTransactionReceipt = {
-        transactionId: payment.txid || `TX-EDU-${Date.now().toString(36).toUpperCase()}`,
-        piTxid: payment.txid,
-        piPaymentId: payment.paymentId || `PAY-EDU-${Date.now().toString(36).toUpperCase()}`,
-        category: 'education',
-        providerId: selectedInstitution.id,
-        providerName: selectedInstitution.name,
-        accountNumber: accountNumber.trim(),
-        accountName: studentFullName || `${buyerUsername} (Student Clearance)`,
-        fiatAmount: effectiveFiatAmount,
-        fiatCurrency: selectedInstitution.currency || 'USD',
-        appliedPiRateUsd: activeRate,
-        piAmount: effectivePiAmount,
-        packageName: selectedPackage?.name || selectedEducationService,
-        tokenOrCode: `CLR-PIN-${Math.floor(1000 + Math.random() * 9000)}-${Math.floor(1000 + Math.random() * 9000)}`,
-        status: 'SUCCESS',
-        timestamp: new Date().toISOString(),
-        orderProtectionGuaranteed: true,
-        buyerUsername: buyerUsername || 'Pioneer_User'
-      };
-
-      setGeneratedReceipt(receipt);
-      onTransactionSuccess?.(receipt);
-    } catch (err: any) {
-      setErrorMessage(err?.message || 'Payment processing encountered an error. Please try again.');
-    } finally {
-      setIsProcessingPayment(false);
-    }
+    setErrorMessage(
+      'Education payments are currently unavailable: a verified institution payment provider and server-side fulfillment integration are required.'
+    );
   };
 
   return (
@@ -290,7 +217,7 @@ export const EducationDiscovery: React.FC<EducationDiscoveryProps> = ({
               <h3 className="text-base font-bold text-white flex items-center gap-2">
                 Education & Tuition Clearance Hub
                 <span className="text-[10px] font-semibold bg-pink-500/20 text-pink-300 border border-pink-500/30 px-2 py-0.5 rounded-full">
-                  Verified Portal
+                  Directory / Provider Integration Required
                 </span>
               </h3>
               <p className="text-xs text-slate-300 mt-0.5">
@@ -409,12 +336,7 @@ export const EducationDiscovery: React.FC<EducationDiscoveryProps> = ({
                   ? inst.availableServices
                   : fullProvider.designations && fullProvider.designations.length > 0
                   ? fullProvider.designations
-                  : [
-                      'Semester Tuition Fee Deposit',
-                      'Acceptance Fee Clearance',
-                      'Campus Accommodation Levy',
-                      'E-Learning Certification Pass'
-                    ];
+                  : [];
 
               return (
                 <div

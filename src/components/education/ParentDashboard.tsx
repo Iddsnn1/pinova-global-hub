@@ -74,7 +74,7 @@ export const ParentDashboard: React.FC<ParentDashboardProps> = ({ onPayForChild 
               <span className="text-xs font-bold text-amber-400 uppercase tracking-wider bg-amber-950/60 border border-amber-800/60 px-2.5 py-0.5 rounded-full">
                 Parent & Guardian Portal
               </span>
-              <span className="text-xs text-slate-400">Account: Idris Datti (Pioneer Parent)</span>
+              <span className="text-xs text-slate-400">Account: Authenticated Pioneer</span>
             </div>
             <h3 className="text-xl font-black text-white mt-1.5">Family Education Dashboard</h3>
             <p className="text-xs text-slate-400 mt-0.5">

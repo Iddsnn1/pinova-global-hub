@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { InstitutionDirectory } from './InstitutionDirectory';
+import { GlobalEducationCoverageBanner } from './GlobalEducationCoverageBanner';
 import { SchoolFeesEngine } from './SchoolFeesEngine';
 import { ParentDashboard } from './ParentDashboard';
 import { AdmissionsPipeline } from './AdmissionsPipeline';
@@ -7,7 +8,9 @@ import { DigitalReceiptVerifier } from './DigitalReceiptVerifier';
 import { ScholarshipsHub } from './ScholarshipsHub';
 import { InstitutionAdminPortal } from './InstitutionAdminPortal';
 import { EducationMarketplace } from './EducationMarketplace';
+import { ExamCardsPortal } from './ExamCardsPortal';
 import { InstitutionProfile, GuardianChildSummary, DigitalEducationReceipt } from '../../types/education';
+import { PiConversionConfig } from '../../types';
 import {
   GraduationCap,
   CreditCard,
@@ -22,12 +25,14 @@ import {
   FileCheck2,
   Globe2,
   CheckCircle2,
-  ArrowRight
+  ArrowRight,
+  FileCheck
 } from 'lucide-react';
 
 export type EducationTab =
   | 'directory'
   | 'fees'
+  | 'exam_cards'
   | 'children'
   | 'admissions'
   | 'verifier'
@@ -38,15 +43,29 @@ export type EducationTab =
 interface EducationHubProps {
   initialTab?: EducationTab;
   onBackToUtilities?: () => void;
+  utilityConfig?: PiConversionConfig;
+  userBalancePi?: number;
+  buyerUsername?: string;
+  onTransactionSuccess?: (receipt: any) => void;
 }
 
 export const EducationHub: React.FC<EducationHubProps> = ({
   initialTab = 'directory',
-  onBackToUtilities
+  onBackToUtilities,
+  utilityConfig,
+  userBalancePi,
+  buyerUsername,
+  onTransactionSuccess
 }) => {
   const [activeTab, setActiveTab] = useState<EducationTab>(initialTab);
   const [preselectedInstitution, setPreselectedInstitution] = useState<InstitutionProfile | null>(null);
   const [preselectedInvoiceId, setPreselectedInvoiceId] = useState<string | undefined>(undefined);
+
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
 
   const handleSelectInstitutionForFees = (institution: InstitutionProfile) => {
     setPreselectedInstitution(institution);
@@ -59,20 +78,20 @@ export const EducationHub: React.FC<EducationHubProps> = ({
   };
 
   const handlePayForChild = (child: GuardianChildSummary) => {
-    // Look up child invoice or switch to fees
     setPreselectedInvoiceId(undefined);
     setActiveTab('fees');
   };
 
   const navTabs = [
-    { id: 'directory' as EducationTab, label: 'Institution Registry', icon: Building2, tag: 'Global' },
-    { id: 'fees' as EducationTab, label: 'School Fees Engine', icon: CreditCard, tag: 'Pi Pay' },
-    { id: 'children' as EducationTab, label: 'My Children', icon: Users, tag: 'Family' },
+    { id: 'directory' as EducationTab, label: 'Global Education Directory', icon: Building2, tag: 'Global' },
+    { id: 'fees' as EducationTab, label: 'School Fees & Tuition Engine', icon: CreditCard, tag: 'Pi Pay' },
+    { id: 'exam_cards' as EducationTab, label: 'Exam Cards & PINs', icon: FileCheck, tag: 'Instant PIN' },
     { id: 'admissions' as EducationTab, label: 'Admissions & Enrolment', icon: GraduationCap, tag: 'Pipeline' },
     { id: 'verifier' as EducationTab, label: 'Verify Receipt', icon: ShieldCheck, tag: 'Public' },
-    { id: 'scholarships' as EducationTab, label: 'Scholarships & Grants', icon: Award, tag: 'Financial Aid' },
-    { id: 'admin' as EducationTab, label: 'Institution Portal', icon: FileCheck2, tag: 'Bursar' },
-    { id: 'marketplace' as EducationTab, label: 'Marketplace', icon: ShoppingBag, tag: 'Supplies' }
+    { id: 'scholarships' as EducationTab, label: 'Scholarships & Aid', icon: Award, tag: 'Financial Aid' },
+    { id: 'marketplace' as EducationTab, label: 'Education Marketplace', icon: ShoppingBag, tag: 'Supplies' },
+    { id: 'children' as EducationTab, label: 'My Children', icon: Users, tag: 'Family' },
+    { id: 'admin' as EducationTab, label: 'Institution Portal', icon: FileCheck2, tag: 'Bursar' }
   ];
 
   return (
@@ -114,26 +133,22 @@ export const EducationHub: React.FC<EducationHubProps> = ({
             </p>
           </div>
 
-          {/* Quick Stats Ticker */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4 border-t border-slate-800/80 text-xs">
             <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800">
               <span className="text-slate-400 block text-[11px]">Supported Tiers</span>
               <span className="text-white font-bold text-sm">6 Complete Levels</span>
               <span className="text-[10px] text-amber-400 block mt-0.5">Creche to PhD & CPD</span>
             </div>
-
             <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800">
               <span className="text-slate-400 block text-[11px]">Receipt Validation</span>
               <span className="text-emerald-400 font-bold text-sm">SHA-256 Verified</span>
               <span className="text-[10px] text-slate-400 block mt-0.5">Zero-leak public audit</span>
             </div>
-
             <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800">
-              <span className="text-slate-400 block text-[11px]">Primary Deployment</span>
-              <span className="text-white font-bold text-sm">Nigeria (West Africa)</span>
-              <span className="text-[10px] text-slate-400 block mt-0.5">Global schema ready</span>
+              <span className="text-slate-400 block text-[11px]">Coverage Scope</span>
+              <span className="text-white font-bold text-sm">🌍 Global (190+ Nations)</span>
+              <span className="text-[10px] text-amber-400 block mt-0.5">🇳🇬 Nigeria: Deployment Hub</span>
             </div>
-
             <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800">
               <span className="text-slate-400 block text-[11px]">Payment Methods</span>
               <span className="text-amber-400 font-bold text-sm">Pi Network & Escrow</span>
@@ -148,7 +163,6 @@ export const EducationHub: React.FC<EducationHubProps> = ({
         {navTabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
-
           return (
             <button
               key={tab.id}
@@ -161,13 +175,7 @@ export const EducationHub: React.FC<EducationHubProps> = ({
             >
               <Icon className={`w-4 h-4 ${isActive ? 'text-slate-950' : 'text-amber-400'}`} />
               <span>{tab.label}</span>
-              <span
-                className={`text-[9px] px-1.5 py-0.5 rounded-full uppercase tracking-wider font-semibold ${
-                  isActive
-                    ? 'bg-slate-950/30 text-slate-950'
-                    : 'bg-slate-800 text-slate-400 border border-slate-700'
-                }`}
-              >
+              <span className={`text-[9px] px-1.5 py-0.5 rounded-full uppercase tracking-wider font-semibold ${isActive ? 'bg-slate-950/30 text-slate-950' : 'bg-slate-800 text-slate-400 border border-slate-700'}`}>
                 {tab.tag}
               </span>
             </button>
@@ -175,7 +183,9 @@ export const EducationHub: React.FC<EducationHubProps> = ({
         })}
       </div>
 
-      {/* Active Tab View */}
+      {/* Global Registry governance is now visible in the Education UI */}
+      {activeTab === 'directory' && <GlobalEducationCoverageBanner />}
+
       <div className="animate-in fade-in duration-200">
         {activeTab === 'directory' && (
           <InstitutionDirectory
@@ -183,37 +193,26 @@ export const EducationHub: React.FC<EducationHubProps> = ({
             onApplyForAdmission={handleApplyForAdmission}
           />
         )}
-
         {activeTab === 'fees' && (
           <SchoolFeesEngine
             preselectedInvoiceId={preselectedInvoiceId}
             preselectedInstitution={preselectedInstitution}
           />
         )}
-
-        {activeTab === 'children' && (
-          <ParentDashboard onPayForChild={handlePayForChild} />
+        {activeTab === 'exam_cards' && (
+          <ExamCardsPortal
+            utilityConfig={utilityConfig}
+            userBalancePi={userBalancePi}
+            buyerUsername={buyerUsername}
+            onTransactionSuccess={onTransactionSuccess}
+          />
         )}
-
-        {activeTab === 'admissions' && (
-          <AdmissionsPipeline preselectedInstitution={preselectedInstitution} />
-        )}
-
-        {activeTab === 'verifier' && (
-          <DigitalReceiptVerifier />
-        )}
-
-        {activeTab === 'scholarships' && (
-          <ScholarshipsHub />
-        )}
-
-        {activeTab === 'admin' && (
-          <InstitutionAdminPortal />
-        )}
-
-        {activeTab === 'marketplace' && (
-          <EducationMarketplace />
-        )}
+        {activeTab === 'children' && <ParentDashboard onPayForChild={handlePayForChild} />}
+        {activeTab === 'admissions' && <AdmissionsPipeline preselectedInstitution={preselectedInstitution} />}
+        {activeTab === 'verifier' && <DigitalReceiptVerifier />}
+        {activeTab === 'scholarships' && <ScholarshipsHub />}
+        {activeTab === 'admin' && <InstitutionAdminPortal />}
+        {activeTab === 'marketplace' && <EducationMarketplace />}
       </div>
     </div>
   );

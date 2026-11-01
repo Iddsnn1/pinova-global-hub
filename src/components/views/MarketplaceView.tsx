@@ -45,7 +45,7 @@ import {
 } from 'lucide-react';
 import { Product, Vendor } from '../../types';
 import { MarketplaceCategory } from '../../types/navigation';
-import { MARKETPLACE_CATEGORIES, getMarketplaceCategoryDef, resolveMarketplaceCategory } from '../../data/categoryData';
+import { MARKETPLACE_CATEGORIES, getMarketplaceCategoryDef, getMarketplaceSubcategories, resolveMarketplaceCategory } from '../../data/categoryData';
 import { ProductCard } from '../ProductCard';
 import { CatalogFilterBar, FilterOptions } from '../CatalogFilterBar';
 
@@ -63,6 +63,7 @@ interface MarketplaceViewProps {
   onQuickView: (product: Product) => void;
   onOpenAiSearch: () => void;
   onOpenUniversalSearch?: (query?: string) => void;
+  onOpenSellerStudio?: () => void;
   recentlyViewedProducts: Product[];
 }
 
@@ -80,6 +81,7 @@ export const MarketplaceView: React.FC<MarketplaceViewProps> = ({
   onQuickView,
   onOpenAiSearch,
   onOpenUniversalSearch,
+  onOpenSellerStudio,
   recentlyViewedProducts
 }) => {
   // Search & Type state for primary discovery
@@ -102,9 +104,17 @@ export const MarketplaceView: React.FC<MarketplaceViewProps> = ({
     sortBy: 'featured'
   });
 
-  // Reset activeSubcategory whenever selectedCategory changes
+  // Keep the category page and the global filter taxonomy on the same
+  // canonical category. A stale filter category must never leak another
+  // category's subcategories into Explore.
   useEffect(() => {
+    const canonicalCategory = resolveMarketplaceCategory(selectedCategory) as MarketplaceCategory;
     setActiveSubcategory('all');
+    setCategoryFilters((prev) => ({
+      ...prev,
+      category: canonicalCategory,
+      subcategory: ''
+    }));
   }, [selectedCategory]);
 
   // Map category icons
@@ -137,6 +147,7 @@ export const MarketplaceView: React.FC<MarketplaceViewProps> = ({
   };
 
   const currentCategoryDef = getMarketplaceCategoryDef(selectedCategory);
+  const currentSubcategoryDefs = useMemo(() => getMarketplaceSubcategories(selectedCategory), [selectedCategory]);
 
   // Recommended products: featured or high rated items
   const recommendedProducts = useMemo(() => {
@@ -172,7 +183,7 @@ export const MarketplaceView: React.FC<MarketplaceViewProps> = ({
         const matchDesc = (p.description || '').toLowerCase().includes(q);
         const matchCat = (p.category || '').toLowerCase().includes(q);
         const matchSubcat = (p.subcategory || '').toLowerCase().includes(q);
-        const matchSeller = (p.sellerName || '').toLowerCase().includes(q);
+        const matchSeller = (p.sellerDisplayName || p.sellerName || '').toLowerCase().includes(q);
         const matchTags = Array.isArray(p.tags) && p.tags.some((t) => typeof t === 'string' && t.toLowerCase().includes(q));
         const matchFeatures = Array.isArray(p.features) && p.features.some((f) => typeof f === 'string' && f.toLowerCase().includes(q));
         
@@ -196,81 +207,56 @@ export const MarketplaceView: React.FC<MarketplaceViewProps> = ({
     });
   }, [vendors, searchQuery]);
 
-  // Category page products logic
+  // Category page products logic.
+  // Taxonomy is authoritative: marketplaceCategory selects the category and
+  // subcategory selects the exact subcategory. Do not infer taxonomy from
+  // product title, tags, or free-form legacy category text.
   const categoryProducts = useMemo(() => {
+    const canonicalSelected = resolveMarketplaceCategory(selectedCategory);
+
     return products.filter((p) => {
       if (!p) return false;
       if (selectedCategory === 'all') return true;
-      
-      const canonicalSelected = resolveMarketplaceCategory(selectedCategory);
 
-      if (canonicalSelected === 'other_general' || selectedCategory === 'deals') {
-        const isBaseDeal = Boolean((p.discountPercent && p.discountPercent > 0) || p.featured || p.rating >= 4.7);
-        if (selectedCategory === 'deals' && !isBaseDeal) return false;
+      const productCategory = resolveMarketplaceCategory(
+        String(p.marketplaceCategory || '')
+      );
 
-        if (activeSubcategory && activeSubcategory !== 'all' && activeSubcategory !== '') {
-          if (activeSubcategory === 'Merchant Week Offers') {
-            return Boolean((p.sellerVerified && ((p.discountPercent && p.discountPercent > 0) || p.featured)) || p.rating >= 4.8);
-          } else if (activeSubcategory === 'Featured Deals' || activeSubcategory === 'Flash Deals & Promotions') {
-            return Boolean(p.featured || (p.discountPercent && p.discountPercent > 0));
-          } else if (activeSubcategory === 'Flash Sales') {
-            return Boolean((p.discountPercent && p.discountPercent >= 15) || (Array.isArray(p.tags) && p.tags.some(t => typeof t === 'string' && t.toLowerCase().includes('flash'))));
-          } else if (activeSubcategory === 'Limited-Time Discounts') {
-            return Boolean(p.discountPercent && p.discountPercent >= 10);
-          } else if (activeSubcategory === 'Recommended Promotions') {
-            return Boolean(p.rating >= 4.7 || p.featured);
-          }
-        }
-        if (selectedCategory === 'deals') return true;
-      }
-      
-      const catNameLower = (currentCategoryDef?.name || '').toLowerCase();
-      const selCatLower = String(selectedCategory || '').toLowerCase();
-      const canCatLower = String(canonicalSelected || '').toLowerCase();
-      
-      const categoryStr = (p.category || '').toLowerCase();
-      const subcategoryStr = (p.subcategory || '').toLowerCase();
-      const tagsArr = Array.isArray(p.tags) ? p.tags : [];
-      
-      const matchesCategoryDirect = categoryStr === selCatLower || categoryStr === canCatLower || categoryStr.includes(selCatLower) || categoryStr.includes(canCatLower);
-      const matchesCategoryTag = tagsArr.some(t => {
-        if (typeof t !== 'string') return false;
-        const tl = t.toLowerCase();
-        return tl.includes(selCatLower) || selCatLower.includes(tl) || tl.includes(canCatLower) || canCatLower.includes(tl);
-      });
-      const matchesSubcat = (subcategoryStr && (
-        subcategoryStr.includes(catNameLower) || 
-        catNameLower.includes(subcategoryStr) || 
-        subcategoryStr.includes(selCatLower) ||
-        subcategoryStr.includes(canCatLower)
-      ));
-      
-      // Also check if any of the category's canonical subcategories matches the product
-      const subcategoriesList = currentCategoryDef?.subcategories || [];
-      const matchesKnownSubcategory = subcategoriesList.some(sub => {
-        const subL = sub.toLowerCase();
-        return subcategoryStr.includes(subL) || tagsArr.some(t => typeof t === 'string' && t.toLowerCase().includes(subL)) || (p.title || '').toLowerCase().includes(subL);
-      });
-
-      const matchesCat = matchesCategoryDirect || matchesCategoryTag || matchesSubcat || matchesKnownSubcategory;
-      if (!matchesCat) return false;
+      // A product without an authoritative marketplaceCategory must not be
+      // pulled into a category through title/tag substring matching.
+      if (productCategory !== canonicalSelected) return false;
 
       if (activeSubcategory && activeSubcategory !== 'all' && activeSubcategory !== '') {
-        const subLower = String(activeSubcategory).toLowerCase();
-        const matchSub = subcategoryStr.includes(subLower);
-        const matchTags = tagsArr.some(t => typeof t === 'string' && (t.toLowerCase().includes(subLower) || subLower.includes(t.toLowerCase())));
-        const matchTitle = (p.title || '').toLowerCase().includes(subLower);
-        return matchSub || matchTags || matchTitle;
+        const productSubcategory = String(p.subcategory || '').trim().toLowerCase();
+        const selectedSubcategory = String(activeSubcategory).trim().toLowerCase();
+        return productSubcategory === selectedSubcategory;
       }
 
       return true;
     });
-  }, [products, selectedCategory, currentCategoryDef, activeSubcategory]);
+  }, [products, selectedCategory, activeSubcategory]);
 
   const filteredCategoryProducts = useMemo(() => {
     return categoryProducts
       .filter((p) => {
         if (!p) return false;
+
+        // Apply the same canonical 18-category taxonomy used by the marketplace filter.
+        if (categoryFilters.category !== 'all') {
+          const canonical = resolveMarketplaceCategory(categoryFilters.category);
+          const productCategory = resolveMarketplaceCategory(
+            String(p.marketplaceCategory || '')
+          );
+
+          if (productCategory !== canonical) return false;
+
+          if (categoryFilters.subcategory) {
+            const productSubcategory = String(p.subcategory || '').trim().toLowerCase();
+            const selectedSubcategory = String(categoryFilters.subcategory).trim().toLowerCase();
+            if (productSubcategory !== selectedSubcategory) return false;
+          }
+        }
+
         const matchesPrice = p.pricePi <= categoryFilters.maxPrice;
         const matchesRating = p.rating >= categoryFilters.minRating;
         const matchesVerified = !categoryFilters.verifiedOnly || p.sellerVerified;
@@ -342,6 +328,15 @@ export const MarketplaceView: React.FC<MarketplaceViewProps> = ({
                   <Lock className="w-4 h-4 text-emerald-400" />
                   <span>PSTP Escrow Protection</span>
                 </div>
+                {onOpenSellerStudio && (
+                  <button
+                    onClick={onOpenSellerStudio}
+                    className="sm:ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-900/60 hover:bg-purple-800/80 border border-purple-500/40 text-purple-200 transition-colors cursor-pointer"
+                  >
+                    <Store className="w-4 h-4 text-purple-300" />
+                    <span>Seller Studio</span>
+                  </button>
+                )}
               </div>
 
               {/* 2. PROMINENT UNIVERSAL MARKETPLACE SEARCH FIELD */}
@@ -633,9 +628,11 @@ export const MarketplaceView: React.FC<MarketplaceViewProps> = ({
                 {/* Visual Category Cards Grid */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                   {(showAllTaxonomy ? MARKETPLACE_CATEGORIES : MARKETPLACE_CATEGORIES.slice(0, 8)).map((cat) => {
+                    const catIdLower = (cat.id || '').toLowerCase();
+                    const catNameLower = (cat.name || '').toLowerCase();
                     const count = products.filter((p) => {
-                      const tagMatch = Array.isArray(p.tags) && p.tags.some(t => typeof t === 'string' && t.toLowerCase().includes(cat.id.toLowerCase()));
-                      const subMatch = (p.subcategory || '').toLowerCase().includes(cat.name.toLowerCase());
+                      const tagMatch = Boolean(catIdLower) && Array.isArray(p.tags) && p.tags.some(t => typeof t === 'string' && t.toLowerCase().includes(catIdLower));
+                      const subMatch = Boolean(catNameLower) && (p.subcategory || '').toLowerCase().includes(catNameLower);
                       return tagMatch || subMatch;
                     }).length;
 
@@ -999,38 +996,39 @@ export const MarketplaceView: React.FC<MarketplaceViewProps> = ({
                 </div>
               </div>
 
-              {/* Subcategories interactive pill bar */}
-              {currentCategoryDef?.subcategories && (
+              {/* Canonical subcategory navigation: every item is a real data domain. */}
+              {currentCategoryDef && (
                 <div className="flex flex-wrap items-center gap-2 pt-1 relative z-20">
                   <button
                     type="button"
-                    onClick={() => setActiveSubcategory('all')}
+                    onClick={() => { setActiveSubcategory('all'); setCategoryFilters((prev) => ({ ...prev, subcategory: '' })); }}
                     className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm cursor-pointer ${
                       activeSubcategory === 'all'
                         ? 'bg-purple-600 text-white border border-purple-400 shadow-purple-500/30'
                         : 'bg-slate-800/90 hover:bg-slate-700/90 text-purple-300 border border-purple-900/60'
                     }`}
                   >
-                    <span>All {selectedCategory === 'deals' ? 'Deals' : 'Items'}</span>
+                    <span>All Items</span>
                   </button>
-
-                  {currentCategoryDef.subcategories.map((sub, idx) => {
-                    const isActive = activeSubcategory === sub;
+                  {currentSubcategoryDefs.map((sub) => {
+                    const isActive = activeSubcategory === sub.name;
                     return (
                       <button
-                        key={idx}
+                        key={sub.id}
                         type="button"
-                        onClick={() => setActiveSubcategory(isActive ? 'all' : sub)}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all flex items-center gap-1.5 shadow-sm cursor-pointer ${
+                        title={sub.description}
+                        onClick={() => {
+                          setActiveSubcategory(isActive ? 'all' : sub.name);
+                          setCategoryFilters((prev) => ({ ...prev, subcategory: isActive ? '' : sub.name }));
+                        }}
+                        className={`px-3 py-2 rounded-xl text-left transition-all shadow-sm cursor-pointer border ${
                           isActive
-                            ? 'bg-gradient-to-r from-amber-500 to-purple-600 text-white border border-amber-300 shadow-amber-500/30'
-                            : 'bg-slate-800/90 hover:bg-slate-700/90 text-purple-200 border border-purple-900/60 hover:text-white'
+                            ? 'bg-gradient-to-r from-amber-500 to-purple-600 text-white border-amber-300'
+                            : 'bg-slate-800/90 hover:bg-slate-700/90 text-purple-200 border-purple-900/60'
                         }`}
                       >
-                        {selectedCategory === 'deals' && (
-                          <Flame className={`w-3.5 h-3.5 ${isActive ? 'text-amber-200' : 'text-amber-400'}`} />
-                        )}
-                        <span>{sub}</span>
+                        <span className="block text-xs font-extrabold">{sub.name}</span>
+                        <span className="block text-[10px] opacity-70 mt-0.5">{sub.listingType}</span>
                       </button>
                     );
                   })}
@@ -1044,6 +1042,21 @@ export const MarketplaceView: React.FC<MarketplaceViewProps> = ({
             <CatalogFilterBar
               filters={categoryFilters}
               onFilterChange={(updated) => setCategoryFilters((prev) => ({ ...prev, ...updated }))}
+              onNavigateCategory={(category) => {
+                setActiveSubcategory('all');
+                setCategoryFilters({
+                  category,
+                  subcategory: '',
+                  minPrice: 0,
+                  maxPrice: 500,
+                  verifiedOnly: false,
+                  orderProtectionOnly: false,
+                  minRating: 0,
+                  discountOnly: false,
+                  sortBy: 'featured'
+                });
+                onSelectCategory(category);
+              }}
               onResetFilters={() => {
                 setActiveSubcategory('all');
                 setCategoryFilters({

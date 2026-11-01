@@ -2,6 +2,9 @@ import crypto from 'crypto';
 import { StorageEngine } from '../StorageEngine';
 import {
   InstitutionProfile,
+  UniversityFaculty,
+  AcademicDepartment,
+  EducationProgramme,
   StudentIdentity,
   GuardianChildSummary,
   EducationInvoice,
@@ -12,17 +15,8 @@ import {
   ScholarshipOpportunity,
   EducationAuditLog
 } from '../../../types/education';
-import { GLOBAL_EDUCATION_INSTITUTIONS } from '../../../data/educationInstitutionsData';
-import {
-  SEED_STUDENTS,
-  SEED_CHILDREN_SUMMARIES,
-  SEED_INVOICES,
-  SEED_RECEIPTS,
-  SEED_ADMISSION_APPLICATIONS,
-  SEED_SCHOLARSHIPS,
-  SEED_PARENT_USER_ID
-} from '../../../data/educationSeedData';
-
+import { normalizeCountryCode, matchesSubdivision } from '../../../data/countrySubdivisions';
+import { piDecimalForStorage } from '../../services/piDecimal';
 export class EducationRepository {
   private institutionsEngine: StorageEngine<InstitutionProfile>;
   private studentsEngine: StorageEngine<StudentIdentity>;
@@ -38,51 +32,55 @@ export class EducationRepository {
     this.institutionsEngine = new StorageEngine<InstitutionProfile>(
       'education_institutions',
       'id',
-      GLOBAL_EDUCATION_INSTITUTIONS
+      []
     );
     this.studentsEngine = new StorageEngine<StudentIdentity>(
       'education_students',
       'id',
-      SEED_STUDENTS
+      []
     );
     this.childrenSummariesEngine = new StorageEngine<GuardianChildSummary>(
       'education_guardian_children',
       'studentId',
-      SEED_CHILDREN_SUMMARIES
+      []
     );
     this.invoicesEngine = new StorageEngine<EducationInvoice>(
       'education_invoices',
       'id',
-      SEED_INVOICES
+      []
     );
     this.paymentsEngine = new StorageEngine<EducationPaymentTransaction>(
       'education_payments',
-      'id'
+      'id',
+      []
     );
     this.receiptsEngine = new StorageEngine<DigitalEducationReceipt>(
       'education_receipts',
       'receiptNumber',
-      SEED_RECEIPTS
+      []
     );
     this.admissionsEngine = new StorageEngine<AdmissionApplication>(
       'education_admissions',
       'id',
-      SEED_ADMISSION_APPLICATIONS
+      []
     );
     this.scholarshipsEngine = new StorageEngine<ScholarshipOpportunity>(
       'education_scholarships',
       'id',
-      SEED_SCHOLARSHIPS
+      []
     );
     this.auditEngine = new StorageEngine<EducationAuditLog>(
       'education_audit_logs',
       'id'
     );
+
   }
 
   // --- Institutions ---
   public getInstitutions(filter?: {
     countryCode?: string;
+    country?: string;
+    state?: string;
     tier?: string;
     institutionType?: string;
     isPublic?: boolean;
@@ -93,8 +91,14 @@ export class EducationRepository {
 
     if (!filter) return list;
 
-    if (filter.countryCode && filter.countryCode !== 'ALL' && filter.countryCode !== 'GLOBAL') {
-      list = list.filter((i) => i.countryCode === filter.countryCode);
+    const rawCountry = filter.countryCode || filter.country;
+    const normalizedCountry = rawCountry ? normalizeCountryCode(rawCountry) : undefined;
+
+    if (normalizedCountry && normalizedCountry !== 'ALL' && normalizedCountry !== 'GLOBAL') {
+      list = list.filter((i) => i.countryCode.toUpperCase() === normalizedCountry.toUpperCase());
+    }
+    if (filter.state && filter.state !== 'all') {
+      list = list.filter((i) => matchesSubdivision(i.countryCode, i.state, filter.state));
     }
     if (filter.tier && filter.tier !== 'all') {
       list = list.filter((i) => i.supportedTiers.includes(filter.tier as any));
@@ -157,8 +161,66 @@ export class EducationRepository {
     return updated;
   }
 
+  // --- Academic Hierarchy (Faculties, Colleges, Departments, Programmes) ---
+  public getFacultiesByInstitution(institutionId: string): UniversityFaculty[] {
+    const inst = this.institutionsEngine.get(institutionId);
+    if (!inst || !inst.faculties) return [];
+    return inst.faculties;
+  }
+
+  public getFacultyById(institutionId: string, facultyId: string): UniversityFaculty | null {
+    const faculties = this.getFacultiesByInstitution(institutionId);
+    return faculties.find((f) => f.id === facultyId) || null;
+  }
+
+  public getDepartmentsByFaculty(institutionId: string, facultyId: string): AcademicDepartment[] {
+    const faculty = this.getFacultyById(institutionId, facultyId);
+    if (!faculty || !faculty.departments) return [];
+    return faculty.departments;
+  }
+
+  public getDepartmentById(institutionId: string, facultyId: string, departmentId: string): AcademicDepartment | null {
+    const departments = this.getDepartmentsByFaculty(institutionId, facultyId);
+    return departments.find((d) => d.id === departmentId) || null;
+  }
+
+  public getProgrammesByDepartment(
+    institutionId: string,
+    facultyId: string,
+    departmentId: string
+  ): EducationProgramme[] {
+    const dept = this.getDepartmentById(institutionId, facultyId, departmentId);
+    if (!dept || !dept.programmes) return [];
+    return dept.programmes;
+  }
+
+  public getAllProgrammesByInstitution(institutionId: string): EducationProgramme[] {
+    const inst = this.institutionsEngine.get(institutionId);
+    if (!inst) return [];
+
+    // If institution has direct programmes (e.g. secondary school, vocational institute)
+    if (inst.programmes && inst.programmes.length > 0) {
+      return inst.programmes;
+    }
+
+    // Otherwise aggregate from faculties -> departments -> programmes
+    const allProgs: EducationProgramme[] = [];
+    if (inst.faculties) {
+      for (const fac of inst.faculties) {
+        if (fac.departments) {
+          for (const dept of fac.departments) {
+            if (dept.programmes) {
+              allProgs.push(...dept.programmes);
+            }
+          }
+        }
+      }
+    }
+    return allProgs;
+  }
+
   // --- Students & Guardian ---
-  public getStudentsByGuardian(guardianId: string = SEED_PARENT_USER_ID): StudentIdentity[] {
+  public getStudentsByGuardian(guardianId: string): StudentIdentity[] {
     return this.studentsEngine.filter((s) => s.guardianId === guardianId);
   }
 
@@ -166,9 +228,13 @@ export class EducationRepository {
     return this.studentsEngine.get(id);
   }
 
-  public getGuardianChildrenSummaries(guardianId: string = SEED_PARENT_USER_ID): GuardianChildSummary[] {
+  public getGuardianChildrenSummaries(guardianId: string): GuardianChildSummary[] {
     // Dynamically recalculate balances based on active invoices
-    const children = this.childrenSummariesEngine.getAll();
+    const cleanGuardianId = (guardianId || '').trim();
+    if (!cleanGuardianId) return [];
+    const children = this.childrenSummariesEngine.filter((c) =>
+      String(c.guardianId || '').trim().toLowerCase() === cleanGuardianId.toLowerCase()
+    );
     return children.map((c) => {
       const studentInvoices = this.invoicesEngine.filter((inv) => inv.studentId === c.studentId);
       const activeInvoices = studentInvoices.filter((inv) => inv.status !== 'PAID' && inv.status !== 'CANCELLED');
@@ -228,19 +294,19 @@ export class EducationRepository {
     tax: number;
     totalAmount: number;
   } {
-    const round2 = (num: number) => Math.round((num + Number.EPSILON) * 100) / 100;
-    const subtotal = Math.max(0, round2(params.subtotal || 0));
-    const compulsoryFees = Math.max(0, round2(params.compulsoryFees || 0));
-    const optionalFees = Math.max(0, round2(params.optionalFees || 0));
-    const discount = Math.max(0, round2(params.discount || 0));
-    const scholarship = Math.max(0, round2(params.scholarship || 0));
-    const tax = Math.max(0, round2(params.tax || 0));
+    const roundPi = (num: number) => Number(piDecimalForStorage(num));
+    const subtotal = roundPi(Math.max(0, params.subtotal || 0));
+    const compulsoryFees = roundPi(Math.max(0, params.compulsoryFees || 0));
+    const optionalFees = roundPi(Math.max(0, params.optionalFees || 0));
+    const discount = roundPi(Math.max(0, params.discount || 0));
+    const scholarship = roundPi(Math.max(0, params.scholarship || 0));
+    const tax = roundPi(Math.max(0, params.tax || 0));
 
-    const totalBeforeDeductions = round2(subtotal + compulsoryFees + optionalFees);
+    const totalBeforeDeductions = roundPi(subtotal + compulsoryFees + optionalFees);
     const cappedDiscount = Math.min(discount, totalBeforeDeductions);
     const cappedScholarship = Math.min(scholarship, Math.max(0, totalBeforeDeductions - cappedDiscount));
-    const totalDeductions = round2(cappedDiscount + cappedScholarship);
-    const totalAmount = Math.max(0, round2(totalBeforeDeductions - totalDeductions + tax));
+    const totalDeductions = roundPi(cappedDiscount + cappedScholarship);
+    const totalAmount = roundPi(Math.max(0, totalBeforeDeductions - totalDeductions + tax));
 
     return {
       subtotal,
@@ -261,8 +327,14 @@ export class EducationRepository {
       tax: invoiceData.taxAmount
     });
 
+    const invoiceCurrency = String(invoiceData.currency || '').trim().toUpperCase();
+    if (invoiceCurrency !== 'PI') {
+      throw new Error('PI_NATIVE_INVOICE_REQUIRED');
+    }
+
     const invoice: EducationInvoice = {
       ...invoiceData,
+      currency: 'PI',
       subtotal: totals.subtotal,
       discountAmount: totals.discount,
       taxAmount: totals.tax,
@@ -277,7 +349,7 @@ export class EducationRepository {
       entityId: invoice.id,
       actorUsername: 'school_bursar',
       actorRole: 'FINANCE_OFFICER',
-      details: `Created invoice ${invoice.invoiceNumber} for student ${invoice.studentName} amount $${invoice.totalAmount}`
+      details: `Created Pi-native invoice ${invoice.invoiceNumber} for student ${invoice.studentName} amount ${invoice.totalAmount} π`
     });
     return invoice;
   }
@@ -303,8 +375,8 @@ export class EducationRepository {
       (params.paymentId || '').trim(),
       (params.studentId || '').trim(),
       (params.institutionId || '').trim(),
-      Number(params.amount).toFixed(2),
-      (params.currency || 'USD').trim().toUpperCase(),
+      piDecimalForStorage(params.amount),
+      (params.currency || 'PI').trim().toUpperCase(),
       (params.paymentTimestamp || '').trim(),
       (params.settlementStatus || 'SETTLED').trim().toUpperCase()
     ].join('|');
@@ -329,7 +401,8 @@ export class EducationRepository {
     invoice: EducationInvoice;
     receipt: DigitalEducationReceipt;
   } {
-    // 1. Idempotency Check: if this payment or idempotency key was already recorded, return existing
+    // 1. Replay binding: an existing idempotency key / Pi payment may only
+    // return the original settlement when every financial binding is identical.
     const existingPayment = this.paymentsEngine.find(
       (p) =>
         (params.idempotencyKey && p.idempotencyKey && p.idempotencyKey === params.idempotencyKey) ||
@@ -337,8 +410,23 @@ export class EducationRepository {
     );
 
     if (existingPayment) {
-      const existingInvoice = this.invoicesEngine.get(existingPayment.invoiceId)!;
-      const existingReceipt = this.receiptsEngine.get(existingPayment.receiptNumber)!;
+      const existingInvoice = this.invoicesEngine.get(existingPayment.invoiceId);
+      if (!existingInvoice) throw new Error('PAYMENT_REPLAY_INVOICE_MISSING');
+
+      const sameInvoice = existingPayment.invoiceId === params.invoiceId;
+      const sameCurrency = existingPayment.currency.trim().toUpperCase() === String(params.currency || '').trim().toUpperCase();
+      const sameAmount = Math.abs(existingPayment.amountPaid - params.amountPaid) <= 0.000000000001;
+      const samePiAmount = Math.abs(existingPayment.piAmount - Number(params.piAmount ?? 0)) <= 0.000000000001;
+      const samePiPayment = (existingPayment.piPaymentId || '') === (params.piPaymentId || '');
+      const samePayer = existingPayment.payerUsername.trim().toLowerCase() === params.payerUsername.trim().toLowerCase();
+
+      if (!(sameInvoice && sameCurrency && sameAmount && samePiAmount && samePiPayment && samePayer)) {
+        throw new Error('PAYMENT_REPLAY_BINDING_MISMATCH');
+      }
+
+      const existingReceipt = this.receiptsEngine.get(existingPayment.receiptNumber);
+      if (!existingReceipt) throw new Error('PAYMENT_REPLAY_RECEIPT_MISSING');
+
       return {
         success: true,
         payment: existingPayment,
@@ -347,21 +435,41 @@ export class EducationRepository {
       };
     }
 
-    // 2. Fetch target invoice
+    // 2. Validate financial amount before any balance mutation.
+    if (!Number.isFinite(params.amountPaid) || params.amountPaid <= 0) {
+      throw new Error('PAYMENT_AMOUNT_REQUIRED');
+    }
+
+    // 3. Fetch target invoice
     const invoice = this.invoicesEngine.get(params.invoiceId);
     if (!invoice) {
       throw new Error(`Invoice with ID ${params.invoiceId} not found`);
     }
 
+    if (params.paymentMethod === 'PI_NETWORK') {
+      if (!params.piPaymentId) throw new Error('PI_PAYMENT_ID_REQUIRED');
+      const invoiceCurrency = String(invoice.currency || '').trim().toUpperCase();
+      const paymentCurrency = String(params.currency || '').trim().toUpperCase();
+      if (invoiceCurrency !== 'PI') throw new Error('PI_NATIVE_INVOICE_REQUIRED');
+      if (paymentCurrency !== 'PI') throw new Error('PI_NATIVE_PAYMENT_REQUIRED');
+      if (!Number.isFinite(params.piAmount) || Number(params.piAmount) <= 0) throw new Error('PI_AMOUNT_REQUIRED');
+      const paidPiAmount = Number(params.amountPaid);
+      const submittedPiAmount = Number(params.piAmount);
+      if (!Number.isFinite(paidPiAmount) || paidPiAmount <= 0) throw new Error('PI_AMOUNT_REQUIRED');
+      if (!Number.isFinite(submittedPiAmount) || submittedPiAmount <= 0) throw new Error('PI_AMOUNT_REQUIRED');
+      if (Math.abs(submittedPiAmount - paidPiAmount) > 0.000000000001) throw new Error('PI_AMOUNT_MISMATCH');
+    }
+
     // Phase 10: Prevent overpayment beyond outstanding balance
-    if (params.amountPaid > invoice.outstandingBalance + 0.001) {
-      throw new Error(`Payment amount ($${params.amountPaid}) exceeds outstanding balance ($${invoice.outstandingBalance}). Overpayment rejected.`);
+    if (params.amountPaid > invoice.outstandingBalance + 0.000000000001) {
+      throw new Error(`Payment amount (${params.amountPaid} π) exceeds outstanding balance (${invoice.outstandingBalance} π). Overpayment rejected.`);
     }
 
     const timestamp = new Date().toISOString();
-    const paymentId = `PAY-EDU-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-    const receiptNumber = `RCP-EDU-${invoice.institutionId.slice(-3).toUpperCase()}-${Date.now().toString().slice(-6)}`;
-    const verificationRef = `VER-${invoice.institutionId.slice(-3).toUpperCase()}-${Date.now().toString().slice(-4)}`;
+    const entropyHex = crypto.randomBytes(3).toString('hex').toUpperCase();
+    const paymentId = `PAY-EDU-${Date.now()}-${entropyHex}`;
+    const receiptNumber = `RCP-EDU-${invoice.institutionId.slice(-3).toUpperCase()}-${Date.now().toString().slice(-6)}-${entropyHex}`;
+    const verificationRef = `VER-${invoice.institutionId.slice(-3).toUpperCase()}-${Date.now().toString().slice(-4)}-${entropyHex}`;
 
     // 3. Cryptographic Tamper-Proof Canonical SHA-256 Digest
     const auditHash = EducationRepository.computeReceiptDigest({
@@ -379,7 +487,7 @@ export class EducationRepository {
     // 4. Update Invoice Balances
     const newAmountPaid = invoice.amountPaid + params.amountPaid;
     const newOutstandingBalance = Math.max(0, invoice.totalAmount - newAmountPaid);
-    const newStatus = newOutstandingBalance <= 0.001 ? 'PAID' : 'PARTIALLY_PAID';
+    const newStatus = newOutstandingBalance <= 0.000000000001 ? 'PAID' : 'PARTIALLY_PAID';
 
     const updatedInvoice: EducationInvoice = {
       ...invoice,
@@ -406,7 +514,7 @@ export class EducationRepository {
       status: 'VERIFIED_COMPLETED',
       receiptNumber,
       payerUsername: params.payerUsername,
-      idempotencyKey: params.idempotencyKey || (`IDEM-${Date.now()}`),
+      idempotencyKey: params.idempotencyKey || params.piPaymentId || paymentId,
       verifiedAt: timestamp,
       auditHash
     };
@@ -446,7 +554,7 @@ export class EducationRepository {
         institutionName: invoice.institutionName,
         academicSession: invoice.academicSession,
         termOrSemester: invoice.termOrSemester,
-        amountPaidFormatted: `$${params.amountPaid.toFixed(2)} ${params.currency} (${(params.piAmount ?? 0).toFixed(6)} π)`,
+        amountPaidFormatted: `${(params.piAmount ?? params.amountPaid).toFixed(12)} π`,
         verifiedAt: timestamp,
         isAuthentic: true
       }
@@ -460,7 +568,7 @@ export class EducationRepository {
       entityId: paymentId,
       actorUsername: params.payerUsername,
       actorRole: 'PARENT',
-      details: `Paid $${params.amountPaid} (${params.piAmount} π) for Invoice ${invoice.invoiceNumber}. Receipt ${receiptNumber} generated.`
+      details: `Paid ${params.amountPaid} π for Invoice ${invoice.invoiceNumber}. Receipt ${receiptNumber} generated.`
     });
 
     return {
@@ -469,6 +577,22 @@ export class EducationRepository {
       invoice: updatedInvoice,
       receipt
     };
+  }
+
+  public getPaymentsByInvoiceId(invoiceId: string): EducationPaymentTransaction[] {
+    const cleanId = (invoiceId || '').trim();
+    return this.paymentsEngine
+      .filter((p) => p.invoiceId === cleanId)
+      .sort((a, b) => new Date(b.verifiedAt).getTime() - new Date(a.verifiedAt).getTime());
+  }
+
+  public getPaymentById(paymentId: string): EducationPaymentTransaction | null {
+    const cleanId = (paymentId || '').trim();
+    return this.paymentsEngine.get(cleanId) || null;
+  }
+
+  public getAllPayments(): EducationPaymentTransaction[] {
+    return this.paymentsEngine.getAll();
   }
 
   // --- Public Safe Receipt Verification with SHA-256 Recomputation ---
@@ -567,12 +691,16 @@ export class EducationRepository {
     const applicationNumber = `APP/${new Date().getFullYear()}/${app.institutionId.slice(-3).toUpperCase()}/${Math.floor(100 + Math.random() * 900)}`;
     const timestamp = new Date().toISOString();
 
+    if (!app.educationTier || !app.dateOfBirth || app.applicationFeeFiat == null || app.applicationFeePaid == null) {
+      throw new Error('Authoritative admission application fields are incomplete');
+    }
+
     const record: AdmissionApplication = {
-      educationTier: app.educationTier || 'tertiary',
+      educationTier: app.educationTier,
       applicantPhone: app.applicantPhone || '',
-      dateOfBirth: app.dateOfBirth || new Date().toISOString(),
-      applicationFeeFiat: app.applicationFeeFiat ?? 0,
-      applicationFeePaid: app.applicationFeePaid ?? false,
+      dateOfBirth: app.dateOfBirth,
+      applicationFeeFiat: app.applicationFeeFiat,
+      applicationFeePaid: app.applicationFeePaid,
       documents: app.documents || [],
       ...app,
       id,
@@ -687,7 +815,7 @@ export class EducationRepository {
     const updated: AdmissionApplication = {
       ...(res as AdmissionApplication),
       updatedAt: new Date().toISOString(),
-      offerDetails: res.offerDetails ? { ...res.offerDetails, acceptanceFeePaid: true } : undefined
+      offerDetails: res.offerDetails ? { ...res.offerDetails } : undefined
     };
     delete (updated as any).application;
     delete (updated as any).success;
@@ -760,6 +888,19 @@ export class EducationRepository {
     const scholarship = this.scholarshipsEngine.get(scholarshipId);
     if (!scholarship) return { success: false, error: 'Scholarship not found' };
 
+    if (!Number.isFinite(scholarship.coverageAmountUsd) || scholarship.coverageAmountUsd <= 0) {
+      return { success: false, error: 'INVALID_SCHOLARSHIP_AMOUNT' };
+    }
+    if (!Number.isFinite(invoice.outstandingBalance) || invoice.outstandingBalance <= 0) {
+      return { success: false, error: 'INVOICE_ALREADY_SETTLED' };
+    }
+    const applicableTiers = Array.isArray(scholarship.applicableTiers) ? scholarship.applicableTiers : [];
+    if (invoice.educationTier && applicableTiers.length > 0 && !applicableTiers.includes(invoice.educationTier as any)) {
+      return { success: false, error: 'SCHOLARSHIP_TIER_NOT_ELIGIBLE' };
+    }
+    if (scholarship.eligibleCountries?.length && invoice.countryCode && !scholarship.eligibleCountries.includes(invoice.countryCode)) {
+      return { success: false, error: 'SCHOLARSHIP_COUNTRY_NOT_ELIGIBLE' };
+    }
     const deduction = Math.min(scholarship.coverageAmountUsd, invoice.outstandingBalance);
     const newAmountPaid = invoice.amountPaid + deduction;
     const newOutstanding = Math.max(0, invoice.totalAmount - newAmountPaid);

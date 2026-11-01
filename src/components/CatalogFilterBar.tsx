@@ -10,10 +10,11 @@ import {
   X,
   ChevronDown
 } from 'lucide-react';
-import { ProductCategory } from '../types';
+import { MarketplaceCategory } from '../types/navigation';
+import { MARKETPLACE_CATEGORIES, getMarketplaceCategoryDef, resolveMarketplaceCategory } from '../data/categoryData';
 
 export interface FilterOptions {
-  category: ProductCategory | 'all';
+  category: MarketplaceCategory | 'all';
   subcategory: string;
   minPrice: number;
   maxPrice: number;
@@ -29,24 +30,25 @@ interface CatalogFilterBarProps {
   onFilterChange: (updated: Partial<FilterOptions>) => void;
   onResetFilters: () => void;
   totalResults: number;
+  /** Navigate to the real Marketplace category page, not just filter the current page. */
+  onNavigateCategory?: (category: MarketplaceCategory | 'all') => void;
 }
 
 export const CatalogFilterBar: React.FC<CatalogFilterBarProps> = ({
   filters,
   onFilterChange,
   onResetFilters,
-  totalResults
+  totalResults,
+  onNavigateCategory
 }) => {
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
 
-  const categories: { id: ProductCategory | 'all'; label: string }[] = [
-    { id: 'all', label: 'All Catalog' },
-    { id: 'physical', label: 'Physical Goods' },
-    { id: 'digital', label: 'Digital Keys & Code' },
-    { id: 'airtime', label: 'Airtime & Data' },
-    { id: 'utility', label: 'Utility Bills' },
-    { id: 'giftcard', label: 'Gift Cards' }
+  const categories: { id: MarketplaceCategory | 'all'; label: string }[] = [
+    { id: 'all', label: 'All Categories' },
+    ...MARKETPLACE_CATEGORIES.map((item) => ({ id: item.id, label: item.name }))
   ];
+  const selectedCategoryDef = getMarketplaceCategoryDef(filters.category);
+  const subcategories = selectedCategoryDef?.subcategories ?? [];
 
   const sortOptions = [
     { value: 'featured', label: 'Featured & Popular' },
@@ -66,7 +68,13 @@ export const CatalogFilterBar: React.FC<CatalogFilterBarProps> = ({
           {categories.map((cat) => (
             <button
               key={cat.id}
-              onClick={() => onFilterChange({ category: cat.id })}
+              onClick={() => {
+                if (onNavigateCategory) {
+                  onNavigateCategory(cat.id);
+                } else {
+                  onFilterChange({ category: cat.id, subcategory: '' });
+                }
+              }}
               className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex-shrink-0 ${
                 filters.category === cat.id
                   ? 'bg-purple-600 text-white shadow-md shadow-purple-600/20'
@@ -76,6 +84,36 @@ export const CatalogFilterBar: React.FC<CatalogFilterBarProps> = ({
               {cat.label}
             </button>
           ))}
+        </div>
+
+        {/* Canonical 18-category selector */}
+        <div className="flex items-center gap-2 w-full lg:w-auto">
+          <select
+            value={filters.category}
+            onChange={(e) => {
+              const category = resolveMarketplaceCategory(e.target.value) as MarketplaceCategory | 'all';
+              if (onNavigateCategory) {
+                onNavigateCategory(category);
+              } else {
+                onFilterChange({ category, subcategory: '' });
+              }
+            }}
+            className="min-w-[190px] max-w-full px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold text-xs border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-purple-500 cursor-pointer"
+            aria-label="Marketplace category"
+          >
+            {categories.map((cat) => <option key={cat.id} value={cat.id}>{cat.label}</option>)}
+          </select>
+          {subcategories.length > 0 && (
+            <select
+              value={filters.subcategory}
+              onChange={(e) => onFilterChange({ subcategory: e.target.value })}
+              className="min-w-[170px] max-w-full px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold text-xs border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-purple-500 cursor-pointer"
+              aria-label="Marketplace subcategory"
+            >
+              <option value="">All Subcategories</option>
+              {subcategories.map((sub) => <option key={sub} value={sub}>{sub}</option>)}
+            </select>
+          )}
         </div>
 
         {/* Controls: Filter Drawer Toggle & Sort dropdown */}

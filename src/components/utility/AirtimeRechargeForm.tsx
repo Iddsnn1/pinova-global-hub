@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   Globe, 
   Smartphone, 
@@ -13,7 +13,7 @@ import {
 import { UtilityServiceProvider, UtilityProviderPackage, PiConversionConfig } from '../../types/utility';
 import { AIRTIME_COUNTRIES, validateAirtimePhoneNumber, PhoneValidationStatus } from '../../data/airtimeData';
 import { SAMPLE_UTILITY_PROVIDERS } from '../../data/utilityData';
-import { formatPiAmount, calculateAuthoritativePiAmount } from '../../utils/formatters';
+import { formatPiAmount } from '../../utils/formatters';
 
 interface AirtimeRechargeFormProps {
   piConversionConfig: PiConversionConfig;
@@ -25,6 +25,7 @@ interface AirtimeRechargeFormProps {
     provider: UtilityServiceProvider;
     phoneNumber: string;
     fiatAmount: number;
+    fiatCurrency?: string;
     piAmount: number;
     packageName?: string;
   }) => Promise<void>;
@@ -55,6 +56,9 @@ export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
   const [purchaseMode, setPurchaseMode] = useState<'custom' | 'package'>('custom');
   const [customAmountInput, setCustomAmountInput] = useState<string>('');
   const [selectedPackage, setSelectedPackage] = useState<UtilityProviderPackage | null>(null);
+  const [fxQuote, setFxQuote] = useState<{ currency: string; amount: number; amountUsd: number; referencePiAmount: number } | null>(null);
+  const [fxQuoteLoading, setFxQuoteLoading] = useState(false);
+  const [fxQuoteError, setFxQuoteError] = useState<string | null>(null);
 
   // Active Country details
   const activeCountry = AIRTIME_COUNTRIES.find((c) => c.code === selectedCountryCode);
@@ -130,7 +134,58 @@ export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
   };
 
   const activeFiatPrice = getActiveFiatPrice();
-  const calculatedPiAmount = calculateAuthoritativePiAmount(activeFiatPrice, piConversionConfig.piRateUsd);
+  const activeFiatCurrency = (purchaseMode === 'package' && selectedPackage ? selectedPackage.currency : selectedProvider?.currency || '').trim().toUpperCase();
+
+  useEffect(() => {
+    let cancelled = false;
+    const controller = new AbortController();
+    setFxQuote(null);
+    setFxQuoteError(null);
+
+    if (!Number.isFinite(activeFiatPrice) || activeFiatPrice <= 0 || !activeFiatCurrency) {
+      setFxQuoteLoading(false);
+      return () => controller.abort();
+    }
+
+    setFxQuoteLoading(true);
+    const timer = setTimeout(async () => {
+      try {
+        const response = await fetch('/api/fx/quote-to-pi', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify({ amount: activeFiatPrice, currency: activeFiatCurrency }),
+          signal: controller.signal
+        });
+        const payload = await response.json();
+        if (!response.ok || payload?.success !== true || !payload?.quote) {
+          throw new Error(payload?.message || 'Live currency conversion is unavailable. Please retry.');
+        }
+        if (!cancelled) {
+          setFxQuote({
+            currency: String(payload.quote.currency || '').toUpperCase(),
+            amount: Number(payload.quote.amount),
+            amountUsd: Number(payload.quote.amountUsd),
+            referencePiAmount: Number(payload.quote.referencePiAmount)
+          });
+        }
+      } catch (error: any) {
+        if (!cancelled && error?.name !== 'AbortError') {
+          setFxQuoteError(error?.message || 'Live currency conversion is unavailable.');
+        }
+      } finally {
+        if (!cancelled) setFxQuoteLoading(false);
+      }
+    }, 300);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [activeFiatPrice, activeFiatCurrency]);
+
+  const hasCurrentFxQuote = !!fxQuote && fxQuote.currency === activeFiatCurrency && fxQuote.amount === activeFiatPrice && Number.isFinite(fxQuote.referencePiAmount) && fxQuote.referencePiAmount > 0;
+  const calculatedPiAmount = hasCurrentFxQuote ? fxQuote!.referencePiAmount : 0;
   const isValidPositiveAmount = typeof activeFiatPrice === 'number' && !isNaN(activeFiatPrice) && isFinite(activeFiatPrice) && activeFiatPrice > 0;
   const minPiThreshold = piConversionConfig.minPurchasePi || 0.00000001;
   const isWithinLimits =
@@ -145,6 +200,8 @@ export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
     !!phoneValidation?.isValid &&
     isValidPositiveAmount &&
     isWithinLimits &&
+    hasCurrentFxQuote &&
+    !fxQuoteLoading &&
     !isProcessingPayment;
 
   // Filter countries for search dropdown
@@ -157,16 +214,36 @@ export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const finalPiAmount = calculateAuthoritativePiAmount(getActiveFiatPrice(), piConversionConfig.piRateUsd);
+    if (!canProceed || !selectedProvider || !activeCountry) return;
+
+    let finalPiAmount = 0;
+    try {
+      const response = await fetch('/api/fx/quote-to-pi', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ amount: getActiveFiatPrice(), currency: activeFiatCurrency })
+      });
+      const payload = await response.json();
+      if (!response.ok || payload?.success !== true || !payload?.quote || String(payload.quote.currency || '').toUpperCase() !== activeFiatCurrency) {
+        throw new Error(payload?.message || 'Live currency conversion is unavailable. No payment was started.');
+      }
+      finalPiAmount = Number(payload.quote.referencePiAmount);
+      if (!Number.isFinite(finalPiAmount) || finalPiAmount <= 0) throw new Error('The currency quote returned an invalid Pi reference amount.');
+      setFxQuote({ currency: activeFiatCurrency, amount: getActiveFiatPrice(), amountUsd: Number(payload.quote.amountUsd), referencePiAmount: finalPiAmount });
+      setFxQuoteError(null);
+    } catch (error: any) {
+      setFxQuoteError(error?.message || 'Live currency conversion is unavailable. No payment was started.');
+      return;
+    }
+
     console.log('[PI PAYMENT] button clicked (AirtimeRechargeForm)', {
       country: activeCountry?.name,
       provider: selectedProvider?.name,
       phoneNumber,
       fiatAmount: getActiveFiatPrice(),
+      fiatCurrency: activeFiatCurrency,
       piAmount: finalPiAmount
     });
-
-    if (!canProceed || !selectedProvider || !activeCountry) return;
 
     await onExecutePayment({
       country: activeCountry.name,
@@ -174,6 +251,7 @@ export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
       provider: selectedProvider,
       phoneNumber: phoneValidation?.formatted || phoneNumber,
       fiatAmount: getActiveFiatPrice(),
+      fiatCurrency: activeFiatCurrency,
       piAmount: finalPiAmount,
       packageName: purchaseMode === 'package' ? selectedPackage?.name : 'Custom Airtime Purchase'
     });
@@ -525,6 +603,13 @@ export const AirtimeRechargeForm: React.FC<AirtimeRechargeFormProps> = ({
             <span className="text-xs font-black uppercase tracking-wider text-slate-200">Required Pi Amount:</span>
             <span className="text-xl font-black text-amber-400">{formatPiAmount(calculatedPiAmount)} π</span>
           </div>
+        </div>
+      )}
+
+      {(fxQuoteLoading || fxQuoteError) && (
+        <div className={`p-3 rounded-xl border text-xs font-bold flex items-center gap-2 ${fxQuoteError ? 'bg-rose-500/10 border-rose-500/20 text-rose-500' : 'bg-sky-500/10 border-sky-500/20 text-sky-600'}`}>
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <span>{fxQuoteLoading ? 'Checking live currency rate…' : fxQuoteError}</span>
         </div>
       )}
 

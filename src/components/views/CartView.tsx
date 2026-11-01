@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { formatPiAmount } from '../../utils/formatters';
 import { ShoppingBag, Trash2, Plus, Minus, ShieldCheck, ArrowRight, ArrowLeft, Tag, Lock, CheckCircle2 } from 'lucide-react';
 import { CartItem, Coupon } from '../../types';
 
@@ -52,7 +53,7 @@ export const CartView: React.FC<CartViewProps> = ({
             Your PiNova Cart is Empty
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto">
-            Browse our global marketplace catalog across 13 major categories and 15 utility services to add items to your cart.
+            Browse our global marketplace catalog across 18 major categories and verified utility services to add items to your cart.
           </p>
         </div>
         <button
@@ -120,7 +121,7 @@ export const CartView: React.FC<CartViewProps> = ({
                     {item.product.title}
                   </h3>
                   <div className="text-xs text-slate-500 dark:text-slate-400">
-                    Seller: <span className="text-purple-400 font-semibold">{item.product.sellerName}</span>
+                    Seller: <span className="text-purple-400 font-semibold">{item.product.sellerDisplayName || item.product.sellerName}</span>
                   </div>
 
                   {item.customDetails?.variant && (
@@ -151,7 +152,7 @@ export const CartView: React.FC<CartViewProps> = ({
                   )}
 
                   <div className="text-xs font-black text-amber-500 mt-1">
-                    {getItemUnitPrice(item).toFixed(2)} π / unit
+                    {formatPiAmount(getItemUnitPrice(item))} π / unit
                   </div>
                 </div>
               </div>
@@ -178,7 +179,7 @@ export const CartView: React.FC<CartViewProps> = ({
 
                 <div className="text-right">
                   <div className="text-xs font-black text-slate-900 dark:text-slate-100">
-                    {(getItemUnitPrice(item) * item.quantity).toFixed(2)} π
+                    {formatPiAmount((getItemUnitPrice(item) * item.quantity))} π
                   </div>
                   <button
                     onClick={() => onRemoveItem(item.product.id)}
@@ -241,12 +242,12 @@ export const CartView: React.FC<CartViewProps> = ({
           <div className="space-y-2.5 text-xs text-slate-300 border-t border-b border-slate-800 py-4">
             <div className="flex justify-between">
               <span>Subtotal:</span>
-              <span className="font-bold text-white">{subtotalPi.toFixed(2)} π</span>
+              <span className="font-bold text-white">{formatPiAmount(subtotalPi)} π</span>
             </div>
             {appliedCoupon && (
               <div className="flex justify-between text-purple-400 font-bold">
                 <span>Discount ({appliedCoupon.code}):</span>
-                <span>-{discountAmountPi.toFixed(2)} π</span>
+                <span>-{formatPiAmount(discountAmountPi)} π</span>
               </div>
             )}
             <div className="flex justify-between">
@@ -255,7 +256,7 @@ export const CartView: React.FC<CartViewProps> = ({
             </div>
             <div className="flex justify-between text-sm font-black text-white pt-2 border-t border-slate-800">
               <span>Total Payment Required:</span>
-              <span className="text-amber-400 text-lg">{totalPi.toFixed(2)} π</span>
+              <span className="text-amber-400 text-lg">{formatPiAmount(totalPi)} π</span>
             </div>
           </div>
 
@@ -268,9 +269,9 @@ export const CartView: React.FC<CartViewProps> = ({
           {/* Checkout Trigger */}
           <button
             onClick={onOpenCheckoutModal}
-            className="w-full py-3.5 rounded-xl bg-gradient-to-r from-purple-600 via-indigo-600 to-amber-500 text-white font-black text-sm shadow-xl hover:opacity-95 transition-opacity flex items-center justify-center gap-2"
+            className="w-full py-3.5 rounded-xl bg-gradient-to-r from-purple-600 via-indigo-600 to-amber-500 text-white font-black text-sm shadow-xl hover:opacity-95 transition-opacity flex items-center justify-center gap-2" aria-label="Checkout with cart"
           >
-            <span>Proceed to Escrow Checkout</span>
+            <span>Checkout</span>
             <ArrowRight className="w-4 h-4" />
           </button>
         </div>

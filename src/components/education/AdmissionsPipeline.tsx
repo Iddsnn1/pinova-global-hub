@@ -31,19 +31,70 @@ export const AdmissionsPipeline: React.FC<AdmissionsPipelineProps> = ({
   const [isApplying, setIsApplying] = useState(false);
 
   // Form State for new application
-  const [institutionId, setInstitutionId] = useState(preselectedInstitution?.id || 'inst-ng-buk-001');
-  const [institutionName, setInstitutionName] = useState(preselectedInstitution?.name || 'Bayero University Kano (BUK)');
-  const [programmeName, setProgrammeName] = useState('B.Eng Computer Engineering');
+  const [institutionId, setInstitutionId] = useState(preselectedInstitution?.id || '');
+  const [institutionName, setInstitutionName] = useState(preselectedInstitution?.name || '');
+  const [programmeId, setProgrammeId] = useState('');
+  const [programmeName, setProgrammeName] = useState('');
+  const [institutionOptions, setInstitutionOptions] = useState<InstitutionProfile[]>([]);
+  const [programmeOptions, setProgrammeOptions] = useState<import('../../types/education').EducationProgramme[]>([]);
+  const [hierarchyLoading, setHierarchyLoading] = useState(false);
+  const [providerUnavailable, setProviderUnavailable] = useState(false);
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
-  const [dateOfBirth, setDateOfBirth] = useState('2003-06-15');
+  const [dateOfBirth, setDateOfBirth] = useState('');
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [documentFile, setDocumentFile] = useState<File | null>(null);
+  const [documentType, setDocumentType] = useState<import('../../types/education').AdmissionDocument['type']>('other');
+  const [documentUploading, setDocumentUploading] = useState(false);
+  const [uploadedDocuments, setUploadedDocuments] = useState<import('../../types/education').AdmissionDocument[]>([]);
 
   useEffect(() => {
     loadApplications();
-  }, []);
+    let cancelled = false;
+    (async () => {
+      const institutions = await educationService.getInstitutions({ tier: 'tertiary', verificationStatus: 'VERIFIED' });
+      if (cancelled) return;
+      setInstitutionOptions(institutions);
+      if (preselectedInstitution?.id) {
+        setInstitutionId(preselectedInstitution.id);
+        setInstitutionName(preselectedInstitution.name);
+      } else if (institutions.length === 1) {
+        setInstitutionId(institutions[0].id);
+        setInstitutionName(institutions[0].name);
+      }
+      if (institutions.length === 0) setProviderUnavailable(true);
+    })();
+    return () => { cancelled = true; };
+  }, [preselectedInstitution?.id, preselectedInstitution?.name]);
+
+  useEffect(() => {
+    if (!institutionId) {
+      setProgrammeOptions([]);
+      setProgrammeId('');
+      setProgrammeName('');
+      return;
+    }
+    let cancelled = false;
+    setHierarchyLoading(true);
+    (async () => {
+      const programmes = await educationService.getProgrammes(institutionId);
+      if (cancelled) return;
+      setProgrammeOptions(programmes);
+      setProgrammeId('');
+      setProgrammeName('');
+      setHierarchyLoading(false);
+    })().catch(() => {
+      if (!cancelled) {
+        setProgrammeOptions([]);
+        setProgrammeId('');
+        setProgrammeName('');
+        setHierarchyLoading(false);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [institutionId]);
 
   const loadApplications = async () => {
     setLoading(true);
@@ -59,8 +110,8 @@ export const AdmissionsPipeline: React.FC<AdmissionsPipelineProps> = ({
 
   const handleApplySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!fullName || !email) {
-      setStatusMessage('Please complete all mandatory candidate fields.');
+    if (!institutionId || !programmeId || !programmeName || !fullName || !email || !dateOfBirth) {
+      setStatusMessage('Please select an authoritative institution and programme, then complete all mandatory candidate fields.');
       return;
     }
 
@@ -71,33 +122,40 @@ export const AdmissionsPipeline: React.FC<AdmissionsPipelineProps> = ({
       const newApp = await educationService.submitAdmission({
         institutionId,
         institutionName,
-        programmeId: 'prog-custom',
+        programmeId,
         programmeName,
         educationTier: 'tertiary',
         applicantFullName: fullName,
         applicantEmail: email,
         applicantPhone: phone,
         dateOfBirth,
-        applicationFeeFiat: 20,
-        applicationFeePaid: true,
-        applicationFeePi: 0.000063,
-        documents: [
-          {
-            id: `doc-${Date.now()}-1`,
-            type: 'previous_transcript',
-            fileName: 'Official_Academic_Credentials.pdf',
-            fileSizeKb: 650,
-            uploadedAt: new Date().toISOString(),
-            verificationStatus: 'verified'
-          }
-        ]
+        documents: []
       });
 
-      setStatusMessage(`Application ${newApp.applicationNumber} submitted successfully!`);
+      let documentNotice = '';
+      if (documentFile) {
+        setDocumentUploading(true);
+        try {
+          const uploaded = await educationService.uploadAcademicDocument({
+            file: documentFile,
+            documentType,
+            applicationId: newApp.id
+          });
+          setUploadedDocuments((current) => [uploaded, ...current]);
+          documentNotice = ` Academic document uploaded and marked pending verification.`;
+        } catch (documentError: any) {
+          documentNotice = ` Application submitted, but document upload failed: ${documentError.message || 'unknown error'}`;
+        } finally {
+          setDocumentUploading(false);
+        }
+      }
+
+      setStatusMessage(`Application ${newApp.applicationNumber} submitted successfully.${documentNotice}`);
       setIsApplying(false);
       setFullName('');
       setEmail('');
       setPhone('');
+      setDocumentFile(null);
       await loadApplications();
     } catch (err: any) {
       setStatusMessage(err.message || 'Failed to submit admission application.');
@@ -140,7 +198,7 @@ export const AdmissionsPipeline: React.FC<AdmissionsPipelineProps> = ({
           </div>
           <h3 className="text-xl font-black text-white mt-1.5">Institution Admissions</h3>
           <p className="text-xs text-slate-400 mt-0.5">
-            Discover programmes, apply to verified institutions, submit credentials, and track your admission offer.
+            Discover provider-listed programmes, apply when an authoritative admissions provider is connected, submit credentials, and track verified admission decisions.
           </p>
         </div>
 
@@ -162,7 +220,7 @@ export const AdmissionsPipeline: React.FC<AdmissionsPipelineProps> = ({
               <span>Submit Admission Application</span>
             </h4>
             <p className="text-xs text-slate-400 mt-1">
-              Apply directly to an accredited institution with automated credential verification and Pi application fee payment.
+              Apply to a verified institution when the authoritative admissions provider is available. Credential verification and any application fee are provider-controlled.
             </p>
           </div>
 
@@ -174,31 +232,38 @@ export const AdmissionsPipeline: React.FC<AdmissionsPipelineProps> = ({
                 <select
                   value={institutionId}
                   onChange={(e) => {
-                    setInstitutionId(e.target.value);
-                    if (e.target.value === 'inst-ng-buk-001') setInstitutionName('Bayero University Kano (BUK)');
-                    else if (e.target.value === 'inst-ng-unilag-002') setInstitutionName('University of Lagos (UNILAG)');
-                    else if (e.target.value === 'inst-ng-decagon-006') setInstitutionName('Decagon Software & AI Institute');
-                    else setInstitutionName("King's College Lagos");
+                    const selected = institutionOptions.find((institution) => institution.id === e.target.value);
+                    setInstitutionId(selected?.id || '');
+                    setInstitutionName(selected?.name || '');
                   }}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-slate-200 focus:outline-none focus:border-amber-500"
+                  disabled={institutionOptions.length === 0}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-slate-200 focus:outline-none focus:border-amber-500 disabled:opacity-60"
                 >
-                  <option value="inst-ng-buk-001">Bayero University Kano (BUK) — Federal University</option>
-                  <option value="inst-ng-unilag-002">University of Lagos (UNILAG) — Federal University</option>
-                  <option value="inst-ng-decagon-006">Decagon Software & AI Institute — Tech Academy</option>
-                  <option value="inst-ng-kings-college-004">King's College Lagos — Secondary</option>
+                  <option value="">{institutionOptions.length ? 'Select an authoritative institution...' : 'No verified institutions available'}</option>
+                  {institutionOptions.map((institution) => (
+                    <option key={institution.id} value={institution.id}>{institution.name}</option>
+                  ))}
                 </select>
               </div>
 
               {/* Programme */}
               <div>
                 <label className="block text-slate-300 font-semibold mb-1">Desired Programme</label>
-                <input
-                  type="text"
-                  value={programmeName}
-                  onChange={(e) => setProgrammeName(e.target.value)}
-                  placeholder="e.g., B.Eng Computer Engineering"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-slate-200 focus:outline-none focus:border-amber-500"
-                />
+                <select
+                  value={programmeId}
+                  onChange={(e) => {
+                    const selected = programmeOptions.find((programme) => programme.id === e.target.value);
+                    setProgrammeId(selected?.id || '');
+                    setProgrammeName(selected?.name || '');
+                  }}
+                  disabled={!institutionId || hierarchyLoading || programmeOptions.length === 0}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-slate-200 focus:outline-none focus:border-amber-500 disabled:opacity-60"
+                >
+                  <option value="">{hierarchyLoading ? 'Loading verified programmes...' : programmeOptions.length ? 'Select an authoritative programme...' : 'No verified programmes available'}</option>
+                  {programmeOptions.map((programme) => (
+                    <option key={programme.id} value={programme.id}>{programme.name}{programme.code ? ' — ' + programme.code : ''}</option>
+                  ))}
+                </select>
               </div>
 
               {/* Candidate Full Name */}
@@ -249,19 +314,56 @@ export const AdmissionsPipeline: React.FC<AdmissionsPipelineProps> = ({
               </div>
             </div>
 
-            {/* Document Upload Notice */}
-            <div className="bg-slate-950 p-4 rounded-xl border border-dashed border-slate-700 text-xs text-center space-y-2">
-              <Upload className="w-6 h-6 text-amber-400 mx-auto" />
-              <p className="text-slate-300 font-semibold">Supporting Academic Documents Attached</p>
-              <p className="text-[11px] text-slate-500">
-                Verified O-Level results / Undergrad Transcript / Identification documents will be securely submitted with cryptographic verification hash.
-              </p>
+            {/* Academic Documents — uploaded only after an authoritative application is created */}
+            <div className="bg-slate-950 p-4 rounded-xl border border-slate-700 text-xs space-y-3">
+              <div className="flex items-center gap-2">
+                <Upload className="w-5 h-5 text-amber-400" />
+                <div>
+                  <p className="text-slate-200 font-semibold">Academic Documents</p>
+                  <p className="text-[11px] text-slate-500">
+                    PDF, JPEG, or PNG up to 10 MB. Files are stored privately and remain pending until an authoritative verification process confirms them.
+                  </p>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <select
+                  value={documentType}
+                  onChange={(e) => setDocumentType(e.target.value as import('../../types/education').AdmissionDocument['type'])}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 text-slate-200"
+                >
+                  <option value="other">Other academic document</option>
+                  <option value="birth_certificate">Birth certificate</option>
+                  <option value="passport_photo">Passport photo</option>
+                  <option value="previous_transcript">Previous transcript</option>
+                  <option value="ssce_result">SSCE result</option>
+                  <option value="recommendation_letter">Recommendation letter</option>
+                </select>
+                <input
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+                  onChange={(e) => setDocumentFile(e.target.files?.[0] || null)}
+                  className="w-full text-slate-300 text-xs"
+                />
+              </div>
+              {documentFile && (
+                <p className="text-[11px] text-slate-400">
+                  Selected: {documentFile.name} ({Math.ceil(documentFile.size / 1024)} KB). It will upload only after the authoritative application is created.
+                </p>
+              )}
+              {uploadedDocuments.length > 0 && (
+                <div className="space-y-1">
+                  {uploadedDocuments.map((doc) => (
+                    <div key={doc.id} className="flex items-center gap-2 text-[11px] text-slate-400">
+                      <FileCheck className="w-3.5 h-3.5 text-amber-400" />
+                      <span>{doc.fileName} — pending verification</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
-            {/* Application Fee Notice */}
-            <div className="bg-amber-950/30 border border-amber-500/30 p-3 rounded-xl flex justify-between items-center text-xs">
-              <span className="text-slate-300">Standard Institution Processing Fee:</span>
-              <span className="text-amber-400 font-bold font-mono">$20.00 USD (0.000063 π)</span>
+            <div className="bg-slate-950 border border-slate-800 p-3 rounded-xl text-xs text-slate-400">
+              Application submission and any institution fee are provider-controlled. No fee is marked paid until an authoritative admissions/payment integration confirms it.
             </div>
 
             {statusMessage && (
@@ -280,11 +382,11 @@ export const AdmissionsPipeline: React.FC<AdmissionsPipelineProps> = ({
               </button>
               <button
                 type="submit"
-                disabled={submitting}
+                disabled={submitting || providerUnavailable || !institutionId || !programmeId || !programmeName}
                 className="px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black transition shadow-md shadow-amber-500/20 flex items-center gap-1.5"
               >
                 <Send className="w-3.5 h-3.5" />
-                <span>{submitting ? 'Submitting Application...' : 'Submit & Pay Fee with Pi'}</span>
+                <span>{submitting ? (documentUploading ? 'Uploading Document...' : 'Submitting Application...') : providerUnavailable ? 'Admissions Provider Unavailable' : 'Submit Application'}</span>
               </button>
             </div>
           </form>
@@ -356,9 +458,13 @@ export const AdmissionsPipeline: React.FC<AdmissionsPipelineProps> = ({
                     </div>
                     <div>
                       <span className="text-slate-500 text-[10px] block">Application Fee</span>
-                      <span className="text-emerald-400 font-semibold font-mono">
-                        ${app.applicationFeeFiat} USD (Paid via Pi)
-                      </span>
+                      {app.applicationFeePaid ? (
+                        <span className="text-emerald-400 font-semibold font-mono">
+                          {app.applicationFeePi != null ? app.applicationFeePi.toFixed(12) : 'Verified'} π — Paid
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 font-medium">Provider-controlled / not verified</span>
+                      )}
                     </div>
                     <div>
                       <span className="text-slate-500 text-[10px] block">Documents</span>
@@ -367,7 +473,7 @@ export const AdmissionsPipeline: React.FC<AdmissionsPipelineProps> = ({
                     <div>
                       <span className="text-slate-500 text-[10px] block">Decision Timeline</span>
                       <span className="text-slate-300 font-medium">
-                        {hasOffer ? 'Offer Available' : isAccepted ? 'Enrolment Final' : 'Estimated 5-7 Days'}
+                        {hasOffer ? 'Offer Available' : isAccepted ? 'Enrolment Final' : 'Awaiting institution decision'}
                       </span>
                     </div>
                   </div>
@@ -382,7 +488,7 @@ export const AdmissionsPipeline: React.FC<AdmissionsPipelineProps> = ({
                             <span>Provisional Admission Offer Issued</span>
                           </div>
                           <p className="text-xs text-slate-300 mt-1">
-                            Congratulations! {app.institutionName} has offered you admission into {app.programmeName}.
+                            {app.institutionName} has reported an admission offer for {app.programmeName}.
                           </p>
                         </div>
 

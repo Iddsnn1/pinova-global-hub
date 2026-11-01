@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { formatPiAmount } from '../utils/formatters';
 import { safeFetchJson } from '../lib/safeFetch';
 import {
   ShieldCheck,
@@ -466,7 +467,7 @@ export const PstpShieldCenter: React.FC<PstpShieldCenterProps> = ({
                   >
                     {orders.map((o) => (
                       <option key={o.id} value={o.id}>
-                        {o.id} - {o.items[0]?.product.title} ({o.totalPi.toFixed(2)} π)
+                        {o.id} - {o.items[0]?.product.title} ({formatPiAmount(o.totalPi)} π)
                       </option>
                     ))}
                   </select>
@@ -575,7 +576,7 @@ export const PstpShieldCenter: React.FC<PstpShieldCenterProps> = ({
                         </div>
                         <div className="flex justify-between border-b border-slate-800 pb-1.5">
                           <span className="text-slate-500">Total Pi Order Amount:</span>
-                          <span className="font-bold text-amber-400">{currentSelectedOrder.totalPi.toFixed(2)} π</span>
+                          <span className="font-bold text-amber-400">{formatPiAmount(currentSelectedOrder.totalPi)} π</span>
                         </div>
                         <div className="flex justify-between border-b border-slate-800 pb-1.5">
                           <span className="text-slate-500">Pi Payment ID:</span>
@@ -639,7 +640,7 @@ export const PstpShieldCenter: React.FC<PstpShieldCenterProps> = ({
                       >
                         {orders.map((o) => (
                           <option key={o.id} value={o.id}>
-                            {o.id} ({o.totalPi.toFixed(2)} π)
+                            {o.id} ({formatPiAmount(o.totalPi)} π)
                           </option>
                         ))}
                       </select>
@@ -745,7 +746,7 @@ export const PstpShieldCenter: React.FC<PstpShieldCenterProps> = ({
                       <h5 className="font-bold text-xs text-slate-900 dark:text-slate-100 line-clamp-1">{disp.reason}</h5>
                       <div className="flex justify-between text-[11px] text-slate-500">
                         <span>Order: {disp.orderId}</span>
-                        <span className="font-bold text-amber-500">{disp.amountPi.toFixed(2)} π</span>
+                        <span className="font-bold text-amber-500">{formatPiAmount(disp.amountPi)} π</span>
                       </div>
                     </div>
                   ))}
@@ -760,7 +761,7 @@ export const PstpShieldCenter: React.FC<PstpShieldCenterProps> = ({
                           <h4 className="font-extrabold text-base text-slate-900 dark:text-slate-100">{selectedDispute.reason}</h4>
                           <p className="text-xs text-slate-500 mt-0.5">Dispute ID: {selectedDispute.id} • Order: {selectedDispute.orderId}</p>
                         </div>
-                        <span className="font-black text-amber-500 text-lg">{selectedDispute.amountPi.toFixed(2)} π</span>
+                        <span className="font-black text-amber-500 text-lg">{formatPiAmount(selectedDispute.amountPi)} π</span>
                       </div>
 
                       <div className="space-y-2 text-xs text-slate-700 dark:text-slate-300">
