@@ -375,7 +375,7 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
     // Operations & Catalog
     { id: 'overview', label: 'Ecosystem Dashboard', icon: LayoutDashboard, category: 'operations' },
     { id: 'multi_store', label: 'Multi-Store Manager', icon: Store, category: 'operations' },
-    { id: 'products', label: 'Products & Catalog', icon: Package, category: 'operations', count: products.length },
+    { id: 'products', label: 'Products & Catalog', icon: Package, category: 'operations', count: sellerProducts.length },
     { id: 'inventory', label: 'Inventory & Warehouses', icon: Boxes, category: 'operations' },
     { id: 'orders', label: 'Orders & Fulfillment', icon: ShoppingBag, category: 'operations', count: sellerOrders.length },
     { id: 'bulk_csv', label: 'Bulk CSV Tools', icon: FileSpreadsheet, category: 'operations' },
@@ -393,7 +393,7 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
     { id: 'policies', label: 'Store Policies', icon: FileText, category: 'trust' },
     { id: 'security', label: 'Security & Audit Logs', icon: Lock, category: 'trust' },
     { id: 'help', label: 'Merchant Support', icon: HelpCircle, category: 'trust' }
-  ], [products.length, sellerOrders.length]);
+  ], [sellerProducts.length, sellerOrders.length]);
 
   const currentTabItem = navItems.find(item => item.id === activeTab) || navItems[0];
   const CurrentIcon = currentTabItem.icon;
@@ -769,7 +769,7 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
                 userUsername={userUsername}
                 serverStatus={serverStatus}
                 vendorProfile={vendorProfile}
-                products={products}
+                products={sellerProducts}
                 orders={sellerOrders}
                 onNavigateTab={(tab) => handleSelectTab(tab as SellerStudioTabId)}
                 onOpenOnboarding={() => setIsOnboardingOpen(true)}
@@ -822,7 +822,7 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
             {/* 5. Orders & Fulfillment */}
             {activeTab === 'orders' && (
               <OrdersTab
-                orders={orders}
+                orders={sellerOrders}
                 onUpdateFulfillment={handleUpdateFulfillment}
               />
             )}
