@@ -796,7 +796,7 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
             {/* 3. Products & Catalog */}
             {activeTab === 'products' && (
               <ProductsTab
-                products={products}
+                products={sellerProducts}
                 sellerUsername={userUsername}
                 openCreateOnMount={openProductForm}
                 onCreateFormOpened={() => setOpenProductForm(false)}
@@ -812,7 +812,7 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
             {/* 4. Inventory & Warehouses */}
             {activeTab === 'inventory' && (
               <InventoryWarehousesTab
-                products={products}
+                products={sellerProducts}
                 onUpdateProduct={onUpdateProduct}
               />
             )}
@@ -828,7 +828,7 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
             {/* 6. Bulk CSV Tools */}
             {activeTab === 'bulk_csv' && (
               <BulkCsvToolsTab
-                products={products}
+                products={sellerProducts}
                 onAddProduct={onAddProduct}
                 onProductCreated={onProductCreated}
               />
@@ -845,8 +845,8 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
             {/* 8. Sales Analytics */}
             {activeTab === 'analytics' && (
               <SalesAnalyticsTab
-                orders={orders}
-                products={products}
+                orders={sellerOrders}
+                products={sellerProducts}
               />
             )}
 
