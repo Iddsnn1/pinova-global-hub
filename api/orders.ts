@@ -612,7 +612,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         return json(res, 403, { ok: false, error: 'ACTIVE_VERIFIED_MERCHANT_REQUIRED' });
       }
       const merchantUsername = normalizeUsername(merchant.pioneerUsername);
-      if (!sellerOwnsOrder(order, merchantUsername)) {
+      if (!sellerOrderView(order, merchantUsername)) {
         return json(res, 403, { ok: false, error: 'SELLER_ORDER_OWNERSHIP_REQUIRED' });
       }
       if (order.serverVerified !== true) {
