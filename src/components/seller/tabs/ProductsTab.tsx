@@ -8,6 +8,7 @@ import { vendorAuthenticatedFetch } from '../../../lib/vendorAuthBridge';
 
 interface ProductsTabProps {
   products: Product[];
+  sellerUsername: string;
   onOpenAddProduct?: () => void;
   onProductCreated?: (product: Product) => void;
   openCreateOnMount?: boolean;
@@ -19,7 +20,7 @@ interface ProductsTabProps {
 type ProductDraft = { title: string; description: string; category: ProductCategory; marketplaceCategory: string; subcategory: string; pricePi: string; stock: string; imageUrl: string; educationTier: string; educationLevelId: string; educationGradeLevel: string; educationCountryCode: string; educationCurriculumId: string; educationSubjects: string };
 const EMPTY_DRAFT: ProductDraft = { title: '', description: '', category: 'physical', marketplaceCategory: MARKETPLACE_CATEGORIES[0]?.id || 'other_general', subcategory: '', pricePi: '', stock: '0', imageUrl: '', educationTier: '', educationLevelId: '', educationGradeLevel: '', educationCountryCode: '', educationCurriculumId: '', educationSubjects: '' };
 
-export const ProductsTab: React.FC<ProductsTabProps> = ({ products, openCreateOnMount = false, onCreateFormOpened, onProductCreated, onEditProduct, onDeleteProduct }) => {
+export const ProductsTab: React.FC<ProductsTabProps> = ({ products: _legacyProducts, sellerUsername, openCreateOnMount = false, onCreateFormOpened, onProductCreated, onEditProduct, onDeleteProduct }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [stockFilter, setStockFilter] = useState<'all' | 'in_stock' | 'out_of_stock'>('all');
@@ -43,7 +44,7 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({ products, openCreateOn
     try {
       // Catalog reads are server-authoritative but do not require a fresh Pi/vendor authentication round-trip.
       // Seller mutations remain protected by vendorAuthenticatedFetch; this keeps catalog refresh fast and deterministic.
-      const response = await fetch('/api/products', { method: 'GET', headers: { Accept: 'application/json' }, cache: 'no-store' });
+      const response = await vendorAuthenticatedFetch('/api/products', { method: 'GET', cache: 'no-store' });
       const text = await response.text();
       if (!response.ok) {
         let data: any = null;
