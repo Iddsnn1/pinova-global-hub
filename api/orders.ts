@@ -78,7 +78,19 @@ function sellerOrderView(order: Order, username: string): Order | null {
       Number(item.customDetails?.variant?.priceDeltaPi || 0);
     return sum + (Number.isFinite(unitPrice) ? unitPrice : 0) * Math.max(0, Number(item.quantity) || 0);
   }, 0);
-  return { ...order, items: sellerItems, totalPi: Number(sellerSubtotal.toFixed(12)) };
+  const sellerTotalPi = Number(sellerSubtotal.toFixed(12));
+  // Remove checkout-wide totals and promotion metadata: in a mixed-seller order
+  // those values can reveal another merchant's sales. Seller view exposes only
+  // this merchant's own item subtotal and item value.
+  return {
+    ...order,
+    items: sellerItems,
+    subtotalPi: sellerTotalPi,
+    discountPi: 0,
+    shippingPi: 0,
+    promoCode: undefined,
+    totalPi: sellerTotalPi
+  };
 }
 
 async function getApprovedActiveMerchant(user: any): Promise<any | null> {
