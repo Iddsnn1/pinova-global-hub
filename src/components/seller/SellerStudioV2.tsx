@@ -285,11 +285,18 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
 
   useEffect(() => {
     let active = true;
+    const owner = userUsername.trim().replace(/^@/, '').toLowerCase();
+    // Fail closed: never issue seller-scoped reads without a verified Pioneer username.
+    if (!owner) {
+      setSellerProducts([]);
+      return () => { active = false; };
+    }
     vendorAuthenticatedFetch('/api/products', { method: 'GET', cache: 'no-store' }).then(async (response) => {
       const data = await response.json().catch(() => ({}));
       if (!active) return;
-      const owner = userUsername.replace(/^@/, '').toLowerCase();
-      const owned = response.ok && Array.isArray(data?.products) ? data.products.filter((product: Product) => String(product?.sellerId || '').trim().replace(/^@/, '').toLowerCase() === owner) : [];
+      const owned = response.ok && Array.isArray(data?.products)
+        ? data.products.filter((product: Product) => String(product?.sellerId || '').trim().replace(/^@/, '').toLowerCase() === owner)
+        : [];
       setSellerProducts(owned);
     }).catch(() => { if (active) setSellerProducts([]); });
     return () => { active = false; };
@@ -299,6 +306,10 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
 
   useEffect(() => {
     let active = true;
+    if (!userUsername.trim().replace(/^@/, '')) {
+      setSellerOrders([]);
+      return () => { active = false; };
+    }
     void vendorAuthenticatedFetch('/api/orders?role=seller', { method: 'GET', cache: 'no-store' })
       .then(async (response) => {
         const data = await response.json().catch(() => ({}));
