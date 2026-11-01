@@ -190,6 +190,7 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
 
   const [applicationData, setApplicationData] = useState<any>(null);
   const [sellerOrders, setSellerOrders] = useState<Order[]>([]);
+  const [sellerProducts, setSellerProducts] = useState<Product[]>([]);
   const [statusDiagnostic, setStatusDiagnostic] = useState<string | null>(null);
 
   // Find matching vendor profile or build fallback
