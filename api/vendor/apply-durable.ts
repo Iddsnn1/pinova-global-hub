@@ -101,7 +101,9 @@ export default async function handler(req: any, res: any) {
       pstpAgreementAccepted,
       id: existing?.id || `VAPP-${String(body.countryCode || 'GL').slice(0, 2).toUpperCase()}-${Date.now().toString().slice(-8)}`,
       pioneerUsername: effectiveUsername,
-      pioneerUid: user.id || body.pioneerUid,
+      // Persist the verified Pi UID, not the per-instance internal user record ID.
+      // Never accept a client-supplied UID as the merchant identity.
+      pioneerUid: user.piUid || user.id,
       status,
       verificationStatus: 'Pending Verification',
       sellerStatus: 'Probation',
