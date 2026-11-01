@@ -287,6 +287,20 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
 
   useEffect(() => {
     let active = true;
+    vendorAuthenticatedFetch('/api/products', { method: 'GET', cache: 'no-store' }).then(async (response) => {
+      const data = await response.json().catch(() => ({}));
+      if (!active) return;
+      const owner = userUsername.replace(/^@/, '').toLowerCase();
+      const owned = response.ok && Array.isArray(data?.products) ? data.products.filter((product: Product) => String(product?.sellerId || '').trim().replace(/^@/, '').toLowerCase() === owner) : [];
+      setSellerProducts(owned);
+    }).catch(() => { if (active) setSellerProducts([]); });
+    return () => { active = false; };
+  }, [userUsername]);
+
+
+
+  useEffect(() => {
+    let active = true;
     void vendorAuthenticatedFetch('/api/orders?role=seller', { method: 'GET', cache: 'no-store' })
       .then(async (response) => {
         const data = await response.json().catch(() => ({}));
