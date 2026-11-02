@@ -219,7 +219,7 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
   const fetchAuthoritativeStatus = useCallback(async () => {
     setIsLoadingStatus(true);
     try {
-      const res = await vendorAuthenticatedFetch('/api/vendor/status');
+      const res = await vendorAuthenticatedFetch('/api/vendor/seller/access');
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
         setStatusDiagnostic(null);
