@@ -16,6 +16,17 @@ export const PiBrowserBanner: React.FC<PiBrowserBannerProps> = ({
   const [diagState, setDiagState] = useState<PiSdkDiagnosticState>(getPiSdkDiagnosticState());
   const [showDiagPanel, setShowDiagPanel] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
+
+  const handleCopyAppLink = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setLinkCopied(true);
+      window.setTimeout(() => setLinkCopied(false), 2500);
+    } catch (error) {
+      console.warn('[PI BANNER] Could not copy app link:', error);
+    }
+  };
 
   useEffect(() => {
     return subscribePiSdkState((st) => setDiagState(st));
@@ -98,11 +109,47 @@ export const PiBrowserBanner: React.FC<PiBrowserBannerProps> = ({
               <span className="font-medium text-[11px]">{getStatusText()}</span>
             </div>
           ) : !inPiBrowser ? (
-            <div className="hidden md:flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/30 text-amber-300 px-3 py-0.5 rounded-md">
-              <Info className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-              <span>
-                Web Browser Preview: Non-custodial payments require <strong>Pi Browser</strong>.
-              </span>
+            <div className="w-full basis-full rounded-xl border border-amber-400/30 bg-amber-950/35 p-3 sm:p-4 text-amber-100">
+              <div className="flex flex-wrap items-center gap-2">
+                <Info className="h-4 w-4 shrink-0 text-amber-300" />
+                <strong className="text-xs sm:text-sm">Standard browser detected</strong>
+                <span className="rounded-full border border-amber-300/30 bg-amber-400/10 px-2 py-0.5 text-[10px] font-semibold text-amber-200">Pi Browser recommended</span>
+              </div>
+              <p className="mt-1.5 max-w-3xl text-[11px] leading-relaxed text-amber-100/85">
+                Open PiNova Global Hub inside Pi Browser to use Pi Network authentication and authorized Pi payment features. Payments still require the normal Pi authorization and server verification steps.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={handleCopyAppLink}
+                  className="inline-flex items-center gap-2 rounded-lg bg-amber-300 px-3 py-2 text-[11px] font-bold text-slate-950 transition hover:bg-amber-200"
+                >
+                  <Smartphone className="h-3.5 w-3.5" />
+                  {linkCopied ? 'App link copied' : 'Copy PiNova link for Pi Browser'}
+                </button>
+                <a
+                  href="https://play.google.com/store/apps/details?id=pi.browser"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 rounded-lg border border-amber-200/40 px-3 py-2 text-[11px] font-semibold text-amber-100 transition hover:bg-amber-400/10"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Get Pi Browser (Google Play)
+                </a>
+                {onOpenDiagnostics && (
+                  <button
+                    type="button"
+                    onClick={onOpenDiagnostics}
+                    className="inline-flex items-center gap-2 rounded-lg border border-slate-400/30 px-3 py-2 text-[11px] font-semibold text-slate-100 transition hover:bg-white/5"
+                  >
+                    <Terminal className="h-3.5 w-3.5" />
+                    Pi connection diagnostics
+                  </button>
+                )}
+              </div>
+              <p className="mt-2 text-[10px] text-amber-200/70">
+                After installing, open Pi Browser, sign in, then paste the copied PiNova link into its address bar.
+              </p>
             </div>
           ) : (
             <div className="flex items-center gap-1.5 text-emerald-300 mr-2">
