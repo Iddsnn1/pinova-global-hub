@@ -61,18 +61,19 @@ export const HomeView: React.FC<HomeViewProps> = ({
 }) => {
   const [trackingQuery, setTrackingQuery] = useState('');
   return (
-    <div className="max-w-7xl mx-auto px-3 sm:px-6 space-y-6 sm:space-y-7 pb-20 animate-fade-in">
+    <div className="relative max-w-7xl mx-auto px-3 sm:px-6 space-y-7 sm:space-y-9 pb-24 animate-fade-in">
       
       {/* ========================================================================= */}
       {/* 1. HERO BANNER: DISCOVERY + SEARCH + POPULAR SEARCHES                     */}
       {/* ========================================================================= */}
       <section 
         id="hero-banner" 
-        className="relative rounded-2xl sm:rounded-3xl bg-gradient-to-br from-slate-950 via-purple-950 to-slate-900 text-white p-4 sm:p-7 md:p-9 border border-purple-800/40 shadow-xl sm:shadow-2xl overflow-hidden"
+        className="relative isolate rounded-[1.6rem] sm:rounded-[2rem] bg-[radial-gradient(ellipse_at_top_right,_rgba(139,92,246,0.34),_transparent_48%),linear-gradient(135deg,#080d1c_0%,#24104b_52%,#101827_100%)] text-white p-5 sm:p-8 md:p-10 border border-violet-400/25 shadow-[0_24px_70px_-28px_rgba(91,33,182,0.65)] overflow-hidden"
       >
         {/* Subtle Brand Ambient Glows */}
-        <div className="absolute top-0 right-0 w-80 sm:w-96 h-80 sm:h-96 bg-purple-600/15 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute bottom-0 left-1/4 w-60 sm:w-80 h-60 sm:h-80 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -top-24 -right-20 w-72 sm:w-[28rem] h-72 sm:h-[28rem] bg-violet-500/20 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-32 left-1/4 w-72 h-72 bg-cyan-400/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute inset-0 opacity-[0.07] pointer-events-none [background-image:linear-gradient(rgba(255,255,255,.45)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.45)_1px,transparent_1px)] [background-size:34px_34px] [mask-image:linear-gradient(to_bottom,black,transparent)]" />
 
         <div className="relative z-10 space-y-4 sm:space-y-5">
           
@@ -81,20 +82,20 @@ export const HomeView: React.FC<HomeViewProps> = ({
             
             {/* Value Proposition */}
             <div className="space-y-1 max-w-xl">
-              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-purple-900/70 border border-purple-700/50 text-purple-200 text-[11px] font-bold backdrop-blur-md">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/15 text-violet-100 text-[10px] sm:text-[11px] font-extrabold uppercase tracking-[0.16em] backdrop-blur-xl shadow-lg">
                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
                 <span>PiNova Global Hub</span>
               </div>
-              <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-black tracking-tight text-white leading-tight">
+              <h1 className="text-[1.7rem] sm:text-3xl md:text-4xl lg:text-[2.85rem] font-black tracking-[-0.045em] text-white leading-[1.08] max-w-2xl">
                 Enterprise Pi Commerce & Utilities
               </h1>
-              <p className="text-xs sm:text-sm text-slate-300 leading-relaxed max-w-lg">
+              <p className="text-sm sm:text-base text-slate-300/95 leading-relaxed max-w-xl">
                 Non-custodial merchant ecosystem, instant global utility fulfillment, and protected transactions.
               </p>
             </div>
 
             {/* Compact Trust & Protection Strip */}
-            <div className="w-full sm:w-auto flex items-center justify-between sm:justify-end gap-2.5 bg-slate-900/80 border border-purple-500/30 px-3 py-2 rounded-xl backdrop-blur-md shrink-0">
+            <div className="w-full sm:w-auto flex items-center justify-between sm:justify-end gap-3 bg-white/[0.07] border border-white/15 px-4 py-3 rounded-2xl backdrop-blur-xl shadow-xl shrink-0">
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
                 <span className="text-xs font-bold text-emerald-400 flex items-center gap-1">
@@ -121,7 +122,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             <div
               id="hero-universal-search-bar"
               onClick={() => onOpenUniversalSearch()}
-              className="group relative cursor-pointer bg-slate-900/90 hover:bg-slate-850 text-slate-300 rounded-xl sm:rounded-2xl border border-purple-500/40 p-3 sm:p-3.5 md:p-4 shadow-lg flex items-center justify-between gap-3 transition-all hover:border-purple-400 hover:shadow-purple-900/20"
+              className="group relative cursor-pointer bg-slate-950/70 hover:bg-slate-950/90 text-slate-300 rounded-2xl sm:rounded-[1.35rem] border border-white/15 p-3.5 sm:p-4 md:p-5 shadow-[0_16px_40px_-22px_rgba(0,0,0,.9)] flex items-center justify-between gap-3 transition-all duration-300 hover:border-violet-300/60 hover:shadow-violet-950/50 hover:-translate-y-0.5"
             >
               <div className="flex items-center gap-2.5 sm:gap-3 flex-1 min-w-0">
                 <Search className="w-4.5 h-4.5 sm:w-5 sm:h-5 text-purple-400 group-hover:scale-110 transition-transform shrink-0" />
@@ -129,7 +130,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                   Search products, merchants, services, utilities, or orders...
                 </span>
               </div>
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg sm:rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white text-xs font-bold shadow-md shrink-0">
+              <div className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-violet-500 via-purple-600 to-indigo-600 text-white text-xs font-extrabold shadow-lg shadow-violet-950/40 shrink-0">
                 <Sparkles className="w-3 h-3 text-amber-300" />
                 <span className="hidden xs:inline">Search</span>
               </div>
@@ -167,10 +168,10 @@ export const HomeView: React.FC<HomeViewProps> = ({
       {(!user.authenticated || authStatus === 'disconnected') && onConnectPi && (
         <section 
           id="home-unauthenticated-connect-banner"
-          className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-purple-950/90 via-slate-900 to-indigo-950/90 border border-purple-600/50 shadow-lg text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-fade-in"
+          className="relative overflow-hidden p-4 sm:p-5 rounded-[1.4rem] bg-[radial-gradient(ellipse_at_top_right,_rgba(168,85,247,.24),_transparent_48%),linear-gradient(115deg,#17102f_0%,#111827_55%,#171b3c_100%)] border border-violet-400/30 shadow-[0_18px_48px_-28px_rgba(76,29,149,.8)] text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-fade-in"
         >
           <div className="flex items-center gap-3.5">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-purple-600 via-indigo-600 to-amber-500 p-0.5 shadow-md shrink-0">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-violet-500 via-indigo-500 to-amber-400 p-[2px] shadow-lg shadow-violet-950/50 shrink-0">
               <div className="w-full h-full bg-slate-950 rounded-[10px] flex items-center justify-center font-black text-amber-400 text-lg">
                 π
               </div>
@@ -202,7 +203,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
       {/* ========================================================================= */}
       {/* 2. PINOVA GLOBAL HUB MODULES: CENTRAL SERVICE DISCOVERY                   */}
       {/* ========================================================================= */}
-      <section id="global-hub-modules" className="space-y-3">
+      <section id="global-hub-modules" className="space-y-4 sm:space-y-5">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-base sm:text-lg font-black text-slate-900 dark:text-slate-100 flex items-center gap-2">
@@ -218,13 +219,13 @@ export const HomeView: React.FC<HomeViewProps> = ({
           </span>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2.5 sm:gap-3.5">
+        <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-4 gap-3 sm:gap-4">
           
           {/* Module 1: Marketplace */}
           <div
             id="hub-module-marketplace"
             onClick={() => onNavigateSection('marketplace', 'all')}
-            className="p-3.5 sm:p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-purple-500 dark:hover:border-purple-500 transition-all cursor-pointer group shadow-sm flex flex-col items-center text-center space-y-2 hover:-translate-y-0.5 hover:shadow-md"
+            className="min-h-[142px] p-4 sm:p-5 rounded-[1.35rem] bg-white dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-700/70 hover:border-violet-400 dark:hover:border-violet-400 transition-all duration-300 cursor-pointer group shadow-[0_8px_24px_-18px_rgba(15,23,42,.35)] hover:shadow-[0_18px_38px_-20px_rgba(91,33,182,.28)] flex flex-col items-center justify-center text-center space-y-3 hover:-translate-y-1"
           >
             <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-purple-500/10 text-purple-500 dark:text-purple-400 flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
               <ShoppingBag className="w-5 h-5 sm:w-6 sm:h-6" />
@@ -241,7 +242,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
           <div
             id="hub-module-utilities"
             onClick={() => onNavigateSection('utilities')}
-            className="p-3.5 sm:p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-emerald-500 dark:hover:border-emerald-500 transition-all cursor-pointer group shadow-sm flex flex-col items-center text-center space-y-2 hover:-translate-y-0.5 hover:shadow-md"
+            className="min-h-[142px] p-4 sm:p-5 rounded-[1.35rem] bg-white dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-700/70 hover:border-violet-400 dark:hover:border-violet-400 transition-all duration-300 cursor-pointer group shadow-[0_8px_24px_-18px_rgba(15,23,42,.35)] hover:shadow-[0_18px_38px_-20px_rgba(91,33,182,.28)] flex flex-col items-center justify-center text-center space-y-3 hover:-translate-y-1"
           >
             <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-emerald-500/10 text-emerald-500 dark:text-emerald-400 flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
               <Zap className="w-5 h-5 sm:w-6 sm:h-6" />
@@ -258,7 +259,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
           <div
             id="hub-module-transport"
             onClick={() => onNavigateSection('utilities', 'transport' as any)}
-            className="p-3.5 sm:p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-cyan-500 dark:hover:border-cyan-500 transition-all cursor-pointer group shadow-sm flex flex-col items-center text-center space-y-2 hover:-translate-y-0.5 hover:shadow-md"
+            className="min-h-[142px] p-4 sm:p-5 rounded-[1.35rem] bg-white dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-700/70 hover:border-violet-400 dark:hover:border-violet-400 transition-all duration-300 cursor-pointer group shadow-[0_8px_24px_-18px_rgba(15,23,42,.35)] hover:shadow-[0_18px_38px_-20px_rgba(91,33,182,.28)] flex flex-col items-center justify-center text-center space-y-3 hover:-translate-y-1"
           >
             <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-cyan-500/10 text-cyan-500 dark:text-cyan-400 flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
               <Compass className="w-5 h-5 sm:w-6 sm:h-6" />
@@ -275,7 +276,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
           <div
             id="hub-module-services"
             onClick={() => onNavigateSection('services')}
-            className="p-3.5 sm:p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-blue-500 dark:hover:border-blue-500 transition-all cursor-pointer group shadow-sm flex flex-col items-center text-center space-y-2 hover:-translate-y-0.5 hover:shadow-md"
+            className="min-h-[142px] p-4 sm:p-5 rounded-[1.35rem] bg-white dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-700/70 hover:border-violet-400 dark:hover:border-violet-400 transition-all duration-300 cursor-pointer group shadow-[0_8px_24px_-18px_rgba(15,23,42,.35)] hover:shadow-[0_18px_38px_-20px_rgba(91,33,182,.28)] flex flex-col items-center justify-center text-center space-y-3 hover:-translate-y-1"
           >
             <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-blue-500/10 text-blue-500 dark:text-blue-400 flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
               <Briefcase className="w-5 h-5 sm:w-6 sm:h-6" />
@@ -292,7 +293,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
           <div
             id="hub-module-ai-concierge"
             onClick={() => onNavigateSection('ai_search')}
-            className="p-3.5 sm:p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-amber-500 dark:hover:border-amber-500 transition-all cursor-pointer group shadow-sm flex flex-col items-center text-center space-y-2 hover:-translate-y-0.5 hover:shadow-md"
+            className="min-h-[142px] p-4 sm:p-5 rounded-[1.35rem] bg-white dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-700/70 hover:border-violet-400 dark:hover:border-violet-400 transition-all duration-300 cursor-pointer group shadow-[0_8px_24px_-18px_rgba(15,23,42,.35)] hover:shadow-[0_18px_38px_-20px_rgba(91,33,182,.28)] flex flex-col items-center justify-center text-center space-y-3 hover:-translate-y-1"
           >
             <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-amber-500/10 text-amber-500 dark:text-amber-400 flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
               <Sparkles className="w-5 h-5 sm:w-6 sm:h-6" />
@@ -309,7 +310,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
           <div
             id="hub-module-pstp-security"
             onClick={onOpenPstpShield}
-            className="p-3.5 sm:p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-emerald-500 dark:hover:border-emerald-500 transition-all cursor-pointer group shadow-sm flex flex-col items-center text-center space-y-2 hover:-translate-y-0.5 hover:shadow-md"
+            className="min-h-[142px] p-4 sm:p-5 rounded-[1.35rem] bg-white dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-700/70 hover:border-violet-400 dark:hover:border-violet-400 transition-all duration-300 cursor-pointer group shadow-[0_8px_24px_-18px_rgba(15,23,42,.35)] hover:shadow-[0_18px_38px_-20px_rgba(91,33,182,.28)] flex flex-col items-center justify-center text-center space-y-3 hover:-translate-y-1"
           >
             <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-emerald-500/10 text-emerald-500 dark:text-emerald-400 flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
               <ShieldCheck className="w-5 h-5 sm:w-6 sm:h-6" />
@@ -326,7 +327,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
           <div
             id="hub-module-developer"
             onClick={() => onNavigateSection('developer_platform' as any)}
-            className="p-3.5 sm:p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-purple-500 dark:hover:border-purple-500 transition-all cursor-pointer group shadow-sm flex flex-col items-center text-center space-y-2 hover:-translate-y-0.5 hover:shadow-md"
+            className="min-h-[142px] p-4 sm:p-5 rounded-[1.35rem] bg-white dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-700/70 hover:border-violet-400 dark:hover:border-violet-400 transition-all duration-300 cursor-pointer group shadow-[0_8px_24px_-18px_rgba(15,23,42,.35)] hover:shadow-[0_18px_38px_-20px_rgba(91,33,182,.28)] flex flex-col items-center justify-center text-center space-y-3 hover:-translate-y-1"
           >
             <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-purple-500/10 text-purple-500 dark:text-purple-400 flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
               <Code className="w-5 h-5 sm:w-6 sm:h-6" />
@@ -343,7 +344,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
           <div
             id="hub-module-future-services"
             onClick={() => onNavigateSection('future_services')}
-            className="p-3.5 sm:p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-indigo-500 dark:hover:border-indigo-500 transition-all cursor-pointer group shadow-sm flex flex-col items-center text-center space-y-2 hover:-translate-y-0.5 hover:shadow-md"
+            className="min-h-[142px] p-4 sm:p-5 rounded-[1.35rem] bg-white dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-700/70 hover:border-violet-400 dark:hover:border-violet-400 transition-all duration-300 cursor-pointer group shadow-[0_8px_24px_-18px_rgba(15,23,42,.35)] hover:shadow-[0_18px_38px_-20px_rgba(91,33,182,.28)] flex flex-col items-center justify-center text-center space-y-3 hover:-translate-y-1"
           >
             <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-indigo-500/10 text-indigo-500 dark:text-indigo-400 flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
               <Layers className="w-5 h-5 sm:w-6 sm:h-6" />
@@ -364,7 +365,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
       {/* ========================================================================= */}
       <section 
         id="track-order-section" 
-        className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 sm:p-5 shadow-sm space-y-4 transition-colors hover:border-purple-500/30"
+        className="rounded-[1.5rem] bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-700/70 p-4 sm:p-6 shadow-[0_16px_45px_-32px_rgba(15,23,42,.45)] space-y-5 transition-all hover:border-violet-400/50"
       >
         {/* Header: Concise Title + Status Badge + Single Subtitle */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -490,7 +491,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
       {/* ========================================================================= */}
       <section 
         id="pi-merchant-week" 
-        className="p-5 sm:p-7 md:p-8 rounded-2xl sm:rounded-3xl bg-gradient-to-r from-purple-950 via-indigo-950 to-slate-950 text-white border border-purple-700/40 shadow-xl space-y-3 relative overflow-hidden"
+        className="p-5 sm:p-7 md:p-8 rounded-[1.5rem] sm:rounded-[1.8rem] bg-[radial-gradient(ellipse_at_top_right,_rgba(168,85,247,.22),_transparent_48%),linear-gradient(115deg,#17102f_0%,#151c35_55%,#0b1220_100%)] text-white border border-violet-400/25 shadow-[0_22px_60px_-32px_rgba(76,29,149,.75)] space-y-3 relative overflow-hidden"
       >
         {/* Ambient Glow */}
         <div className="absolute top-0 right-0 w-72 sm:w-80 h-72 sm:h-80 bg-purple-500/10 rounded-full blur-2xl pointer-events-none" />
@@ -525,7 +526,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
       {/* ========================================================================= */}
       <section 
         id="merchant-onboarding-open" 
-        className="p-5 sm:p-7 md:p-8 rounded-2xl sm:rounded-3xl bg-gradient-to-r from-amber-950/60 via-slate-900 to-purple-950/60 border border-amber-500/40 shadow-xl flex flex-wrap items-center justify-between gap-4 sm:gap-5 text-white"
+        className="p-5 sm:p-7 md:p-8 rounded-[1.5rem] sm:rounded-[1.8rem] bg-[radial-gradient(ellipse_at_top_left,_rgba(245,158,11,.16),_transparent_48%),linear-gradient(115deg,#211a19_0%,#111827_55%,#21143c_100%)] border border-amber-400/30 shadow-[0_22px_60px_-32px_rgba(120,53,15,.55)] flex flex-wrap items-center justify-between gap-4 sm:gap-5 text-white"
       >
         <div className="space-y-1.5 sm:space-y-2 max-w-xl">
           <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/40 text-[10px] font-black uppercase tracking-wider">
