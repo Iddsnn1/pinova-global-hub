@@ -944,6 +944,13 @@ function MainAppContent() {
         authStatus={authStatus}
       />
 
+      {/* Global Pi Browser / PWA access banner: visible on the landing page and other sections. */}
+      <PiBrowserBanner
+        sandboxMode={isSandboxMode()}
+        userBalancePi={userBalancePi}
+        onOpenDiagnostics={() => handleNavigateSection('pi-diagnostic')}
+      />
+
       {/* Non-blocking Pi Authentication Notice / Alert */}
       {authError && (
         <div className="max-w-7xl mx-auto px-3 sm:px-6 pt-3 animate-fade-in">
@@ -1394,11 +1401,6 @@ function MainAppContent() {
 
         {activeSection === 'developer_platform' && (
           <div className="space-y-4">
-            <PiBrowserBanner
-              sandboxMode={isSandboxMode()}
-              userBalancePi={userBalancePi}
-              onOpenDiagnostics={() => handleNavigateSection('pi-diagnostic')}
-            />
             <DeveloperPlatformView
               userRole={user.role}
               onNavigateSection={handleNavigateSection}
