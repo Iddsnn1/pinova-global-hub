@@ -25,7 +25,7 @@ export class AuthorizationService {
    * Creates an authoritative server session for a verified user
    */
   public createSession(
-    param: string | { username: string; uid?: string; roles?: UserRole[]; accessToken?: string; institutionId?: string },
+    param: string | { username: string; uid?: string; roles?: UserRole[]; accessToken?: string; institutionId?: string; isAuthorizedAdmin?: boolean },
     ttlMs: number = 7 * 86400000
   ): SessionEntity & { user: AuthenticatedUser } {
     const username = typeof param === 'string' ? param : param.username;
@@ -34,7 +34,7 @@ export class AuthorizationService {
     const institutionId = typeof param === 'object' ? param.institutionId : undefined;
     const isAuthorizedAdmin = typeof param === 'object' && 'isAuthorizedAdmin' in param
       ? (param as any).isAuthorizedAdmin === true
-      : true;
+      : false;
 
     // Filter out privileged roles unless the caller is an authorized administrator
     const safeRoles = isAuthorizedAdmin
@@ -44,8 +44,15 @@ export class AuthorizationService {
     let user = this.userRepo.findByUsername(username);
     if (!user) {
       user = this.userRepo.upsertUser({ username, piUid: uid, roles: safeRoles, institutionId });
-    } else if (isAuthorizedAdmin && safeRoles && safeRoles.length > 0) {
-      user = this.userRepo.upsertUser({ username, piUid: uid || user.piUid, roles: safeRoles, institutionId: institutionId || user.institutionId });
+    } else {
+      // Reconcile roles on every session issuance. Otherwise an existing identity
+      // carrying stale privileged roles could retain them after a non-admin login.
+      user = this.userRepo.upsertUser({
+        username,
+        piUid: uid || user.piUid,
+        roles: safeRoles && safeRoles.length > 0 ? safeRoles : ['PIONEER'],
+        institutionId: institutionId || user.institutionId
+      });
     }
 
     // Vercel runs API handlers in separate serverless instances. A session token
