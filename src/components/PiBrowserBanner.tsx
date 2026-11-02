@@ -17,6 +17,8 @@ export const PiBrowserBanner: React.FC<PiBrowserBannerProps> = ({
   const [showDiagPanel, setShowDiagPanel] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [installPrompt, setInstallPrompt] = useState<any>(null);
+  const [installHelp, setInstallHelp] = useState(false);
 
   const handleCopyAppLink = async () => {
     try {
@@ -121,6 +123,14 @@ export const PiBrowserBanner: React.FC<PiBrowserBannerProps> = ({
               <div className="mt-3 flex flex-wrap gap-2">
                 <button
                   type="button"
+                  onClick={handleInstallPiNova}
+                  className="inline-flex items-center gap-2 rounded-lg border border-emerald-300/40 bg-emerald-400/10 px-3 py-2 text-[11px] font-semibold text-emerald-100 transition hover:bg-emerald-400/20"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  {installPrompt ? 'Install PiNova app' : 'How to install PiNova'}
+                </button>
+                <button
+                  type="button"
                   onClick={handleCopyAppLink}
                   className="inline-flex items-center gap-2 rounded-lg bg-amber-300 px-3 py-2 text-[11px] font-bold text-slate-950 transition hover:bg-amber-200"
                 >
@@ -147,6 +157,11 @@ export const PiBrowserBanner: React.FC<PiBrowserBannerProps> = ({
                   </button>
                 )}
               </div>
+              {installHelp && (
+                <p className="mt-2 rounded-lg border border-emerald-300/20 bg-emerald-400/5 p-2 text-[10px] leading-relaxed text-emerald-100">
+                  If your browser offers installation, use its menu and choose “Install app” or “Add to Home screen”. If this option is unavailable, continue using PiNova in your browser. Pi Browser access is still recommended for Pi Network authentication.
+                </p>
+              )}
               <p className="mt-2 text-[10px] text-amber-200/70">
                 After installing, open Pi Browser, sign in, then paste the copied PiNova link into its address bar.
               </p>
