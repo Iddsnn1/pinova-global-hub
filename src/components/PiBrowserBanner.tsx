@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ShieldCheck, Info, Sparkles, Terminal, ChevronDown, ChevronUp, RefreshCw } from 'lucide-react';
+import { ShieldCheck, Info, Sparkles, Terminal, ChevronDown, ChevronUp, RefreshCw, Smartphone, Download } from 'lucide-react';
 import { isPiBrowser, subscribePiSdkState, getPiSdkDiagnosticState, authenticatePiUser, resetPiAuthState, setCustomSandboxMode, PiSdkDiagnosticState } from '../lib/piSdk';
 
 interface PiBrowserBannerProps {
