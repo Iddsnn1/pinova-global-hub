@@ -14,7 +14,13 @@ export class AuthorizationService {
     this.userRepo = userRepo || new UserIdentityRepository();
     this.sessionEngine = new StorageEngine<SessionEntity>('user_sessions', 'token');
     this.revokedSessionEngine = new StorageEngine<{ token: string; revokedAt: string }>('revoked_sessions', 'token');
-    this.secretKey = process.env.JWT_SECRET || process.env.SESSION_SECRET || 'pinova-sec-auth-v2-master-key';
+    const configuredSecret = process.env.JWT_SECRET || process.env.SESSION_SECRET;
+    if (!configuredSecret && process.env.NODE_ENV === 'production') {
+      throw new Error('SESSION_SIGNING_SECRET_REQUIRED');
+    }
+    // Local development may use an ephemeral key; deployed production-mode
+    // environments must provide a branch-scoped secret explicitly.
+    this.secretKey = configuredSecret || crypto.randomBytes(32).toString('hex');
   }
 
   public getUserRepo(): UserIdentityRepository {
