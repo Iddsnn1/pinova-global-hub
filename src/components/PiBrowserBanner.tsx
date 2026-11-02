@@ -117,7 +117,7 @@ export const PiBrowserBanner: React.FC<PiBrowserBannerProps> = ({
 
         {/* Center: Environment & Diagnostic Info */}
         <div className="flex flex-wrap items-center gap-2 text-slate-300">
-          {diagState.authState === 'AUTH_PROMISE_RETURNED' || diagState.authState === 'AUTH_CALL_STARTED' ? (
+          {!inPiBrowser ? (
             <div className="flex items-center gap-1.5 bg-amber-500/20 border border-amber-500/50 text-amber-200 px-3 py-0.5 rounded-md animate-pulse">
               <span className="w-2 h-2 rounded-full bg-amber-400" />
               <span className="font-medium text-[11px]">{getStatusText()}</span>
@@ -137,7 +137,7 @@ export const PiBrowserBanner: React.FC<PiBrowserBannerProps> = ({
               <span className="w-2 h-2 rounded-full bg-rose-400" />
               <span className="font-medium text-[11px]">{getStatusText()}</span>
             </div>
-          ) : !inPiBrowser ? (
+          ) : (
             <div className="w-full basis-full rounded-xl border border-amber-400/30 bg-amber-950/35 p-3 sm:p-4 text-amber-100">
               <div className="flex flex-wrap items-center gap-2">
                 <Info className="h-4 w-4 shrink-0 text-amber-300" />
