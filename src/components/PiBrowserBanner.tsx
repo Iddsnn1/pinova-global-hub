@@ -34,6 +34,33 @@ export const PiBrowserBanner: React.FC<PiBrowserBannerProps> = ({
     return subscribePiSdkState((st) => setDiagState(st));
   }, []);
 
+  useEffect(() => {
+    const onInstallPrompt = (event: Event) => {
+      event.preventDefault();
+      setInstallPrompt(event as any);
+    };
+    const onInstalled = () => {
+      setInstallPrompt(null);
+      setInstallHelp(false);
+    };
+    window.addEventListener('beforeinstallprompt', onInstallPrompt);
+    window.addEventListener('appinstalled', onInstalled);
+    return () => {
+      window.removeEventListener('beforeinstallprompt', onInstallPrompt);
+      window.removeEventListener('appinstalled', onInstalled);
+    };
+  }, []);
+
+  const handleInstallPiNova = async () => {
+    if (!installPrompt) {
+      setInstallHelp(true);
+      return;
+    }
+    await installPrompt.prompt();
+    await installPrompt.userChoice;
+    setInstallPrompt(null);
+  };
+
   const handleRetryAuth = async () => {
     setIsRetrying(true);
     resetPiAuthState();
