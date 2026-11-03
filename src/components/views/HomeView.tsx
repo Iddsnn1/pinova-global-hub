@@ -140,18 +140,26 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 </div>
                 <span className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-2.5 py-1 text-[9px] font-bold text-emerald-300">Pi enabled</span>
               </div>
-              <div className="grid grid-cols-2 gap-3 py-4">
-                <div className="rounded-2xl bg-gradient-to-br from-violet-500/25 to-indigo-500/10 border border-violet-200/15 p-4">
-                  <ShoppingBag className="w-5 h-5 text-violet-200 mb-3" /><div className="text-xs font-extrabold">Marketplace</div><div className="text-[10px] text-slate-400 mt-1">Discover goods</div>
+              <div className="space-y-3 py-4">
+                <div className="rounded-2xl border border-violet-200/15 bg-gradient-to-r from-violet-500/15 via-indigo-500/10 to-cyan-500/10 p-4 sm:p-5">
+                  <div className="flex items-center gap-2 text-violet-100">
+                    <Compass className="w-5 h-5 text-cyan-200" />
+                    <span className="text-xs font-extrabold tracking-wide">GLOBAL REACH</span>
+                  </div>
+                  <p className="mt-2 text-sm font-bold text-white">Connect beyond borders</p>
+                  <p className="mt-1 text-[11px] leading-relaxed text-slate-400">A connected experience for people, merchants and services across the Pi ecosystem.</p>
                 </div>
-                <div className="rounded-2xl bg-gradient-to-br from-cyan-500/20 to-blue-500/10 border border-cyan-200/15 p-4">
-                  <Zap className="w-5 h-5 text-cyan-200 mb-3" /><div className="text-xs font-extrabold">Utilities</div><div className="text-[10px] text-slate-400 mt-1">Everyday services</div>
-                </div>
-                <div className="rounded-2xl bg-gradient-to-br from-amber-500/20 to-orange-500/10 border border-amber-200/15 p-4">
-                  <Compass className="w-5 h-5 text-amber-200 mb-3" /><div className="text-xs font-extrabold">Global mobility</div><div className="text-[10px] text-slate-400 mt-1">Travel & transport</div>
-                </div>
-                <div className="rounded-2xl bg-gradient-to-br from-emerald-500/20 to-teal-500/10 border border-emerald-200/15 p-4">
-                  <ShieldCheck className="w-5 h-5 text-emerald-200 mb-3" /><div className="text-xs font-extrabold">PSTP</div><div className="text-[10px] text-slate-400 mt-1">Protection framework</div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="rounded-2xl border border-emerald-200/15 bg-emerald-500/10 p-3">
+                    <ShieldCheck className="mb-2 h-5 w-5 text-emerald-200" />
+                    <div className="text-xs font-extrabold text-white">PSTP framework</div>
+                    <div className="mt-1 text-[10px] text-slate-400">Protection-first flows</div>
+                  </div>
+                  <div className="rounded-2xl border border-amber-200/15 bg-amber-500/10 p-3">
+                    <Sparkles className="mb-2 h-5 w-5 text-amber-200" />
+                    <div className="text-xs font-extrabold text-white">One ecosystem</div>
+                    <div className="mt-1 text-[10px] text-slate-400">Designed to work together</div>
+                  </div>
                 </div>
               </div>
               <div className="flex items-center justify-between rounded-xl bg-slate-950/50 border border-white/10 px-3 py-2.5">
