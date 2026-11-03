@@ -225,6 +225,9 @@ export const HomeView: React.FC<HomeViewProps> = ({
           <div
             id="hub-module-marketplace"
             onClick={() => onNavigateSection('marketplace', 'all')}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.currentTarget.click(); } }}
             className="min-h-[142px] p-4 sm:p-5 rounded-[1.35rem] bg-white dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-700/70 hover:border-violet-400 dark:hover:border-violet-400 transition-all duration-300 cursor-pointer group shadow-[0_8px_24px_-18px_rgba(15,23,42,.35)] hover:shadow-[0_18px_38px_-20px_rgba(91,33,182,.28)] flex flex-col items-center justify-center text-center space-y-3 hover:-translate-y-1"
           >
             <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-purple-500/10 text-purple-500 dark:text-purple-400 flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
@@ -242,6 +245,9 @@ export const HomeView: React.FC<HomeViewProps> = ({
           <div
             id="hub-module-utilities"
             onClick={() => onNavigateSection('utilities')}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.currentTarget.click(); } }}
             className="min-h-[142px] p-4 sm:p-5 rounded-[1.35rem] bg-white dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-700/70 hover:border-violet-400 dark:hover:border-violet-400 transition-all duration-300 cursor-pointer group shadow-[0_8px_24px_-18px_rgba(15,23,42,.35)] hover:shadow-[0_18px_38px_-20px_rgba(91,33,182,.28)] flex flex-col items-center justify-center text-center space-y-3 hover:-translate-y-1"
           >
             <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-emerald-500/10 text-emerald-500 dark:text-emerald-400 flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
@@ -259,6 +265,9 @@ export const HomeView: React.FC<HomeViewProps> = ({
           <div
             id="hub-module-transport"
             onClick={() => onNavigateSection('utilities', 'transport' as any)}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.currentTarget.click(); } }}
             className="min-h-[142px] p-4 sm:p-5 rounded-[1.35rem] bg-white dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-700/70 hover:border-violet-400 dark:hover:border-violet-400 transition-all duration-300 cursor-pointer group shadow-[0_8px_24px_-18px_rgba(15,23,42,.35)] hover:shadow-[0_18px_38px_-20px_rgba(91,33,182,.28)] flex flex-col items-center justify-center text-center space-y-3 hover:-translate-y-1"
           >
             <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-cyan-500/10 text-cyan-500 dark:text-cyan-400 flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
@@ -276,6 +285,9 @@ export const HomeView: React.FC<HomeViewProps> = ({
           <div
             id="hub-module-services"
             onClick={() => onNavigateSection('services')}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.currentTarget.click(); } }}
             className="min-h-[142px] p-4 sm:p-5 rounded-[1.35rem] bg-white dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-700/70 hover:border-violet-400 dark:hover:border-violet-400 transition-all duration-300 cursor-pointer group shadow-[0_8px_24px_-18px_rgba(15,23,42,.35)] hover:shadow-[0_18px_38px_-20px_rgba(91,33,182,.28)] flex flex-col items-center justify-center text-center space-y-3 hover:-translate-y-1"
           >
             <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-blue-500/10 text-blue-500 dark:text-blue-400 flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
@@ -293,6 +305,9 @@ export const HomeView: React.FC<HomeViewProps> = ({
           <div
             id="hub-module-ai-concierge"
             onClick={() => onNavigateSection('ai_search')}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.currentTarget.click(); } }}
             className="min-h-[142px] p-4 sm:p-5 rounded-[1.35rem] bg-white dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-700/70 hover:border-violet-400 dark:hover:border-violet-400 transition-all duration-300 cursor-pointer group shadow-[0_8px_24px_-18px_rgba(15,23,42,.35)] hover:shadow-[0_18px_38px_-20px_rgba(91,33,182,.28)] flex flex-col items-center justify-center text-center space-y-3 hover:-translate-y-1"
           >
             <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-amber-500/10 text-amber-500 dark:text-amber-400 flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
@@ -310,6 +325,9 @@ export const HomeView: React.FC<HomeViewProps> = ({
           <div
             id="hub-module-pstp-security"
             onClick={onOpenPstpShield}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.currentTarget.click(); } }}
             className="min-h-[142px] p-4 sm:p-5 rounded-[1.35rem] bg-white dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-700/70 hover:border-violet-400 dark:hover:border-violet-400 transition-all duration-300 cursor-pointer group shadow-[0_8px_24px_-18px_rgba(15,23,42,.35)] hover:shadow-[0_18px_38px_-20px_rgba(91,33,182,.28)] flex flex-col items-center justify-center text-center space-y-3 hover:-translate-y-1"
           >
             <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-emerald-500/10 text-emerald-500 dark:text-emerald-400 flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
@@ -327,6 +345,9 @@ export const HomeView: React.FC<HomeViewProps> = ({
           <div
             id="hub-module-developer"
             onClick={() => onNavigateSection('developer_platform' as any)}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.currentTarget.click(); } }}
             className="min-h-[142px] p-4 sm:p-5 rounded-[1.35rem] bg-white dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-700/70 hover:border-violet-400 dark:hover:border-violet-400 transition-all duration-300 cursor-pointer group shadow-[0_8px_24px_-18px_rgba(15,23,42,.35)] hover:shadow-[0_18px_38px_-20px_rgba(91,33,182,.28)] flex flex-col items-center justify-center text-center space-y-3 hover:-translate-y-1"
           >
             <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-purple-500/10 text-purple-500 dark:text-purple-400 flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
@@ -344,6 +365,9 @@ export const HomeView: React.FC<HomeViewProps> = ({
           <div
             id="hub-module-future-services"
             onClick={() => onNavigateSection('future_services')}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.currentTarget.click(); } }}
             className="min-h-[142px] p-4 sm:p-5 rounded-[1.35rem] bg-white dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-700/70 hover:border-violet-400 dark:hover:border-violet-400 transition-all duration-300 cursor-pointer group shadow-[0_8px_24px_-18px_rgba(15,23,42,.35)] hover:shadow-[0_18px_38px_-20px_rgba(91,33,182,.28)] flex flex-col items-center justify-center text-center space-y-3 hover:-translate-y-1"
           >
             <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-indigo-500/10 text-indigo-500 dark:text-indigo-400 flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
