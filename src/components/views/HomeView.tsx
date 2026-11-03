@@ -86,22 +86,6 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 Discover products, access everyday services, explore global utilities and connect with merchants across the Pi community.
               </p>
             </div>
-            <div className="flex flex-col sm:flex-row gap-3">
-              <button
-                id="hero-explore-marketplace"
-                onClick={() => onNavigateSection('marketplace', 'all')}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-500 to-indigo-500 hover:from-violet-400 hover:to-indigo-400 px-5 py-3.5 text-sm font-extrabold text-white shadow-lg shadow-indigo-950/50 transition-all active:scale-[.98]"
-              >
-                Explore Marketplace <ArrowRight className="w-4 h-4" />
-              </button>
-              <button
-                id="hero-explore-services"
-                onClick={() => onNavigateSection('utilities')}
-                className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/[.07] hover:bg-white/[.13] px-5 py-3.5 text-sm font-bold text-white transition-all"
-              >
-                Explore Global Utilities <Zap className="w-4 h-4 text-amber-300" />
-              </button>
-            </div>
             <div className="pt-1">
               <div
                 id="hero-universal-search-bar"
