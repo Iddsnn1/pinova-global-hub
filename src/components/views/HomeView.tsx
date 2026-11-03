@@ -378,7 +378,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 TRACK ORDER
               </h2>
               <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-950/80 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
-                PSTP Live
+                Order Tracking
               </span>
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400 font-medium pl-8 sm:pl-8">
@@ -390,8 +390,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
         {/* Compact Active Order & Lifecycle Indicator Card */}
         {(() => {
           const displayOrder = activeOrders && activeOrders.length > 0 ? activeOrders[0] : null;
-          const orderId = displayOrder?.id || 'ORD-PI-892341';
-          const orderStatus = (displayOrder?.pstpStatus || displayOrder?.escrowStatus || 'IN TRANSIT').replace('_', ' ').toUpperCase();
+          const orderId = displayOrder?.id || '';
+          const orderStatus = displayOrder ? (displayOrder.pstpStatus || displayOrder.escrowStatus || 'STATUS PENDING').replace('_', ' ').toUpperCase() : 'NO ACTIVE ORDER';
 
           return (
             <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 p-3 sm:p-3.5 space-y-2.5">
@@ -399,7 +399,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <div className="flex items-center gap-2">
                   <span className="font-mono text-xs sm:text-sm font-black text-slate-900 dark:text-white">
-                    {orderId}
+                    {orderId || 'No active order'}
                   </span>
                   {displayOrder && (
                     <span className="text-[11px] text-amber-500 dark:text-amber-400 font-bold hidden sm:inline">
