@@ -67,8 +67,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
         <div className="absolute inset-0 opacity-[0.12] pointer-events-none [background-image:linear-gradient(rgba(255,255,255,.35)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.35)_1px,transparent_1px)] [background-size:42px_42px] [mask-image:linear-gradient(120deg,black,transparent_80%)]" />
         <div className="absolute -right-20 top-8 w-72 h-72 sm:w-[27rem] sm:h-[27rem] rounded-full border border-violet-300/15 pointer-events-none" />
         <div className="absolute -right-8 top-20 w-52 h-52 sm:w-[20rem] sm:h-[20rem] rounded-full border border-cyan-200/10 pointer-events-none" />
-        <div className="relative z-10 grid lg:grid-cols-[1.15fr_.85fr] items-center gap-5 sm:gap-7 lg:gap-8 p-4 sm:p-6 md:p-8 lg:p-9">
-          <div className="min-w-0 flex flex-col justify-center gap-4 sm:gap-5">
+        <div className="relative z-10 grid lg:grid-cols-[1.15fr_.85fr] items-center gap-4 sm:gap-6 lg:gap-7 p-3.5 sm:p-5 md:p-6 lg:p-7">
+          <div className="min-w-0 flex flex-col justify-center gap-3.5 sm:gap-4">
             <div className="flex flex-wrap items-center gap-2">
               <span className="inline-flex items-center gap-2 rounded-full border border-violet-300/25 bg-violet-300/10 px-3 py-1.5 text-[10px] sm:text-xs font-extrabold uppercase tracking-[.18em] text-violet-100">
                 <Sparkles className="w-3.5 h-3.5 text-amber-300" /> PiNova Global Hub
@@ -78,7 +78,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
               </span>
             </div>
             <div className="space-y-3">
-              <h1 className="text-[1.95rem] sm:text-[2.8rem] lg:text-[3.25rem] font-black tracking-[-.055em] leading-[1.02] max-w-3xl">
+              <h1 className="text-[1.8rem] sm:text-[2.55rem] lg:text-[3rem] font-black tracking-[-.055em] leading-[1.04] max-w-3xl">
                 One global hub.
                 <span className="block text-transparent bg-clip-text bg-gradient-to-r from-violet-300 via-fuchsia-200 to-cyan-200">Endless possibilities.</span>
               </h1>
@@ -130,18 +130,18 @@ export const HomeView: React.FC<HomeViewProps> = ({
               </div>
             </div>
           </div>
-          <div className="relative min-h-[190px] sm:min-h-[230px] flex items-center justify-center">
+          <div className="relative min-h-[170px] sm:min-h-[205px] flex items-center justify-center">
             <div className="absolute w-56 h-56 sm:w-72 sm:h-72 rounded-full bg-violet-500/20 blur-3xl" />
-            <div className="relative w-full max-w-[21rem] rounded-[1.65rem] border border-white/15 bg-white/[.07] p-3.5 sm:p-4 backdrop-blur-xl shadow-2xl">
-              <div className="flex items-center justify-between border-b border-white/10 pb-4">
+            <div className="relative w-full max-w-[19rem] rounded-[1.5rem] border border-white/15 bg-white/[.07] p-3 sm:p-3.5 backdrop-blur-xl shadow-2xl">
+              <div className="flex items-center justify-between border-b border-white/10 pb-3">
                 <div className="flex items-center gap-2">
                   <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-400 to-indigo-600 flex items-center justify-center text-xl font-black text-white">π</div>
                   <div><div className="text-xs font-extrabold text-white">Global ecosystem</div><div className="text-[10px] text-slate-400">Commerce · Utilities · Services</div></div>
                 </div>
                 <span className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-2.5 py-1 text-[9px] font-bold text-emerald-300">Pi enabled</span>
               </div>
-              <div className="space-y-2.5 py-3">
-                <div className="rounded-2xl border border-violet-200/15 bg-gradient-to-r from-violet-500/15 via-indigo-500/10 to-cyan-500/10 p-3.5 sm:p-4">
+              <div className="space-y-2 py-2.5">
+                <div className="rounded-xl border border-violet-200/15 bg-gradient-to-r from-violet-500/15 via-indigo-500/10 to-cyan-500/10 p-3">
                   <div className="flex items-center gap-2 text-violet-100">
                     <Compass className="w-5 h-5 text-cyan-200" />
                     <span className="text-xs font-extrabold tracking-wide">GLOBAL REACH</span>
@@ -149,20 +149,20 @@ export const HomeView: React.FC<HomeViewProps> = ({
                   <p className="mt-2 text-sm font-bold text-white">Connect beyond borders</p>
                   <p className="mt-1 text-[11px] leading-relaxed text-slate-400">A connected experience for people, merchants and services across the Pi ecosystem.</p>
                 </div>
-                <div className="grid grid-cols-2 gap-2.5">
-                  <div className="rounded-xl border border-emerald-200/15 bg-emerald-500/10 p-2.5">
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="rounded-xl border border-emerald-200/15 bg-emerald-500/10 p-2">
                     <ShieldCheck className="mb-2 h-5 w-5 text-emerald-200" />
                     <div className="text-xs font-extrabold text-white">PSTP framework</div>
                     <div className="mt-1 text-[10px] text-slate-400">Protection-first flows</div>
                   </div>
-                  <div className="rounded-xl border border-amber-200/15 bg-amber-500/10 p-2.5">
+                  <div className="rounded-xl border border-amber-200/15 bg-amber-500/10 p-2">
                     <Sparkles className="mb-2 h-5 w-5 text-amber-200" />
                     <div className="text-xs font-extrabold text-white">One ecosystem</div>
                     <div className="mt-1 text-[10px] text-slate-400">Designed to work together</div>
                   </div>
                 </div>
               </div>
-              <div className="flex items-center justify-between rounded-xl bg-slate-950/50 border border-white/10 px-3 py-2.5">
+              <div className="flex items-center justify-between rounded-xl bg-slate-950/50 border border-white/10 px-3 py-2">
                 <span className="text-[10px] font-semibold text-slate-300">A connected Pi experience</span>
                 <Sparkles className="w-4 h-4 text-amber-300" />
               </div>
