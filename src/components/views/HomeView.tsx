@@ -22,7 +22,6 @@ import {
 } from 'lucide-react';
 import { Product, Order, Vendor, PiUser } from '../../types';
 import { MainSection, MarketplaceCategory } from '../../types/navigation';
-import { ConnectPiButton, AuthStatus } from '../auth/ConnectPiButton';
 
 interface HomeViewProps {
   user: PiUser;
@@ -44,8 +43,6 @@ interface HomeViewProps {
   onConfirmReceipt?: (orderId: string) => void;
   onTrackOrder?: (orderId?: string) => void;
   onOpenVendorApplication?: () => void;
-  onConnectPi?: () => void;
-  authStatus?: AuthStatus;
 }
 
 export const HomeView: React.FC<HomeViewProps> = ({
@@ -55,9 +52,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
   onOpenUniversalSearch,
   onOpenPstpShield,
   onTrackOrder,
-  onOpenVendorApplication,
-  onConnectPi,
-  authStatus = user?.authenticated ? 'connected' : 'disconnected'
+  onOpenVendorApplication
 }) => {
   const [trackingQuery, setTrackingQuery] = useState('');
   return (
@@ -168,32 +163,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
         </div>
       </section>
 
-      {/* Pi authentication banner — kept directly below the hero */}
-      {(!user.authenticated || authStatus === 'disconnected') && onConnectPi && (
-        <section
-          id="home-unauthenticated-connect-banner"
-          className="relative isolate overflow-hidden rounded-[1.6rem] border border-amber-300/25 bg-[#100d22] p-4 sm:p-5 text-white shadow-[0_18px_55px_-30px_rgba(124,58,237,.7)]"
-        >
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_0%_50%,rgba(124,58,237,.3),transparent_45%),linear-gradient(100deg,#17102e,#111827_65%,#17233a)] pointer-events-none" />
-          <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="flex items-center gap-3.5 min-w-0">
-              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-300 via-amber-500 to-violet-600 p-[2px] shadow-lg shrink-0">
-                <div className="w-full h-full rounded-[14px] bg-[#100d22] flex items-center justify-center text-3xl font-black text-amber-300">π</div>
-              </div>
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="text-base sm:text-lg font-black text-white">Your Pi journey starts here</h2>
-                  <span className="rounded-full border border-emerald-300/25 bg-emerald-300/10 px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-wider text-emerald-300">Testnet</span>
-                </div>
-                <p className="mt-1 max-w-2xl text-xs sm:text-sm leading-relaxed text-slate-300">Connect your Pi account in Pi Browser to authenticate and access your Pioneer experience.</p>
-              </div>
-            </div>
-            <div className="w-full md:w-auto shrink-0">
-              <ConnectPiButton user={user} authStatus={authStatus} onConnect={onConnectPi} variant="standalone" className="w-full md:min-w-[190px]" />
-            </div>
-          </div>
-        </section>
-      )}
+      {/* Connect with Pi is intentionally provided once in the global header. */}
 
       {/* ========================================================================= */}
       {/* 2. PINOVA GLOBAL HUB MODULES: CENTRAL SERVICE DISCOVERY                   */}
