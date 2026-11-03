@@ -63,139 +63,134 @@ export const HomeView: React.FC<HomeViewProps> = ({
   return (
     <div className="relative max-w-7xl mx-auto px-3 sm:px-6 space-y-7 sm:space-y-9 pb-24 animate-fade-in">
       
-      {/* ========================================================================= */}
-      {/* 1. HERO BANNER: DISCOVERY + SEARCH + POPULAR SEARCHES                     */}
-      {/* ========================================================================= */}
-      <section 
-        id="hero-banner" 
-        className="relative isolate rounded-[1.6rem] sm:rounded-[2rem] bg-[radial-gradient(ellipse_at_top_right,_rgba(139,92,246,0.34),_transparent_48%),linear-gradient(135deg,#080d1c_0%,#24104b_52%,#101827_100%)] text-white p-5 sm:p-8 md:p-10 border border-violet-400/25 shadow-[0_24px_70px_-28px_rgba(91,33,182,0.65)] overflow-hidden"
+      {/* PREMIUM GLOBAL DISCOVERY HERO */}
+      <section
+        id="hero-banner"
+        className="relative isolate overflow-hidden rounded-[2rem] sm:rounded-[2.5rem] bg-[#080b18] text-white border border-indigo-300/20 shadow-[0_28px_90px_-35px_rgba(79,70,229,.65)]"
       >
-        {/* Subtle Brand Ambient Glows */}
-        <div className="absolute -top-24 -right-20 w-72 sm:w-[28rem] h-72 sm:h-[28rem] bg-violet-500/20 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute -bottom-32 left-1/4 w-72 h-72 bg-cyan-400/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute inset-0 opacity-[0.07] pointer-events-none [background-image:linear-gradient(rgba(255,255,255,.45)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.45)_1px,transparent_1px)] [background-size:34px_34px] [mask-image:linear-gradient(to_bottom,black,transparent)]" />
-
-        <div className="relative z-10 space-y-4 sm:space-y-5">
-          
-          {/* Top Row: Brand Statement & Compact Trust Indicator */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-            
-            {/* Value Proposition */}
-            <div className="space-y-1 max-w-xl">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/15 text-violet-100 text-[10px] sm:text-[11px] font-extrabold uppercase tracking-[0.16em] backdrop-blur-xl shadow-lg">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                <span>PiNova Global Hub</span>
-              </div>
-              <h1 className="text-[1.7rem] sm:text-3xl md:text-4xl lg:text-[2.85rem] font-black tracking-[-0.045em] text-white leading-[1.08] max-w-2xl">
-                Enterprise Pi Commerce & Utilities
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_78%_18%,rgba(124,58,237,.48),transparent_34%),radial-gradient(ellipse_at_8%_95%,rgba(8,145,178,.24),transparent_38%),linear-gradient(125deg,#080b18_0%,#15102f_52%,#0b1727_100%)] pointer-events-none" />
+        <div className="absolute inset-0 opacity-[0.12] pointer-events-none [background-image:linear-gradient(rgba(255,255,255,.35)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.35)_1px,transparent_1px)] [background-size:42px_42px] [mask-image:linear-gradient(120deg,black,transparent_80%)]" />
+        <div className="absolute -right-20 top-8 w-72 h-72 sm:w-[27rem] sm:h-[27rem] rounded-full border border-violet-300/15 pointer-events-none" />
+        <div className="absolute -right-8 top-20 w-52 h-52 sm:w-[20rem] sm:h-[20rem] rounded-full border border-cyan-200/10 pointer-events-none" />
+        <div className="relative z-10 grid lg:grid-cols-[1.2fr_.8fr] gap-7 lg:gap-10 p-5 sm:p-8 md:p-10 lg:p-12">
+          <div className="min-w-0 flex flex-col justify-center gap-5 sm:gap-6">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-2 rounded-full border border-violet-300/25 bg-violet-300/10 px-3 py-1.5 text-[10px] sm:text-xs font-extrabold uppercase tracking-[.18em] text-violet-100">
+                <Sparkles className="w-3.5 h-3.5 text-amber-300" /> PiNova Global Hub
+              </span>
+              <span className="inline-flex items-center gap-1.5 text-[10px] sm:text-xs font-bold text-emerald-300">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Built for the Pi ecosystem
+              </span>
+            </div>
+            <div className="space-y-3">
+              <h1 className="text-[2.15rem] sm:text-5xl lg:text-[3.65rem] font-black tracking-[-.055em] leading-[1.02] max-w-3xl">
+                One global hub.
+                <span className="block text-transparent bg-clip-text bg-gradient-to-r from-violet-300 via-fuchsia-200 to-cyan-200">Endless possibilities.</span>
               </h1>
-              <p className="text-sm sm:text-base text-slate-300/95 leading-relaxed max-w-xl">
-                Non-custodial merchant ecosystem, instant global utility fulfillment, and protected transactions.
+              <p className="text-sm sm:text-base lg:text-lg text-slate-300 leading-relaxed max-w-xl">
+                Discover products, access everyday services, explore global utilities and connect with merchants across the Pi community.
               </p>
             </div>
-
-            {/* Compact Trust & Protection Strip */}
-            <div className="w-full sm:w-auto flex items-center justify-between sm:justify-end gap-3 bg-white/[0.07] border border-white/15 px-4 py-3 rounded-2xl backdrop-blur-xl shadow-xl shrink-0">
-              <div className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
-                <span className="text-xs font-bold text-emerald-400 flex items-center gap-1">
-                  <ShieldCheck className="w-3.5 h-3.5" />
-                  PSTP Protected
-                </span>
-              </div>
-
+            <div className="flex flex-col sm:flex-row gap-3">
               <button
-                id="hero-pstp-shield-button"
-                onClick={onOpenPstpShield}
-                className="px-2.5 py-1 rounded-lg bg-purple-950 hover:bg-purple-900 border border-purple-700/60 text-amber-300 text-[11px] font-bold transition-all flex items-center gap-1 shadow-sm active:scale-95 shrink-0"
-                title="PSTP Protection Shield"
+                id="hero-explore-marketplace"
+                onClick={() => onNavigateSection('marketplace', 'all')}
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-500 to-indigo-500 hover:from-violet-400 hover:to-indigo-400 px-5 py-3.5 text-sm font-extrabold text-white shadow-lg shadow-indigo-950/50 transition-all active:scale-[.98]"
               >
-                <span>Shield Details</span>
-                <ChevronRight className="w-3 h-3 text-slate-400" />
+                Explore Marketplace <ArrowRight className="w-4 h-4" />
+              </button>
+              <button
+                id="hero-explore-services"
+                onClick={() => onNavigateSection('utilities')}
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/[.07] hover:bg-white/[.13] px-5 py-3.5 text-sm font-bold text-white transition-all"
+              >
+                Explore Global Utilities <Zap className="w-4 h-4 text-amber-300" />
               </button>
             </div>
-
-          </div>
-
-          {/* Universal Hero Search Input Trigger */}
-          <div className="pt-0.5">
-            <div
-              id="hero-universal-search-bar"
-              onClick={() => onOpenUniversalSearch()}
-              className="group relative cursor-pointer bg-slate-950/70 hover:bg-slate-950/90 text-slate-300 rounded-2xl sm:rounded-[1.35rem] border border-white/15 p-3.5 sm:p-4 md:p-5 shadow-[0_16px_40px_-22px_rgba(0,0,0,.9)] flex items-center justify-between gap-3 transition-all duration-300 hover:border-violet-300/60 hover:shadow-violet-950/50 hover:-translate-y-0.5"
-            >
-              <div className="flex items-center gap-2.5 sm:gap-3 flex-1 min-w-0">
-                <Search className="w-4.5 h-4.5 sm:w-5 sm:h-5 text-purple-400 group-hover:scale-110 transition-transform shrink-0" />
-                <span className="text-xs sm:text-sm text-slate-300 font-medium truncate">
-                  Search products, merchants, services, utilities, or orders...
-                </span>
+            <div className="pt-1">
+              <div
+                id="hero-universal-search-bar"
+                onClick={() => onOpenUniversalSearch()}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onOpenUniversalSearch(); } }}
+                className="group cursor-pointer rounded-2xl border border-white/15 bg-slate-950/65 hover:bg-slate-950/85 px-4 py-4 flex items-center justify-between gap-3 shadow-xl transition-all hover:border-violet-300/50"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <Search className="w-5 h-5 text-violet-300 shrink-0" />
+                  <span className="text-xs sm:text-sm text-slate-300 truncate">Search products, merchants, services and utilities</span>
+                </div>
+                <span className="rounded-lg bg-white/10 px-3 py-2 text-xs font-bold text-white group-hover:bg-violet-500 shrink-0">Search</span>
               </div>
-              <div className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-violet-500 via-purple-600 to-indigo-600 text-white text-xs font-extrabold shadow-lg shadow-violet-950/40 shrink-0">
-                <Sparkles className="w-3 h-3 text-amber-300" />
-                <span className="hidden xs:inline">Search</span>
-              </div>
-            </div>
-
-            {/* Popular Searches Chips: Actual searchable products and services */}
-            <div className="relative pt-2.5">
-              <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar pb-1 text-xs">
-                <span className="text-slate-400 text-[11px] font-bold shrink-0 hidden xs:inline">Popular:</span>
+              <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pt-3 pb-1">
                 {[
-                  { id: 'pop-airtime', label: '⚡ Airtime Topup', action: () => onNavigateSection('utilities', 'airtime' as any) },
-                  { id: 'pop-phones', label: '📱 Flagship Phones', action: () => onNavigateSection('marketplace', 'phones_mobile') },
-                  { id: 'pop-electricity', label: '💡 Electricity Pay', action: () => onNavigateSection('utilities', 'electricity' as any) },
+                  { id: 'pop-airtime', label: '⚡ Airtime', action: () => onNavigateSection('utilities', 'airtime' as any) },
+                  { id: 'pop-phones', label: '📱 Phones', action: () => onNavigateSection('marketplace', 'phones_mobile') },
+                  { id: 'pop-electricity', label: '💡 Electricity', action: () => onNavigateSection('utilities', 'electricity' as any) },
                   { id: 'pop-laptops', label: '💻 Laptops', action: () => onNavigateSection('marketplace', 'computers_technology') },
-                  { id: 'pop-services', label: '🎨 Tech Services', action: () => onNavigateSection('marketplace', 'professional_services') },
-                  { id: 'pop-electronics', label: '🎧 Electronics', action: () => onNavigateSection('marketplace', 'electronics') }
+                  { id: 'pop-services', label: '🛠 Services', action: () => onNavigateSection('marketplace', 'professional_services') }
                 ].map((chip) => (
-                  <button
-                    key={chip.id}
-                    id={chip.id}
-                    onClick={chip.action}
-                    className="min-h-[34px] px-2.5 sm:px-3 py-1 rounded-full bg-slate-900/90 hover:bg-purple-950 text-slate-300 hover:text-amber-300 border border-slate-800 hover:border-purple-600/60 transition-all whitespace-nowrap font-medium text-[11px] active:scale-95 flex items-center shrink-0"
-                  >
-                    {chip.label}
-                  </button>
+                  <button key={chip.id} id={chip.id} onClick={chip.action} className="shrink-0 rounded-full border border-white/10 bg-white/[.06] px-3 py-1.5 text-[11px] font-semibold text-slate-300 hover:text-white hover:bg-white/15 transition-colors">{chip.label}</button>
                 ))}
               </div>
             </div>
           </div>
-
+          <div className="relative min-h-[220px] sm:min-h-[280px] flex items-center justify-center">
+            <div className="absolute w-56 h-56 sm:w-72 sm:h-72 rounded-full bg-violet-500/20 blur-3xl" />
+            <div className="relative w-full max-w-sm rounded-[2rem] border border-white/15 bg-white/[.07] p-4 sm:p-5 backdrop-blur-xl shadow-2xl rotate-1">
+              <div className="flex items-center justify-between border-b border-white/10 pb-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-400 to-indigo-600 flex items-center justify-center text-xl font-black text-white">π</div>
+                  <div><div className="text-xs font-extrabold text-white">Global ecosystem</div><div className="text-[10px] text-slate-400">Commerce · Utilities · Services</div></div>
+                </div>
+                <span className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-2.5 py-1 text-[9px] font-bold text-emerald-300">Pi enabled</span>
+              </div>
+              <div className="grid grid-cols-2 gap-3 py-4">
+                <div className="rounded-2xl bg-gradient-to-br from-violet-500/25 to-indigo-500/10 border border-violet-200/15 p-4">
+                  <ShoppingBag className="w-5 h-5 text-violet-200 mb-3" /><div className="text-xs font-extrabold">Marketplace</div><div className="text-[10px] text-slate-400 mt-1">Discover goods</div>
+                </div>
+                <div className="rounded-2xl bg-gradient-to-br from-cyan-500/20 to-blue-500/10 border border-cyan-200/15 p-4">
+                  <Zap className="w-5 h-5 text-cyan-200 mb-3" /><div className="text-xs font-extrabold">Utilities</div><div className="text-[10px] text-slate-400 mt-1">Everyday services</div>
+                </div>
+                <div className="rounded-2xl bg-gradient-to-br from-amber-500/20 to-orange-500/10 border border-amber-200/15 p-4">
+                  <Compass className="w-5 h-5 text-amber-200 mb-3" /><div className="text-xs font-extrabold">Global mobility</div><div className="text-[10px] text-slate-400 mt-1">Travel & transport</div>
+                </div>
+                <div className="rounded-2xl bg-gradient-to-br from-emerald-500/20 to-teal-500/10 border border-emerald-200/15 p-4">
+                  <ShieldCheck className="w-5 h-5 text-emerald-200 mb-3" /><div className="text-xs font-extrabold">PSTP</div><div className="text-[10px] text-slate-400 mt-1">Protection framework</div>
+                </div>
+              </div>
+              <div className="flex items-center justify-between rounded-xl bg-slate-950/50 border border-white/10 px-3 py-2.5">
+                <span className="text-[10px] font-semibold text-slate-300">A connected Pi experience</span>
+                <Sparkles className="w-4 h-4 text-amber-300" />
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
-      {/* Unauthenticated Quick Connect Banner */}
+      {/* Pi authentication banner — kept directly below the hero */}
       {(!user.authenticated || authStatus === 'disconnected') && onConnectPi && (
-        <section 
+        <section
           id="home-unauthenticated-connect-banner"
-          className="relative overflow-hidden p-4 sm:p-5 rounded-[1.4rem] bg-[radial-gradient(ellipse_at_top_right,_rgba(168,85,247,.24),_transparent_48%),linear-gradient(115deg,#17102f_0%,#111827_55%,#171b3c_100%)] border border-violet-400/30 shadow-[0_18px_48px_-28px_rgba(76,29,149,.8)] text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-fade-in"
+          className="relative isolate overflow-hidden rounded-[1.6rem] border border-amber-300/25 bg-[#100d22] p-4 sm:p-5 text-white shadow-[0_18px_55px_-30px_rgba(124,58,237,.7)]"
         >
-          <div className="flex items-center gap-3.5">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-violet-500 via-indigo-500 to-amber-400 p-[2px] shadow-lg shadow-violet-950/50 shrink-0">
-              <div className="w-full h-full bg-slate-950 rounded-[10px] flex items-center justify-center font-black text-amber-400 text-lg">
-                π
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_0%_50%,rgba(124,58,237,.3),transparent_45%),linear-gradient(100deg,#17102e,#111827_65%,#17233a)] pointer-events-none" />
+          <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-center gap-3.5 min-w-0">
+              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-300 via-amber-500 to-violet-600 p-[2px] shadow-lg shrink-0">
+                <div className="w-full h-full rounded-[14px] bg-[#100d22] flex items-center justify-center text-3xl font-black text-amber-300">π</div>
+              </div>
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-base sm:text-lg font-black text-white">Your Pi journey starts here</h2>
+                  <span className="rounded-full border border-emerald-300/25 bg-emerald-300/10 px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-wider text-emerald-300">Testnet</span>
+                </div>
+                <p className="mt-1 max-w-2xl text-xs sm:text-sm leading-relaxed text-slate-300">Connect your Pi account in Pi Browser to authenticate and access your Pioneer experience.</p>
               </div>
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-black text-sm text-white">Connect with Pi Network</span>
-                <span className="px-2 py-0.5 rounded-full bg-purple-900/80 text-amber-300 border border-purple-700/60 text-[10px] font-bold">
-                  Testnet Ready
-                </span>
-              </div>
-              <p className="text-xs text-slate-300 mt-0.5">
-                Authenticate in Pi Browser to sync your Pioneer account, unlock zero-trust escrow payments, and manage your orders.
-              </p>
+            <div className="w-full md:w-auto shrink-0">
+              <ConnectPiButton user={user} authStatus={authStatus} onConnect={onConnectPi} variant="standalone" className="w-full md:min-w-[190px]" />
             </div>
-          </div>
-          <div className="w-full sm:w-auto shrink-0">
-            <ConnectPiButton
-              user={user}
-              authStatus={authStatus}
-              onConnect={onConnectPi}
-              variant="standalone"
-              className="w-full sm:w-auto"
-            />
           </div>
         </section>
       )}
