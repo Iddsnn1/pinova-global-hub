@@ -444,7 +444,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             id="quick-order-track-form"
             onSubmit={(e) => {
               e.preventDefault();
-              const targetId = trackingQuery.trim() || (activeOrders && activeOrders.length > 0 ? activeOrders[0].id : 'ORD-PI-892341');
+              const targetId = trackingQuery.trim() || (activeOrders && activeOrders.length > 0 ? activeOrders[0].id : '');
               if (targetId) {
                 onTrackOrder?.(targetId);
               } else {
