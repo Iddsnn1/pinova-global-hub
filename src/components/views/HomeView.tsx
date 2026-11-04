@@ -388,33 +388,39 @@ export const HomeView: React.FC<HomeViewProps> = ({
                     </span>
                   )}
                 </div>
-                <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 shrink-0">
+                <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider border shrink-0 ${displayOrder ? 'bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700'}`}>
                   {orderStatus}
                 </span>
               </div>
 
-              {/* Lifecycle Progress Sequence */}
-              <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap text-[11px] text-slate-600 dark:text-slate-300 pt-1 border-t border-slate-200/60 dark:border-slate-700/50">
-                <span className="inline-flex items-center gap-1 font-medium text-purple-600 dark:text-purple-400">
-                  <CreditCard className="w-3 h-3 text-purple-500 shrink-0" />
-                  <span>Payment</span>
-                </span>
-                <span className="text-slate-300 dark:text-slate-600 font-mono text-[10px]">→</span>
-                <span className="inline-flex items-center gap-1 font-medium text-blue-600 dark:text-blue-400">
-                  <Box className="w-3 h-3 text-blue-500 shrink-0" />
-                  <span>Fulfillment</span>
-                </span>
-                <span className="text-slate-300 dark:text-slate-600 font-mono text-[10px]">→</span>
-                <span className="inline-flex items-center gap-1 font-semibold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 rounded border border-amber-200/60 dark:border-amber-800/60">
-                  <Truck className="w-3 h-3 text-amber-500 shrink-0 animate-pulse" />
-                  <span>Shipment</span>
-                </span>
-                <span className="text-slate-300 dark:text-slate-600 font-mono text-[10px]">→</span>
-                <span className="inline-flex items-center gap-1 font-medium text-slate-400 dark:text-slate-500">
-                  <ShieldCheck className="w-3 h-3 text-slate-400 dark:text-slate-500 shrink-0" />
-                  <span>Delivery</span>
-                </span>
-              </div>
+              {/* Only show shipment progress for a real active order. */}
+              {displayOrder ? (
+                <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap text-[11px] text-slate-600 dark:text-slate-300 pt-2 border-t border-slate-200/60 dark:border-slate-700/50">
+                  <span className="inline-flex items-center gap-1 font-medium text-purple-600 dark:text-purple-400">
+                    <CreditCard className="w-3 h-3 text-purple-500 shrink-0" />
+                    <span>Payment</span>
+                  </span>
+                  <span className="text-slate-300 dark:text-slate-600 font-mono text-[10px]">→</span>
+                  <span className="inline-flex items-center gap-1 font-medium text-blue-600 dark:text-blue-400">
+                    <Box className="w-3 h-3 text-blue-500 shrink-0" />
+                    <span>Fulfillment</span>
+                  </span>
+                  <span className="text-slate-300 dark:text-slate-600 font-mono text-[10px]">→</span>
+                  <span className="inline-flex items-center gap-1 font-medium text-slate-500 dark:text-slate-400">
+                    <Truck className="w-3 h-3 shrink-0" />
+                    <span>Shipment</span>
+                  </span>
+                  <span className="text-slate-300 dark:text-slate-600 font-mono text-[10px]">→</span>
+                  <span className="inline-flex items-center gap-1 font-medium text-slate-400 dark:text-slate-500">
+                    <ShieldCheck className="w-3 h-3 text-slate-400 dark:text-slate-500 shrink-0" />
+                    <span>Delivery</span>
+                  </span>
+                </div>
+              ) : (
+                <p className="pt-2 border-t border-slate-200/60 dark:border-slate-700/50 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
+                  Your order journey will appear here when you have an active order.
+                </p>
+              )}
             </div>
           );
         })()}
