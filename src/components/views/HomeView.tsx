@@ -120,7 +120,16 @@ export const HomeView: React.FC<HomeViewProps> = ({
               <div className="flex items-center justify-between border-b border-white/10 pb-3">
                 <div className="flex items-center gap-2">
                   <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-400 to-indigo-600 flex items-center justify-center text-xl font-black text-white">π</div>
-                  <div><div className="text-xs font-extrabold text-white">Global ecosystem</div><div className="text-[10px] text-slate-400">Commerce · Utilities · Services</div></div>
+                  <div>
+                    <div className="text-xs font-extrabold text-white">Global ecosystem</div>
+                    <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                      <button type="button" onClick={() => onNavigateSection('marketplace', 'all')} className="text-[10px] text-slate-300 hover:text-white underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300 rounded-sm" aria-label="Open Commerce marketplace">Commerce</button>
+                      <span className="text-[10px] text-slate-600">·</span>
+                      <button type="button" onClick={() => onNavigateSection('utilities')} className="text-[10px] text-slate-300 hover:text-white underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300 rounded-sm" aria-label="Open Global Utilities">Utilities</button>
+                      <span className="text-[10px] text-slate-600">·</span>
+                      <button type="button" onClick={() => onNavigateSection('services')} className="text-[10px] text-slate-300 hover:text-white underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300 rounded-sm" aria-label="Open Services">Services</button>
+                    </div>
+                  </div>
                 </div>
                 <span className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-2.5 py-1 text-[9px] font-bold text-emerald-300">Pi ecosystem</span>
               </div>
@@ -134,16 +143,16 @@ export const HomeView: React.FC<HomeViewProps> = ({
                   <p className="mt-1 text-[11px] leading-relaxed text-slate-400">A connected experience for people, merchants and services across the Pi ecosystem.</p>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
-                  <div className="rounded-xl border border-emerald-200/15 bg-emerald-500/10 p-2">
-                    <ShieldCheck className="mb-2 h-5 w-5 text-emerald-200" />
-                    <div className="text-xs font-extrabold text-white">PSTP framework</div>
+                  <button type="button" onClick={onOpenPstpShield} className="group rounded-xl border border-emerald-200/15 bg-emerald-500/10 p-2 text-left transition-all hover:border-emerald-200/40 hover:bg-emerald-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-200" aria-label="Open PSTP Security Center">
+                    <ShieldCheck className="mb-2 h-5 w-5 text-emerald-200 group-hover:scale-110 transition-transform" />
+                    <div className="text-xs font-extrabold text-white">PSTP framework <ArrowRight className="inline h-3 w-3 opacity-70" /></div>
                     <div className="mt-1 text-[10px] text-slate-400">Protection-first flows</div>
-                  </div>
-                  <div className="rounded-xl border border-amber-200/15 bg-amber-500/10 p-2">
-                    <Sparkles className="mb-2 h-5 w-5 text-amber-200" />
-                    <div className="text-xs font-extrabold text-white">One ecosystem</div>
+                  </button>
+                  <button type="button" onClick={() => document.getElementById('global-hub-modules')?.scrollIntoView({ behavior: 'smooth', block: 'start' })} className="group rounded-xl border border-amber-200/15 bg-amber-500/10 p-2 text-left transition-all hover:border-amber-200/40 hover:bg-amber-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-200" aria-label="Explore all PiNova Global Hub modules">
+                    <Sparkles className="mb-2 h-5 w-5 text-amber-200 group-hover:scale-110 transition-transform" />
+                    <div className="text-xs font-extrabold text-white">One ecosystem <ArrowRight className="inline h-3 w-3 opacity-70" /></div>
                     <div className="mt-1 text-[10px] text-slate-400">Designed to work together</div>
-                  </div>
+                  </button>
                 </div>
               </div>
               <div className="flex items-center justify-between rounded-xl bg-slate-950/50 border border-white/10 px-3 py-2">
