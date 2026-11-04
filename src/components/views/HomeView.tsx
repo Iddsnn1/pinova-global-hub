@@ -122,7 +122,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                   <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-400 to-indigo-600 flex items-center justify-center text-xl font-black text-white">π</div>
                   <div><div className="text-xs font-extrabold text-white">Global ecosystem</div><div className="text-[10px] text-slate-400">Commerce · Utilities · Services</div></div>
                 </div>
-                <span className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-2.5 py-1 text-[9px] font-bold text-emerald-300">Pi enabled</span>
+                <span className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-2.5 py-1 text-[9px] font-bold text-emerald-300">Pi ecosystem</span>
               </div>
               <div className="space-y-2 py-2.5">
                 <div className="rounded-xl border border-violet-200/15 bg-gradient-to-r from-violet-500/15 via-indigo-500/10 to-cyan-500/10 p-3">
@@ -468,10 +468,10 @@ export const HomeView: React.FC<HomeViewProps> = ({
       </section>
 
       {/* ========================================================================= */}
-      {/* 4. PI MERCHANT WEEK: PROMOTIONAL CAMPAIGN SECTION                         */}
+      {/* 4. GLOBAL MARKETPLACE DISCOVERY                                           */}
       {/* ========================================================================= */}
       <section 
-        id="pi-merchant-week" 
+        id="global-marketplace-discovery" 
         className="p-5 sm:p-7 md:p-8 rounded-[1.5rem] sm:rounded-[1.8rem] bg-[radial-gradient(ellipse_at_top_right,_rgba(168,85,247,.22),_transparent_48%),linear-gradient(115deg,#17102f_0%,#151c35_55%,#0b1220_100%)] text-white border border-violet-400/25 shadow-[0_22px_60px_-32px_rgba(76,29,149,.75)] space-y-3 relative overflow-hidden"
       >
         {/* Ambient Glow */}
@@ -481,22 +481,22 @@ export const HomeView: React.FC<HomeViewProps> = ({
           <div className="space-y-1.5 sm:space-y-2 max-w-2xl">
             <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-400 text-slate-950 font-black text-[10px] uppercase tracking-wider shadow-sm">
               <Flame className="w-3.5 h-3.5" />
-              <span>Pi Merchant Week</span>
+              <span>Explore the Global Hub</span>
             </div>
             <h3 className="text-base sm:text-lg md:text-xl lg:text-2xl font-black text-white leading-snug">
-              Pi Merchant Fest: Verified Merchants & Protected Escrow
+              Discover products, services and everyday utilities
             </h3>
             <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-              Explore verified merchants across physical goods, utilities, and digital services with guaranteed non-custodial PSTP escrow protection and Pi Network SDK v2 protocol.
+              Browse marketplace categories and available services. Seller eligibility, payment options and protection features are shown in the relevant flows as they become available.
             </p>
           </div>
 
           <button
-            id="pi-merchant-week-shop-deals-btn"
+            id="global-marketplace-discovery-btn"
             onClick={() => onNavigateSection('marketplace', 'deals')}
             className="px-5 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs sm:text-sm rounded-xl shadow-lg shadow-purple-600/30 inline-flex items-center gap-2 transition-all shrink-0 active:scale-95"
           >
-            <span>Shop Deals</span>
+            <span>Explore Marketplace</span>
             <ArrowRight className="w-4 h-4" />
           </button>
         </div>
@@ -512,13 +512,13 @@ export const HomeView: React.FC<HomeViewProps> = ({
         <div className="space-y-1.5 sm:space-y-2 max-w-xl">
           <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/40 text-[10px] font-black uppercase tracking-wider">
             <Store className="w-3.5 h-3.5 text-amber-400" />
-            <span>Merchant Onboarding Open</span>
+            <span>Merchant Applications</span>
           </div>
           <h3 className="text-base sm:text-lg md:text-xl font-black text-white">
             Sell Your Products & Services for Pi
           </h3>
           <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-            Apply to become a Verified Vendor. Get guaranteed PSTP Escrow order protection, Seller Studio management dashboard, and reach Pi users worldwide.
+            Submit a merchant application, complete the required verification steps and manage your store through Seller Studio. Available payment and order-protection options are presented during the relevant checkout flow.
           </p>
         </div>
 
@@ -530,7 +530,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
               className="px-4 sm:px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 via-amber-600 to-purple-600 hover:opacity-95 text-slate-950 font-black text-xs sm:text-sm shadow-lg flex items-center gap-2 transition-all active:scale-95"
             >
               <ShieldCheck className="w-4 h-4 text-slate-950" />
-              <span>Become a Verified Vendor</span>
+              <span>Apply to Become a Merchant</span>
             </button>
           )}
           <button
