@@ -540,9 +540,11 @@ app.post(['/api/auth/session', '/api/v1/auth/session'], authRateLimiter, async (
       adminAuth.authenticated && adminAuth.user?.roles?.includes('PLATFORM_ADMIN') === true;
     const sessionRoles = hasPlatformAdminAuthorization
       ? ['PLATFORM_ADMIN', 'COMPLIANCE_ADMIN'] as const
-      : isAuthorizedAdmin
+      : configuredComplianceAdmin || adminAuth.user?.roles?.includes('COMPLIANCE_ADMIN')
         ? ['COMPLIANCE_ADMIN'] as const
-        : verifiedPiUser.roles;
+        : adminAuth.user?.roles?.includes('COMPLIANCE_OFFICER')
+          ? ['COMPLIANCE_OFFICER'] as const
+          : verifiedPiUser.roles;
 
     const session = await authService.createSession({
       username: verifiedPiUser.username,
