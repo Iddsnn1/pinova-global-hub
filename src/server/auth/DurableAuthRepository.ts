@@ -76,22 +76,24 @@ export class DurableAuthRepository {
   }) {
     const username = input.username.trim().replace(/^@/, '');
     if (!username) throw new Error('AUTH_USERNAME_REQUIRED');
-    const roles = input.isAuthorizedAdmin
-      ? (input.roles || ['PIONEER'])
-      : (input.roles || ['PIONEER']).filter((role) =>
-          !['PLATFORM_ADMIN', 'COMPLIANCE_ADMIN', 'COMPLIANCE_OFFICER', 'BURSAR', 'FINANCE_ADMIN', 'INSTITUTION_ADMIN'].includes(role)
-        );
+    const hasExplicitRoles = Array.isArray(input.roles) && input.roles.length > 0;
+    const roles = hasExplicitRoles
+      ? (input.isAuthorizedAdmin
+          ? input.roles!
+          : input.roles!.filter((role) =>
+              !['PLATFORM_ADMIN', 'COMPLIANCE_ADMIN', 'COMPLIANCE_OFFICER', 'BURSAR', 'FINANCE_ADMIN', 'INSTITUTION_ADMIN'].includes(role)
+            ))
+      : null;
     const rows = await this.sql.query(
       `INSERT INTO public.user_identities (username, pi_uid, roles, institution_id)
-       VALUES ($1, $2, $3::jsonb, $4)
+       VALUES ($1, $2, COALESCE($3::jsonb, '["PIONEER"]'::jsonb), $4)
        ON CONFLICT ((LOWER(username))) DO UPDATE SET
          pi_uid = COALESCE(EXCLUDED.pi_uid, user_identities.pi_uid),
-         roles = CASE WHEN cardinality(ARRAY(SELECT jsonb_array_elements_text(EXCLUDED.roles))) > 0
-                      THEN EXCLUDED.roles ELSE user_identities.roles END,
+         roles = COALESCE($3::jsonb, user_identities.roles),
          institution_id = COALESCE(EXCLUDED.institution_id, user_identities.institution_id),
          updated_at = NOW()
        RETURNING id, username, pi_uid, email, roles, institution_id, guardian_id, status, session_version, created_at, updated_at`,
-      [username, input.piUid || null, JSON.stringify(roles), input.institutionId || null]
+      [username, input.piUid || null, roles ? JSON.stringify(roles) : null, input.institutionId || null]
     ) as IdentityRow[];
     if (!rows[0]) throw new Error('AUTH_IDENTITY_UPSERT_FAILED');
     return mapIdentity(rows[0]);
