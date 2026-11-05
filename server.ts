@@ -534,9 +534,15 @@ app.post(['/api/auth/session', '/api/v1/auth/session'], authRateLimiter, async (
     const isAuthorizedAdmin =
       (adminAuth.authenticated && adminAuth.authorized) || configuredComplianceAdmin;
 
-    const sessionRoles = isAuthorizedAdmin
+    // Only a verified PLATFORM_ADMIN or server machine key may preserve platform-wide authority.
+    // The compliance username allowlist grants COMPLIANCE_ADMIN only.
+    const hasPlatformAdminAuthorization =
+      adminAuth.authenticated && adminAuth.user?.roles?.includes('PLATFORM_ADMIN') === true;
+    const sessionRoles = hasPlatformAdminAuthorization
       ? ['PLATFORM_ADMIN', 'COMPLIANCE_ADMIN'] as const
-      : verifiedPiUser.roles;
+      : isAuthorizedAdmin
+        ? ['COMPLIANCE_ADMIN'] as const
+        : verifiedPiUser.roles;
 
     const session = await authService.createSession({
       username: verifiedPiUser.username,
