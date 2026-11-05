@@ -200,9 +200,10 @@ export class AuthorizationService {
       };
     }
 
-    // 2. Check Active Session Engine
-    const session = this.sessionEngine.get(token);
-    if (session) {
+    // File-backed sessions are development-only; never let them bypass Neon revocation.
+    if (!DurableAuthRepository.isEnabled()) {
+      const session = this.sessionEngine.get(token);
+      if (session) {
       if (Date.now() > session.expiresAt) {
         this.sessionEngine.delete(token);
         return null;
@@ -223,6 +224,7 @@ export class AuthorizationService {
         institutionId: user.institutionId,
         guardianId: user.guardianId
       };
+      }
     }
 
     // Shared durable session validation is authoritative whenever Neon is configured.
