@@ -2,9 +2,13 @@ name: PiNova Global Hub CI
 
 on:
   push:
-    branches: ["main"]
+    branches:
+      - main
+      - "fix/auth-durable-session-revocation"
   pull_request:
-    branches: ["main"]
+    branches:
+      - main
+      - "design/premium-landing-preview"
 
 permissions:
   contents: read
@@ -26,6 +30,12 @@ jobs:
 
       - name: TypeScript lint
         run: npm run lint
+
+      - name: Durable authentication regression tests
+        run: npm run test:auth:durable
+
+      - name: Authentication audit regression tests
+        run: npm run test:audit
 
       - name: Production build
         run: npm run build
