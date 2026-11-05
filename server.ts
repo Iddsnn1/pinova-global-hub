@@ -221,27 +221,36 @@ app.use((req, res, next) => {
 async function checkAdminAuth(req: express.Request): Promise<{ authenticated: boolean; authorized: boolean; user?: AuthenticatedUser }> {
   const authHeader = req.headers['authorization'] as string | undefined;
   const adminKeyHeader = req.headers['x-admin-key'] as string | undefined;
-  const adminSecret = process.env.ADMIN_API_KEY || process.env.PI_API_KEY || process.env.PI_SERVER_KEY;
+  // ADMIN_API_KEY is the only application machine credential. Pi Platform
+  // secrets are reserved exclusively for outbound Pi API requests.
+  const adminSecret = (process.env.ADMIN_API_KEY || '').trim();
 
   // 1. Machine/Server Key Verification
-  if (adminSecret && adminSecret !== 'YOUR_PI_PLATFORM_API_KEY' && adminSecret !== 'MY_PI_API_KEY') {
-    const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : null;
-    const keyToken = authHeader?.startsWith('Key ') ? authHeader.substring(4).trim() : null;
-    const directToken = authHeader?.trim();
+  if (
+    adminSecret &&
+    adminSecret !== 'YOUR_ADMIN_API_KEY' &&
+    adminSecret !== 'YOUR_PI_PLATFORM_API_KEY' &&
+    adminSecret !== 'MY_PI_API_KEY'
+  ) {
+    const candidates = [
+      authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : null,
+      authHeader?.startsWith('Key ') ? authHeader.substring(4).trim() : null,
+      authHeader?.trim() || null,
+      adminKeyHeader?.trim() || null
+    ].filter((value): value is string => Boolean(value));
+    const matchesAdminSecret = candidates.some((candidate) =>
+      candidate.length === adminSecret.length &&
+      crypto.timingSafeEqual(Buffer.from(candidate), Buffer.from(adminSecret))
+    );
 
-    if (
-      (bearerToken && bearerToken === adminSecret) ||
-      (keyToken && keyToken === adminSecret) ||
-      (directToken && directToken === adminSecret) ||
-      (adminKeyHeader && adminKeyHeader === adminSecret)
-    ) {
+    if (matchesAdminSecret) {
       return {
         authenticated: true,
         authorized: true,
         user: {
           id: 'usr-admin-sys',
           username: 'system_admin',
-          roles: ['PLATFORM_ADMIN', 'COMPLIANCE_OFFICER'],
+          roles: ['PLATFORM_ADMIN'],
           permissions: new Set<Permission>(['platform.admin.access']),
           authMethod: 'API_KEY'
         }
@@ -254,7 +263,7 @@ async function checkAdminAuth(req: express.Request): Promise<{ authenticated: bo
   if (token) {
     const user = await authService.authenticateToken(token);
     if (user) {
-      const isAuthorized = user.roles.some((r) => r === 'PLATFORM_ADMIN' || r === 'COMPLIANCE_OFFICER' || r === 'COMPLIANCE_ADMIN');
+      const isAuthorized = user.roles.some((r) => r === 'PLATFORM_ADMIN' || r === 'COMPLIANCE_ADMIN');
       return { authenticated: true, authorized: isAuthorized, user };
     }
   }
@@ -509,7 +518,7 @@ app.post(['/api/auth/session', '/api/v1/auth/session'], authRateLimiter, async (
     // Never trust username, uid, or roles supplied by the browser. In production,
     // verify the raw Pi access token against Pi Platform first, then bind the
     // server session to the identity returned by Pi.
-    const verifiedPiUser = await authService.authenticateToken(accessToken.trim());
+    const verifiedPiUser = await authService.verifyPiAccessToken(accessToken.trim());
     if (!verifiedPiUser?.username) {
       return res.status(401).json({
         success: false,
