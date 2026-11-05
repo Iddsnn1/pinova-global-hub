@@ -99,7 +99,7 @@ export class AuthorizationService {
     // Filter out privileged roles unless the caller is an authorized administrator
     const safeRoles = isAuthorizedAdmin
       ? roles
-      : roles?.filter((r) => !['PLATFORM_ADMIN', 'COMPLIANCE_ADMIN', 'COMPLIANCE_OFFICER', 'BURSAR', 'FINANCE_ADMIN', 'INSTITUTION_ADMIN'].includes(r));
+      : roles?.filter((r) => !['PLATFORM_ADMIN', 'COMPLIANCE_ADMIN', 'COMPLIANCE_OFFICER'].includes(r));
 
     let user = this.userRepo.findByUsername(username);
     if (!user) {
