@@ -175,6 +175,44 @@ export class DurableAuthRepository {
     );
   }
 
+  async setIdentityStatus(username: string, status: 'ACTIVE' | 'SUSPENDED', reason: string) {
+    const cleanUsername = username.trim().replace(/^@/, '');
+    const cleanReason = reason.trim().slice(0, 240);
+    if (!cleanUsername) throw new Error('AUTH_USERNAME_REQUIRED');
+    if (!cleanReason) throw new Error('AUTH_STATUS_CHANGE_REASON_REQUIRED');
+
+    // Status transition, session-version bump, and revocation share one SQL statement.
+    // A reactivated account therefore cannot reuse sessions issued before suspension.
+    const rows = await this.sql.query(
+      `WITH changed_identity AS (
+         UPDATE public.user_identities
+         SET status = $2,
+             session_version = session_version + 1,
+             updated_at = NOW()
+         WHERE LOWER(username) = LOWER($1)
+           AND status IS DISTINCT FROM $2
+         RETURNING id
+       ),
+       revoked_sessions AS (
+         UPDATE public.user_sessions AS sessions
+         SET revoked_at = NOW(), revoke_reason = $3
+         FROM changed_identity
+         WHERE sessions.user_id = changed_identity.id
+           AND sessions.revoked_at IS NULL
+         RETURNING sessions.id
+       )
+       SELECT id, username, pi_uid, email, roles, institution_id, guardian_id,
+              status, session_version, created_at, updated_at
+       FROM public.user_identities
+       WHERE LOWER(username) = LOWER($1)
+       LIMIT 1`,
+      [cleanUsername, status, cleanReason]
+    ) as IdentityRow[];
+
+    if (!rows[0]) return null;
+    return mapIdentity(rows[0]);
+  }
+
   async revokeAllUserSessions(userId: string, reason = 'identity_changed') {
     // Bump the identity version and revoke its sessions in one PostgreSQL statement.
     // This prevents a partial outcome if either operation would otherwise fail alone.
