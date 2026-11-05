@@ -3,12 +3,14 @@ import { UserIdentityRepository } from './UserIdentityRepository';
 import { RoleRepository } from './RoleRepository';
 import { AuthenticatedUser, SessionEntity, Permission, UserRole } from './types';
 import { StorageEngine } from '../db/StorageEngine';
+import { DurableAuthRepository } from './DurableAuthRepository';
 
 export class AuthorizationService {
   private userRepo: UserIdentityRepository;
   private sessionEngine: StorageEngine<SessionEntity>;
   private revokedSessionEngine: StorageEngine<{ token: string; revokedAt: string }>;
   private secretKey: string;
+  private durableAuthRepo = new DurableAuthRepository();
 
   constructor(userRepo?: UserIdentityRepository) {
     this.userRepo = userRepo || new UserIdentityRepository();
@@ -30,10 +32,10 @@ export class AuthorizationService {
   /**
    * Creates an authoritative server session for a verified user
    */
-  public createSession(
+  public async createSession(
     param: string | { username: string; uid?: string; roles?: UserRole[]; accessToken?: string; institutionId?: string; isAuthorizedAdmin?: boolean },
     ttlMs: number = 7 * 86400000
-  ): SessionEntity & { user: AuthenticatedUser } {
+  ): Promise<SessionEntity & { user: AuthenticatedUser }> {
     const username = typeof param === 'string' ? param : param.username;
     const uid = typeof param === 'object' ? param.uid : undefined;
     const roles = typeof param === 'object' ? param.roles : undefined;
@@ -41,6 +43,58 @@ export class AuthorizationService {
     const isAuthorizedAdmin = typeof param === 'object' && 'isAuthorizedAdmin' in param
       ? (param as any).isAuthorizedAdmin === true
       : false;
+
+    // Production must never fall back to instance-local filesystem identity/session state.
+    if (process.env.NODE_ENV === 'production' && !DurableAuthRepository.isEnabled()) {
+      throw new Error('DURABLE_AUTH_DATABASE_REQUIRED');
+    }
+
+    if (DurableAuthRepository.isEnabled()) {
+      const durableUser = await this.durableAuthRepo.upsertVerifiedIdentity({
+        username,
+        piUid: uid,
+        roles,
+        institutionId,
+        isAuthorizedAdmin
+      });
+      if (durableUser.status !== 'ACTIVE') throw new Error('AUTH_IDENTITY_NOT_ACTIVE');
+      const expiresAt = Date.now() + ttlMs;
+      const nonce = crypto.randomBytes(16).toString('hex');
+      const payload = Buffer.from(JSON.stringify({
+        v: 1,
+        username: durableUser.username,
+        uid: durableUser.piUid || uid || null,
+        exp: expiresAt,
+        nonce
+      })).toString('base64url');
+      const signature = crypto.createHmac('sha256', this.secretKey).update(payload).digest('base64url');
+      const token = `pinova_sess_v1_${payload}.${signature}`;
+      const session: SessionEntity = {
+        token,
+        userId: durableUser.id,
+        username: durableUser.username,
+        roles: durableUser.roles,
+        institutionId: durableUser.institutionId,
+        expiresAt,
+        createdAt: new Date().toISOString()
+      };
+      await this.durableAuthRepo.createSession({
+        token,
+        userId: durableUser.id,
+        sessionVersion: durableUser.sessionVersion,
+        expiresAt
+      });
+      const authUser: AuthenticatedUser = {
+        id: durableUser.id,
+        username: durableUser.username,
+        piUid: durableUser.piUid,
+        roles: durableUser.roles,
+        permissions: RoleRepository.getPermissionsForRoles(durableUser.roles),
+        institutionId: durableUser.institutionId,
+        authMethod: 'SESSION'
+      };
+      return Object.assign(session, { user: authUser });
+    }
 
     // Filter out privileged roles unless the caller is an authorized administrator
     const safeRoles = isAuthorizedAdmin
@@ -127,6 +181,9 @@ export class AuthorizationService {
 
     if (!token) return null;
 
+    // Production authentication is fail-closed: no ephemeral local identity/session fallback.
+    if (process.env.NODE_ENV === 'production' && !DurableAuthRepository.isEnabled()) return null;
+
     // Revocation must be checked before both stateful and signed-stateless session validation.
     if (this.revokedSessionEngine.get(token)) return null;
 
@@ -166,6 +223,44 @@ export class AuthorizationService {
         institutionId: user.institutionId,
         guardianId: user.guardianId
       };
+    }
+
+    // Shared durable session validation is authoritative whenever Neon is configured.
+    if (token.startsWith('pinova_sess_v1_') && DurableAuthRepository.isEnabled()) {
+      try {
+        const signed = token.slice('pinova_sess_v1_'.length);
+        const separator = signed.lastIndexOf('.');
+        if (separator <= 0) return null;
+        const payload = signed.slice(0, separator);
+        const signature = signed.slice(separator + 1);
+        const expected = crypto.createHmac('sha256', this.secretKey).update(payload).digest('base64url');
+        const providedBuf = Buffer.from(signature);
+        const expectedBuf = Buffer.from(expected);
+        if (providedBuf.length !== expectedBuf.length || !crypto.timingSafeEqual(providedBuf, expectedBuf)) return null;
+        const decoded = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+        if (decoded?.v !== 1 || !decoded?.username || !Number.isFinite(decoded?.exp) || Date.now() > decoded.exp) return null;
+
+        const activeSession = await this.durableAuthRepo.findActiveSession(token);
+        if (!activeSession) return null;
+        const user = await this.durableAuthRepo.findIdentityByUsername(String(decoded.username));
+        if (!user || user.status !== 'ACTIVE') return null;
+        if (String(activeSession.user_id) !== user.id || Number(activeSession.session_version) !== Number(user.sessionVersion)) return null;
+
+        return {
+          id: user.id,
+          username: user.username,
+          piUid: user.piUid,
+          roles: user.roles,
+          permissions: RoleRepository.getPermissionsForRoles(user.roles),
+          institutionId: user.institutionId,
+          guardianId: user.guardianId,
+          authMethod: 'SESSION'
+        };
+      } catch (error) {
+        // Database errors fail closed; never trust roles embedded in the signed token.
+        console.error('[AuthorizationService] Durable session verification failed closed:', error instanceof Error ? error.message : 'unknown');
+        return null;
+      }
     }
 
     // 3. Verify portable signed session tokens. This is required across Vercel
@@ -295,10 +390,14 @@ export class AuthorizationService {
     return null;
   }
 
-  public invalidateSession(token: string): boolean {
+  public async invalidateSession(token: string): Promise<boolean> {
     let cleanToken = token.trim();
     if (cleanToken.startsWith('Bearer ')) cleanToken = cleanToken.substring(7).trim();
     if (cleanToken.startsWith('Key ')) cleanToken = cleanToken.substring(4).trim();
+    if (DurableAuthRepository.isEnabled()) {
+      await this.durableAuthRepo.revokeSession(cleanToken, 'logout');
+      return true;
+    }
     const deleted = this.sessionEngine.delete(cleanToken);
     this.revokedSessionEngine.set(cleanToken, { token: cleanToken, revokedAt: new Date().toISOString() });
     return deleted;
