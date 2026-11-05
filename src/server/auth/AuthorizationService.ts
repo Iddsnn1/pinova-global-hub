@@ -184,16 +184,25 @@ export class AuthorizationService {
     // Revocation must be checked before both stateful and signed-stateless session validation.
     if (this.revokedSessionEngine.get(token)) return null;
 
-    // 1. Check Server Machine Secrets (Admin scripts / API keys)
-    const adminSecret = process.env.ADMIN_API_KEY || process.env.PI_API_KEY || process.env.PI_SERVER_KEY;
-    if (adminSecret && adminSecret !== 'YOUR_PI_PLATFORM_API_KEY' && adminSecret !== 'MY_PI_API_KEY' && token === adminSecret) {
-      const roles: UserRole[] = ['PLATFORM_ADMIN', 'COMPLIANCE_ADMIN'];
+    // Machine credentials are a separate trust domain. Pi Platform API secrets must
+    // never authenticate application administrators or create browser sessions.
+    const adminSecret = (process.env.ADMIN_API_KEY || '').trim();
+    if (
+      adminSecret &&
+      adminSecret !== 'YOUR_ADMIN_API_KEY' &&
+      adminSecret !== 'YOUR_PI_PLATFORM_API_KEY' &&
+      adminSecret !== 'MY_PI_API_KEY' &&
+      token.length === adminSecret.length &&
+      crypto.timingSafeEqual(Buffer.from(token), Buffer.from(adminSecret))
+    ) {
+      const roles: UserRole[] = ['PLATFORM_ADMIN'];
       return {
         id: 'sys-machine-admin',
         username: 'system_admin',
         roles,
         permissions: RoleRepository.getPermissionsForRoles(roles),
-        isMachineKey: true
+        isMachineKey: true,
+        authMethod: 'API_KEY'
       };
     }
 
@@ -417,6 +426,83 @@ export class AuthorizationService {
     }
 
     return null;
+  }
+
+  /**
+   * Verifies a raw Pi SDK access token only against Pi Platform.
+   * This path intentionally does not accept ADMIN_API_KEY, PI_API_KEY, PI_SERVER_KEY,
+   * application session tokens, or local/test identities.
+   */
+  public async verifyPiAccessToken(accessToken: string): Promise<AuthenticatedUser | null> {
+    const token = typeof accessToken === 'string' ? accessToken.trim() : '';
+    if (!token || token.length <= 20 || /\\s/.test(token)) return null;
+
+    const piApiKey = (process.env.PI_API_KEY || process.env.PI_SERVER_KEY || '').trim();
+    if (
+      !piApiKey ||
+      piApiKey === 'YOUR_PI_PLATFORM_API_KEY' ||
+      piApiKey === 'MY_PI_API_KEY'
+    ) return null;
+
+    try {
+      const response = await fetch('https://api.minepi.com/v2/me', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!response.ok) return null;
+
+      const piUser = await response.json() as { uid?: unknown; username?: unknown };
+      if (
+        typeof piUser.uid !== 'string' || !piUser.uid.trim() ||
+        typeof piUser.username !== 'string' || !piUser.username.trim()
+      ) return null;
+
+      if (process.env.NODE_ENV === 'production' && !DurableAuthRepository.isEnabled()) {
+        return null;
+      }
+
+      if (DurableAuthRepository.isEnabled()) {
+        const isAuthorizedAdmin = (process.env.PINOVA_COMPLIANCE_ADMIN_USERNAMES || '')
+          .split(',')
+          .map((value) => value.trim().replace(/^@/, '').toLowerCase())
+          .filter(Boolean)
+          .includes(piUser.username.replace(/^@/, '').toLowerCase());
+        const durableUser = await this.durableAuthRepo.upsertVerifiedIdentity({
+          username: piUser.username,
+          piUid: piUser.uid,
+          isAuthorizedAdmin,
+          roles: isAuthorizedAdmin ? ['COMPLIANCE_ADMIN'] : undefined
+        });
+        if (durableUser.status !== 'ACTIVE') return null;
+        return {
+          id: durableUser.id,
+          username: durableUser.username,
+          piUid: durableUser.piUid,
+          roles: durableUser.roles,
+          permissions: RoleRepository.getPermissionsForRoles(durableUser.roles),
+          institutionId: durableUser.institutionId,
+          guardianId: durableUser.guardianId,
+          authMethod: 'PI'
+        };
+      }
+
+      const user = this.userRepo.upsertUser({
+        username: piUser.username,
+        piUid: piUser.uid
+      });
+      return {
+        id: user.id,
+        username: user.username,
+        piUid: user.piUid,
+        roles: user.roles,
+        permissions: RoleRepository.getPermissionsForRoles(user.roles),
+        institutionId: user.institutionId,
+        guardianId: user.guardianId,
+        authMethod: 'PI'
+      };
+    } catch (error) {
+      console.warn('[AuthorizationService] Strict Pi access-token verification failed:', error);
+      return null;
+    }
   }
 
   public async invalidateSession(token: string): Promise<boolean> {
