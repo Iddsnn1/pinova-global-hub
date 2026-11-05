@@ -95,8 +95,7 @@ export class DurableAuthRepository {
             END
           ) AS existing_role(role)
           WHERE existing_role.role NOT IN (
-            'PLATFORM_ADMIN', 'COMPLIANCE_ADMIN', 'COMPLIANCE_OFFICER',
-            'BURSAR', 'FINANCE_ADMIN', 'INSTITUTION_ADMIN'
+            'PLATFORM_ADMIN', 'COMPLIANCE_ADMIN', 'COMPLIANCE_OFFICER'
           )
         ),
         '["PIONEER"]'::jsonb
