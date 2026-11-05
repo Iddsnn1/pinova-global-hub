@@ -1210,6 +1210,11 @@ export class PiSdkManagerService {
   private piAuthPromise:
     Promise<PiUser> | null = null;
 
+  // Tracks the native Pi bridge independently of the UI timeout.
+  // Promise.race() cannot cancel Pi.authenticate() once invoked.
+  private nativeAuthBridgePromise:
+    Promise<any> | null = null;
+
   private activePaymentId:
     string | null = null;
 
@@ -2589,6 +2594,22 @@ export class PiSdkManagerService {
       return this.piAuthPromise;
     }
 
+    // A timeout only stops waiting in this app; it does not cancel the
+    // native Pi Browser request. Never invoke a second native request
+    // while the first bridge promise is still unresolved.
+    if (this.nativeAuthBridgePromise) {
+      this.nativeBridgeState = 'promise_pending';
+      logPiTrace(
+        `[Pi SDK] AUTH_RETRY_BLOCKED_NATIVE_REQUEST_PENDING ` +
+        `scopes=${JSON.stringify(requestedScopes)}`,
+        'warn'
+      );
+      this.notifyDiagnosticStateChange();
+      throw new Error(
+        'The previous Pi Browser authentication request is still pending. Wait for Pi Browser to respond before retrying.'
+      );
+    }
+
     /*
      * ------------------------------------------------------------
      * STEP 3 — New generation
@@ -2768,6 +2789,45 @@ export class PiSdkManagerService {
 
           nativeAuthPromise =
             Promise.resolve(nativeResult);
+
+          this.nativeAuthBridgePromise = nativeAuthPromise;
+          nativeAuthPromise.then(
+            () => {
+              if (this.nativeAuthBridgePromise === nativeAuthPromise) {
+                this.nativeAuthBridgePromise = null;
+                if (
+                  this.lastAuthAttemptId === attemptId &&
+                  this.authLifecycleState === 'TIMEOUT'
+                ) {
+                  this.nativeBridgeState = 'promise_resolved';
+                  logPiTrace(
+                    `[Pi TELEMETRY] NATIVE_AUTH_RESOLVED_AFTER_TIMEOUT ` +
+                    `attemptId=${attemptId}`,
+                    'warn'
+                  );
+                  this.notifyDiagnosticStateChange();
+                }
+              }
+            },
+            (nativeError: any) => {
+              if (this.nativeAuthBridgePromise === nativeAuthPromise) {
+                this.nativeAuthBridgePromise = null;
+                if (
+                  this.lastAuthAttemptId === attemptId &&
+                  this.authLifecycleState === 'TIMEOUT'
+                ) {
+                  this.nativeBridgeState = 'promise_rejected';
+                  logPiTrace(
+                    `[Pi TELEMETRY] NATIVE_AUTH_REJECTED_AFTER_TIMEOUT ` +
+                    `attemptId=${attemptId} ` +
+                    `error=${nativeError?.message || nativeError}`,
+                    'warn'
+                  );
+                  this.notifyDiagnosticStateChange();
+                }
+              }
+            }
+          );
 
           this.nativeBridgeState = 'promise_pending';
           this.authPromiseState = 'pending';
@@ -3084,7 +3144,9 @@ export class PiSdkManagerService {
           this.authenticatedUser = null;
 
           this.currentPaymentStage = 'TIMEOUT';
-          this.nativeBridgeState = 'idle';
+          this.nativeBridgeState = this.nativeAuthBridgePromise
+            ? 'promise_pending'
+            : 'idle';
 
           logPiTrace(
             `[Pi TELEMETRY] NATIVE_AUTH_TIMED_OUT ` +
@@ -3268,7 +3330,9 @@ export class PiSdkManagerService {
             this.authLifecycleState === 'FAILED' ||
             this.authLifecycleState === 'REJECTED'
           ) {
-            this.nativeBridgeState = 'idle';
+            this.nativeBridgeState = this.nativeAuthBridgePromise
+              ? 'promise_pending'
+              : 'idle';
           }
         }
 
