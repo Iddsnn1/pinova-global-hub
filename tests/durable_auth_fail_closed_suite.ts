@@ -4,6 +4,8 @@ import crypto from 'node:crypto';
 process.env.NODE_ENV = 'production';
 process.env.JWT_SECRET = 'durable-auth-test-secret';
 process.env.DATABASE_URL = '';
+process.env.PI_API_KEY = '';
+process.env.PI_SERVER_KEY = '';
 process.env.ADMIN_API_KEY = 'test-machine-key-not-used';
 
 const { AuthorizationService } = await import('../src/server/auth/AuthorizationService');
