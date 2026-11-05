@@ -380,7 +380,7 @@ export class AuthorizationService {
                 username: piUser.username,
                 piUid: piUser.uid,
                 isAuthorizedAdmin,
-                roles: isAuthorizedAdmin ? ['PLATFORM_ADMIN', 'COMPLIANCE_ADMIN'] : undefined
+                roles: isAuthorizedAdmin ? ['COMPLIANCE_ADMIN'] : undefined
               });
               if (durableUser.status !== 'ACTIVE') return null;
               return {
