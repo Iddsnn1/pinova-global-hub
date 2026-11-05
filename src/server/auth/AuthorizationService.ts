@@ -435,7 +435,7 @@ export class AuthorizationService {
    */
   public async verifyPiAccessToken(accessToken: string): Promise<AuthenticatedUser | null> {
     const token = typeof accessToken === 'string' ? accessToken.trim() : '';
-    if (!token || token.length <= 20 || /\\s/.test(token)) return null;
+    if (!token || token.length <= 20 || /\s/.test(token)) return null;
 
     const piApiKey = (process.env.PI_API_KEY || process.env.PI_SERVER_KEY || '').trim();
     if (
