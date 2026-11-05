@@ -76,7 +76,12 @@ export interface PiPaymentCallbacks {
   onError: (error: Error, payment?: PiPayment) => void;
 }
 
-export const BUILD_COMMIT = 'b89f21cd99e230aa7782ce477ba6190f10c5580a';
+declare const __PINOVA_BUILD_COMMIT__: string;
+
+export const BUILD_COMMIT =
+  typeof __PINOVA_BUILD_COMMIT__ !== 'undefined'
+    ? __PINOVA_BUILD_COMMIT__
+    : 'local-build';
 
 /* =========================================================
  * State
