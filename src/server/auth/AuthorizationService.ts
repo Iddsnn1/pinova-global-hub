@@ -14,7 +14,13 @@ export class AuthorizationService {
     this.userRepo = userRepo || new UserIdentityRepository();
     this.sessionEngine = new StorageEngine<SessionEntity>('user_sessions', 'token');
     this.revokedSessionEngine = new StorageEngine<{ token: string; revokedAt: string }>('revoked_sessions', 'token');
-    this.secretKey = process.env.JWT_SECRET || process.env.SESSION_SECRET || 'pinova-sec-auth-v2-master-key';
+    const configuredSecret = process.env.JWT_SECRET || process.env.SESSION_SECRET;
+    if (!configuredSecret && process.env.NODE_ENV === 'production') {
+      throw new Error('SESSION_SIGNING_SECRET_REQUIRED');
+    }
+    // Local development may use an ephemeral key; deployed production-mode
+    // environments must provide a branch-scoped secret explicitly.
+    this.secretKey = configuredSecret || crypto.randomBytes(32).toString('hex');
   }
 
   public getUserRepo(): UserIdentityRepository {
@@ -25,7 +31,7 @@ export class AuthorizationService {
    * Creates an authoritative server session for a verified user
    */
   public createSession(
-    param: string | { username: string; uid?: string; roles?: UserRole[]; accessToken?: string; institutionId?: string },
+    param: string | { username: string; uid?: string; roles?: UserRole[]; accessToken?: string; institutionId?: string; isAuthorizedAdmin?: boolean },
     ttlMs: number = 7 * 86400000
   ): SessionEntity & { user: AuthenticatedUser } {
     const username = typeof param === 'string' ? param : param.username;
@@ -34,7 +40,7 @@ export class AuthorizationService {
     const institutionId = typeof param === 'object' ? param.institutionId : undefined;
     const isAuthorizedAdmin = typeof param === 'object' && 'isAuthorizedAdmin' in param
       ? (param as any).isAuthorizedAdmin === true
-      : true;
+      : false;
 
     // Filter out privileged roles unless the caller is an authorized administrator
     const safeRoles = isAuthorizedAdmin
@@ -44,8 +50,15 @@ export class AuthorizationService {
     let user = this.userRepo.findByUsername(username);
     if (!user) {
       user = this.userRepo.upsertUser({ username, piUid: uid, roles: safeRoles, institutionId });
-    } else if (isAuthorizedAdmin && safeRoles && safeRoles.length > 0) {
-      user = this.userRepo.upsertUser({ username, piUid: uid || user.piUid, roles: safeRoles, institutionId: institutionId || user.institutionId });
+    } else {
+      // Reconcile roles on every session issuance. Otherwise an existing identity
+      // carrying stale privileged roles could retain them after a non-admin login.
+      user = this.userRepo.upsertUser({
+        username,
+        piUid: uid || user.piUid,
+        roles: safeRoles && safeRoles.length > 0 ? safeRoles : ['PIONEER'],
+        institutionId: institutionId || user.institutionId
+      });
     }
 
     // Vercel runs API handlers in separate serverless instances. A session token

@@ -8,6 +8,7 @@ import { vendorAuthenticatedFetch } from '../../../lib/vendorAuthBridge';
 
 interface ProductsTabProps {
   products: Product[];
+  sellerUsername: string;
   onOpenAddProduct?: () => void;
   onProductCreated?: (product: Product) => void;
   openCreateOnMount?: boolean;
@@ -19,7 +20,7 @@ interface ProductsTabProps {
 type ProductDraft = { title: string; description: string; category: ProductCategory; marketplaceCategory: string; subcategory: string; pricePi: string; stock: string; imageUrl: string; educationTier: string; educationLevelId: string; educationGradeLevel: string; educationCountryCode: string; educationCurriculumId: string; educationSubjects: string };
 const EMPTY_DRAFT: ProductDraft = { title: '', description: '', category: 'physical', marketplaceCategory: MARKETPLACE_CATEGORIES[0]?.id || 'other_general', subcategory: '', pricePi: '', stock: '0', imageUrl: '', educationTier: '', educationLevelId: '', educationGradeLevel: '', educationCountryCode: '', educationCurriculumId: '', educationSubjects: '' };
 
-export const ProductsTab: React.FC<ProductsTabProps> = ({ products, openCreateOnMount = false, onCreateFormOpened, onProductCreated, onEditProduct, onDeleteProduct }) => {
+export const ProductsTab: React.FC<ProductsTabProps> = ({ sellerUsername, openCreateOnMount = false, onCreateFormOpened, onProductCreated, onEditProduct, onDeleteProduct }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [stockFilter, setStockFilter] = useState<'all' | 'in_stock' | 'out_of_stock'>('all');
@@ -41,9 +42,10 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({ products, openCreateOn
     setIsLoadingServerProducts(true);
     setSubmitError(null);
     try {
+      if (!sellerUsername?.trim()) throw new Error('SELLER_IDENTITY_UNAVAILABLE');
       // Catalog reads are server-authoritative but do not require a fresh Pi/vendor authentication round-trip.
       // Seller mutations remain protected by vendorAuthenticatedFetch; this keeps catalog refresh fast and deterministic.
-      const response = await fetch('/api/products', { method: 'GET', headers: { Accept: 'application/json' }, cache: 'no-store' });
+      const response = await vendorAuthenticatedFetch('/api/products', { method: 'GET', cache: 'no-store' });
       const text = await response.text();
       if (!response.ok) {
         let data: any = null;
@@ -52,8 +54,13 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({ products, openCreateOn
       }
       const data = text ? JSON.parse(text) : null;
       if (!Array.isArray(data?.products)) throw new Error('PRODUCT_CATALOG_INVALID_RESPONSE');
-      setServerProducts(data.products);
-      setSubmitSuccess(`Catalog refreshed • ${data.products.length} server product${data.products.length === 1 ? '' : 's'}`);
+      const canonicalUsername = sellerUsername.trim().replace(/^@/, '').toLowerCase();
+      const ownedProducts = data.products.filter((product: Product) =>
+        String(product?.sellerId || '').trim().replace(/^@/, '').toLowerCase() === canonicalUsername
+      );
+      setServerProducts(ownedProducts);
+      setCreatedProducts([]);
+      setSubmitSuccess(`Your catalog is up to date • ${ownedProducts.length} product${ownedProducts.length === 1 ? '' : 's'}`);
     } catch (error: any) {
       console.warn('[ProductsTab] Failed to refresh durable catalog:', error);
       setSubmitError(String(error?.message || 'Unable to refresh the server catalog.'));
@@ -67,30 +74,16 @@ export const ProductsTab: React.FC<ProductsTabProps> = ({ products, openCreateOn
   }, []);
 
   const visibleProducts = useMemo(() => {
-    // The server catalog is authoritative. Legacy parent-state records can lack
-    // a durable id; never render such a duplicate when the server has the same
-    // merchant/title record, otherwise Edit can open the id-less legacy card.
-    const canonical = [...serverProducts, ...createdProducts];
-    const canonicalKeys = new Set(canonical.map(product => {
-      const seller = String(product.sellerId || '').trim().replace(/^@/, '').toLowerCase();
-      const title = String(product.title || '').trim().toLowerCase();
-      return `${seller}\u0000${title}`;
-    }));
+    const canonicalUsername = sellerUsername.trim().replace(/^@/, '').toLowerCase();
     const merged = new Map<string, Product>();
-    for (const product of products) {
+    for (const product of [...serverProducts, ...createdProducts]) {
+      const owner = String(product.sellerId || '').trim().replace(/^@/, '').toLowerCase();
       const id = String(product.id || '').trim();
-      const seller = String(product.sellerId || '').trim().replace(/^@/, '').toLowerCase();
-      const title = String(product.title || '').trim().toLowerCase();
-      const key = `${seller}\u0000${title}`;
-      if (!id && canonicalKeys.has(key)) continue;
-      merged.set(id || `legacy:${key}`, product);
-    }
-    for (const product of canonical) {
-      const id = String(product.id || '').trim();
-      if (id) merged.set(id, product);
+      if (owner !== canonicalUsername || !id) continue;
+      merged.set(id, product);
     }
     return Array.from(merged.values());
-  }, [createdProducts, products, serverProducts]);
+  }, [createdProducts, sellerUsername, serverProducts]);
   const filteredProducts = visibleProducts.filter(product => {
     const q = searchQuery.toLowerCase();
     const matchesSearch = String(product.title || '').toLowerCase().includes(q) || String(product.description || '').toLowerCase().includes(q) || String(product.id || '').toLowerCase().includes(q);

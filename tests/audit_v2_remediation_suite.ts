@@ -64,7 +64,8 @@ async function runTestSuite() {
   const adminSession = await authService.createSession({
     username: 'admin_bob',
     uid: 'pi-uid-bob-admin',
-    roles: ['PLATFORM_ADMIN']
+    roles: ['PLATFORM_ADMIN'],
+    isAuthorizedAdmin: true
   });
   assert(authService.hasRole(adminSession.user, 'PLATFORM_ADMIN'), 'Scenario 1.6: Platform admin possesses PLATFORM_ADMIN role');
   assert(authService.hasPermission(adminSession.user, 'pstp:disputes:resolve'), 'Scenario 1.7: Platform admin possesses dispute resolution permission');
