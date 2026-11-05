@@ -181,9 +181,6 @@ export class AuthorizationService {
 
     if (!token) return null;
 
-    // Production authentication is fail-closed: no ephemeral local identity/session fallback.
-    if (process.env.NODE_ENV === 'production' && !DurableAuthRepository.isEnabled()) return null;
-
     // Revocation must be checked before both stateful and signed-stateless session validation.
     if (this.revokedSessionEngine.get(token)) return null;
 
@@ -199,6 +196,9 @@ export class AuthorizationService {
         isMachineKey: true
       };
     }
+
+    // Production authentication is fail-closed: no ephemeral local identity/session fallback.
+    if (process.env.NODE_ENV === 'production' && !DurableAuthRepository.isEnabled()) return null;
 
     // File-backed sessions are development-only; never let them bypass Neon revocation.
     if (!DurableAuthRepository.isEnabled()) {
