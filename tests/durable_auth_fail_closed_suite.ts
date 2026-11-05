@@ -65,8 +65,8 @@ assert.equal(
 );
 assert.equal(
   observedPiAuthorization,
-  `Bearer ${process.env.PI_API_KEY}`,
-  'A Pi API key may only be used as an outbound Pi Platform credential, never as an admin credential'
+  '',
+  'The application session verifier must not send the Pi Platform API key as a Pioneer access token'
 );
 assert.equal(
   await auth.verifyPiAccessToken('fake-pioneer-access-token-that-is-not-valid'),
