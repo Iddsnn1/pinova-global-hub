@@ -17,7 +17,6 @@ import {
 } from '../../../types/education';
 import { normalizeCountryCode, matchesSubdivision } from '../../../data/countrySubdivisions';
 import { piDecimalForStorage } from '../../services/piDecimal';
-import { GLOBAL_EDUCATION_INSTITUTIONS } from '../../../data/educationInstitutionsData';
 export class EducationRepository {
   private institutionsEngine: StorageEngine<InstitutionProfile>;
   private studentsEngine: StorageEngine<StudentIdentity>;
@@ -33,7 +32,7 @@ export class EducationRepository {
     this.institutionsEngine = new StorageEngine<InstitutionProfile>(
       'education_institutions',
       'id',
-      GLOBAL_EDUCATION_INSTITUTIONS
+      []
     );
     this.studentsEngine = new StorageEngine<StudentIdentity>(
       'education_students',
