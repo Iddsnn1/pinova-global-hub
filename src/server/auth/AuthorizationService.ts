@@ -368,6 +368,33 @@ export class AuthorizationService {
 
           if (res.ok) {
             const piUser = await res.json() as { uid: string; username: string };
+            // The Pi Platform response proves the Pi identity only. In production,
+            // persist/resolve that identity through Neon and never consult local files.
+            if (DurableAuthRepository.isEnabled()) {
+              const isAuthorizedAdmin = (process.env.PINOVA_COMPLIANCE_ADMIN_USERNAMES || '')
+                .split(',')
+                .map((value) => value.trim().replace(/^@/, '').toLowerCase())
+                .filter(Boolean)
+                .includes(piUser.username.replace(/^@/, '').toLowerCase());
+              const durableUser = await this.durableAuthRepo.upsertVerifiedIdentity({
+                username: piUser.username,
+                piUid: piUser.uid,
+                isAuthorizedAdmin,
+                roles: isAuthorizedAdmin ? ['PLATFORM_ADMIN', 'COMPLIANCE_ADMIN'] : undefined
+              });
+              if (durableUser.status !== 'ACTIVE') return null;
+              return {
+                id: durableUser.id,
+                username: durableUser.username,
+                piUid: durableUser.piUid,
+                roles: durableUser.roles,
+                permissions: RoleRepository.getPermissionsForRoles(durableUser.roles),
+                institutionId: durableUser.institutionId,
+                guardianId: durableUser.guardianId,
+                authMethod: 'PI'
+              };
+            }
+
             const user = this.userRepo.upsertUser({
               username: piUser.username,
               piUid: piUser.uid
