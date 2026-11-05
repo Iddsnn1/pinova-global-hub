@@ -78,18 +78,66 @@ export class DurableAuthRepository {
     if (!username) throw new Error('AUTH_USERNAME_REQUIRED');
     // A Pi login proves identity, not application privileges. Only a server-side
     // compliance allowlist may grant privileged roles during session establishment.
+    // When a username is removed from that allowlist, strip every elevated role
+    // instead of preserving stale privileges from the existing identity row.
     const roles = input.isAuthorizedAdmin
       ? (input.roles && input.roles.length > 0 ? input.roles : ['PLATFORM_ADMIN', 'COMPLIANCE_ADMIN'])
       : null;
+    const effectiveRolesSql = `CASE
+      WHEN $3::jsonb IS NOT NULL THEN $3::jsonb
+      ELSE COALESCE(
+        (
+          SELECT jsonb_agg(existing_role.role)
+          FROM jsonb_array_elements_text(
+            CASE
+              WHEN jsonb_typeof(user_identities.roles) = 'array' THEN user_identities.roles
+              ELSE '[]'::jsonb
+            END
+          ) AS existing_role(role)
+          WHERE existing_role.role NOT IN (
+            'PLATFORM_ADMIN', 'COMPLIANCE_ADMIN', 'COMPLIANCE_OFFICER',
+            'BURSAR', 'FINANCE_ADMIN', 'INSTITUTION_ADMIN'
+          )
+        ),
+        '["PIONEER"]'::jsonb
+      )
+    END`;
     const rows = await this.sql.query(
-      `INSERT INTO public.user_identities (username, pi_uid, roles, institution_id)
-       VALUES ($1, $2, COALESCE($3::jsonb, '["PIONEER"]'::jsonb), $4)
-       ON CONFLICT ((LOWER(username))) DO UPDATE SET
-         pi_uid = COALESCE(EXCLUDED.pi_uid, user_identities.pi_uid),
-         roles = COALESCE($3::jsonb, user_identities.roles),
-         institution_id = COALESCE(EXCLUDED.institution_id, user_identities.institution_id),
-         updated_at = NOW()
-       RETURNING id, username, pi_uid, email, roles, institution_id, guardian_id, status, session_version, created_at, updated_at`,
+      `WITH prior_identity AS MATERIALIZED (
+         SELECT id, session_version
+         FROM public.user_identities
+         WHERE LOWER(username) = LOWER($1)
+         FOR UPDATE
+       ),
+       upserted_identity AS (
+         INSERT INTO public.user_identities (username, pi_uid, roles, institution_id)
+         VALUES ($1, $2, COALESCE($3::jsonb, '["PIONEER"]'::jsonb), $4)
+         ON CONFLICT ((LOWER(username))) DO UPDATE SET
+           pi_uid = COALESCE(EXCLUDED.pi_uid, user_identities.pi_uid),
+           roles = ${effectiveRolesSql},
+           session_version = user_identities.session_version
+             + CASE
+                 WHEN user_identities.roles IS DISTINCT FROM (${effectiveRolesSql}) THEN 1
+                 ELSE 0
+               END,
+           institution_id = COALESCE(EXCLUDED.institution_id, user_identities.institution_id),
+           updated_at = NOW()
+         RETURNING id, username, pi_uid, email, roles, institution_id, guardian_id,
+                   status, session_version, created_at, updated_at
+       ),
+       revoked_old_sessions AS (
+         UPDATE public.user_sessions AS sessions
+         SET revoked_at = NOW(), revoke_reason = 'identity_roles_changed'
+         FROM upserted_identity AS updated, prior_identity AS prior
+         WHERE sessions.user_id = updated.id
+           AND updated.id = prior.id
+           AND updated.session_version > prior.session_version
+           AND sessions.revoked_at IS NULL
+         RETURNING sessions.id
+       )
+       SELECT id, username, pi_uid, email, roles, institution_id, guardian_id,
+              status, session_version, created_at, updated_at
+       FROM upserted_identity`,
       [username, input.piUid || null, roles ? JSON.stringify(roles) : null, input.institutionId || null]
     ) as IdentityRow[];
     if (!rows[0]) throw new Error('AUTH_IDENTITY_UPSERT_FAILED');
@@ -127,14 +175,21 @@ export class DurableAuthRepository {
   }
 
   async revokeAllUserSessions(userId: string, reason = 'identity_changed') {
+    // Bump the identity version and revoke its sessions in one PostgreSQL statement.
+    // This prevents a partial outcome if either operation would otherwise fail alone.
     await this.sql.query(
-      `UPDATE public.user_sessions SET revoked_at = NOW(), revoke_reason = $2
-       WHERE user_id = $1::uuid AND revoked_at IS NULL`,
+      `WITH bumped_identity AS (
+         UPDATE public.user_identities
+         SET session_version = session_version + 1, updated_at = NOW()
+         WHERE id = $1::uuid
+         RETURNING id
+       )
+       UPDATE public.user_sessions AS sessions
+       SET revoked_at = NOW(), revoke_reason = $2
+       FROM bumped_identity
+       WHERE sessions.user_id = bumped_identity.id
+         AND sessions.revoked_at IS NULL`,
       [userId, reason]
-    );
-    await this.sql.query(
-      'UPDATE public.user_identities SET session_version = session_version + 1, updated_at = NOW() WHERE id = $1::uuid',
-      [userId]
     );
   }
 }
