@@ -111,7 +111,9 @@ export class DurableAuthRepository {
        ),
        upserted_identity AS (
          INSERT INTO public.user_identities (username, pi_uid, roles, institution_id)
-         VALUES ($1, $2, COALESCE($3::jsonb, '["PIONEER"]'::jsonb), $4)
+         SELECT $1, $2, COALESCE($3::jsonb, '["PIONEER"]'::jsonb), $4
+         FROM (SELECT 1) AS seed
+         LEFT JOIN prior_identity ON TRUE
          ON CONFLICT ((LOWER(username))) DO UPDATE SET
            pi_uid = COALESCE(EXCLUDED.pi_uid, user_identities.pi_uid),
            roles = ${effectiveRolesSql},
