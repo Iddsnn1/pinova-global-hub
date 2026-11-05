@@ -540,13 +540,18 @@ app.post(['/api/auth/session', '/api/v1/auth/session'], authRateLimiter, async (
     const configuredComplianceAdmin = configuredAdminUsernames.has(verifiedUsername);
 
     const adminAuth = await checkAdminAuth(req);
+    // Machine API keys authorize server-to-server routes, not Pioneer browser
+    // sessions. Never let possession of ADMIN_API_KEY elevate another identity.
     const isAuthorizedAdmin =
-      (adminAuth.authenticated && adminAuth.authorized) || configuredComplianceAdmin;
+      (adminAuth.authenticated && adminAuth.authorized && adminAuth.user?.isMachineKey !== true) ||
+      configuredComplianceAdmin;
 
-    // Only a verified PLATFORM_ADMIN or server machine key may preserve platform-wide authority.
-    // The compliance username allowlist grants COMPLIANCE_ADMIN only.
+    // Only an authenticated platform-admin user session may preserve platform-wide
+    // authority. The compliance username allowlist grants COMPLIANCE_ADMIN only.
     const hasPlatformAdminAuthorization =
-      adminAuth.authenticated && adminAuth.user?.roles?.includes('PLATFORM_ADMIN') === true;
+      adminAuth.authenticated &&
+      adminAuth.user?.isMachineKey !== true &&
+      adminAuth.user?.roles?.includes('PLATFORM_ADMIN') === true;
     const sessionRoles = hasPlatformAdminAuthorization
       ? ['PLATFORM_ADMIN', 'COMPLIANCE_ADMIN'] as const
       : configuredComplianceAdmin || adminAuth.user?.roles?.includes('COMPLIANCE_ADMIN')
