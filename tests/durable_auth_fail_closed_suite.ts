@@ -33,6 +33,52 @@ assert.equal(
   'A raw Pi token must not authenticate through a local identity fallback when durable storage is unavailable'
 );
 
+assert.equal(
+  (await auth.verifyToken(process.env.ADMIN_API_KEY!))?.roles.join(','),
+  'PLATFORM_ADMIN',
+  'The dedicated ADMIN_API_KEY may authenticate a machine identity with the platform role only'
+);
+
+assert.equal(
+  await auth.verifyPiAccessToken(process.env.ADMIN_API_KEY!),
+  null,
+  'The Pi session-establishment path must never accept the application ADMIN_API_KEY'
+);
+
+const originalFetch = globalThis.fetch;
+let observedPiAuthorization = '';
+globalThis.fetch = (async (_input: any, init?: any) => {
+  observedPiAuthorization = String(init?.headers?.Authorization || '');
+  return new Response('Unauthorized', { status: 401 });
+}) as typeof fetch;
+
+process.env.ADMIN_API_KEY = '';
+process.env.PI_API_KEY = 'pi-platform-secret-that-must-not-be-an-admin-key';
+process.env.PI_SERVER_KEY = 'pi-server-secret-that-must-not-be-an-admin-key';
+
+assert.equal(
+  await auth.verifyToken(process.env.PI_API_KEY),
+  null,
+  'PI_API_KEY must not authenticate as an application machine administrator'
+);
+assert.equal(
+  observedPiAuthorization,
+  `Bearer ${process.env.PI_API_KEY}`,
+  'A Pi API key may only be used as an outbound Pi Platform credential, never as an admin credential'
+);
+assert.equal(
+  await auth.verifyPiAccessToken('fake-pioneer-access-token-that-is-not-valid'),
+  null,
+  'An unverified Pioneer token must not establish a session'
+);
+assert.equal(
+  observedPiAuthorization,
+  'Bearer fake-pioneer-access-token-that-is-not-valid',
+  'The session endpoint verifier must send the Pioneer token to Pi Platform for verification'
+);
+globalThis.fetch = originalFetch;
+
+
 await assert.rejects(
   auth.createSession({ username: 'preview_test_user', roles: ['PLATFORM_ADMIN'], isAuthorizedAdmin: true }),
   /DURABLE_AUTH_DATABASE_REQUIRED/,
