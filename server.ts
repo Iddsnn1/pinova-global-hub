@@ -534,7 +534,7 @@ app.post(['/api/auth/session', '/api/v1/auth/session'], authRateLimiter, async (
     const isAuthorizedAdmin =
       (adminAuth.authenticated && adminAuth.authorized) || configuredComplianceAdmin;
 
-    const sessionRoles = configuredComplianceAdmin
+    const sessionRoles = isAuthorizedAdmin
       ? ['PLATFORM_ADMIN', 'COMPLIANCE_ADMIN'] as const
       : verifiedPiUser.roles;
 
