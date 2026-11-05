@@ -76,13 +76,10 @@ export class DurableAuthRepository {
   }) {
     const username = input.username.trim().replace(/^@/, '');
     if (!username) throw new Error('AUTH_USERNAME_REQUIRED');
-    const hasExplicitRoles = Array.isArray(input.roles) && input.roles.length > 0;
-    const roles = hasExplicitRoles
-      ? (input.isAuthorizedAdmin
-          ? input.roles!
-          : input.roles!.filter((role) =>
-              !['PLATFORM_ADMIN', 'COMPLIANCE_ADMIN', 'COMPLIANCE_OFFICER', 'BURSAR', 'FINANCE_ADMIN', 'INSTITUTION_ADMIN'].includes(role)
-            ))
+    // A Pi login proves identity, not application privileges. Only a server-side
+    // compliance allowlist may grant privileged roles during session establishment.
+    const roles = input.isAuthorizedAdmin
+      ? (input.roles && input.roles.length > 0 ? input.roles : ['PLATFORM_ADMIN', 'COMPLIANCE_ADMIN'])
       : null;
     const rows = await this.sql.query(
       `INSERT INTO public.user_identities (username, pi_uid, roles, institution_id)
