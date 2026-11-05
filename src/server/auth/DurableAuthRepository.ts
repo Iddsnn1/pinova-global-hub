@@ -81,7 +81,7 @@ export class DurableAuthRepository {
     // When a username is removed from that allowlist, strip every elevated role
     // instead of preserving stale privileges from the existing identity row.
     const roles = input.isAuthorizedAdmin
-      ? (input.roles && input.roles.length > 0 ? input.roles : ['PLATFORM_ADMIN', 'COMPLIANCE_ADMIN'])
+      ? (input.roles && input.roles.length > 0 ? input.roles : ['COMPLIANCE_ADMIN'])
       : null;
     const effectiveRolesSql = `CASE
       WHEN $3::jsonb IS NOT NULL THEN $3::jsonb
@@ -118,7 +118,11 @@ export class DurableAuthRepository {
            roles = ${effectiveRolesSql},
            session_version = user_identities.session_version
              + CASE
-                 WHEN user_identities.roles IS DISTINCT FROM (${effectiveRolesSql}) THEN 1
+                 WHEN user_identities.roles IS DISTINCT FROM (${effectiveRolesSql})
+                   OR (
+                     EXCLUDED.pi_uid IS NOT NULL
+                     AND user_identities.pi_uid IS DISTINCT FROM EXCLUDED.pi_uid
+                   ) THEN 1
                  ELSE 0
                END,
            institution_id = COALESCE(EXCLUDED.institution_id, user_identities.institution_id),
@@ -128,7 +132,7 @@ export class DurableAuthRepository {
        ),
        revoked_old_sessions AS (
          UPDATE public.user_sessions AS sessions
-         SET revoked_at = NOW(), revoke_reason = 'identity_roles_changed'
+         SET revoked_at = NOW(), revoke_reason = 'identity_or_roles_changed'
          FROM upserted_identity AS updated, prior_identity AS prior
          WHERE sessions.user_id = updated.id
            AND updated.id = prior.id
