@@ -21,6 +21,10 @@ type CreateSessionInput = {
 export class AuthorizationService {
   private repository?: NeonAuthRepository;
 
+  constructor(repository?: NeonAuthRepository) {
+    this.repository = repository;
+  }
+
   private get authRepository(): NeonAuthRepository {
     if (!this.repository) this.repository = new NeonAuthRepository();
     return this.repository;
