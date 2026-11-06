@@ -571,7 +571,11 @@ app.post(['/api/auth/logout', '/api/v1/auth/logout'], authenticate, async (req: 
     return;
   }
   try {
-    await authService.invalidateSession(token);
+    const revoked = await authService.invalidateSession(token);
+    if (!revoked) {
+      res.status(401).json({ success: false, error: 'INVALID_SESSION_TOKEN' });
+      return;
+    }
     res.json({ success: true, message: 'Session invalidated successfully' });
   } catch {
     res.status(503).json({
