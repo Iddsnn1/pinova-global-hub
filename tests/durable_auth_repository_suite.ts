@@ -112,6 +112,11 @@ async function run() {
     /AUTH_DURABLE_IDENTITY_NOT_FOUND_OR_MISMATCH/
   );
 
+  const fs = await import('node:fs/promises');
+  const repositorySource = await fs.readFile(new URL('../src/server/auth/NeonAuthRepository.ts', import.meta.url), 'utf8');
+  assert.ok(repositorySource.includes("createHash('sha256')"), 'Repository hashes session tokens before persistence');
+  assert.ok(repositorySource.includes('token_hash'), 'Repository persists token_hash columns, not raw bearer tokens');
+
   console.log('Durable auth regression suite passed.');
 }
 
