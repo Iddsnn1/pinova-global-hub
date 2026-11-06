@@ -1,294 +1,194 @@
 import crypto from 'crypto';
-import { UserIdentityRepository } from './UserIdentityRepository';
 import { RoleRepository } from './RoleRepository';
-import { AuthenticatedUser, SessionEntity, Permission, UserRole } from './types';
-import { StorageEngine } from '../db/StorageEngine';
+import { AuthenticatedUser, SessionEntity, UserRole } from './types';
+import { NeonAuthRepository } from './NeonAuthRepository';
+
+const SESSION_TTL_MS = 7 * 86400000;
+const PRIVILEGED_ROLES: UserRole[] = [
+  'PLATFORM_ADMIN', 'COMPLIANCE_ADMIN', 'COMPLIANCE_OFFICER',
+  'BURSAR', 'FINANCE_ADMIN', 'INSTITUTION_ADMIN'
+];
+
+type CreateSessionInput = {
+  username: string;
+  uid?: string;
+  roles?: UserRole[];
+  accessToken?: string;
+  institutionId?: string;
+  isAuthorizedAdmin?: boolean;
+};
 
 export class AuthorizationService {
-  private userRepo: UserIdentityRepository;
-  private sessionEngine: StorageEngine<SessionEntity>;
-  private revokedSessionEngine: StorageEngine<{ token: string; revokedAt: string }>;
-  private secretKey: string;
+  private repository?: NeonAuthRepository;
 
-  constructor(userRepo?: UserIdentityRepository) {
-    this.userRepo = userRepo || new UserIdentityRepository();
-    this.sessionEngine = new StorageEngine<SessionEntity>('user_sessions', 'token');
-    this.revokedSessionEngine = new StorageEngine<{ token: string; revokedAt: string }>('revoked_sessions', 'token');
-    this.secretKey = process.env.JWT_SECRET || process.env.SESSION_SECRET || 'pinova-sec-auth-v2-master-key';
+  private get authRepository(): NeonAuthRepository {
+    if (!this.repository) this.repository = new NeonAuthRepository();
+    return this.repository;
   }
 
-  public getUserRepo(): UserIdentityRepository {
-    return this.userRepo;
+  private getSecret(): string {
+    const secret = String(process.env.JWT_SECRET || process.env.SESSION_SECRET || '').trim();
+    if (secret.length < 32) throw new Error('AUTH_SESSION_SECRET_MISSING_OR_WEAK');
+    return secret;
   }
 
-  /**
-   * Creates an authoritative server session for a verified user
-   */
-  public createSession(
-    param: string | { username: string; uid?: string; roles?: UserRole[]; accessToken?: string; institutionId?: string },
-    ttlMs: number = 7 * 86400000
-  ): SessionEntity & { user: AuthenticatedUser } {
-    const username = typeof param === 'string' ? param : param.username;
-    const uid = typeof param === 'object' ? param.uid : undefined;
-    const roles = typeof param === 'object' ? param.roles : undefined;
-    const institutionId = typeof param === 'object' ? param.institutionId : undefined;
-    const isAuthorizedAdmin = typeof param === 'object' && 'isAuthorizedAdmin' in param
-      ? (param as any).isAuthorizedAdmin === true
-      : true;
-
-    // Filter out privileged roles unless the caller is an authorized administrator
-    const safeRoles = isAuthorizedAdmin
-      ? roles
-      : roles?.filter((r) => !['PLATFORM_ADMIN', 'COMPLIANCE_ADMIN', 'COMPLIANCE_OFFICER', 'BURSAR', 'FINANCE_ADMIN', 'INSTITUTION_ADMIN'].includes(r));
-
-    let user = this.userRepo.findByUsername(username);
-    if (!user) {
-      user = this.userRepo.upsertUser({ username, piUid: uid, roles: safeRoles, institutionId });
-    } else if (isAuthorizedAdmin && safeRoles && safeRoles.length > 0) {
-      user = this.userRepo.upsertUser({ username, piUid: uid || user.piUid, roles: safeRoles, institutionId: institutionId || user.institutionId });
+  /** Creates a session only for a Pi identity already verified and persisted in Neon. */
+  public async createSession(
+    param: string | CreateSessionInput,
+    ttlMs: number = SESSION_TTL_MS
+  ): Promise<SessionEntity & { user: AuthenticatedUser }> {
+    const input: CreateSessionInput = typeof param === 'string' ? { username: param } : param;
+    const username = String(input.username || '').trim().replace(/^@/, '');
+    const uid = String(input.uid || '').trim();
+    if (!username || !uid) throw new Error('AUTH_VERIFIED_PI_IDENTITY_REQUIRED');
+    if (!Number.isFinite(ttlMs) || ttlMs <= 0 || ttlMs > 30 * 86400000) {
+      throw new Error('AUTH_SESSION_TTL_INVALID');
     }
 
-    // Vercel runs API handlers in separate serverless instances. A session token
-    // stored only in StorageEngine can therefore disappear between /api/auth/session
-    // and /api/vendor/apply. Use a signed, stateless session token as the portable
-    // server credential while still re-fetching the user's authoritative roles.
+    const repository = this.authRepository;
+    let identity = await repository.findUserByUsername(username);
+    if (!identity || !identity.piUid || identity.piUid !== uid) {
+      throw new Error('AUTH_DURABLE_IDENTITY_NOT_FOUND_OR_MISMATCH');
+    }
+
+    // Only a server-authorized admin flow may write roles. Browser-supplied
+    // roles are ignored for every other session creation.
+    if (input.isAuthorizedAdmin === true) {
+      const requestedRoles = Array.isArray(input.roles)
+        ? input.roles.filter((role): role is UserRole => PRIVILEGED_ROLES.includes(role) || identity!.roles.includes(role) || role === 'PIONEER' || role === 'BUYER' || role === 'SELLER' || role === 'STUDENT' || role === 'GUARDIAN' || role === 'TEACHER' || role === 'ADMISSIONS_OFFICER')
+        : identity.roles;
+      const safeRoles = requestedRoles.length ? requestedRoles : ['PIONEER' as UserRole];
+      identity = (await repository.setAuthoritativeRoles(identity.id, safeRoles)) || identity;
+    }
+
+    if (identity.status !== 'ACTIVE') throw new Error('AUTH_IDENTITY_NOT_ACTIVE');
+
+    const secret = this.getSecret();
     const expiresAt = Date.now() + ttlMs;
-    const nonce = crypto.randomBytes(16).toString('hex');
+    const nonce = crypto.randomBytes(24).toString('base64url');
     const payload = Buffer.from(JSON.stringify({
-      v: 1,
-      username: user.username,
-      uid: user.piUid || uid || null,
-      // The token is cryptographically signed by the server. Include the
-      // already-sanitized roles so a Vercel function instance can verify the
-      // portable session without depending on another instance's filesystem.
-      roles: Array.isArray(user.roles) ? user.roles : [],
-      exp: expiresAt,
-      nonce
+      v: 2, sub: identity.id, username: identity.username, exp: expiresAt, nonce
     })).toString('base64url');
-    const signature = crypto.createHmac('sha256', this.secretKey).update(payload).digest('base64url');
-    const token = `pinova_sess_v1_${payload}.${signature}`;
+    const signature = crypto.createHmac('sha256', secret).update(payload).digest('base64url');
+    const token = `pinova_sess_v2_${payload}.${signature}`;
+
+    await repository.createSession(token, identity.id, expiresAt);
+
     const session: SessionEntity = {
-      token,
-      userId: user.id,
-      username: user.username,
-      roles: user.roles,
-      institutionId: user.institutionId,
-      expiresAt,
-      createdAt: new Date().toISOString()
+      token, userId: identity.id, username: identity.username,
+      roles: identity.roles, institutionId: identity.institutionId,
+      expiresAt, createdAt: new Date().toISOString()
     };
-
-    this.sessionEngine.set(token, session);
-
-    const authUser: AuthenticatedUser = {
-      id: user.id,
-      username: user.username,
-      piUid: user.piUid,
-      roles: user.roles,
-      permissions: RoleRepository.getPermissionsForRoles(user.roles),
-      institutionId: user.institutionId,
-      authMethod: 'SESSION'
+    const user: AuthenticatedUser = {
+      id: identity.id, username: identity.username, piUid: identity.piUid,
+      roles: identity.roles, permissions: RoleRepository.getPermissionsForRoles(identity.roles),
+      institutionId: identity.institutionId, guardianId: identity.guardianId, authMethod: 'SESSION'
     };
-
-    return Object.assign(session, { user: authUser });
+    return Object.assign(session, { user });
   }
 
-  /**
-   * Alias for verifyToken for semantic parity across callers
-   */
   public async authenticateToken(tokenHeader?: string): Promise<AuthenticatedUser | null> {
     return this.verifyToken(tokenHeader);
   }
 
-  /**
-   * Authoritatively verifies an authentication token
-   */
   public async verifyToken(tokenHeader?: string): Promise<AuthenticatedUser | null> {
     if (!tokenHeader) return null;
-
     let token = tokenHeader.trim();
-    if (token.startsWith('Bearer ')) {
-      token = token.substring(7).trim();
-    } else if (token.startsWith('Key ')) {
-      token = token.substring(4).trim();
-    }
-
+    if (token.startsWith('Bearer ')) token = token.slice(7).trim();
+    else if (token.startsWith('Key ')) token = token.slice(4).trim();
     if (!token) return null;
 
-    // Revocation must be checked before both stateful and signed-stateless session validation.
-    if (this.revokedSessionEngine.get(token)) return null;
-
-    // 1. Check Server Machine Secrets (Admin scripts / API keys)
-    const adminSecret = process.env.ADMIN_API_KEY || process.env.PI_API_KEY || process.env.PI_SERVER_KEY;
-    if (adminSecret && adminSecret !== 'YOUR_PI_PLATFORM_API_KEY' && adminSecret !== 'MY_PI_API_KEY' && token === adminSecret) {
+    // Machine credentials are a separate server-to-server mechanism, not user sessions.
+    const machineSecret = process.env.ADMIN_API_KEY || process.env.PI_API_KEY || process.env.PI_SERVER_KEY;
+    if (machineSecret && !['YOUR_PI_PLATFORM_API_KEY', 'MY_PI_API_KEY'].includes(machineSecret) && token === machineSecret) {
       const roles: UserRole[] = ['PLATFORM_ADMIN', 'COMPLIANCE_ADMIN'];
       return {
-        id: 'sys-machine-admin',
-        username: 'system_admin',
-        roles,
-        permissions: RoleRepository.getPermissionsForRoles(roles),
-        isMachineKey: true
+        id: 'sys-machine-admin', username: 'system_admin', roles,
+        permissions: RoleRepository.getPermissionsForRoles(roles), isMachineKey: true, authMethod: 'API_KEY'
       };
     }
 
-    // 2. Check Active Session Engine
-    const session = this.sessionEngine.get(token);
-    if (session) {
-      if (Date.now() > session.expiresAt) {
-        this.sessionEngine.delete(token);
-        return null;
-      }
-
-      // Re-fetch authoritative roles from user repository (in case roles were updated/revoked)
-      const user = this.userRepo.findByUsername(session.username);
-      if (!user || user.status === 'SUSPENDED') {
-        return null;
-      }
-
-      return {
-        id: user.id,
-        username: user.username,
-        piUid: user.piUid,
-        roles: user.roles,
-        permissions: RoleRepository.getPermissionsForRoles(user.roles),
-        institutionId: user.institutionId,
-        guardianId: user.guardianId
-      };
-    }
-
-    // 3. Verify portable signed session tokens. This is required across Vercel
-    // serverless instances where an in-memory/file-backed session cache is not shared.
-    if (token.startsWith('pinova_sess_v1_')) {
+    if (token.startsWith('pinova_sess_v2_')) {
       try {
-        const signed = token.slice('pinova_sess_v1_'.length);
+        const secret = this.getSecret();
+        const signed = token.slice('pinova_sess_v2_'.length);
         const separator = signed.lastIndexOf('.');
         if (separator <= 0) return null;
-
         const payload = signed.slice(0, separator);
         const signature = signed.slice(separator + 1);
-        const expected = crypto.createHmac('sha256', this.secretKey).update(payload).digest('base64url');
-
-        const providedBuf = Buffer.from(signature);
-        const expectedBuf = Buffer.from(expected);
-        if (providedBuf.length !== expectedBuf.length || !crypto.timingSafeEqual(providedBuf, expectedBuf)) {
-          return null;
-        }
+        const expected = crypto.createHmac('sha256', secret).update(payload).digest('base64url');
+        const providedBytes = Buffer.from(signature);
+        const expectedBytes = Buffer.from(expected);
+        if (providedBytes.length !== expectedBytes.length ||
+            !crypto.timingSafeEqual(providedBytes, expectedBytes)) return null;
 
         const decoded = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
-        if (decoded?.v !== 1 || !decoded?.username || !Number.isFinite(decoded?.exp) || Date.now() > decoded.exp) {
-          return null;
-        }
+        if (decoded?.v !== 2 || typeof decoded.sub !== 'string' ||
+            !Number.isFinite(decoded.exp) || Date.now() >= decoded.exp) return null;
 
-        let user = this.userRepo.findByUsername(String(decoded.username));
-        if (user?.status === 'SUSPENDED') return null;
-
-        // Vercel serverless instances do not share the file-backed identity
-        // repository. A valid signed session therefore must remain portable.
-        // Roles are copied from the server-issued, sanitized session payload;
-        // they are never accepted from the client request itself.
-        const tokenRoles = Array.isArray(decoded.roles)
-          ? decoded.roles.filter((role: any) => typeof role === 'string') as UserRole[]
-          : [];
-
-        if (!user) {
-          user = this.userRepo.upsertUser({
-            username: String(decoded.username),
-            piUid: typeof decoded.uid === 'string' ? decoded.uid : undefined,
-            roles: tokenRoles.length ? tokenRoles : ['PIONEER']
-          });
-        }
-
-        const roles = tokenRoles.length ? tokenRoles : user.roles;
+        const active = await this.authRepository.findActiveSession(token);
+        if (!active || active.user.id !== decoded.sub || active.user.status !== 'ACTIVE') return null;
+        const identity = active.user;
         return {
-          id: user.id,
-          username: user.username,
-          piUid: user.piUid || (typeof decoded.uid === 'string' ? decoded.uid : undefined),
-          roles,
-          permissions: RoleRepository.getPermissionsForRoles(roles),
-          institutionId: user.institutionId,
-          guardianId: user.guardianId
+          id: identity.id, username: identity.username, piUid: identity.piUid,
+          roles: identity.roles, permissions: RoleRepository.getPermissionsForRoles(identity.roles),
+          institutionId: identity.institutionId, guardianId: identity.guardianId, authMethod: 'SESSION'
         };
       } catch {
         return null;
       }
     }
 
-    // 4. Check Test / Dev Signed Tokens (e.g. "pinova_test_token_<username>")
-    if (token.startsWith('pinova_test_token_')) {
-      // In production mode: strictly disallow test tokens
-      if (process.env.NODE_ENV === 'production') {
-        return null;
-      }
-
-      const username = token.replace('pinova_test_token_', '').trim();
-      if (username) {
-        const user = this.userRepo.findByUsername(username) || this.userRepo.upsertUser({ username });
-        if (user.status === 'SUSPENDED') return null;
-
-        return {
-          id: user.id,
-          username: user.username,
-          piUid: user.piUid,
-          roles: user.roles,
-          permissions: RoleRepository.getPermissionsForRoles(user.roles),
-          institutionId: user.institutionId,
-          guardianId: user.guardianId
-        };
-      }
-    }
-
-    // 5. If token appears to be a Pi Access Token, verify with Pi Network Platform API
+    // Raw Pi access tokens are accepted only after authoritative Platform verification.
     if (token.length > 20 && !token.includes(' ')) {
       try {
-        const isProduction = process.env.NODE_ENV === 'production';
-        const piApiKey = (process.env.PI_API_KEY || process.env.PI_SERVER_KEY || '').trim();
-
-        // Pi's Sandbox is a Pi Browser/SDK environment mapped onto Pi Testnet.
-        // The backend identity endpoint remains the official Platform API
-        // (/v2/me); there is no separate api.sandbox.minepi.com Platform API host.
-        // Therefore never construct a non-existent sandbox API hostname here.
-        const piApiBase = 'https://api.minepi.com';
-
-        // The access token is verified server-side against Pi's official Platform API.
-        if (isProduction && piApiKey && piApiKey !== 'YOUR_PI_PLATFORM_API_KEY' && piApiKey !== 'MY_PI_API_KEY') {
-          const res = await fetch(`${piApiBase}/v2/me`, {
-            headers: {
-              'Authorization': `Bearer ${token}`
-            }
-          });
-
-          if (res.ok) {
-            const piUser = await res.json() as { uid: string; username: string };
-            const user = this.userRepo.upsertUser({
-              username: piUser.username,
-              piUid: piUser.uid
-            });
-
-            return {
-              id: user.id,
-              username: user.username,
-              piUid: user.piUid,
-              roles: user.roles,
-              permissions: RoleRepository.getPermissionsForRoles(user.roles),
-              institutionId: user.institutionId,
-              guardianId: user.guardianId
-            };
-          }
-        }
-      } catch (err) {
-        console.warn('[AuthorizationService] Pi platform token verification check error:', err);
+        const piApiKey = String(process.env.PI_API_KEY || process.env.PI_SERVER_KEY || '').trim();
+        if (!piApiKey || ['YOUR_PI_PLATFORM_API_KEY', 'MY_PI_API_KEY'].includes(piApiKey)) return null;
+        const response = await fetch('https://api.minepi.com/v2/me', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (!response.ok) return null;
+        const piUser = await response.json() as { uid?: string; username?: string };
+        if (!piUser.uid || !piUser.username) return null;
+        const identity = await this.authRepository.upsertVerifiedPiIdentity({
+          username: piUser.username, piUid: piUser.uid
+        });
+        if (identity.status !== 'ACTIVE') return null;
+        return {
+          id: identity.id, username: identity.username, piUid: identity.piUid,
+          roles: identity.roles, permissions: RoleRepository.getPermissionsForRoles(identity.roles),
+          institutionId: identity.institutionId, guardianId: identity.guardianId, authMethod: 'PI_PLATFORM'
+        };
+      } catch (error) {
+        console.warn('[AuthorizationService] Pi token verification or durable identity lookup failed.');
+        return null;
       }
     }
 
+    // Legacy stateless sessions and local test tokens are intentionally rejected.
     return null;
   }
 
-  public invalidateSession(token: string): boolean {
-    let cleanToken = token.trim();
-    if (cleanToken.startsWith('Bearer ')) cleanToken = cleanToken.substring(7).trim();
-    if (cleanToken.startsWith('Key ')) cleanToken = cleanToken.substring(4).trim();
-    const deleted = this.sessionEngine.delete(cleanToken);
-    this.revokedSessionEngine.set(cleanToken, { token: cleanToken, revokedAt: new Date().toISOString() });
-    return deleted;
+  /** Durable revocation completes before logout can report success. */
+  public async invalidateSession(tokenHeader: string): Promise<boolean> {
+    let token = tokenHeader.trim();
+    if (token.startsWith('Bearer ')) token = token.slice(7).trim();
+    else if (token.startsWith('Key ')) token = token.slice(4).trim();
+    if (!token) return false;
+
+    let expiresAt = Date.now() + SESSION_TTL_MS;
+    if (token.startsWith('pinova_sess_v2_')) {
+      try {
+        const signed = token.slice('pinova_sess_v2_'.length);
+        const payload = signed.slice(0, signed.lastIndexOf('.'));
+        const decoded = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+        if (Number.isFinite(decoded?.exp)) expiresAt = Math.max(expiresAt, decoded.exp);
+      } catch {
+        // Keep a bounded revocation window for malformed/unknown tokens.
+      }
+    }
+    await this.authRepository.revokeSession(token, expiresAt);
+    return true;
   }
 
   public hasPermission(user: AuthenticatedUser, permission: any): boolean {
@@ -296,12 +196,10 @@ export class AuthorizationService {
     const perms = Array.isArray(user.permissions)
       ? user.permissions
       : Array.from(user.permissions as Set<string>);
-
     if (perms.includes('*') || perms.includes('platform.admin.access')) return true;
-
-    const strPerm = String(permission);
-    const normalized = strPerm.replace(/:/g, '.');
-    return perms.includes(strPerm) || perms.includes(normalized);
+    const value = String(permission);
+    const normalized = value.replace(/:/g, '.');
+    return perms.includes(value) || perms.includes(normalized);
   }
 
   public hasRole(user: AuthenticatedUser, role: UserRole): boolean {
