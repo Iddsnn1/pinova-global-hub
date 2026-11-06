@@ -2,6 +2,7 @@ export * from './types';
 export * from './UserIdentityRepository';
 export * from './RoleRepository';
 export * from './AuthorizationService';
+export * from './NeonAuthRepository';
 export * from './middleware';
 
 import { UserIdentityRepository } from './UserIdentityRepository';
