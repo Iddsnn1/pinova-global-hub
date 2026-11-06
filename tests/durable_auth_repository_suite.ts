@@ -71,6 +71,8 @@ async function run() {
 
   const verified = await auth.verifyToken(session.token);
   assert.deepEqual(verified?.roles, ['PIONEER'], 'Client/session input cannot grant roles');
+  const secondInstance = new AuthorizationService(harness.repository as any);
+  assert.deepEqual((await secondInstance.verifyToken(session.token))?.roles, ['PIONEER'], 'A second server instance validates the shared Neon session');
 
   // Current database roles, not token claims, govern each authenticated request.
   const alice = harness.identities.get('alice')!;
