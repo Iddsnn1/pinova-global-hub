@@ -563,13 +563,23 @@ app.get(['/api/auth/me', '/api/v1/auth/me'], authenticate, requireAuthenticatedU
   });
 });
 
-app.post(['/api/auth/logout', '/api/v1/auth/logout'], authenticate, (req: AuthenticatedRequest, res) => {
+app.post(['/api/auth/logout', '/api/v1/auth/logout'], authenticate, async (req: AuthenticatedRequest, res) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : authHeader?.trim();
-  if (token) {
-    authService.invalidateSession(token);
+  if (!token) {
+    res.status(400).json({ success: false, error: 'SESSION_TOKEN_REQUIRED' });
+    return;
   }
-  res.json({ success: true, message: 'Session invalidated successfully' });
+  try {
+    await authService.invalidateSession(token);
+    res.json({ success: true, message: 'Session invalidated successfully' });
+  } catch {
+    res.status(503).json({
+      success: false,
+      error: 'SESSION_REVOCATION_UNAVAILABLE',
+      message: 'Session revocation could not be confirmed. Please retry.'
+    });
+  }
 });
 
 // Diagnostic API Endpoint (Protected in Production)
