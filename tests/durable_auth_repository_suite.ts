@@ -95,12 +95,16 @@ async function run() {
   assert.equal(await auth.verifyToken(tampered), null, 'Tampered signature is rejected');
 
   const weakSecret = process.env.SESSION_SECRET;
+  const jwtSecret = process.env.JWT_SECRET;
+  delete process.env.JWT_SECRET;
   process.env.SESSION_SECRET = 'short';
   await assert.rejects(
     () => auth.createSession({ username: 'alice', uid: 'pi-alice' }),
     /AUTH_SESSION_SECRET_MISSING_OR_WEAK/
   );
   process.env.SESSION_SECRET = weakSecret;
+  if (jwtSecret === undefined) delete process.env.JWT_SECRET;
+  else process.env.JWT_SECRET = jwtSecret;
 
   // A session cannot be created for an identity absent from the authoritative store.
   await assert.rejects(
