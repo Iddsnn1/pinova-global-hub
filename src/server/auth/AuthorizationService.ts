@@ -55,6 +55,9 @@ export class AuthorizationService {
       throw new Error('AUTH_DURABLE_IDENTITY_NOT_FOUND_OR_MISMATCH');
     }
 
+    // Never mutate roles for suspended or pending identities.
+    if (identity.status !== 'ACTIVE') throw new Error('AUTH_IDENTITY_NOT_ACTIVE');
+
     // Only a server-authorized admin flow may write roles. Browser-supplied
     // roles are ignored for every other session creation.
     if (input.isAuthorizedAdmin === true) {
@@ -64,8 +67,6 @@ export class AuthorizationService {
       const safeRoles = requestedRoles.length ? requestedRoles : ['PIONEER' as UserRole];
       identity = (await repository.setAuthoritativeRoles(identity.id, safeRoles)) || identity;
     }
-
-    if (identity.status !== 'ACTIVE') throw new Error('AUTH_IDENTITY_NOT_ACTIVE');
 
     const secret = this.getSecret();
     const expiresAt = Date.now() + ttlMs;
