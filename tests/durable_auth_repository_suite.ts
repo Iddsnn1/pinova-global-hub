@@ -59,9 +59,6 @@ async function run() {
 
   const session = await auth.createSession({
     username: 'alice', uid: 'pi-alice', roles: ['PLATFORM_ADMIN']
-  }).catch((error) => {
-    // The seeded identity UID is intentionally corrected below to match the test.
-    throw error;
   });
   assert.ok(session.token.startsWith('pinova_sess_v2_'));
   const payload = session.token.slice('pinova_sess_v2_'.length).split('.')[0];
