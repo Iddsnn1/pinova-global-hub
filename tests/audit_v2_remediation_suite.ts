@@ -8,7 +8,6 @@ import path from 'path';
 process.env.PINOVA_DATA_DIR = path.join(os.tmpdir(), `pinova_audit_test_${Date.now()}`);
 
 import crypto from 'crypto';
-import { UserIdentityRepository } from '../src/server/auth/UserIdentityRepository';
 import { AuthorizationService } from '../src/server/auth/AuthorizationService';
 import { createRateLimiter } from '../src/server/auth/rateLimit';
 import { EducationRepository } from '../src/server/db/repositories/EducationRepository';
@@ -113,7 +112,7 @@ async function runTestSuite() {
     isAuthorizedAdmin: true
   });
   assert(authService.hasRole(adminSession.user, 'PLATFORM_ADMIN'), 'Scenario 1.6: Explicit server-authorized admin receives PLATFORM_ADMIN role');
-  assert(authService.hasPermission(adminSession.user, 'pstp:disputes:resolve'), 'Scenario 1.7: Platform admin possesses dispute resolution permission');
+  assert(authService.hasPermission(adminSession.user, 'pstp:dispute:resolve'), 'Scenario 1.7: Platform admin possesses dispute resolution permission');
 
   // 1.4 Token cannot elevate roles beyond the authoritative identity
   const tokenUser = await authService.authenticateToken(pioneerSession.token);
