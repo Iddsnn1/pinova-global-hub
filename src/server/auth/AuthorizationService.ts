@@ -179,20 +179,31 @@ export class AuthorizationService {
     let token = tokenHeader.trim();
     if (token.startsWith('Bearer ')) token = token.slice(7).trim();
     else if (token.startsWith('Key ')) token = token.slice(4).trim();
-    if (!token) return false;
+    if (!token.startsWith('pinova_sess_v2_')) return false;
 
-    let expiresAt = Date.now() + SESSION_TTL_MS;
-    if (token.startsWith('pinova_sess_v2_')) {
-      try {
-        const signed = token.slice('pinova_sess_v2_'.length);
-        const payload = signed.slice(0, signed.lastIndexOf('.'));
-        const decoded = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
-        if (Number.isFinite(decoded?.exp)) expiresAt = Math.max(expiresAt, decoded.exp);
-      } catch {
-        // Keep a bounded revocation window for malformed/unknown tokens.
-      }
+    // Do not let unauthenticated callers create arbitrary revocation rows.
+    const secret = this.getSecret();
+    const signed = token.slice('pinova_sess_v2_'.length);
+    const separator = signed.lastIndexOf('.');
+    if (separator <= 0) return false;
+    const payload = signed.slice(0, separator);
+    const signature = signed.slice(separator + 1);
+    const expected = crypto.createHmac('sha256', secret).update(payload).digest('base64url');
+    const providedBytes = Buffer.from(signature);
+    const expectedBytes = Buffer.from(expected);
+    if (providedBytes.length !== expectedBytes.length ||
+        !crypto.timingSafeEqual(providedBytes, expectedBytes)) return false;
+
+    let decoded: any;
+    try {
+      decoded = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+    } catch {
+      return false;
     }
-    await this.authRepository.revokeSession(token, expiresAt);
+    if (decoded?.v !== 2 || typeof decoded.sub !== 'string' ||
+        !Number.isFinite(decoded.exp)) return false;
+
+    await this.authRepository.revokeSession(token, decoded.exp);
     return true;
   }
 
