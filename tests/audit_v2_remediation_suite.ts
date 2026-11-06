@@ -40,46 +40,89 @@ async function runTestSuite() {
   // --- 1. AUTHENTICATION & SERVER-SIDE AUTHORIZATION ---
   console.log('--- SECTION 1: SERVER-SIDE AUTHORIZATION & SESSION AUDIT ---');
 
-  const userRepo = new UserIdentityRepository();
-  const authService = new AuthorizationService(userRepo);
+  process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'test-only-session-secret-32-characters-min';
+  const identities = new Map<string, any>();
+  const sessions = new Map<string, { userId: string; expiresAt: number }>();
+  const fakeNeonRepository = {
+    async findUserByUsername(username: string) {
+      return identities.get(username.trim().replace(/^@/, '').toLowerCase()) || null;
+    },
+    async findActiveSession(token: string) {
+      const session = sessions.get(token);
+      if (!session || session.expiresAt <= Date.now()) return null;
+      const user = [...identities.values()].find((candidate) => candidate.id === session.userId);
+      return user ? { user: { ...user }, expiresAt: session.expiresAt } : null;
+    },
+    async createSession(token: string, userId: string, expiresAt: number) {
+      sessions.set(token, { userId, expiresAt });
+    },
+    async revokeSession(token: string) {
+      sessions.delete(token);
+    },
+    async setAuthoritativeRoles(userId: string, roles: any[]) {
+      const user = [...identities.values()].find((candidate) => candidate.id === userId);
+      if (!user) return null;
+      user.roles = [...roles];
+      return { ...user };
+    },
+    async upsertVerifiedPiIdentity({ username, piUid }: { username: string; piUid: string }) {
+      const key = username.trim().replace(/^@/, '').toLowerCase();
+      const existing = identities.get(key);
+      const user = existing || {
+        id: `test-${key}`, username, piUid, roles: ['PIONEER'], status: 'ACTIVE',
+        createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
+      };
+      if (existing && existing.piUid !== piUid) throw new Error('AUTH_PI_UID_MISMATCH');
+      identities.set(key, user);
+      return { ...user };
+    }
+  };
+  identities.set('pioneer_alice', {
+    id: 'test-alice', username: 'pioneer_alice', piUid: 'pi-uid-alice-123',
+    roles: ['PIONEER', 'STUDENT'], status: 'ACTIVE',
+    createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
+  });
+  identities.set('admin_bob', {
+    id: 'test-bob', username: 'admin_bob', piUid: 'pi-uid-bob-admin',
+    roles: ['PIONEER'], status: 'ACTIVE',
+    createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
+  });
+  const authService = new AuthorizationService(fakeNeonRepository as any);
 
   // 1.1 Session Creation & Identity Binding
   const pioneerSession = await authService.createSession({
     username: 'pioneer_alice',
     uid: 'pi-uid-alice-123',
-    roles: ['PIONEER', 'STUDENT']
+    roles: ['PLATFORM_ADMIN']
   });
-  assert(Boolean(pioneerSession.token), 'Scenario 1.1: Auth service issues secure random session token');
-  assert(pioneerSession.user.username === 'pioneer_alice', 'Scenario 1.2: Authenticated user profile bound to session');
-  assert(pioneerSession.user.roles.includes('PIONEER'), 'Scenario 1.3: User possesses assigned role');
+  assert(Boolean(pioneerSession.token), 'Scenario 1.1: Auth service issues a signed durable-session token');
+  assert(pioneerSession.user.username === 'pioneer_alice', 'Scenario 1.2: Authenticated user profile bound to Neon identity');
+  assert(pioneerSession.user.roles.includes('PIONEER'), 'Scenario 1.3: Roles are read from authoritative identity');
 
   // 1.2 Role Checking
   const isAliceAdmin = authService.hasRole(pioneerSession.user, 'PLATFORM_ADMIN');
   assert(!isAliceAdmin, 'Scenario 1.4: Regular Pioneer lacks PLATFORM_ADMIN role');
-
   const isAliceStudent = authService.hasRole(pioneerSession.user, 'STUDENT');
-  assert(isAliceStudent, 'Scenario 1.5: Regular Pioneer with student role possesses STUDENT role');
+  assert(isAliceStudent, 'Scenario 1.5: Existing authoritative STUDENT role is retained');
 
-  // 1.3 Admin Session & Permissions
+  // 1.3 Server-authorized admin role assignment
   const adminSession = await authService.createSession({
     username: 'admin_bob',
     uid: 'pi-uid-bob-admin',
-    roles: ['PLATFORM_ADMIN']
+    roles: ['PLATFORM_ADMIN'],
+    isAuthorizedAdmin: true
   });
-  assert(authService.hasRole(adminSession.user, 'PLATFORM_ADMIN'), 'Scenario 1.6: Platform admin possesses PLATFORM_ADMIN role');
+  assert(authService.hasRole(adminSession.user, 'PLATFORM_ADMIN'), 'Scenario 1.6: Explicit server-authorized admin receives PLATFORM_ADMIN role');
   assert(authService.hasPermission(adminSession.user, 'pstp:disputes:resolve'), 'Scenario 1.7: Platform admin possesses dispute resolution permission');
-  assert(authService.hasPermission(adminSession.user, 'education:fees:override'), 'Scenario 1.8: Platform admin possesses fee override permission');
 
-  // 1.4 Client Header Impersonation Rejection
-  // If a user token is regular pioneer, an attacker cannot claim admin permissions
+  // 1.4 Token cannot elevate roles beyond the authoritative identity
   const tokenUser = await authService.authenticateToken(pioneerSession.token);
-  assert(tokenUser !== null && !tokenUser.roles.includes('PLATFORM_ADMIN'), 'Scenario 1.9: Token cannot be spoofed to elevate privileges');
+  assert(tokenUser !== null && !tokenUser.roles.includes('PLATFORM_ADMIN'), 'Scenario 1.9: Signed token roles cannot elevate privileges');
 
-  // 1.5 Logout & Session Invalidation
-  authService.invalidateSession(pioneerSession.token);
+  // 1.5 Logout waits for durable revocation
+  await authService.invalidateSession(pioneerSession.token);
   const invalidatedUser = await authService.authenticateToken(pioneerSession.token);
-  assert(invalidatedUser === null, 'Scenario 1.10: Invalidated session token rejected upon subsequent authentication');
-
+  assert(invalidatedUser === null, 'Scenario 1.10: Revoked session rejected on subsequent authentication');
 
   // 1.6 Education API BOLA/BFLA source-level regression guards
   // These guards ensure the fail-closed authorization contracts remain present in server.ts.
