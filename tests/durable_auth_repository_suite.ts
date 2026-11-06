@@ -86,6 +86,7 @@ async function run() {
   assert.equal(await auth.verifyToken(session.token), null, 'Pending identities are rejected');
   alice.status = 'ACTIVE';
 
+  assert.equal(await auth.invalidateSession('not-a-valid-session'), false, 'Malformed logout token cannot create revocation rows');
   await auth.invalidateSession(session.token);
   assert.equal(harness.sessions.has(session.token), false, 'Logout removes active session');
   assert.equal(harness.revocations.has(session.token), true, 'Logout persists revocation');
@@ -105,6 +106,20 @@ async function run() {
   process.env.SESSION_SECRET = weakSecret;
   if (jwtSecret === undefined) delete process.env.JWT_SECRET;
   else process.env.JWT_SECRET = jwtSecret;
+
+  const expiring = await auth.createSession({ username: 'alice', uid: 'pi-alice' }, 1);
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  assert.equal(await auth.verifyToken(expiring.token), null, 'Expired session is rejected');
+
+  const oldDatabaseUrl = process.env.DATABASE_URL;
+  process.env.DATABASE_URL = '';
+  const noDatabase = new AuthorizationService();
+  await assert.rejects(
+    () => noDatabase.createSession({ username: 'alice', uid: 'pi-alice' }),
+    /NEON_DATABASE_URL_UNAVAILABLE_OR_INVALID/
+  );
+  if (oldDatabaseUrl === undefined) delete process.env.DATABASE_URL;
+  else process.env.DATABASE_URL = oldDatabaseUrl;
 
   // A session cannot be created for an identity absent from the authoritative store.
   await assert.rejects(
