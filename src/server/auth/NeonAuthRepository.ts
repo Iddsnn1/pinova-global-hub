@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'crypto';
+import { createHash } from 'crypto';
 import { getNeonSql } from '../db/NeonDatabase';
 import type { UserIdentityEntity, UserRole } from './types';
 
@@ -24,8 +24,10 @@ function mapUser(row: any): UserIdentityEntity {
 }
 
 /**
- * Neon-backed auth persistence. Schema creation is idempotent and is intended
- * to be invoked by the explicit migration/bootstrap path, not on every request.
+ * Adapter for the existing Preview auth schema:
+ * user_identities, user_sessions and revoked_sessions.
+ * Only SHA-256 token hashes are persisted; bearer tokens remain in memory
+ * for the response and are never written to PostgreSQL.
  */
 export class NeonAuthRepository {
   private sql: Sql;
@@ -34,51 +36,29 @@ export class NeonAuthRepository {
     this.sql = sql;
   }
 
-  public async ensureSchema(): Promise<void> {
-    await this.sql`CREATE TABLE IF NOT EXISTS pinova_user_identities (
-      id text PRIMARY KEY,
-      username text NOT NULL,
-      username_normalized text NOT NULL UNIQUE,
-      pi_uid text UNIQUE,
-      email text,
-      roles jsonb NOT NULL DEFAULT '[]'::jsonb,
-      institution_id text,
-      guardian_id text,
-      status text NOT NULL DEFAULT 'ACTIVE'
-        CHECK (status IN ('ACTIVE','SUSPENDED','PENDING_VERIFICATION')),
-      created_at timestamptz NOT NULL DEFAULT now(),
-      updated_at timestamptz NOT NULL DEFAULT now()
-    )`;
-    await this.sql`CREATE INDEX IF NOT EXISTS pinova_user_identities_pi_uid_idx
-      ON pinova_user_identities (pi_uid) WHERE pi_uid IS NOT NULL`;
-    await this.sql`CREATE TABLE IF NOT EXISTS pinova_auth_sessions (
-      token_hash char(64) PRIMARY KEY,
-      user_id text NOT NULL REFERENCES pinova_user_identities(id) ON DELETE CASCADE,
-      expires_at timestamptz NOT NULL,
-      created_at timestamptz NOT NULL DEFAULT now()
-    )`;
-    await this.sql`CREATE INDEX IF NOT EXISTS pinova_auth_sessions_user_idx
-      ON pinova_auth_sessions (user_id)`;
-    await this.sql`CREATE INDEX IF NOT EXISTS pinova_auth_sessions_expiry_idx
-      ON pinova_auth_sessions (expires_at)`;
-    await this.sql`CREATE TABLE IF NOT EXISTS pinova_auth_revocations (
-      token_hash char(64) PRIMARY KEY,
-      revoked_at timestamptz NOT NULL DEFAULT now(),
-      expires_at timestamptz NOT NULL
-    )`;
-    await this.sql`CREATE INDEX IF NOT EXISTS pinova_auth_revocations_expiry_idx
-      ON pinova_auth_revocations (expires_at)`;
+  /** Fail fast if the pre-provisioned durable auth schema is not available. */
+  public async assertSchemaReady(): Promise<void> {
+    const rows = await this.sql`
+      SELECT
+        to_regclass('public.user_identities') AS identities,
+        to_regclass('public.user_sessions') AS sessions,
+        to_regclass('public.revoked_sessions') AS revocations
+    `;
+    const row = rows[0];
+    if (!row?.identities || !row?.sessions || !row?.revocations) {
+      throw new Error('AUTH_DURABLE_SCHEMA_NOT_READY');
+    }
   }
 
   public async findUserByUsername(username: string): Promise<UserIdentityEntity | null> {
     const key = normalizeUsername(username);
     if (!key) return null;
-    const rows = await this.sql`SELECT * FROM pinova_user_identities WHERE username_normalized = ${key} LIMIT 1`;
+    const rows = await this.sql`SELECT * FROM user_identities WHERE lower(username) = ${key} LIMIT 1`;
     return rows[0] ? mapUser(rows[0]) : null;
   }
 
   public async findUserById(id: string): Promise<UserIdentityEntity | null> {
-    const rows = await this.sql`SELECT * FROM pinova_user_identities WHERE id = ${id} LIMIT 1`;
+    const rows = await this.sql`SELECT * FROM user_identities WHERE id = ${id}::uuid LIMIT 1`;
     return rows[0] ? mapUser(rows[0]) : null;
   }
 
@@ -89,57 +69,59 @@ export class NeonAuthRepository {
   }): Promise<UserIdentityEntity> {
     const username = input.username.trim().replace(/^@/, '');
     const normalized = normalizeUsername(username);
-    if (!username || !normalized || !input.piUid.trim()) {
-      throw new Error('AUTH_IDENTITY_INVALID');
-    }
+    const piUid = input.piUid.trim();
+    if (!username || !normalized || !piUid) throw new Error('AUTH_IDENTITY_INVALID');
+
     const rows = await this.sql`
-      INSERT INTO pinova_user_identities
-        (id, username, username_normalized, pi_uid, email, roles, status)
-      VALUES
-        (${randomUUID()}, ${username}, ${normalized}, ${input.piUid.trim()},
-         ${input.email || null}, '["PIONEER"]'::jsonb, 'ACTIVE')
-      ON CONFLICT (username_normalized) DO UPDATE SET
+      INSERT INTO user_identities (username, pi_uid, email)
+      VALUES (${username}, ${piUid}, ${input.email || null})
+      ON CONFLICT (lower(username)) DO UPDATE SET
         username = EXCLUDED.username,
-        pi_uid = COALESCE(pinova_user_identities.pi_uid, EXCLUDED.pi_uid),
-        email = COALESCE(EXCLUDED.email, pinova_user_identities.email),
+        pi_uid = COALESCE(user_identities.pi_uid, EXCLUDED.pi_uid),
+        email = COALESCE(EXCLUDED.email, user_identities.email),
         updated_at = now()
       RETURNING *
     `;
     if (!rows[0]) throw new Error('AUTH_IDENTITY_UPSERT_FAILED');
-    if (String(rows[0].pi_uid) !== input.piUid.trim()) {
-      throw new Error('AUTH_PI_UID_MISMATCH');
-    }
+    if (String(rows[0].pi_uid) !== piUid) throw new Error('AUTH_PI_UID_MISMATCH');
     return mapUser(rows[0]);
   }
 
   /** Privileged role changes must only be called behind server-side admin authorization. */
   public async setAuthoritativeRoles(userId: string, roles: UserRole[]): Promise<UserIdentityEntity | null> {
     const rows = await this.sql`
-      UPDATE pinova_user_identities SET roles = ${JSON.stringify([...new Set(roles)])}::jsonb,
-        updated_at = now()
-      WHERE id = ${userId} RETURNING *
+      UPDATE user_identities
+      SET roles = ${JSON.stringify([...new Set(roles)])}::jsonb, updated_at = now()
+      WHERE id = ${userId}::uuid
+      RETURNING *
     `;
     return rows[0] ? mapUser(rows[0]) : null;
   }
 
   public async createSession(token: string, userId: string, expiresAt: number): Promise<void> {
     const hash = createHash('sha256').update(token).digest('hex');
-    await this.sql`INSERT INTO pinova_auth_sessions (token_hash, user_id, expires_at)
-      VALUES (${hash}, ${userId}, to_timestamp(${expiresAt / 1000}))
-      ON CONFLICT (token_hash) DO NOTHING`;
+    const rows = await this.sql`
+      INSERT INTO user_sessions (token_hash, user_id, session_version, expires_at)
+      SELECT ${hash}, id, session_version, to_timestamp(${expiresAt / 1000})
+      FROM user_identities
+      WHERE id = ${userId}::uuid
+      RETURNING id
+    `;
+    if (!rows[0]) throw new Error('AUTH_SESSION_IDENTITY_NOT_FOUND');
   }
 
   public async findActiveSession(token: string): Promise<{ user: UserIdentityEntity; expiresAt: number } | null> {
     const hash = createHash('sha256').update(token).digest('hex');
     const rows = await this.sql`
       SELECT u.*, s.expires_at
-      FROM pinova_auth_sessions s
-      JOIN pinova_user_identities u ON u.id = s.user_id
+      FROM user_sessions s
+      JOIN user_identities u ON u.id = s.user_id
       WHERE s.token_hash = ${hash}
         AND s.expires_at > now()
+        AND s.revoked_at IS NULL
+        AND s.session_version = u.session_version
         AND NOT EXISTS (
-          SELECT 1 FROM pinova_auth_revocations r
-          WHERE r.token_hash = s.token_hash AND r.expires_at > now()
+          SELECT 1 FROM revoked_sessions r WHERE r.token_hash = s.token_hash
         )
       LIMIT 1
     `;
@@ -148,18 +130,23 @@ export class NeonAuthRepository {
     return { user: mapUser(userRow), expiresAt: new Date(expires_at).getTime() };
   }
 
-  /** Revoke before returning from logout; only the hash is persisted. */
-  public async revokeSession(token: string, expiresAt: number): Promise<void> {
+  /** Revocation is written first; a subsequent update failure still fails closed. */
+  public async revokeSession(token: string, _expiresAt: number): Promise<void> {
     const hash = createHash('sha256').update(token).digest('hex');
-    await this.sql`INSERT INTO pinova_auth_revocations (token_hash, expires_at)
-      VALUES (${hash}, to_timestamp(${expiresAt / 1000}))
-      ON CONFLICT (token_hash) DO UPDATE SET revoked_at = now(),
-        expires_at = GREATEST(pinova_auth_revocations.expires_at, EXCLUDED.expires_at)`;
-    await this.sql`DELETE FROM pinova_auth_sessions WHERE token_hash = ${hash}`;
+    await this.sql`
+      INSERT INTO revoked_sessions (token_hash, reason)
+      VALUES (${hash}, 'logout')
+      ON CONFLICT (token_hash) DO UPDATE SET revoked_at = now(), reason = 'logout'
+    `;
+    await this.sql`
+      UPDATE user_sessions
+      SET revoked_at = now(), revoke_reason = 'logout'
+      WHERE token_hash = ${hash} AND revoked_at IS NULL
+    `;
   }
 
   public async pruneExpiredAuthRows(): Promise<void> {
-    await this.sql`DELETE FROM pinova_auth_sessions WHERE expires_at <= now()`;
-    await this.sql`DELETE FROM pinova_auth_revocations WHERE expires_at <= now()`;
+    await this.sql`DELETE FROM user_sessions WHERE expires_at <= now()`;
+    await this.sql`DELETE FROM revoked_sessions WHERE revoked_at < now() - interval '30 days'`;
   }
 }
