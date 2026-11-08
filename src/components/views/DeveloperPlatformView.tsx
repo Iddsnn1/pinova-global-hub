@@ -594,10 +594,12 @@ export const DeveloperPlatformView: React.FC<DeveloperPlatformViewProps> = ({
                       <span>Test Ping</span>
                     </button>
                     <button
-                      onClick={() => handleToggleConnector(conn.id)}
-                      className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition-all"
+                      type="button"
+                      disabled
+                      title="Server-side provider configuration is required"
+                      className="px-3 py-1.5 rounded-xl bg-slate-800 text-slate-500 text-xs font-bold cursor-not-allowed"
                     >
-                      {conn.status === 'CONNECTED' ? 'Disconnect' : 'Connect'}
+                      Backend required
                     </button>
                   </div>
                 </div>
