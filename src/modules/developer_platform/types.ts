@@ -49,7 +49,7 @@ export interface IntegrationConnector {
   category: IntegrationCategory;
   provider: string;
   description: string;
-  status: 'CONNECTED' | 'DEGRADED' | 'DISCONNECTED' | 'CONFIGURING';
+  status: 'CONNECTED' | 'DEGRADED' | 'DISCONNECTED' | 'CONFIGURING' | 'UNVERIFIED';
   healthPercent: number;
   lastPingIso: string;
   apiDocsUrl: string;
@@ -79,7 +79,7 @@ export interface WebhookDeliveryLog {
   payloadSnippet: string;
   statusCode: number;
   deliveryDurationMs: number;
-  status: 'SUCCESS' | 'FAILED' | 'RETRYING' | 'DEAD_LETTER';
+  status: 'SUCCESS' | 'FAILED' | 'RETRYING' | 'DEAD_LETTER' | 'SIMULATED';
   timestampIso: string;
   retryCount: number;
   errorMessage?: string;
@@ -169,7 +169,7 @@ export interface DeveloperApiKey {
   createdIso: string;
   lastUsedIso: string;
   rateLimitPerMin: number;
-  status: 'ACTIVE' | 'REVOKED' | 'EXPIRED';
+  status: 'ACTIVE' | 'REVOKED' | 'EXPIRED' | 'UNVERIFIED';
 }
 
 export interface DeveloperOAuthClient {
