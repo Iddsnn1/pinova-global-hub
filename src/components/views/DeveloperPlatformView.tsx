@@ -90,9 +90,9 @@ export const DeveloperPlatformView: React.FC<DeveloperPlatformViewProps> = ({
 
   // Interactive API Runner State
   const [apiTestPath, setApiTestPath] = useState<string>('/api/v2/pi/payments/verify');
-  const [apiTestMethod, setApiTestMethod] = useState<string>('POST');
-  const [apiTestHeaders, setApiTestHeaders] = useState<string>('{\n  "Authorization": "Bearer pn_live_pk_demo8841",\n  "Content-Type": "application/json"\n}');
-  const [apiTestBody, setApiTestBody] = useState<string>('{\n  "paymentId": "pi_tx_99812401",\n  "amountPi": 12.5,\n  "currency": "PI"\n}');
+  const [apiTestMethod, setApiTestMethod] = useState<string>('GET');
+  const [apiTestHeaders, setApiTestHeaders] = useState<string>('{\n  "Content-Type": "application/json"\n}');
+  const [apiTestBody, setApiTestBody] = useState<string>('{\n  "paymentId": "YOUR_TEST_PAYMENT_ID"\n}');
   const [apiTestResult, setApiTestResult] = useState<any | null>(null);
   const [isExecutingApiTest, setIsExecutingApiTest] = useState<boolean>(false);
   const [selectedSdkTab, setSelectedSdkTab] = useState<'curl' | 'typescript' | 'python'>('typescript');
@@ -830,8 +830,9 @@ export const DeveloperPlatformView: React.FC<DeveloperPlatformViewProps> = ({
             <div className="lg:col-span-6 space-y-4 p-5 rounded-2xl bg-slate-900 border border-slate-800">
               <h4 className="font-bold text-white text-sm flex items-center gap-2 border-b border-slate-800 pb-2">
                 <Play className="w-4 h-4 text-emerald-400" />
-                <span>API Request Testing Engine</span>
+                <span>API Request Simulation Engine</span>
               </h4>
+              <p className="text-[11px] text-amber-300">Simulation only: this panel does not send network requests and cannot verify Pi payments.</p>
 
               <div className="space-y-3">
                 <div className="space-y-1">
