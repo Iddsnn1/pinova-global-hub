@@ -100,6 +100,7 @@ export const PlatformAdminView: React.FC<PlatformAdminViewProps> = ({
   // Live Refresh State
   const [lastRefreshedAt, setLastRefreshedAt] = useState(new Date().toLocaleTimeString());
   const [isRefreshingMetrics, setIsRefreshingMetrics] = useState(false);
+  const [selectedAlert, setSelectedAlert] = useState<SystemPlatformAlert | null>(null);
 
   // Filter & Search for Users Directory
   const [userQuery, setUserQuery] = useState('');
@@ -557,7 +558,7 @@ export const PlatformAdminView: React.FC<PlatformAdminViewProps> = ({
             className="px-3 py-1.5 rounded-xl bg-purple-950 hover:bg-purple-900 border border-purple-800 text-purple-200 text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm active:scale-95 disabled:opacity-60 disabled:cursor-wait"
           >
             <RefreshCw className={`w-3.5 h-3.5 text-amber-400 ${isRefreshingMetrics ? 'animate-spin' : ''}`} />
-            <span>{isRefreshingMetrics ? 'Syncing…' : 'Sync Live Metrics'}</span>
+            <span>{isRefreshingMetrics ? 'Syncing…' : 'Refresh Dashboard'}</span>
           </button>
         </div>
       </div>
@@ -901,7 +902,16 @@ export const PlatformAdminView: React.FC<PlatformAdminViewProps> = ({
                 {systemAlerts.map((alert) => (
                   <div 
                     key={alert.id}
-                    className={`p-3.5 rounded-2xl border transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs ${
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setSelectedAlert(alert)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        setSelectedAlert(alert);
+                      }
+                    }}
+                    className={`p-3.5 rounded-2xl border transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs cursor-pointer focus:outline-none focus:ring-2 focus:ring-amber-400 ${
                       alert.resolved
                         ? 'bg-slate-950/60 border-slate-800/60 opacity-60'
                         : alert.severity === 'CRITICAL' || alert.severity === 'HIGH'
@@ -938,6 +948,31 @@ export const PlatformAdminView: React.FC<PlatformAdminViewProps> = ({
                   </div>
                 ))}
               </div>
+              {selectedAlert && (
+                <div className="rounded-2xl border border-slate-700 bg-slate-950/80 p-4 space-y-2" role="status">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wider font-bold text-slate-500">Alert details</p>
+                      <h4 className="text-sm font-bold text-white">{selectedAlert.title}</h4>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedAlert(null)}
+                      className="rounded-lg px-2 py-1 text-xs font-bold text-slate-300 hover:bg-slate-800"
+                      aria-label="Close alert details"
+                    >
+                      Close
+                    </button>
+                  </div>
+                  <p className="text-xs text-slate-300">{selectedAlert.message}</p>
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-slate-500">
+                    <span>Component: {selectedAlert.component}</span>
+                    <span>Severity: {selectedAlert.severity}</span>
+                    <span>Reported: {new Date(selectedAlert.timestamp).toLocaleString()}</span>
+                    <span>Status: {selectedAlert.resolved ? 'Resolved' : 'Unresolved'}</span>
+                  </div>
+                </div>
+              )}
             </div>
 
           </div>
