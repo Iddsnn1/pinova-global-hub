@@ -268,7 +268,7 @@ export const DeveloperPlatformView: React.FC<DeveloperPlatformViewProps> = ({
             </span>
           </div>
           <span className="px-2.5 py-1 rounded-full bg-emerald-950 text-emerald-400 text-[10px] font-extrabold border border-emerald-800">
-            Pi SDK v2 & Platform API Verified
+            Pi SDK v2 — Runtime Verification Pending
           </span>
         </div>
         <p className="text-[11px] text-slate-300 leading-relaxed">
@@ -338,22 +338,22 @@ export const DeveloperPlatformView: React.FC<DeveloperPlatformViewProps> = ({
         <div className="p-3.5 rounded-2xl bg-slate-900 border border-slate-800 space-y-1">
           <span className="text-[10px] text-slate-400 font-bold block uppercase">Platform Status</span>
           <div className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-sm font-black text-emerald-400">{health.overallStatus}</span>
+            <span className="w-2.5 h-2.5 rounded-full bg-amber-400" />
+            <span className="text-sm font-black text-amber-400">{health.overallStatus}</span>
           </div>
-          <span className="text-[10px] text-slate-500 block">System SLA {health.apiSlaPercentage}%</span>
+          <span className="text-[10px] text-slate-500 block">Live SLA telemetry unavailable</span>
         </div>
 
         <div className="p-3.5 rounded-2xl bg-slate-900 border border-slate-800 space-y-1">
           <span className="text-[10px] text-slate-400 font-bold block uppercase">API Gateway</span>
           <span className="text-lg font-black text-white">{health.activeEndpointsCount} Routes</span>
-          <span className="text-[10px] text-purple-400 block font-medium">Avg Latency {health.avgApiLatencyMs}ms</span>
+          <span className="text-[10px] text-purple-400 block font-medium">Latency: Not measured</span>
         </div>
 
         <div className="p-3.5 rounded-2xl bg-slate-900 border border-slate-800 space-y-1">
           <span className="text-[10px] text-slate-400 font-bold block uppercase">Connectors</span>
-          <span className="text-lg font-black text-emerald-400">{health.connectedIntegrationsCount} Connected</span>
-          <span className="text-[10px] text-slate-500 block">Payment, Utility, AI, ERP</span>
+          <span className="text-lg font-black text-slate-200">{health.connectedIntegrationsCount} Configured</span>
+          <span className="text-[10px] text-slate-500 block">Runtime connectivity not verified</span>
         </div>
 
         <div className="p-3.5 rounded-2xl bg-slate-900 border border-slate-800 space-y-1">
@@ -364,8 +364,8 @@ export const DeveloperPlatformView: React.FC<DeveloperPlatformViewProps> = ({
 
         <div className="p-3.5 rounded-2xl bg-slate-900 border border-slate-800 space-y-1">
           <span className="text-[10px] text-slate-400 font-bold block uppercase">Webhook Success</span>
-          <span className="text-lg font-black text-amber-400">{health.webhookSuccessRate24h}%</span>
-          <span className="text-[10px] text-slate-500 block">HMAC SHA-256 Verified</span>
+          <span className="text-lg font-black text-slate-200">Unavailable</span>
+          <span className="text-[10px] text-slate-500 block">Live delivery and signature checks not measured</span>
         </div>
 
         <div className="p-3.5 rounded-2xl bg-slate-900 border border-slate-800 space-y-1">
