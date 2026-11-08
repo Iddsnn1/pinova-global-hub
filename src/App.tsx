@@ -278,6 +278,7 @@ function MainAppContent() {
   // Proactive Pi SDK Initialization on Application Load (Controlled Lifecycle)
   useEffect(() => {
     let active = true;
+    let handlePopState: ((event: PopStateEvent) => void) | null = null;
 
     if (typeof window !== 'undefined') {
       const search = window.location.search || '';
@@ -288,7 +289,7 @@ function MainAppContent() {
         setActiveSection('seller_studio');
       }
 
-      const handlePopState = (e: PopStateEvent) => {
+      handlePopState = (e: PopStateEvent) => {
         const curPath = window.location.pathname || '';
         const curSearch = window.location.search || '';
 
@@ -346,7 +347,7 @@ function MainAppContent() {
     return () => {
       active = false;
       if (typeof window !== 'undefined') {
-        window.removeEventListener('popstate', handlePopState);
+        if (handlePopState) window.removeEventListener('popstate', handlePopState);
       }
       unsubscribe();
     };
