@@ -894,8 +894,8 @@ export class EnterpriseDeveloperPlatformEngine {
     responseHeaders: Record<string, string>;
     responseBody: Record<string, any>;
   } {
-    // This browser-side runner is intentionally simulation-only. It must never
-    // claim that a payment was verified or that a backend endpoint was called.
+    // Browser-side runner is intentionally simulation-only. It never calls the
+    // backend and must never claim a payment was verified or an operation ran.
     this.recordAuditLog(
       'SANDBOX_API_REQUEST',
       `Simulated developer request [${method}] ${path}; no network request was sent.`,
@@ -920,81 +920,6 @@ export class EnterpriseDeveloperPlatformEngine {
         message: 'This API Explorer is a local simulator. No backend request or Pi payment verification was performed.'
       }
     };
-  } {
-    const responseTimeMs = Math.floor(Math.random() * 35) + 18;
-    const isV2Payment = path.includes('/payments/verify');
-    const isAirtime = path.includes('/airtime/fulfill');
-
-    this.recordAuditLog(
-      'SANDBOX_API_REQUEST',
-      `Executed developer sandbox request [${method}] ${path}`,
-      'API Explorer',
-      path,
-      'SANDBOX_RUN'
-    );
-
-    if (isV2Payment) {
-      return {
-        statusCode: 200,
-        statusText: 'OK',
-        responseTimeMs,
-        responseHeaders: {
-          'content-type': 'application/json; charset=utf-8',
-          'x-pinova-request-id': `req_${Math.random().toString(36).slice(2, 10)}`,
-          'x-ratelimit-remaining': '1198',
-          'x-pi-sdk-compliance': 'v2.0.0-verified'
-        },
-        responseBody: {
-          status: 'VERIFIED',
-          paymentId: 'pi_tx_99812401',
-          amountPi: 12.5,
-          currency: 'PI',
-          txHash: '0x9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b',
-          timestamp: new Date().toISOString(),
-          verificationStatus: 'VERIFIED_COMPLETED',
-          compliance: {
-            piSdkVersion: 'v2',
-            zeroKeyCustody: true,
-            serverVerified: true
-          }
-        }
-      };
-    } else if (isAirtime) {
-      return {
-        statusCode: 200,
-        statusText: 'OK',
-        responseTimeMs,
-        responseHeaders: {
-          'content-type': 'application/json; charset=utf-8',
-          'x-pinova-request-id': `req_${Math.random().toString(36).slice(2, 10)}`
-        },
-        responseBody: {
-          status: 'FULFILLED',
-          refId: 'UTL-TELCO-99120',
-          carrier: 'MTN Global Switch',
-          amountLocal: 2000,
-          currencyLocal: 'NGN',
-          pinovaReference: 'PIN-AIRTIME-44109',
-          fulfilledIso: new Date().toISOString()
-        }
-      };
-    } else {
-      return {
-        statusCode: 200,
-        statusText: 'OK',
-        responseTimeMs,
-        responseHeaders: {
-          'content-type': 'application/json; charset=utf-8',
-          'x-pinova-request-id': `req_${Math.random().toString(36).slice(2, 10)}`
-        },
-        responseBody: {
-          status: 'SUCCESS',
-          message: `Endpoint ${path} executed successfully under PiNova Developer Sandbox.`,
-          environment: this.activeEnvironment,
-          timestamp: new Date().toISOString()
-        }
-      };
-    }
   }
 
   // --- AUDIT LOGS & REPORTING ---
