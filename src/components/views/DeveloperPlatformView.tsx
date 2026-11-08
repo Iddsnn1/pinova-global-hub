@@ -90,9 +90,9 @@ export const DeveloperPlatformView: React.FC<DeveloperPlatformViewProps> = ({
 
   // Interactive API Runner State
   const [apiTestPath, setApiTestPath] = useState<string>('/api/v2/pi/payments/verify');
-  const [apiTestMethod, setApiTestMethod] = useState<string>('POST');
-  const [apiTestHeaders, setApiTestHeaders] = useState<string>('{\n  "Authorization": "Bearer pn_live_pk_demo8841",\n  "Content-Type": "application/json"\n}');
-  const [apiTestBody, setApiTestBody] = useState<string>('{\n  "paymentId": "pi_tx_99812401",\n  "amountPi": 12.5,\n  "currency": "PI"\n}');
+  const [apiTestMethod, setApiTestMethod] = useState<string>('GET');
+  const [apiTestHeaders, setApiTestHeaders] = useState<string>('{\n  "Content-Type": "application/json"\n}');
+  const [apiTestBody, setApiTestBody] = useState<string>('{\n  "paymentId": "YOUR_TEST_PAYMENT_ID"\n}');
   const [apiTestResult, setApiTestResult] = useState<any | null>(null);
   const [isExecutingApiTest, setIsExecutingApiTest] = useState<boolean>(false);
   const [selectedSdkTab, setSelectedSdkTab] = useState<'curl' | 'typescript' | 'python'>('typescript');
@@ -140,9 +140,7 @@ export const DeveloperPlatformView: React.FC<DeveloperPlatformViewProps> = ({
   const handleTestConnector = (id: string) => {
     const res = engine.testConnectorConnection(id);
     refreshState();
-    if (res.success) {
-      showToast(`Ping Success (${res.latencyMs}ms): ${res.message}`);
-    }
+    showToast(res.success ? `Ping verified (${res.latencyMs}ms): ${res.message}` : res.message);
   };
 
   const handleToggleConnector = (id: string) => {
@@ -155,14 +153,14 @@ export const DeveloperPlatformView: React.FC<DeveloperPlatformViewProps> = ({
   const handleTriggerWebhookTest = (id: string) => {
     const newLog = engine.triggerWebhookTest(id);
     refreshState();
-    showToast(`Webhook Test Dispatched! Result: HTTP ${newLog.statusCode} (${newLog.deliveryDurationMs}ms)`);
+    showToast('Simulation only: webhook was NOT sent. Backend delivery worker is not configured.');
   };
 
   const handleReplayWebhook = (logId: string) => {
     const replayed = engine.replayWebhookEvent(logId);
     if (replayed) {
       refreshState();
-      showToast(`Event replayed successfully! HTTP ${replayed.statusCode}`);
+      showToast('Simulation only: replay was NOT sent. No outbound network request occurred.');
     }
   };
 
@@ -208,6 +206,12 @@ export const DeveloperPlatformView: React.FC<DeveloperPlatformViewProps> = ({
     if (!newKeyName.trim()) return;
     const defaultScopes = ['pi:payments:write', 'catalog:read', 'orders:read'];
     const created = engine.createApiKey(newKeyName.trim(), newKeyRole, defaultScopes);
+    if (!created) {
+      setIsCreateKeyModalOpen(false);
+      showToast('API key generation is disabled: secure server-side provisioning is not configured.');
+      refreshState();
+      return;
+    }
     setGeneratedSecret(created.maskedKey);
     setNewKeyName('');
     setApiKeys(engine.getApiKeys());
@@ -268,7 +272,7 @@ export const DeveloperPlatformView: React.FC<DeveloperPlatformViewProps> = ({
             </span>
           </div>
           <span className="px-2.5 py-1 rounded-full bg-emerald-950 text-emerald-400 text-[10px] font-extrabold border border-emerald-800">
-            Pi SDK v2 & Platform API Verified
+            Pi SDK v2 — Runtime Verification Pending
           </span>
         </div>
         <p className="text-[11px] text-slate-300 leading-relaxed">
@@ -292,7 +296,7 @@ export const DeveloperPlatformView: React.FC<DeveloperPlatformViewProps> = ({
         <div className="flex items-center gap-3 flex-wrap">
           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800">
             <Globe className="w-3.5 h-3.5 text-purple-400" />
-            <span className="text-xs font-bold text-slate-400">Environment:</span>
+            <span className="text-xs font-bold text-slate-400">Local profile selector:</span>
             <div className="flex items-center gap-1">
               {(['SANDBOX', 'STAGING', 'PRODUCTION'] as EnvironmentProfile[]).map(env => (
                 <button
@@ -338,40 +342,40 @@ export const DeveloperPlatformView: React.FC<DeveloperPlatformViewProps> = ({
         <div className="p-3.5 rounded-2xl bg-slate-900 border border-slate-800 space-y-1">
           <span className="text-[10px] text-slate-400 font-bold block uppercase">Platform Status</span>
           <div className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-sm font-black text-emerald-400">{health.overallStatus}</span>
+            <span className="w-2.5 h-2.5 rounded-full bg-amber-400" />
+            <span className="text-sm font-black text-amber-400">{health.overallStatus}</span>
           </div>
-          <span className="text-[10px] text-slate-500 block">System SLA {health.apiSlaPercentage}%</span>
+          <span className="text-[10px] text-slate-500 block">Live SLA telemetry unavailable</span>
         </div>
 
         <div className="p-3.5 rounded-2xl bg-slate-900 border border-slate-800 space-y-1">
           <span className="text-[10px] text-slate-400 font-bold block uppercase">API Gateway</span>
           <span className="text-lg font-black text-white">{health.activeEndpointsCount} Routes</span>
-          <span className="text-[10px] text-purple-400 block font-medium">Avg Latency {health.avgApiLatencyMs}ms</span>
+          <span className="text-[10px] text-purple-400 block font-medium">Latency: Not measured</span>
         </div>
 
         <div className="p-3.5 rounded-2xl bg-slate-900 border border-slate-800 space-y-1">
           <span className="text-[10px] text-slate-400 font-bold block uppercase">Connectors</span>
-          <span className="text-lg font-black text-emerald-400">{health.connectedIntegrationsCount} Connected</span>
-          <span className="text-[10px] text-slate-500 block">Payment, Utility, AI, ERP</span>
+          <span className="text-lg font-black text-slate-200">{health.connectedIntegrationsCount} Configured</span>
+          <span className="text-[10px] text-slate-500 block">Runtime connectivity not verified</span>
         </div>
 
         <div className="p-3.5 rounded-2xl bg-slate-900 border border-slate-800 space-y-1">
-          <span className="text-[10px] text-slate-400 font-bold block uppercase">Plugins Active</span>
-          <span className="text-lg font-black text-indigo-400">{health.activePluginsCount} Extensions</span>
-          <span className="text-[10px] text-slate-500 block">Marketplace & Admin</span>
+          <span className="text-[10px] text-slate-400 font-bold block uppercase">Extensions Configured</span>
+          <span className="text-lg font-black text-indigo-400">{health.activePluginsCount} Registered</span>
+          <span className="text-[10px] text-slate-500 block">Local registry; runtime not verified</span>
         </div>
 
         <div className="p-3.5 rounded-2xl bg-slate-900 border border-slate-800 space-y-1">
           <span className="text-[10px] text-slate-400 font-bold block uppercase">Webhook Success</span>
-          <span className="text-lg font-black text-amber-400">{health.webhookSuccessRate24h}%</span>
-          <span className="text-[10px] text-slate-500 block">HMAC SHA-256 Verified</span>
+          <span className="text-lg font-black text-slate-200">Unavailable</span>
+          <span className="text-[10px] text-slate-500 block">Live delivery and signature checks not measured</span>
         </div>
 
         <div className="p-3.5 rounded-2xl bg-slate-900 border border-slate-800 space-y-1">
-          <span className="text-[10px] text-slate-400 font-bold block uppercase">Job Queue</span>
-          <span className="text-lg font-black text-purple-300">{health.activeJobsInQueue} Active</span>
-          <span className="text-[10px] text-slate-500 block">Background Queue Engine</span>
+          <span className="text-[10px] text-slate-400 font-bold block uppercase">Queue Records</span>
+          <span className="text-lg font-black text-purple-300">{health.activeJobsInQueue} Listed</span>
+          <span className="text-[10px] text-slate-500 block">Local records; worker execution unverified</span>
         </div>
       </div>
 
@@ -417,7 +421,7 @@ export const DeveloperPlatformView: React.FC<DeveloperPlatformViewProps> = ({
                 <span>Centralized API Gateway & Endpoint Registry</span>
               </h3>
               <p className="text-xs text-slate-400">
-                Manage versioning, endpoint rate limits, SLA metrics, latency distribution, and deprecation policies.
+                Endpoint registry and configured rate limits. Live request, latency, error, and SLA telemetry is not connected.
               </p>
             </div>
             <button
@@ -502,7 +506,7 @@ export const DeveloperPlatformView: React.FC<DeveloperPlatformViewProps> = ({
                         </span>
                       ) : (
                         <span className="px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 font-bold text-[10px] border border-emerald-800">
-                          ACTIVE SLA
+                          REGISTERED
                         </span>
                       )}
                     </td>
@@ -590,10 +594,12 @@ export const DeveloperPlatformView: React.FC<DeveloperPlatformViewProps> = ({
                       <span>Test Ping</span>
                     </button>
                     <button
-                      onClick={() => handleToggleConnector(conn.id)}
-                      className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition-all"
+                      type="button"
+                      disabled
+                      title="Server-side provider configuration is required"
+                      className="px-3 py-1.5 rounded-xl bg-slate-800 text-slate-500 text-xs font-bold cursor-not-allowed"
                     >
-                      {conn.status === 'CONNECTED' ? 'Disconnect' : 'Connect'}
+                      Backend required
                     </button>
                   </div>
                 </div>
@@ -689,10 +695,10 @@ export const DeveloperPlatformView: React.FC<DeveloperPlatformViewProps> = ({
                               : 'bg-rose-950 text-rose-400 border border-rose-800'
                           }`}
                         >
-                          {log.status} ({log.statusCode})
+                          {log.status} {log.statusCode > 0 ? `(${log.statusCode})` : '(not sent)'}
                         </span>
                       </td>
-                      <td className="p-3.5 font-bold text-slate-300">{log.deliveryDurationMs} ms</td>
+                      <td className="p-3.5 font-bold text-slate-300">{log.deliveryDurationMs > 0 ? `${log.deliveryDurationMs} ms` : 'Not measured'}</td>
                       <td className="p-3.5 font-mono text-[10px] text-slate-400 max-w-[150px] truncate">
                         {log.signatureHeader}
                       </td>
@@ -830,8 +836,9 @@ export const DeveloperPlatformView: React.FC<DeveloperPlatformViewProps> = ({
             <div className="lg:col-span-6 space-y-4 p-5 rounded-2xl bg-slate-900 border border-slate-800">
               <h4 className="font-bold text-white text-sm flex items-center gap-2 border-b border-slate-800 pb-2">
                 <Play className="w-4 h-4 text-emerald-400" />
-                <span>API Request Testing Engine</span>
+                <span>API Request Simulation Engine</span>
               </h4>
+              <p className="text-[11px] text-amber-300">Simulation only: this panel does not send network requests and cannot verify Pi payments.</p>
 
               <div className="space-y-3">
                 <div className="space-y-1">
@@ -960,25 +967,22 @@ export const DeveloperPlatformView: React.FC<DeveloperPlatformViewProps> = ({
                     <pre>{`import { PiNovaSDK } from '@pinova/sdk-v2';
 
 const pinova = new PiNovaSDK({ apiKey: process.env.PINOVA_API_KEY });
-const response = await pinova.payments.verify({
-  paymentId: "pi_tx_99812401",
-  amountPi: 12.5
-});`}</pre>
+const response = await fetch(
+  '/api/v2/pi/payments/verify?paymentId=YOUR_TEST_PAYMENT_ID'
+);`}</pre>
                   )}
                   {selectedSdkTab === 'python' && (
                     <pre>{`from pinova import PiNovaClient
 
-client = PiNovaClient(api_key="pn_live_pk_demo8841")
-response = client.payments.verify(
-    payment_id="pi_tx_99812401",
-    amount_pi=12.5
+response = requests.get(
+    'https://YOUR_API_HOST/api/v2/pi/payments/verify',
+    params={'paymentId': 'YOUR_TEST_PAYMENT_ID'},
+    timeout=10
 )`}</pre>
                   )}
                   {selectedSdkTab === 'curl' && (
-                    <pre>{`curl -X POST https://api.pinova.app/api/v2/pi/payments/verify \\
-  -H "Authorization: Bearer pn_live_pk_demo8841" \\
-  -H "Content-Type: application/json" \\
-  -d '{"paymentId":"pi_tx_99812401","amountPi":12.5}'`}</pre>
+                    <pre>{`curl -G 'https://YOUR_API_HOST/api/v2/pi/payments/verify' \\
+  --data-urlencode 'paymentId=YOUR_TEST_PAYMENT_ID'`}</pre>
                   )}
                 </div>
               </div>
@@ -994,10 +998,10 @@ response = client.payments.verify(
             <div>
               <h3 className="font-bold text-white text-base flex items-center gap-2">
                 <Sliders className="w-5 h-5 text-purple-400" />
-                <span>Centralized Configuration & Feature Flags</span>
+                <span>Local Configuration & Feature Flags</span>
               </h3>
               <p className="text-xs text-slate-400">
-                Control runtime environment profiles, feature toggles, HMAC headers, and system preferences.
+                Change local UI profile and feature-flag demo state only; this does not switch the deployed backend environment.
               </p>
             </div>
           </div>
@@ -1127,7 +1131,7 @@ response = client.payments.verify(
                 <span>Observability, Telemetry & SLA Compliance</span>
               </h3>
               <p className="text-xs text-slate-400">
-                Real-time API latency breakdown, SLA tracking, error budgets, and system health metrics.
+                Configured observability views. Live request, latency, error-budget, and SLA telemetry is not connected.
               </p>
             </div>
           </div>
@@ -1135,20 +1139,20 @@ response = client.payments.verify(
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-2">
               <span className="text-xs font-bold text-slate-400 block uppercase">Gateway SLA Compliance</span>
-              <div className="text-3xl font-black text-emerald-400">99.98%</div>
-              <p className="text-[11px] text-slate-400">Exceeds target 99.90% SLA commitment across 6 endpoints.</p>
+              <div className="text-2xl font-black text-slate-300">Unavailable</div>
+              <p className="text-[11px] text-slate-400">No live request telemetry is connected; compliance cannot be calculated.</p>
             </div>
 
             <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-2">
               <span className="text-xs font-bold text-slate-400 block uppercase">Average Latency (P99)</span>
-              <div className="text-3xl font-black text-purple-300">42 ms</div>
-              <p className="text-[11px] text-slate-400">Optimized via in-memory cached configuration layers.</p>
+              <div className="text-2xl font-black text-slate-300">Not measured</div>
+              <p className="text-[11px] text-slate-400">No production-like traffic sample is available.</p>
             </div>
 
             <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-2">
               <span className="text-xs font-bold text-slate-400 block uppercase">Error Budget Remaining</span>
-              <div className="text-3xl font-black text-amber-400">98.4%</div>
-              <p className="text-[11px] text-slate-400">Zero catastrophic outage incidents recorded in 30 days.</p>
+              <div className="text-2xl font-black text-slate-300">Unavailable</div>
+              <p className="text-[11px] text-slate-400">Cannot calculate an error budget until an SLA target and live telemetry source are configured.</p>
             </div>
           </div>
         </div>

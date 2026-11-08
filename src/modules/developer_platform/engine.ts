@@ -24,23 +24,23 @@ import {
 export class EnterpriseDeveloperPlatformEngine {
   private static instance: EnterpriseDeveloperPlatformEngine;
 
-  private activeEnvironment: EnvironmentProfile = 'PRODUCTION';
+  private activeEnvironment: EnvironmentProfile = 'SANDBOX';
 
   private endpoints: ApiEndpoint[] = [
     {
       id: 'ep-001',
       path: '/api/v2/pi/payments/verify',
-      method: 'POST',
+      method: 'GET',
       version: 'v2',
       category: 'PAYMENTS',
       name: 'Pi SDK v2 Payment Verification Gateway',
       description: 'Official Pi Network SDK v2 payment proof verification proxy.',
       rateLimitPerMin: 1200,
       deprecated: false,
-      activeRequests24h: 14280,
-      avgLatencyMs: 42,
-      errorRatePercent: 0.08,
-      slaPercent: 99.98,
+      activeRequests24h: 0,
+      avgLatencyMs: 0,
+      errorRatePercent: 0,
+      slaPercent: 0,
       requiresAuth: true,
       requiredScope: 'pi:payments:write'
     },
@@ -54,10 +54,10 @@ export class EnterpriseDeveloperPlatformEngine {
       description: 'Executes automated airtime & utility token top-ups across global telcos.',
       rateLimitPerMin: 600,
       deprecated: false,
-      activeRequests24h: 8930,
-      avgLatencyMs: 110,
-      errorRatePercent: 0.15,
-      slaPercent: 99.94,
+      activeRequests24h: 0,
+      avgLatencyMs: 0,
+      errorRatePercent: 0,
+      slaPercent: 0,
       requiresAuth: true,
       requiredScope: 'utility:fulfill'
     },
@@ -72,10 +72,10 @@ export class EnterpriseDeveloperPlatformEngine {
       rateLimitPerMin: 300,
       deprecated: true,
       deprecationNotice: 'v1 deprecated. Please upgrade to /api/v2/orders/sync by Dec 2026.',
-      activeRequests24h: 2150,
-      avgLatencyMs: 185,
-      errorRatePercent: 1.2,
-      slaPercent: 99.85,
+      activeRequests24h: 0,
+      avgLatencyMs: 0,
+      errorRatePercent: 0,
+      slaPercent: 0,
       requiresAuth: true,
       requiredScope: 'orders:read_write'
     },
@@ -89,10 +89,10 @@ export class EnterpriseDeveloperPlatformEngine {
       description: 'Provides Gemini AI-powered product matching & personalized catalog discovery.',
       rateLimitPerMin: 900,
       deprecated: false,
-      activeRequests24h: 28400,
-      avgLatencyMs: 65,
-      errorRatePercent: 0.02,
-      slaPercent: 99.99,
+      activeRequests24h: 0,
+      avgLatencyMs: 0,
+      errorRatePercent: 0,
+      slaPercent: 0,
       requiresAuth: false,
       requiredScope: 'catalog:read'
     },
@@ -106,10 +106,10 @@ export class EnterpriseDeveloperPlatformEngine {
       description: 'Dispatches instant push, SMS, and email alerts for marketplace events.',
       rateLimitPerMin: 1500,
       deprecated: false,
-      activeRequests24h: 31200,
-      avgLatencyMs: 38,
-      errorRatePercent: 0.05,
-      slaPercent: 99.97,
+      activeRequests24h: 0,
+      avgLatencyMs: 0,
+      errorRatePercent: 0,
+      slaPercent: 0,
       requiresAuth: true,
       requiredScope: 'notifications:dispatch'
     },
@@ -123,10 +123,10 @@ export class EnterpriseDeveloperPlatformEngine {
       description: 'Streams privacy-compliant aggregated metrics to analytics engines.',
       rateLimitPerMin: 3000,
       deprecated: false,
-      activeRequests24h: 89400,
-      avgLatencyMs: 18,
-      errorRatePercent: 0.01,
-      slaPercent: 99.99,
+      activeRequests24h: 0,
+      avgLatencyMs: 0,
+      errorRatePercent: 0,
+      slaPercent: 0,
       requiresAuth: true,
       requiredScope: 'analytics:write'
     }
@@ -139,14 +139,14 @@ export class EnterpriseDeveloperPlatformEngine {
       category: 'PAYMENT',
       provider: 'Pi Network Official SDK v2',
       description: 'Official SDK integration for client-side authentication & server-side payment verification.',
-      status: 'CONNECTED',
-      healthPercent: 100,
-      lastPingIso: new Date().toISOString(),
+      status: 'UNVERIFIED',
+      healthPercent: 0,
+      lastPingIso: '',
       apiDocsUrl: 'https://developers.minepi.com/docs',
       isCustomEndpointAllowed: false,
       activeConfig: {
         sdkVersion: '2.0.0',
-        environment: 'Production Mainnet Proxy',
+        environment: 'Pi SDK sandbox/testnet — runtime verification pending',
         paymentVerificationMode: 'Strict Server-to-Server Verification'
       },
       supportedEvents: ['payment.created', 'payment.approved', 'payment.completed', 'payment.cancelled']
@@ -157,9 +157,9 @@ export class EnterpriseDeveloperPlatformEngine {
       category: 'UTILITY',
       provider: 'Multi-Country Telco Switch',
       description: 'Connects to 120+ telecom providers across Africa, Asia, and Latin America.',
-      status: 'CONNECTED',
-      healthPercent: 99.2,
-      lastPingIso: new Date().toISOString(),
+      status: 'UNVERIFIED',
+      healthPercent: 0,
+      lastPingIso: '',
       apiDocsUrl: 'https://pinova.app/docs/integrations/utility-hub',
       isCustomEndpointAllowed: true,
       activeConfig: {
@@ -175,9 +175,9 @@ export class EnterpriseDeveloperPlatformEngine {
       category: 'SHIPPING',
       provider: 'Universal Shipping API',
       description: 'Provides real-time tracking, rate quotes, and label generation for physical marketplace orders.',
-      status: 'CONNECTED',
-      healthPercent: 98.7,
-      lastPingIso: new Date().toISOString(),
+      status: 'UNVERIFIED',
+      healthPercent: 0,
+      lastPingIso: '',
       apiDocsUrl: 'https://pinova.app/docs/integrations/shipping',
       isCustomEndpointAllowed: true,
       activeConfig: {
@@ -192,9 +192,9 @@ export class EnterpriseDeveloperPlatformEngine {
       category: 'NOTIFICATION',
       provider: 'Twilio / Firebase Push Bridge',
       description: 'Sends transactional notifications, OTPs, and order updates to mobile devices.',
-      status: 'CONNECTED',
-      healthPercent: 100,
-      lastPingIso: new Date().toISOString(),
+      status: 'UNVERIFIED',
+      healthPercent: 0,
+      lastPingIso: '',
       apiDocsUrl: 'https://pinova.app/docs/integrations/notifications',
       isCustomEndpointAllowed: true,
       activeConfig: {
@@ -209,9 +209,9 @@ export class EnterpriseDeveloperPlatformEngine {
       category: 'AI_PROVIDER',
       provider: 'Google GenAI SDK (Server-Side Proxy)',
       description: 'Secure server-side proxy for product recommendations, fraud score generation, and translation.',
-      status: 'CONNECTED',
-      healthPercent: 100,
-      lastPingIso: new Date().toISOString(),
+      status: 'UNVERIFIED',
+      healthPercent: 0,
+      lastPingIso: '',
       apiDocsUrl: 'https://ai.google.dev/docs',
       isCustomEndpointAllowed: false,
       activeConfig: {
@@ -228,7 +228,7 @@ export class EnterpriseDeveloperPlatformEngine {
       description: 'Syncs marketplace vendor catalog, sales orders, and tax ledgers with enterprise systems.',
       status: 'CONFIGURING',
       healthPercent: 95.0,
-      lastPingIso: new Date().toISOString(),
+      lastPingIso: '',
       apiDocsUrl: 'https://pinova.app/docs/integrations/crm-erp',
       isCustomEndpointAllowed: true,
       activeConfig: {
@@ -246,11 +246,11 @@ export class EnterpriseDeveloperPlatformEngine {
       targetUrl: 'https://api.merchant-partner.org/v2/pinova/orders',
       secretKeyMasked: 'whsec_••••••••••••9A4F',
       events: ['order.created', 'order.paid', 'order.shipped'],
-      status: 'ACTIVE',
-      successRate24h: 99.8,
-      totalDelivered24h: 3420,
+      status: 'PAUSED',
+      successRate24h: 0,
+      totalDelivered24h: 0,
       createdIso: '2026-01-15T10:00:00Z',
-      lastTriggeredIso: new Date(Date.now() - 120000).toISOString()
+      lastTriggeredIso: ''
     },
     {
       id: 'wh-002',
@@ -258,11 +258,11 @@ export class EnterpriseDeveloperPlatformEngine {
       targetUrl: 'https://telco-switch.net/callbacks/pinova/fulfillment',
       secretKeyMasked: 'whsec_••••••••••••7B12',
       events: ['utility.fulfilled', 'utility.failed'],
-      status: 'ACTIVE',
-      successRate24h: 100,
-      totalDelivered24h: 1840,
+      status: 'PAUSED',
+      successRate24h: 0,
+      totalDelivered24h: 0,
       createdIso: '2026-02-01T14:30:00Z',
-      lastTriggeredIso: new Date(Date.now() - 450000).toISOString()
+      lastTriggeredIso: ''
     },
     {
       id: 'wh-003',
@@ -270,11 +270,11 @@ export class EnterpriseDeveloperPlatformEngine {
       targetUrl: 'https://secops.pinova-enterprise.io/audit/ingest',
       secretKeyMasked: 'whsec_••••••••••••3E88',
       events: ['security.alert', 'audit.log_created', 'policy.changed'],
-      status: 'ACTIVE',
-      successRate24h: 99.95,
-      totalDelivered24h: 8900,
+      status: 'PAUSED',
+      successRate24h: 0,
+      totalDelivered24h: 0,
       createdIso: '2026-03-10T08:15:00Z',
-      lastTriggeredIso: new Date(Date.now() - 30000).toISOString()
+      lastTriggeredIso: ''
     }
   ];
 
@@ -285,12 +285,12 @@ export class EnterpriseDeveloperPlatformEngine {
       eventType: 'order.paid',
       targetUrl: 'https://api.merchant-partner.org/v2/pinova/orders',
       payloadSnippet: '{"orderId":"ORD-88291","amountPi":14.5,"currency":"PI","status":"PAID"}',
-      statusCode: 200,
-      deliveryDurationMs: 84,
-      status: 'SUCCESS',
+      statusCode: 0,
+      deliveryDurationMs: 0,
+      status: 'SIMULATED',
       timestampIso: new Date(Date.now() - 120000).toISOString(),
       retryCount: 0,
-      signatureHeader: 't=1785892000,v1=9f8a7b6c5d4e3f2a1b'
+      signatureHeader: 'NOT_SENT — SAMPLE DATA ONLY'
     },
     {
       id: 'log-102',
@@ -298,12 +298,12 @@ export class EnterpriseDeveloperPlatformEngine {
       eventType: 'utility.fulfilled',
       targetUrl: 'https://telco-switch.net/callbacks/pinova/fulfillment',
       payloadSnippet: '{"refId":"UTL-77102","phone":"+2348031234567","carrier":"MTN Nigeria","amountNgn":1000}',
-      statusCode: 200,
-      deliveryDurationMs: 142,
-      status: 'SUCCESS',
+      statusCode: 0,
+      deliveryDurationMs: 0,
+      status: 'SIMULATED',
       timestampIso: new Date(Date.now() - 450000).toISOString(),
       retryCount: 0,
-      signatureHeader: 't=1785891600,v1=3c2b1a0f9e8d7c6b5a'
+      signatureHeader: 'NOT_SENT — SAMPLE DATA ONLY'
     },
     {
       id: 'log-103',
@@ -311,13 +311,13 @@ export class EnterpriseDeveloperPlatformEngine {
       eventType: 'order.shipped',
       targetUrl: 'https://api.merchant-partner.org/v2/pinova/orders',
       payloadSnippet: '{"orderId":"ORD-88289","trackingNumber":"DHL-9920148"}',
-      statusCode: 504,
-      deliveryDurationMs: 5002,
-      status: 'RETRYING',
+      statusCode: 0,
+      deliveryDurationMs: 0,
+      status: 'SIMULATED',
       timestampIso: new Date(Date.now() - 900000).toISOString(),
       retryCount: 2,
       errorMessage: 'HTTP 504 Gateway Timeout from target server',
-      signatureHeader: 't=1785891100,v1=1a2b3c4d5e6f7a8b9c'
+      signatureHeader: 'NOT_SENT — SAMPLE DATA ONLY'
     }
   ];
 
@@ -436,8 +436,8 @@ export class EnterpriseDeveloperPlatformEngine {
   ];
 
   private runtimeConfig: RuntimeConfigProfile = {
-    environment: 'PRODUCTION',
-    gatewayBaseUrl: 'https://api.pinova.app',
+    environment: 'SANDBOX',
+    gatewayBaseUrl: 'Not configured — backend gateway required',
     defaultRateLimitPerMin: 1200,
     hmacSignatureHeader: 'X-PiNova-Signature',
     webhookMaxRetries: 5,
@@ -521,7 +521,7 @@ export class EnterpriseDeveloperPlatformEngine {
       createdIso: '2026-01-10T09:00:00Z',
       lastUsedIso: new Date(Date.now() - 40000).toISOString(),
       rateLimitPerMin: 1200,
-      status: 'ACTIVE'
+      status: 'UNVERIFIED'
     },
     {
       id: 'key-002',
@@ -533,7 +533,7 @@ export class EnterpriseDeveloperPlatformEngine {
       createdIso: '2026-03-22T14:30:00Z',
       lastUsedIso: new Date(Date.now() - 120000).toISOString(),
       rateLimitPerMin: 3000,
-      status: 'ACTIVE'
+      status: 'UNVERIFIED'
     }
   ];
 
@@ -598,12 +598,14 @@ export class EnterpriseDeveloperPlatformEngine {
     );
 
     return {
-      overallStatus: 'OPTIMAL',
+      overallStatus: 'DEGRADED',
       activeEndpointsCount: this.endpoints.length,
       connectedIntegrationsCount: this.connectors.filter(c => c.status === 'CONNECTED').length,
       activePluginsCount: this.plugins.filter(p => p.installed && p.enabled).length,
-      webhookSuccessRate24h: 99.88,
-      avgApiLatencyMs: avgLatency || 45,
+      // Live delivery and latency telemetry is not wired to a backend source.
+      // Zero is a neutral placeholder; the UI labels these metrics unavailable.
+      webhookSuccessRate24h: 0,
+      avgApiLatencyMs: 0,
       apiSlaPercentage: Number(avgSla.toFixed(2)),
       activeJobsInQueue: this.backgroundJobs.filter(j => j.status === 'RUNNING' || j.status === 'QUEUED').length
     };
@@ -638,35 +640,32 @@ export class EnterpriseDeveloperPlatformEngine {
     const conn = this.connectors.find(c => c.id === connectorId);
     if (!conn) return { success: false, message: 'Connector not found', latencyMs: 0 };
 
-    conn.lastPingIso = new Date().toISOString();
-    conn.healthPercent = 100;
-    conn.status = 'CONNECTED';
-
     this.recordAuditLog(
-      'INTEGRATION_TEST_PING',
-      `Executed health ping test for ${conn.name}. Status verified optimal.`,
+      'INTEGRATION_TEST_NOT_RUN',
+      `No live connector ping was sent for ${conn.name}; provider credentials and a server-side health endpoint are not configured.`,
       'Integration Hub',
       conn.provider,
-      'PING_TEST'
+      'PING_TEST',
+      'WARNING'
     );
 
     return {
-      success: true,
-      message: `Connection test to ${conn.name} (${conn.provider}) completed successfully with HTTP 200 OK.`,
-      latencyMs: Math.floor(Math.random() * 45) + 15
+      success: false,
+      message: 'Not verified: no server-side provider health check is configured. No network request was sent.',
+      latencyMs: 0
     };
   }
 
   public toggleConnectorStatus(connectorId: string): IntegrationConnector[] {
     const conn = this.connectors.find(c => c.id === connectorId);
     if (conn) {
-      conn.status = conn.status === 'CONNECTED' ? 'DISCONNECTED' : 'CONNECTED';
       this.recordAuditLog(
-        'CONNECTOR_STATUS_TOGGLED',
-        `Toggled status of ${conn.name} to ${conn.status}`,
+        'CONNECTOR_CHANGE_BLOCKED',
+        `Cannot mark ${conn.name} connected or disconnected from local UI; a backend provider configuration is required.`,
         'Integration Hub',
         conn.name,
-        'STATUS_CHANGE'
+        'STATUS_CHANGE',
+        'WARNING'
       );
     }
     return this.getConnectors();
@@ -683,67 +682,53 @@ export class EnterpriseDeveloperPlatformEngine {
 
   public triggerWebhookTest(subscriptionId: string): WebhookDeliveryLog {
     const sub = this.webhooks.find(w => w.id === subscriptionId);
-    const subName = sub ? sub.name : 'Target Subscription';
-    const targetUrl = sub ? sub.targetUrl : 'https://api.partner.org/webhook';
-
     const newLog: WebhookDeliveryLog = {
-      id: `log-${Date.now().toString().slice(-4)}`,
+      id: `log-sim-${Date.now()}`,
       subscriptionId,
-      eventType: 'webhook.test_ping',
-      targetUrl,
-      payloadSnippet: JSON.stringify({
-        event: 'webhook.test_ping',
-        timestamp: new Date().toISOString(),
-        source: 'PiNova Global Hub Enterprise Webhook Engine'
-      }),
-      statusCode: 200,
-      deliveryDurationMs: Math.floor(Math.random() * 80) + 20,
-      status: 'SUCCESS',
+      eventType: 'webhook.test_not_sent',
+      targetUrl: sub?.targetUrl ?? 'UNCONFIGURED',
+      payloadSnippet: JSON.stringify({ mode: 'SIMULATION_ONLY', networkRequestSent: false }),
+      statusCode: 0,
+      deliveryDurationMs: 0,
+      status: 'SIMULATED',
       timestampIso: new Date().toISOString(),
       retryCount: 0,
-      signatureHeader: `t=${Math.floor(Date.now()/1000)},v1=${Math.random().toString(36).slice(2, 18)}`
+      signatureHeader: 'NOT_GENERATED — NO DELIVERY'
     };
-
     this.webhookLogs.unshift(newLog);
-    if (sub) {
-      sub.lastTriggeredIso = new Date().toISOString();
-      sub.totalDelivered24h += 1;
-    }
-
     this.recordAuditLog(
-      'WEBHOOK_TEST_DISPATCHED',
-      `Dispatched manual test payload for webhook subscription: ${subName}`,
+      'WEBHOOK_TEST_NOT_SENT',
+      `Webhook test for ${sub?.name ?? subscriptionId} was not sent; server-side delivery worker and signing secret are not configured.`,
       'Webhook Engine',
-      targetUrl,
-      'TEST_DISPATCH'
+      sub?.targetUrl ?? subscriptionId,
+      'TEST_DISPATCH',
+      'WARNING'
     );
-
     return newLog;
   }
 
   public replayWebhookEvent(logId: string): WebhookDeliveryLog | null {
     const existing = this.webhookLogs.find(l => l.id === logId);
     if (!existing) return null;
-
     const replayed: WebhookDeliveryLog = {
       ...existing,
-      id: `log-replay-${Date.now().toString().slice(-4)}`,
+      id: `log-replay-sim-${Date.now()}`,
       timestampIso: new Date().toISOString(),
-      status: 'SUCCESS',
-      statusCode: 200,
-      deliveryDurationMs: Math.floor(Math.random() * 60) + 25,
-      signatureHeader: `t=${Math.floor(Date.now()/1000)},v1=replay_${Math.random().toString(36).slice(2, 10)}`
+      status: 'SIMULATED',
+      statusCode: 0,
+      deliveryDurationMs: 0,
+      signatureHeader: 'NOT_GENERATED — REPLAY NOT SENT',
+      errorMessage: 'Simulation only. No outbound network request was sent.'
     };
-
     this.webhookLogs.unshift(replayed);
     this.recordAuditLog(
-      'WEBHOOK_EVENT_REPLAYED',
-      `Replayed event ${existing.eventType} to ${existing.targetUrl}`,
+      'WEBHOOK_REPLAY_NOT_SENT',
+      `Replay of ${existing.eventType} was simulated locally; no outbound request was sent.`,
       'Webhook Engine',
       existing.targetUrl,
-      'EVENT_REPLAY'
+      'EVENT_REPLAY',
+      'WARNING'
     );
-
     return replayed;
   }
 
@@ -844,31 +829,16 @@ export class EnterpriseDeveloperPlatformEngine {
     return [...this.oauthClients];
   }
 
-  public createApiKey(name: string, role: DeveloperApiKey['role'], scopes: string[]): DeveloperApiKey {
-    const rawSecret = `pn_live_pk_${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}`;
-    const newKey: DeveloperApiKey = {
-      id: `key-${Date.now().toString().slice(-4)}`,
-      name,
-      prefix: 'pn_live_pk_',
-      maskedKey: `pn_live_pk_••••••••••••${rawSecret.slice(-4)}`,
-      role,
-      scopes,
-      createdIso: new Date().toISOString(),
-      lastUsedIso: new Date().toISOString(),
-      rateLimitPerMin: role === 'ADMIN_INTEGRATION' ? 3000 : 1200,
-      status: 'ACTIVE'
-    };
-
-    this.apiKeys.unshift(newKey);
+  public createApiKey(_name: string, _role: DeveloperApiKey['role'], _scopes: string[]): DeveloperApiKey | null {
     this.recordAuditLog(
-      'DEVELOPER_API_KEY_CREATED',
-      `Created developer API key: "${name}" with role ${role}`,
+      'DEVELOPER_API_KEY_CREATION_BLOCKED',
+      'API key creation is disabled until secure server-side secret generation, storage, and one-time secret delivery are implemented.',
       'Developer Security',
-      name,
-      'KEY_GEN'
+      'API Key Provisioning',
+      'KEY_GEN',
+      'WARNING'
     );
-
-    return newKey;
+    return null;
   }
 
   public revokeApiKey(keyId: string): DeveloperApiKey[] {
@@ -894,80 +864,32 @@ export class EnterpriseDeveloperPlatformEngine {
     responseHeaders: Record<string, string>;
     responseBody: Record<string, any>;
   } {
-    const responseTimeMs = Math.floor(Math.random() * 35) + 18;
-    const isV2Payment = path.includes('/payments/verify');
-    const isAirtime = path.includes('/airtime/fulfill');
-
+    // Browser-side runner is intentionally simulation-only. It never calls the
+    // backend and must never claim a payment was verified or an operation ran.
     this.recordAuditLog(
       'SANDBOX_API_REQUEST',
-      `Executed developer sandbox request [${method}] ${path}`,
+      `Simulated developer request [${method}] ${path}; no network request was sent.`,
       'API Explorer',
       path,
-      'SANDBOX_RUN'
+      'SANDBOX_SIMULATION'
     );
 
-    if (isV2Payment) {
-      return {
-        statusCode: 200,
-        statusText: 'OK',
-        responseTimeMs,
-        responseHeaders: {
-          'content-type': 'application/json; charset=utf-8',
-          'x-pinova-request-id': `req_${Math.random().toString(36).slice(2, 10)}`,
-          'x-ratelimit-remaining': '1198',
-          'x-pi-sdk-compliance': 'v2.0.0-verified'
-        },
-        responseBody: {
-          status: 'VERIFIED',
-          paymentId: 'pi_tx_99812401',
-          amountPi: 12.5,
-          currency: 'PI',
-          txHash: '0x9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b',
-          timestamp: new Date().toISOString(),
-          verificationStatus: 'VERIFIED_COMPLETED',
-          compliance: {
-            piSdkVersion: 'v2',
-            zeroKeyCustody: true,
-            serverVerified: true
-          }
-        }
-      };
-    } else if (isAirtime) {
-      return {
-        statusCode: 200,
-        statusText: 'OK',
-        responseTimeMs,
-        responseHeaders: {
-          'content-type': 'application/json; charset=utf-8',
-          'x-pinova-request-id': `req_${Math.random().toString(36).slice(2, 10)}`
-        },
-        responseBody: {
-          status: 'FULFILLED',
-          refId: 'UTL-TELCO-99120',
-          carrier: 'MTN Global Switch',
-          amountLocal: 2000,
-          currencyLocal: 'NGN',
-          pinovaReference: 'PIN-AIRTIME-44109',
-          fulfilledIso: new Date().toISOString()
-        }
-      };
-    } else {
-      return {
-        statusCode: 200,
-        statusText: 'OK',
-        responseTimeMs,
-        responseHeaders: {
-          'content-type': 'application/json; charset=utf-8',
-          'x-pinova-request-id': `req_${Math.random().toString(36).slice(2, 10)}`
-        },
-        responseBody: {
-          status: 'SUCCESS',
-          message: `Endpoint ${path} executed successfully under PiNova Developer Sandbox.`,
-          environment: this.activeEnvironment,
-          timestamp: new Date().toISOString()
-        }
-      };
-    }
+    return {
+      statusCode: 501,
+      statusText: 'SIMULATION ONLY',
+      responseTimeMs: 0,
+      responseHeaders: {
+        'content-type': 'application/json; charset=utf-8',
+        'x-pinova-execution-mode': 'simulation-only'
+      },
+      responseBody: {
+        status: 'NOT_EXECUTED',
+        verified: false,
+        executionMode: 'SIMULATION_ONLY',
+        networkRequestSent: false,
+        message: 'This API Explorer is a local simulator. No backend request or Pi payment verification was performed.'
+      }
+    };
   }
 
   // --- AUDIT LOGS & REPORTING ---
