@@ -417,7 +417,7 @@ export const DeveloperPlatformView: React.FC<DeveloperPlatformViewProps> = ({
                 <span>Centralized API Gateway & Endpoint Registry</span>
               </h3>
               <p className="text-xs text-slate-400">
-                Manage versioning, endpoint rate limits, SLA metrics, latency distribution, and deprecation policies.
+                Endpoint registry and configured rate limits. Live request, latency, error, and SLA telemetry is not connected.
               </p>
             </div>
             <button
@@ -961,25 +961,22 @@ export const DeveloperPlatformView: React.FC<DeveloperPlatformViewProps> = ({
                     <pre>{`import { PiNovaSDK } from '@pinova/sdk-v2';
 
 const pinova = new PiNovaSDK({ apiKey: process.env.PINOVA_API_KEY });
-const response = await pinova.payments.verify({
-  paymentId: "pi_tx_99812401",
-  amountPi: 12.5
-});`}</pre>
+const response = await fetch(
+  '/api/v2/pi/payments/verify?paymentId=YOUR_TEST_PAYMENT_ID'
+);`}</pre>
                   )}
                   {selectedSdkTab === 'python' && (
                     <pre>{`from pinova import PiNovaClient
 
-client = PiNovaClient(api_key="pn_live_pk_demo8841")
-response = client.payments.verify(
-    payment_id="pi_tx_99812401",
-    amount_pi=12.5
+response = requests.get(
+    'https://YOUR_API_HOST/api/v2/pi/payments/verify',
+    params={'paymentId': 'YOUR_TEST_PAYMENT_ID'},
+    timeout=10
 )`}</pre>
                   )}
                   {selectedSdkTab === 'curl' && (
-                    <pre>{`curl -X POST https://api.pinova.app/api/v2/pi/payments/verify \\
-  -H "Authorization: Bearer pn_live_pk_demo8841" \\
-  -H "Content-Type: application/json" \\
-  -d '{"paymentId":"pi_tx_99812401","amountPi":12.5}'`}</pre>
+                    <pre>{`curl -G 'https://YOUR_API_HOST/api/v2/pi/payments/verify' \\
+  --data-urlencode 'paymentId=YOUR_TEST_PAYMENT_ID'`}</pre>
                   )}
                 </div>
               </div>
