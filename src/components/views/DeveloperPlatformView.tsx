@@ -292,7 +292,7 @@ export const DeveloperPlatformView: React.FC<DeveloperPlatformViewProps> = ({
         <div className="flex items-center gap-3 flex-wrap">
           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800">
             <Globe className="w-3.5 h-3.5 text-purple-400" />
-            <span className="text-xs font-bold text-slate-400">Environment:</span>
+            <span className="text-xs font-bold text-slate-400">Local profile selector:</span>
             <div className="flex items-center gap-1">
               {(['SANDBOX', 'STAGING', 'PRODUCTION'] as EnvironmentProfile[]).map(env => (
                 <button
@@ -357,9 +357,9 @@ export const DeveloperPlatformView: React.FC<DeveloperPlatformViewProps> = ({
         </div>
 
         <div className="p-3.5 rounded-2xl bg-slate-900 border border-slate-800 space-y-1">
-          <span className="text-[10px] text-slate-400 font-bold block uppercase">Plugins Active</span>
-          <span className="text-lg font-black text-indigo-400">{health.activePluginsCount} Extensions</span>
-          <span className="text-[10px] text-slate-500 block">Marketplace & Admin</span>
+          <span className="text-[10px] text-slate-400 font-bold block uppercase">Extensions Configured</span>
+          <span className="text-lg font-black text-indigo-400">{health.activePluginsCount} Registered</span>
+          <span className="text-[10px] text-slate-500 block">Local registry; runtime not verified</span>
         </div>
 
         <div className="p-3.5 rounded-2xl bg-slate-900 border border-slate-800 space-y-1">
@@ -369,9 +369,9 @@ export const DeveloperPlatformView: React.FC<DeveloperPlatformViewProps> = ({
         </div>
 
         <div className="p-3.5 rounded-2xl bg-slate-900 border border-slate-800 space-y-1">
-          <span className="text-[10px] text-slate-400 font-bold block uppercase">Job Queue</span>
-          <span className="text-lg font-black text-purple-300">{health.activeJobsInQueue} Active</span>
-          <span className="text-[10px] text-slate-500 block">Background Queue Engine</span>
+          <span className="text-[10px] text-slate-400 font-bold block uppercase">Queue Records</span>
+          <span className="text-lg font-black text-purple-300">{health.activeJobsInQueue} Listed</span>
+          <span className="text-[10px] text-slate-500 block">Local records; worker execution unverified</span>
         </div>
       </div>
 
@@ -502,7 +502,7 @@ export const DeveloperPlatformView: React.FC<DeveloperPlatformViewProps> = ({
                         </span>
                       ) : (
                         <span className="px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 font-bold text-[10px] border border-emerald-800">
-                          ACTIVE SLA
+                          REGISTERED
                         </span>
                       )}
                     </td>
@@ -992,10 +992,10 @@ response = requests.get(
             <div>
               <h3 className="font-bold text-white text-base flex items-center gap-2">
                 <Sliders className="w-5 h-5 text-purple-400" />
-                <span>Centralized Configuration & Feature Flags</span>
+                <span>Local Configuration & Feature Flags</span>
               </h3>
               <p className="text-xs text-slate-400">
-                Control runtime environment profiles, feature toggles, HMAC headers, and system preferences.
+                Change local UI profile and feature-flag demo state only; this does not switch the deployed backend environment.
               </p>
             </div>
           </div>
@@ -1125,7 +1125,7 @@ response = requests.get(
                 <span>Observability, Telemetry & SLA Compliance</span>
               </h3>
               <p className="text-xs text-slate-400">
-                Real-time API latency breakdown, SLA tracking, error budgets, and system health metrics.
+                Configured observability views. Live request, latency, error-budget, and SLA telemetry is not connected.
               </p>
             </div>
           </div>
@@ -1133,20 +1133,20 @@ response = requests.get(
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-2">
               <span className="text-xs font-bold text-slate-400 block uppercase">Gateway SLA Compliance</span>
-              <div className="text-3xl font-black text-emerald-400">99.98%</div>
-              <p className="text-[11px] text-slate-400">Exceeds target 99.90% SLA commitment across 6 endpoints.</p>
+              <div className="text-2xl font-black text-slate-300">Unavailable</div>
+              <p className="text-[11px] text-slate-400">No live request telemetry is connected; compliance cannot be calculated.</p>
             </div>
 
             <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-2">
               <span className="text-xs font-bold text-slate-400 block uppercase">Average Latency (P99)</span>
-              <div className="text-3xl font-black text-purple-300">42 ms</div>
-              <p className="text-[11px] text-slate-400">Optimized via in-memory cached configuration layers.</p>
+              <div className="text-2xl font-black text-slate-300">Not measured</div>
+              <p className="text-[11px] text-slate-400">No production-like traffic sample is available.</p>
             </div>
 
             <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-2">
               <span className="text-xs font-bold text-slate-400 block uppercase">Error Budget Remaining</span>
-              <div className="text-3xl font-black text-amber-400">98.4%</div>
-              <p className="text-[11px] text-slate-400">Zero catastrophic outage incidents recorded in 30 days.</p>
+              <div className="text-2xl font-black text-slate-300">Unavailable</div>
+              <p className="text-[11px] text-slate-400">Cannot calculate an error budget until an SLA target and live telemetry source are configured.</p>
             </div>
           </div>
         </div>
