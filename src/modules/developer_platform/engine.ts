@@ -30,17 +30,17 @@ export class EnterpriseDeveloperPlatformEngine {
     {
       id: 'ep-001',
       path: '/api/v2/pi/payments/verify',
-      method: 'POST',
+      method: 'GET',
       version: 'v2',
       category: 'PAYMENTS',
       name: 'Pi SDK v2 Payment Verification Gateway',
       description: 'Official Pi Network SDK v2 payment proof verification proxy.',
       rateLimitPerMin: 1200,
       deprecated: false,
-      activeRequests24h: 14280,
-      avgLatencyMs: 42,
-      errorRatePercent: 0.08,
-      slaPercent: 99.98,
+      activeRequests24h: 0,
+      avgLatencyMs: 0,
+      errorRatePercent: 0,
+      slaPercent: 0,
       requiresAuth: true,
       requiredScope: 'pi:payments:write'
     },
@@ -54,10 +54,10 @@ export class EnterpriseDeveloperPlatformEngine {
       description: 'Executes automated airtime & utility token top-ups across global telcos.',
       rateLimitPerMin: 600,
       deprecated: false,
-      activeRequests24h: 8930,
-      avgLatencyMs: 110,
-      errorRatePercent: 0.15,
-      slaPercent: 99.94,
+      activeRequests24h: 0,
+      avgLatencyMs: 0,
+      errorRatePercent: 0,
+      slaPercent: 0,
       requiresAuth: true,
       requiredScope: 'utility:fulfill'
     },
@@ -72,10 +72,10 @@ export class EnterpriseDeveloperPlatformEngine {
       rateLimitPerMin: 300,
       deprecated: true,
       deprecationNotice: 'v1 deprecated. Please upgrade to /api/v2/orders/sync by Dec 2026.',
-      activeRequests24h: 2150,
-      avgLatencyMs: 185,
-      errorRatePercent: 1.2,
-      slaPercent: 99.85,
+      activeRequests24h: 0,
+      avgLatencyMs: 0,
+      errorRatePercent: 0,
+      slaPercent: 0,
       requiresAuth: true,
       requiredScope: 'orders:read_write'
     },
@@ -89,10 +89,10 @@ export class EnterpriseDeveloperPlatformEngine {
       description: 'Provides Gemini AI-powered product matching & personalized catalog discovery.',
       rateLimitPerMin: 900,
       deprecated: false,
-      activeRequests24h: 28400,
-      avgLatencyMs: 65,
-      errorRatePercent: 0.02,
-      slaPercent: 99.99,
+      activeRequests24h: 0,
+      avgLatencyMs: 0,
+      errorRatePercent: 0,
+      slaPercent: 0,
       requiresAuth: false,
       requiredScope: 'catalog:read'
     },
@@ -106,10 +106,10 @@ export class EnterpriseDeveloperPlatformEngine {
       description: 'Dispatches instant push, SMS, and email alerts for marketplace events.',
       rateLimitPerMin: 1500,
       deprecated: false,
-      activeRequests24h: 31200,
-      avgLatencyMs: 38,
-      errorRatePercent: 0.05,
-      slaPercent: 99.97,
+      activeRequests24h: 0,
+      avgLatencyMs: 0,
+      errorRatePercent: 0,
+      slaPercent: 0,
       requiresAuth: true,
       requiredScope: 'notifications:dispatch'
     },
@@ -123,10 +123,10 @@ export class EnterpriseDeveloperPlatformEngine {
       description: 'Streams privacy-compliant aggregated metrics to analytics engines.',
       rateLimitPerMin: 3000,
       deprecated: false,
-      activeRequests24h: 89400,
-      avgLatencyMs: 18,
-      errorRatePercent: 0.01,
-      slaPercent: 99.99,
+      activeRequests24h: 0,
+      avgLatencyMs: 0,
+      errorRatePercent: 0,
+      slaPercent: 0,
       requiresAuth: true,
       requiredScope: 'analytics:write'
     }
@@ -598,7 +598,7 @@ export class EnterpriseDeveloperPlatformEngine {
     );
 
     return {
-      overallStatus: 'OPTIMAL',
+      overallStatus: 'DEGRADED',
       activeEndpointsCount: this.endpoints.length,
       connectedIntegrationsCount: this.connectors.filter(c => c.status === 'CONNECTED').length,
       activePluginsCount: this.plugins.filter(p => p.installed && p.enabled).length,
@@ -893,6 +893,33 @@ export class EnterpriseDeveloperPlatformEngine {
     responseTimeMs: number;
     responseHeaders: Record<string, string>;
     responseBody: Record<string, any>;
+  } {
+    // This browser-side runner is intentionally simulation-only. It must never
+    // claim that a payment was verified or that a backend endpoint was called.
+    this.recordAuditLog(
+      'SANDBOX_API_REQUEST',
+      `Simulated developer request [${method}] ${path}; no network request was sent.`,
+      'API Explorer',
+      path,
+      'SANDBOX_SIMULATION'
+    );
+
+    return {
+      statusCode: 501,
+      statusText: 'SIMULATION ONLY',
+      responseTimeMs: 0,
+      responseHeaders: {
+        'content-type': 'application/json; charset=utf-8',
+        'x-pinova-execution-mode': 'simulation-only'
+      },
+      responseBody: {
+        status: 'NOT_EXECUTED',
+        verified: false,
+        executionMode: 'SIMULATION_ONLY',
+        networkRequestSent: false,
+        message: 'This API Explorer is a local simulator. No backend request or Pi payment verification was performed.'
+      }
+    };
   } {
     const responseTimeMs = Math.floor(Math.random() * 35) + 18;
     const isV2Payment = path.includes('/payments/verify');
