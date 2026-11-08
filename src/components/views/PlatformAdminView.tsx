@@ -902,16 +902,7 @@ export const PlatformAdminView: React.FC<PlatformAdminViewProps> = ({
                 {systemAlerts.map((alert) => (
                   <div 
                     key={alert.id}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => setSelectedAlert(alert)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' || event.key === ' ') {
-                        event.preventDefault();
-                        setSelectedAlert(alert);
-                      }
-                    }}
-                    className={`p-3.5 rounded-2xl border transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs cursor-pointer focus:outline-none focus:ring-2 focus:ring-amber-400 ${
+                    className={`p-3.5 rounded-2xl border transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs ${
                       alert.resolved
                         ? 'bg-slate-950/60 border-slate-800/60 opacity-60'
                         : alert.severity === 'CRITICAL' || alert.severity === 'HIGH'
@@ -937,14 +928,23 @@ export const PlatformAdminView: React.FC<PlatformAdminViewProps> = ({
                       </div>
                     </div>
 
-                    {!alert.resolved && (
+                    <div className="flex items-center gap-2 shrink-0">
                       <button
-                        onClick={() => handleResolveAlert(alert.id)}
+                        type="button"
+                        onClick={() => setSelectedAlert(alert)}
+                        className="px-3 py-1 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs border border-slate-700 transition-colors"
+                      >
+                        View details
+                      </button>
+                      {!alert.resolved && (
+                        <button
+                          onClick={() => handleResolveAlert(alert.id)}
                         className="px-3 py-1 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs shrink-0 border border-slate-700 transition-colors"
                       >
-                        Acknowledge & Resolve
-                      </button>
-                    )}
+                          Acknowledge & Resolve
+                        </button>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
