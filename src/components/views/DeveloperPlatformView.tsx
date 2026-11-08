@@ -140,9 +140,7 @@ export const DeveloperPlatformView: React.FC<DeveloperPlatformViewProps> = ({
   const handleTestConnector = (id: string) => {
     const res = engine.testConnectorConnection(id);
     refreshState();
-    if (res.success) {
-      showToast(`Ping Success (${res.latencyMs}ms): ${res.message}`);
-    }
+    showToast(res.success ? `Ping verified (${res.latencyMs}ms): ${res.message}` : res.message);
   };
 
   const handleToggleConnector = (id: string) => {
@@ -155,14 +153,14 @@ export const DeveloperPlatformView: React.FC<DeveloperPlatformViewProps> = ({
   const handleTriggerWebhookTest = (id: string) => {
     const newLog = engine.triggerWebhookTest(id);
     refreshState();
-    showToast(`Webhook Test Dispatched! Result: HTTP ${newLog.statusCode} (${newLog.deliveryDurationMs}ms)`);
+    showToast('Simulation only: webhook was NOT sent. Backend delivery worker is not configured.');
   };
 
   const handleReplayWebhook = (logId: string) => {
     const replayed = engine.replayWebhookEvent(logId);
     if (replayed) {
       refreshState();
-      showToast(`Event replayed successfully! HTTP ${replayed.statusCode}`);
+      showToast('Simulation only: replay was NOT sent. No outbound network request occurred.');
     }
   };
 
@@ -208,6 +206,12 @@ export const DeveloperPlatformView: React.FC<DeveloperPlatformViewProps> = ({
     if (!newKeyName.trim()) return;
     const defaultScopes = ['pi:payments:write', 'catalog:read', 'orders:read'];
     const created = engine.createApiKey(newKeyName.trim(), newKeyRole, defaultScopes);
+    if (!created) {
+      setIsCreateKeyModalOpen(false);
+      showToast('API key generation is disabled: secure server-side provisioning is not configured.');
+      refreshState();
+      return;
+    }
     setGeneratedSecret(created.maskedKey);
     setNewKeyName('');
     setApiKeys(engine.getApiKeys());
@@ -689,10 +693,10 @@ export const DeveloperPlatformView: React.FC<DeveloperPlatformViewProps> = ({
                               : 'bg-rose-950 text-rose-400 border border-rose-800'
                           }`}
                         >
-                          {log.status} ({log.statusCode})
+                          {log.status} {log.statusCode > 0 ? `(${log.statusCode})` : '(not sent)'}
                         </span>
                       </td>
-                      <td className="p-3.5 font-bold text-slate-300">{log.deliveryDurationMs} ms</td>
+                      <td className="p-3.5 font-bold text-slate-300">{log.deliveryDurationMs > 0 ? `${log.deliveryDurationMs} ms` : 'Not measured'}</td>
                       <td className="p-3.5 font-mono text-[10px] text-slate-400 max-w-[150px] truncate">
                         {log.signatureHeader}
                       </td>
