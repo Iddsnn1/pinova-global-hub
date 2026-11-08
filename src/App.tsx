@@ -291,10 +291,20 @@ function MainAppContent() {
       const handlePopState = (e: PopStateEvent) => {
         const curPath = window.location.pathname || '';
         const curSearch = window.location.search || '';
+
+        // A storefront is a history-backed full-screen route. When Back returns
+        // to the preceding history entry, release the overlay so it cannot
+        // intercept clicks intended for the app navigation.
+        if (!e.state?.storefrontPage || !curSearch.includes('store=')) {
+          setStorefrontPageVendor(null);
+        }
+
         if (curPath.includes('/seller-studio') || curSearch.includes('section=seller_studio')) {
           setActiveSection('seller_studio');
         } else if (e.state?.section) {
-          setActiveSection(e.state.section);
+          setActiveSection(e.state.section as MainSection);
+        } else if (!curPath.includes('/seller-studio')) {
+          setActiveSection('home');
         }
       };
       window.addEventListener('popstate', handlePopState);
@@ -329,6 +339,9 @@ function MainAppContent() {
 
     return () => {
       active = false;
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('popstate', handlePopState);
+      }
       unsubscribe();
     };
   }, []);
@@ -1364,7 +1377,7 @@ function MainAppContent() {
               setSelectedVendor(null);
               setStorefrontPageVendor(vendor);
               if (typeof window !== 'undefined') {
-                window.history.pushState({ storefrontPage: true }, '', `?store=${encodeURIComponent(vendor.sellerUsername || vendor.id)}`);
+                window.history.pushState({ storefrontPage: true, section: activeSection }, '', `?store=${encodeURIComponent(vendor.sellerUsername || vendor.id)}`);
               }
             }}
           />
@@ -1436,6 +1449,7 @@ function MainAppContent() {
           'security_trust',
           'developer_platform',
           'future_services',
+          'education',
           'pi-diagnostic'
         ].includes(activeSection) && (
           <div className="max-w-2xl mx-auto px-4 py-16 text-center space-y-6 animate-fade-in">
@@ -1552,7 +1566,7 @@ function MainAppContent() {
             products={products}
             onClose={() => {
               setStorefrontPageVendor(null);
-              if (typeof window !== 'undefined') window.history.pushState({}, '', window.location.pathname);
+              if (typeof window !== 'undefined') window.history.replaceState({ section: activeSection }, '', window.location.pathname);
             }}
             onSelectProduct={handleSelectProduct}
             onAddToCart={(p, e) => handleAddToCart(p, 1)}
