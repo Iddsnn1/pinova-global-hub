@@ -602,8 +602,10 @@ export class EnterpriseDeveloperPlatformEngine {
       activeEndpointsCount: this.endpoints.length,
       connectedIntegrationsCount: this.connectors.filter(c => c.status === 'CONNECTED').length,
       activePluginsCount: this.plugins.filter(p => p.installed && p.enabled).length,
-      webhookSuccessRate24h: 99.88,
-      avgApiLatencyMs: avgLatency || 45,
+      // Live delivery and latency telemetry is not wired to a backend source.
+      // Zero is a neutral placeholder; the UI labels these metrics unavailable.
+      webhookSuccessRate24h: 0,
+      avgApiLatencyMs: 0,
       apiSlaPercentage: Number(avgSla.toFixed(2)),
       activeJobsInQueue: this.backgroundJobs.filter(j => j.status === 'RUNNING' || j.status === 'QUEUED').length
     };
