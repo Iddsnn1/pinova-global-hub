@@ -299,13 +299,19 @@ function MainAppContent() {
           setStorefrontPageVendor(null);
         }
 
-        if (curPath.includes('/seller-studio') || curSearch.includes('section=seller_studio')) {
-          setActiveSection('seller_studio');
-        } else if (e.state?.section) {
-          setActiveSection(e.state.section as MainSection);
-        } else if (!curPath.includes('/seller-studio')) {
-          setActiveSection('home');
-        }
+        const targetSection: MainSection =
+          curPath.includes('/seller-studio') || curSearch.includes('section=seller_studio')
+            ? 'seller_studio'
+            : (e.state?.section as MainSection) || 'home';
+        setActiveSection(targetSection);
+        setNavigationStack((previous) => {
+          const current = previous[previous.length - 1];
+          if (current?.section === targetSection) return previous;
+          if (previous.length > 1 && previous[previous.length - 2]?.section === targetSection) {
+            return previous.slice(0, -1);
+          }
+          return [...previous, { section: targetSection, category: 'all' }];
+        });
       };
       window.addEventListener('popstate', handlePopState);
     }
