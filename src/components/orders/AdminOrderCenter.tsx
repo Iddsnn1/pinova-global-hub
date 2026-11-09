@@ -141,7 +141,7 @@ export const AdminOrderCenter: React.FC<AdminOrderCenterProps> = ({
                 PSTP Governance
               </span>
             </h2>
-            <p className="text-xs text-slate-400">Monitor all platform orders, inspect state timelines, arbitrate disputes, and approve refunds.</p>
+            <p className="text-xs text-slate-400">Inspect server-loaded orders and lifecycle data. Administrative transitions and dispute rulings remain disabled until their audited server workflows are connected.</p>
           </div>
         </div>
         {onOrdersRefreshed && (
@@ -282,32 +282,41 @@ export const AdminOrderCenter: React.FC<AdminOrderCenterProps> = ({
                 </div>
               </div>
 
-              {/* Admin Override Action Bar */}
-              <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 space-y-2">
+              {/* Administrative transitions are intentionally disabled until server-authoritative endpoints are connected. */}
+              <div className="p-4 rounded-xl border border-amber-500/30 bg-amber-500/5 space-y-2">
                 <div className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-                  Admin Lifecycle Override
+                  Administrative Actions — Not Yet Connected
                 </div>
+                <p className="text-xs text-amber-700 dark:text-amber-300">These controls previously changed only local UI state. They are disabled to prevent an unsaved status change from appearing authoritative.</p>
                 <div className="flex flex-wrap gap-2 text-xs">
                   <button
                     onClick={() => handleAdminOverrideStatus('Order Confirmed')}
+                    disabled
+                    title="Awaiting audited server workflow"
                     className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold"
                   >
                     Confirm Order
                   </button>
                   <button
                     onClick={() => handleAdminOverrideStatus('Shipped')}
+                    disabled
+                    title="Awaiting audited server workflow"
                     className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-bold"
                   >
                     Set Shipped
                   </button>
                   <button
                     onClick={() => handleAdminOverrideStatus('Completed')}
+                    disabled
+                    title="Awaiting audited server workflow"
                     className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold"
                   >
                     Force Complete
                   </button>
                   <button
                     onClick={() => handleAdminOverrideStatus('Refunded')}
+                    disabled
+                    title="Awaiting audited server workflow"
                     className="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white rounded-lg font-bold"
                   >
                     Authorize Refund
@@ -341,7 +350,7 @@ export const AdminOrderCenter: React.FC<AdminOrderCenterProps> = ({
               <Gavel className="w-6 h-6 text-red-400" />
               <div>
                 <h3 className="text-sm font-bold">PiNova Dispute Arbitration Portal</h3>
-                <p className="text-xs text-slate-400">Arbitrate buyer-seller disputes and issue non-custodial protocol refunds.</p>
+                <p className="text-xs text-slate-400">Dispute review UI only. Binding rulings and refunds are disabled until a server-authoritative arbitration workflow is implemented.</p>
               </div>
             </div>
           </div>
@@ -397,9 +406,11 @@ export const AdminOrderCenter: React.FC<AdminOrderCenterProps> = ({
 
             <button
               type="submit"
-              className="px-5 py-2.5 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-bold shadow-sm transition-colors"
+              disabled
+              title="Awaiting audited server arbitration workflow"
+              className="px-5 py-2.5 bg-slate-500 text-white rounded-lg font-bold shadow-sm opacity-60 cursor-not-allowed"
             >
-              Execute Binding Ruling
+              Binding Ruling Unavailable
             </button>
           </form>
         </div>
