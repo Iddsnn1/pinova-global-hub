@@ -17,7 +17,7 @@ import { Order } from '../../../types';
 
 interface OrdersTabProps {
   orders: Order[];
-  onUpdateFulfillment: (orderId: string, trackingNumber: string, carrier: string) => void;
+  onUpdateFulfillment: (orderId: string, trackingNumber: string, carrier: string) => Promise<boolean> | boolean | void;
 }
 
 export const OrdersTab: React.FC<OrdersTabProps> = ({
@@ -32,6 +32,8 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
   const [editingFulfillmentOrderId, setEditingFulfillmentOrderId] = useState<string | null>(null);
   const [carrierInput, setCarrierInput] = useState('');
   const [trackingInput, setTrackingInput] = useState('');
+  const [isSavingFulfillment, setIsSavingFulfillment] = useState(false);
+  const [fulfillmentError, setFulfillmentError] = useState<string | null>(null);
 
   const filteredOrders = orders.filter((order) => {
     const matchesSearch = order.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -40,12 +42,27 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
     return matchesSearch && matchesStatus;
   });
 
-  const handleSaveFulfillment = (orderId: string) => {
-    if (!carrierInput.trim() || !trackingInput.trim()) return;
-    onUpdateFulfillment(orderId, trackingInput.trim(), carrierInput.trim());
-    setEditingFulfillmentOrderId(null);
-    setCarrierInput('');
-    setTrackingInput('');
+  const handleSaveFulfillment = async (orderId: string) => {
+    if (!carrierInput.trim() || !trackingInput.trim()) {
+      setFulfillmentError('Enter both a carrier and tracking number before saving.');
+      return;
+    }
+    setIsSavingFulfillment(true);
+    setFulfillmentError(null);
+    try {
+      const result = await onUpdateFulfillment(orderId, trackingInput.trim(), carrierInput.trim());
+      if (result === false) {
+        setFulfillmentError('The server did not confirm this shipment update. Your tracking details have been kept; please retry.');
+        return;
+      }
+      setEditingFulfillmentOrderId(null);
+      setCarrierInput('');
+      setTrackingInput('');
+    } catch (error) {
+      setFulfillmentError(error instanceof Error ? error.message : 'Shipment update failed. Your tracking details have been kept.');
+    } finally {
+      setIsSavingFulfillment(false);
+    }
   };
 
   return (
@@ -234,6 +251,11 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
                       <div className="p-3.5 rounded-xl bg-neutral-50 dark:bg-neutral-800/70 border border-neutral-200 dark:border-neutral-700">
                         {isEditingFulfillment ? (
                           <div className="space-y-3">
+                            {fulfillmentError && (
+                              <div role="alert" className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-700 dark:text-rose-300">
+                                {fulfillmentError}
+                              </div>
+                            )}
                             <h6 className="text-xs font-bold text-neutral-900 dark:text-neutral-100">
                               Update Shipment Tracking
                             </h6>
@@ -255,16 +277,20 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
                             </div>
                             <div className="flex items-center justify-end gap-2">
                               <button
-                                onClick={() => setEditingFulfillmentOrderId(null)}
-                                className="px-3 py-1 rounded-lg border border-neutral-300 dark:border-neutral-600 text-xs text-neutral-600 dark:text-neutral-400"
+                                type="button"
+                                disabled={isSavingFulfillment}
+                                onClick={() => { setEditingFulfillmentOrderId(null); setFulfillmentError(null); }}
+                                className="px-3 py-1 rounded-lg border border-neutral-300 dark:border-neutral-600 text-xs text-neutral-600 dark:text-neutral-400 disabled:opacity-50"
                               >
                                 Cancel
                               </button>
                               <button
-                                onClick={() => handleSaveFulfillment(order.id)}
-                                className="px-3 py-1 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold"
+                                type="button"
+                                onClick={() => void handleSaveFulfillment(order.id)}
+                                disabled={isSavingFulfillment}
+                                className="px-3 py-1 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold disabled:opacity-60 disabled:cursor-wait"
                               >
-                                Save & Mark Shipped
+                                {isSavingFulfillment ? 'Saving…' : 'Save & Mark Shipped'}
                               </button>
                             </div>
                           </div>
