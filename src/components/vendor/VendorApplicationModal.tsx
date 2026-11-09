@@ -84,8 +84,8 @@ export const VendorApplicationModal: React.FC<VendorApplicationModalProps> = ({
   const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'uploaded' | 'error'>('idle');
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadedDocRef, setUploadedDocRef] = useState<string>('');
-  const [returnPolicy, setReturnPolicy] = useState('Standard 7-Day Return for defective items under PSTP Escrow Protection.');
-  const [deliveryTerms, setDeliveryTerms] = useState('Dispatched within 24-48 business hours with verified tracking number.');
+  const [returnPolicy, setReturnPolicy] = useState('Returns are handled according to the seller’s stated policy and applicable consumer-protection requirements. PSTP coverage is not implied.');
+  const [deliveryTerms, setDeliveryTerms] = useState('The seller dispatches within the timeframe stated on each listing and provides tracking where available.');
   const [agreedTerms, setAgreedTerms] = useState(false);
 
   // Check if pioneer already has an application
@@ -1225,7 +1225,7 @@ export const VendorApplicationModal: React.FC<VendorApplicationModalProps> = ({
                   <Lock className="w-3.5 h-3.5 text-purple-400 mt-0.5 shrink-0" />
                   <div className="leading-relaxed">
                     <span className="font-semibold text-slate-300">Protected Server-Side Storage: </span>
-                    KYC files are stored with AES-256-GCM server-side encryption under strict governance control. Public URLs and plaintext files are strictly prohibited.
+                    KYC documents are stored in private server-side object storage. The application does not independently verify the storage provider’s encryption-at-rest configuration.
                   </div>
                 </div>
               </div>
@@ -1345,7 +1345,7 @@ export const VendorApplicationModal: React.FC<VendorApplicationModalProps> = ({
                     {uploadedDocRef.startsWith('private://vendor-documents/') ? (
                       <>
                         <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                        <span>Encrypted (AES-256-GCM)</span>
+                        <span>Private storage reference received — encryption not verified</span>
                       </>
                     ) : (
                       <span className="text-rose-400">Missing Upload</span>
