@@ -122,6 +122,8 @@ function getDefaultDesignationsForCategory(category: UtilityCategoryType): strin
   }
 }
 
+const PI_UTILITY_PAYMENTS_ENABLED = false;
+
 export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
   onClose,
   piConversionConfig,
@@ -547,6 +549,10 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
 
   // Execute Pi Payment
   const handleExecutePayment = async () => {
+    if (!PI_UTILITY_PAYMENTS_ENABLED) {
+      setErrorMessage('Pi utility payments are disabled during development. No Pi payment or utility order was started.');
+      return;
+    }
     let finalPiAmount = calculatedPiAmount;
 
     if (!selectedProvider) return;
@@ -1423,17 +1429,22 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
                 {/* Order Guarantee */}
                 <div className="p-3 rounded-xl bg-purple-950/80 border border-purple-800/80 flex items-center gap-2.5 text-[11px] text-purple-200">
                   <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
-                  <span>Protected by Pi Escrow. Instant digital fulfillment upon payment.</span>
+                  <span>Pi payments and escrow are disabled in Preview during development.</span>
                 </div>
 
                 {/* PAY WITH PI WALLET BUTTON */}
                 <button
                   type="button"
                   onClick={handleExecutePayment}
-                  disabled={isProcessingPayment || fxQuoteLoading || !hasCurrentFxQuote || !selectedProvider || selectedProvider.enabled === false || !accountNumber.trim() || !isWithinLimits || getActiveFiatPrice() <= 0}
+                  disabled={!PI_UTILITY_PAYMENTS_ENABLED || isProcessingPayment || fxQuoteLoading || !hasCurrentFxQuote || !selectedProvider || selectedProvider.enabled === false || !accountNumber.trim() || !isWithinLimits || getActiveFiatPrice() <= 0}
                   className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-purple-600 via-indigo-600 to-amber-500 hover:opacity-95 disabled:opacity-50 text-white font-extrabold text-xs sm:text-sm shadow-xl shadow-purple-600/30 transition-all flex items-center justify-center gap-2"
                 >
-                  {selectedProvider?.enabled === false ? (
+                  {!PI_UTILITY_PAYMENTS_ENABLED ? (
+                    <>
+                      <AlertCircle className="w-4 h-4 text-amber-300" />
+                      <span>Pi Payments Disabled During Development</span>
+                    </>
+                  ) : selectedProvider?.enabled === false ? (
                     <>
                       <AlertCircle className="w-4 h-4 text-amber-300" />
                       <span>Gateway Onboarding Pending — Direct Vending Paused</span>
