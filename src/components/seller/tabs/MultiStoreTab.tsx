@@ -47,18 +47,13 @@ export const MultiStoreTab: React.FC<MultiStoreTabProps> = ({
     e.preventDefault();
     if (!branchName.trim()) return;
 
-    if (!isApproved) {
-      setBranchNotice('Multi-store expansion requires an approved and verified merchant account.');
+    if (!isApproved || !isVerified) {
+      setBranchNotice('Multi-store expansion requires an approved and verified merchant account. No branch was created.');
       return;
     }
 
-    setBranchNotice(`Secondary branch "${branchName}" submitted for enterprise multi-store compliance review.`);
-    setTimeout(() => {
-      setShowAddBranchModal(false);
-      setBranchName('');
-      setBranchRegion('');
-      setBranchNotice(null);
-    }, 2500);
+    // Branch persistence is not implemented yet. Never report a local-only action as submitted.
+    setBranchNotice('Secondary branch registration is not available yet. No branch was created or submitted. Your entered details remain on this form.');
   };
 
   return (
