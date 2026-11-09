@@ -14,7 +14,8 @@ import {
   MapPin, 
   User,
   ShieldCheck,
-  Send
+  Send,
+  RefreshCw
 } from 'lucide-react';
 import { Order, PstpOrderStatus, ShippingLabel, FulfillmentRecord } from '../../types';
 import { vendorAuthenticatedFetch } from '../../lib/vendorAuthBridge';
@@ -82,6 +83,31 @@ export const SellerFulfillmentCenter: React.FC<SellerFulfillmentCenterProps> = (
     void loadSellerQueue();
     return () => { cancelled = true; };
   }, [sellerUsername]);
+
+  const handleRefreshQueue = async () => {
+    if (queueLoading) return;
+    setQueueLoading(true);
+    setQueueError('');
+    try {
+      const response = await vendorAuthenticatedFetch('/api/v1/orders?role=seller', {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !Array.isArray(payload?.orders)) {
+        throw new Error(payload?.error || `SELLER_QUEUE_REFRESH_FAILED_${response.status}`);
+      }
+      setSellerOrders(payload.orders as Order[]);
+      setSelectedOrder((current) => {
+        if (!current) return (payload.orders[0] as Order) || null;
+        return (payload.orders as Order[]).find((order) => order.id === current.id) || (payload.orders[0] as Order) || null;
+      });
+    } catch (error: any) {
+      setQueueError(error?.message || 'Unable to refresh the server-authoritative seller queue.');
+    } finally {
+      setQueueLoading(false);
+    }
+  };
 
   const filteredOrders = sellerOrders.filter((o) => {
     if (filterStatus === 'all') return true;
@@ -162,6 +188,17 @@ export const SellerFulfillmentCenter: React.FC<SellerFulfillmentCenterProps> = (
             <p className="text-xs text-slate-400">Process verified orders, prepare shipments, record real carrier tracking, and advance only server-authorized lifecycle states.</p>
           </div>
         </div>
+        <button
+          type="button"
+          onClick={() => { void handleRefreshQueue(); }}
+          disabled={queueLoading}
+          aria-label="Refresh seller order queue"
+          aria-busy={queueLoading}
+          className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-xs font-bold text-amber-200 hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          <RefreshCw className={`h-4 w-4 ${queueLoading ? 'animate-spin' : ''}`} />
+          {queueLoading ? 'Refreshing…' : 'Refresh Queue'}
+        </button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-12 divide-y md:divide-y-0 md:divide-x divide-slate-200 dark:divide-slate-800">
