@@ -79,8 +79,6 @@ interface SellerStudioV2Props {
   products: Product[];
   orders: Order[];
   vendors?: Vendor[];
-  onAddProduct: (product: Omit<Product, 'id' | 'createdAt' | 'rating' | 'reviewsCount'>) => void;
-  onProductCreated?: (product: Product) => void;
   onUpdateProduct?: (product: Product) => void;
   onDeleteProduct?: (productId: string) => void;
   onUpdateOrderStatus?: (orderId: string, status: Order['pstpStatus'], trackingNumber?: string, carrier?: string) => Promise<boolean> | boolean | void;
@@ -102,8 +100,6 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
   products,
   orders,
   vendors = [],
-  onAddProduct,
-  onProductCreated,
   onUpdateProduct,
   onDeleteProduct,
   onUpdateOrderStatus,
@@ -821,8 +817,6 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
             {activeTab === 'bulk_csv' && (
               <BulkCsvToolsTab
                 products={products}
-                onAddProduct={onAddProduct}
-                onProductCreated={onProductCreated}
               />
             )}
 
