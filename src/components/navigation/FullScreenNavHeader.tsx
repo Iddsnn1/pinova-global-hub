@@ -22,6 +22,7 @@ import {
   QrCode,
   CheckCircle2,
   MoreVertical,
+  RefreshCw,
   X
 } from 'lucide-react';
 import { MainSection, BreadcrumbItem, VisitedCategory } from '../../types/navigation';
@@ -35,6 +36,7 @@ interface FullScreenNavHeaderProps {
   breadcrumbs: BreadcrumbItem[];
   canGoBack: boolean;
   onGoBack: () => void;
+  onRefreshApp?: () => void;
   searchQuery: string;
   onSearchChange: (q: string) => void;
   onOpenUniversalSearch: (query?: string) => void;
@@ -61,6 +63,7 @@ export const FullScreenNavHeader: React.FC<FullScreenNavHeaderProps> = ({
   breadcrumbs,
   canGoBack,
   onGoBack,
+  onRefreshApp = () => window.location.reload(),
   searchQuery,
   onSearchChange,
   onOpenUniversalSearch,
@@ -202,6 +205,16 @@ export const FullScreenNavHeader: React.FC<FullScreenNavHeaderProps> = ({
               <span className="hidden lg:inline text-[11px]">Scan QR</span>
             </button>
           )}
+
+          <button
+            type="button"
+            onClick={onRefreshApp}
+            aria-label="Refresh PiNova Global Hub"
+            title="Refresh PiNova Global Hub (unsaved changes may be lost)"
+            className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 hover:text-amber-300 transition-colors focus:outline-none focus:ring-2 focus:ring-amber-400"
+          >
+            <RefreshCw className="w-4 h-4" />
+          </button>
 
           {/* Marketplace Shortcut */}
           <button
@@ -401,9 +414,18 @@ export const FullScreenNavHeader: React.FC<FullScreenNavHeaderProps> = ({
             <span className="font-black text-amber-400 text-xs">π</span>
             <span className="font-extrabold text-[11px] text-white tracking-tight">{userBalancePi.toFixed(1)}</span>
           </div>
+          <button
+            type="button"
+            onClick={onRefreshApp}
+            aria-label="Refresh PiNova Global Hub"
+            title="Refresh PiNova Global Hub (unsaved changes may be lost)"
+            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 hover:text-amber-300 transition-colors shrink-0 focus:outline-none focus:ring-2 focus:ring-amber-400"
+          >
+            <RefreshCw className="w-4 h-4" />
+          </button>
         </div>
 
-        {/* Center Priority Control: 3. Connect with Pi Button OR Pioneer ID Profile (PERMANENTLY VISIBLE) */}
+        {/* Center Priority Control: 3. Connect with Pi Button OR Pioneer ID Profile (PERMANENTLY VISIBLE) */
         {isConnected ? (
           <div className="relative shrink-0 mx-0.5" ref={userDropdownRef}>
             <button
