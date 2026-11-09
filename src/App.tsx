@@ -1430,19 +1430,6 @@ function MainAppContent() {
             products={products}
             orders={orders}
             vendors={vendors}
-            onAddProduct={(newProd) => {
-              const fullProd: Product = {
-                ...newProd,
-                id: `prod_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-                createdAt: new Date().toISOString(),
-                rating: 5.0,
-                reviewsCount: 0,
-                sellerId: user.username,
-                sellerName: user.username,
-                sellerVerified: true
-              };
-              setProducts((prev) => [fullProd, ...prev]);
-            }}
             onProductCreated={(created) => {
               setProducts((prev) => [
                 created,
