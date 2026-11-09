@@ -155,14 +155,14 @@ export const DeveloperPlatformView: React.FC<DeveloperPlatformViewProps> = ({
   const handleTriggerWebhookTest = (id: string) => {
     const newLog = engine.triggerWebhookTest(id);
     refreshState();
-    showToast(`Webhook Test Dispatched! Result: HTTP ${newLog.statusCode} (${newLog.deliveryDurationMs}ms)`);
+    showToast(`Local webhook simulation only — nothing was sent. HTTP ${newLog.statusCode} is a mock value.`);
   };
 
   const handleReplayWebhook = (logId: string) => {
     const replayed = engine.replayWebhookEvent(logId);
     if (replayed) {
       refreshState();
-      showToast(`Event replayed successfully! HTTP ${replayed.statusCode}`);
+      showToast('Local replay simulation only — no external webhook was replayed.');
     }
   };
 
@@ -689,12 +689,12 @@ export const DeveloperPlatformView: React.FC<DeveloperPlatformViewProps> = ({
                               : 'bg-rose-950 text-rose-400 border border-rose-800'
                           }`}
                         >
-                          {log.status} ({log.statusCode})
+                          SIMULATED — NOT SENT
                         </span>
                       </td>
-                      <td className="p-3.5 font-bold text-slate-300">{log.deliveryDurationMs} ms</td>
+                      <td className="p-3.5 font-bold text-slate-300">—</td>
                       <td className="p-3.5 font-mono text-[10px] text-slate-400 max-w-[150px] truncate">
-                        {log.signatureHeader}
+                        Not signed — local simulation
                       </td>
                       <td className="p-3.5">
                         <button
