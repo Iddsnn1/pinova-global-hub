@@ -304,14 +304,21 @@ function MainAppContent() {
           curPath.includes('/seller-studio') || curSearch.includes('section=seller_studio')
             ? 'seller_studio'
             : (e.state?.section as MainSection) || 'home';
+        const targetCategory = (e.state?.category || 'all') as MarketplaceCategory;
         setActiveSection(targetSection);
+        if (targetSection === 'marketplace') setSelectedMarketplaceCategory(targetCategory);
+        if (targetSection === 'utilities') setSelectedUtilityCategory(String(targetCategory));
+        if (targetSection === 'education' && targetCategory !== 'all') {
+          setSelectedEducationTab(targetCategory as unknown as EducationTab);
+        }
         setNavigationStack((previous) => {
           const current = previous[previous.length - 1];
-          if (current?.section === targetSection) return previous;
-          if (previous.length > 1 && previous[previous.length - 2]?.section === targetSection) {
+          if (current?.section === targetSection && current?.category === targetCategory) return previous;
+          if (previous.length > 1 && previous[previous.length - 2]?.section === targetSection &&
+              previous[previous.length - 2]?.category === targetCategory) {
             return previous.slice(0, -1);
           }
-          return [...previous, { section: targetSection, category: 'all' }];
+          return [...previous, { section: targetSection, category: targetCategory }];
         });
       };
       window.addEventListener('popstate', handlePopState);
@@ -455,12 +462,24 @@ function MainAppContent() {
     setActiveSection(targetSection);
     if (typeof window !== 'undefined') {
       try {
-        if (targetSection === 'seller_studio' && !window.location.pathname.includes('/seller-studio')) {
-          window.history.pushState({ section: 'seller_studio' }, '', '/seller-studio');
-        } else if (targetSection !== 'seller_studio' && window.location.pathname.includes('/seller-studio')) {
-          window.history.pushState({ section: targetSection }, '', '/');
+        const nextPath = targetSection === 'seller_studio' ? '/seller-studio' : '/';
+        const currentState = window.history.state;
+        const nextCategory = (newCategory || 'all') as string;
+        if (
+          currentState?.pinovaNavigation !== true ||
+          currentState?.section !== targetSection ||
+          currentState?.category !== nextCategory ||
+          window.location.pathname !== nextPath
+        ) {
+          window.history.pushState(
+            { pinovaNavigation: true, section: targetSection, category: nextCategory },
+            '',
+            nextPath
+          );
         }
-      } catch (_) {}
+      } catch (error) {
+        console.warn('[Navigation] Unable to record browser history entry:', error);
+      }
     }
     if (targetSection === 'marketplace') {
       setSelectedMarketplaceCategory(newCategory as MarketplaceCategory);
@@ -490,6 +509,17 @@ function MainAppContent() {
   const handleSelectMarketplaceCategory = (cat: MarketplaceCategory) => {
     setSelectedMarketplaceCategory(cat);
     setActiveSection('marketplace');
+    if (typeof window !== 'undefined') {
+      try {
+        const state = { pinovaNavigation: true, section: 'marketplace', category: cat };
+        const current = window.history.state;
+        if (current?.section !== 'marketplace' || current?.category !== cat) {
+          window.history.pushState(state, '', '/');
+        }
+      } catch (error) {
+        console.warn('[Navigation] Unable to record marketplace category history:', error);
+      }
+    }
 
     if (cat !== 'all') {
       const found = MARKETPLACE_CATEGORIES.find((c) => c.id === cat);
