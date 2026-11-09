@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { 
   Users, 
   UserPlus, 
@@ -8,7 +8,8 @@ import {
   CheckCircle2, 
   Clock, 
   ShieldAlert,
-  UserCheck
+  UserCheck,
+  RefreshCw
 } from 'lucide-react';
 import { StaffMember, StaffRole, PiUser as User } from '../../../types';
 import { vendorAuthenticatedFetch } from '../../../lib/vendorAuthBridge';
@@ -45,22 +46,26 @@ export const StaffTeamTab: React.FC<StaffTeamTabProps> = ({
   const [staffList, setStaffList] = useState<StaffMember[]>([]);
   const [staffLoading, setStaffLoading] = useState(true);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await vendorAuthenticatedFetch('/api/vendor/team');
-        const data = await res.json().catch(() => null);
-        if (!cancelled && res.ok && Array.isArray(data?.staff)) setStaffList(data.staff);
-        if (!cancelled && !res.ok) setInviteNotice(data?.message || 'Unable to load the team roster.');
-      } catch {
-        if (!cancelled) setInviteNotice('Unable to load the team roster from the server.');
-      } finally {
-        if (!cancelled) setStaffLoading(false);
+  const loadStaffRoster = useCallback(async () => {
+    setStaffLoading(true);
+    setInviteNotice(null);
+    try {
+      const res = await vendorAuthenticatedFetch('/api/vendor/team');
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !Array.isArray(data?.staff)) {
+        throw new Error(data?.message || data?.error || 'Unable to load the team roster.');
       }
-    })();
-    return () => { cancelled = true; };
+      setStaffList(data.staff);
+    } catch (error: any) {
+      setInviteNotice(error?.message || 'Unable to load the team roster from the server.');
+    } finally {
+      setStaffLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    void loadStaffRoster();
+  }, [loadStaffRoster]);
 
   const handleInviteStaff = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -118,14 +123,29 @@ export const StaffTeamTab: React.FC<StaffTeamTabProps> = ({
             </p>
           </div>
 
-          <button
-            id="invite-staff-member-btn"
-            onClick={() => setShowInviteModal(true)}
-            className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs sm:text-sm font-semibold flex items-center justify-center gap-1.5 transition-colors shadow-xs shrink-0 min-h-[44px]"
-          >
-            <UserPlus className="w-4 h-4" />
-            <span>Invite Team Member</span>
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              id="refresh-staff-roster-btn"
+              type="button"
+              onClick={() => void loadStaffRoster()}
+              disabled={staffLoading}
+              aria-label="Refresh team roster"
+              aria-busy={staffLoading}
+              title="Refresh server-authoritative team roster"
+              className="px-3 py-2 rounded-xl border border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-200 text-xs font-semibold flex items-center gap-1.5 min-h-[44px] disabled:opacity-60"
+            >
+              <RefreshCw className={`w-4 h-4 ${staffLoading ? 'animate-spin' : ''}`} />
+              <span>{staffLoading ? 'Refreshing…' : 'Refresh'}</span>
+            </button>
+            <button
+              id="invite-staff-member-btn"
+              onClick={() => setShowInviteModal(true)}
+              className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs sm:text-sm font-semibold flex items-center justify-center gap-1.5 transition-colors shadow-xs shrink-0 min-h-[44px]"
+            >
+              <UserPlus className="w-4 h-4" />
+              <span>Invite Team Member</span>
+            </button>
+          </div>
         </div>
       </div>
 
