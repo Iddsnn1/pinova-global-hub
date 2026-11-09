@@ -165,17 +165,19 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
           <span>Seller Fulfillment Center</span>
         </button>
 
-        <button
-          onClick={() => setActiveTab('admin')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
-            activeTab === 'admin'
-              ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30'
-              : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-800 hover:border-purple-300'
-          }`}
-        >
-          <ShieldAlert className="w-4 h-4 text-amber-400" />
-          <span>Admin & Dispute Arbitration</span>
-        </button>
+        {currentUserRole === 'admin' && (
+          <button
+            onClick={() => setActiveTab('admin')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+              activeTab === 'admin'
+                ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30'
+                : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-800 hover:border-purple-300'
+            }`}
+          >
+            <ShieldAlert className="w-4 h-4 text-amber-400" />
+            <span>Admin & Dispute Arbitration</span>
+          </button>
+        )}
 
         <button
           onClick={() => setActiveTab('audit')}
@@ -186,7 +188,7 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
           }`}
         >
           <History className="w-4 h-4 text-emerald-400" />
-          <span>Append-only Audit Logs ({auditLogs.length})</span>
+          <span>Order Timeline ({auditLogs.length})</span>
         </button>
       </div>
 
@@ -213,7 +215,7 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
         />
       )}
 
-      {activeTab === 'admin' && (
+      {activeTab === 'admin' && currentUserRole === 'admin' && (
         <AdminOrderCenter
           orders={orders}
           onOrderUpdated={onOrderUpdated}
@@ -230,7 +232,7 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
                 <span>Append-only Lifecycle Audit Trail</span>
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                A server-side chronological record of order lifecycle events. Historical events are not edited or removed through normal application workflows.
+                A chronological summary generated from the order timeline currently loaded in this view.
               </p>
             </div>
             <span className="text-xs font-mono text-slate-500 shrink-0">{auditLogs.length} Recorded Events</span>
