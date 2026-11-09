@@ -1424,7 +1424,16 @@ function MainAppContent() {
               setSelectedVendor(null);
               setStorefrontPageVendor(vendor);
               if (typeof window !== 'undefined') {
-                window.history.pushState({ storefrontPage: true, section: activeSection }, '', `?store=${encodeURIComponent(vendor.sellerUsername || vendor.id)}`);
+                window.history.pushState(
+                  {
+                    pinovaNavigation: true,
+                    storefrontPage: true,
+                    section: activeSection,
+                    category: activeSection === 'marketplace' ? selectedMarketplaceCategory : 'all'
+                  },
+                  '',
+                  `?store=${encodeURIComponent(vendor.sellerUsername || vendor.id)}`
+                );
               }
             }}
           />
@@ -1612,8 +1621,11 @@ function MainAppContent() {
             vendor={storefrontPageVendor}
             products={products}
             onClose={() => {
-              setStorefrontPageVendor(null);
-              if (typeof window !== 'undefined') window.history.replaceState({ section: activeSection }, '', window.location.pathname);
+              if (typeof window !== 'undefined' && window.history.state?.storefrontPage === true) {
+                window.history.back();
+              } else {
+                setStorefrontPageVendor(null);
+              }
             }}
             onSelectProduct={handleSelectProduct}
             onAddToCart={(p, e) => handleAddToCart(p, 1)}
