@@ -30,10 +30,10 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   authError
 }) => {
   const [address, setAddress] = useState({
-    street: '102 Innovation Drive',
-    city: 'London',
-    country: 'United Kingdom',
-    postalCode: 'EC1A 1BB'
+    street: '',
+    city: '',
+    country: '',
+    postalCode: ''
   });
   const [isSaved, setIsSaved] = useState(false);
 
@@ -62,11 +62,11 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
               {user.authenticated && (
                 <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[10px] font-bold flex items-center gap-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                  <span>Verified Pioneer</span>
+                  <span>Pi session authenticated</span>
                 </span>
               )}
             </div>
-            <p className="text-xs text-slate-200 mt-0.5">Pi Network Testnet Pioneer ID: {user.uid || 'Pioneer-Verified'}</p>
+            <p className="text-xs text-slate-200 mt-0.5">Pi username: @{user.username || 'Not connected'} · Session ID: {user.uid || 'Unavailable'}</p>
           </div>
         </div>
 
@@ -75,7 +75,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           className="px-4 py-2.5 rounded-xl bg-purple-950 border border-purple-800 text-amber-300 font-extrabold text-xs flex items-center gap-2 shadow-lg hover:bg-purple-900 transition-colors"
         >
           <ShieldCheck className="w-4 h-4 text-emerald-400" />
-          <span>PSTP Reputation Score: 98/100</span>
+          <span>PSTP Reputation: No verified score available</span>
         </button>
       </div>
 
@@ -86,7 +86,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
         <div className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
           <h2 className="font-extrabold text-sm text-slate-900 dark:text-slate-100 flex items-center gap-2">
             <User className="w-4 h-4 text-purple-500" />
-            <span>Active Navigation Role</span>
+            <span>Navigation Preview Role</span>
           </h2>
 
           <div className="grid grid-cols-3 gap-2">
@@ -105,7 +105,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             ))}
           </div>
           <p className="text-[11px] text-slate-500">
-            Switching role adjusts accessible controls in the Order Management Center and dashboard tools.
+            This changes the visible navigation experience only. It does not grant server permissions or admin access.
           </p>
         </div>
 
@@ -117,16 +117,16 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
               <span>Pi Wallet Balance</span>
             </div>
             <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-bold">
-              Testnet / Mainnet Sync
+              Live wallet balance unavailable
             </span>
           </div>
 
           <div>
             <div className="text-3xl font-black text-amber-400 tracking-tight">
-              250.00 π
+              — π
             </div>
             <p className="text-[11px] text-slate-400 mt-1">
-              Protected by official Pi SDK v2 payment & transaction verification protocol.
+              A live wallet balance has not been fetched. No payment or transaction verification is implied.
             </p>
           </div>
         </div>
@@ -339,7 +339,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       <div className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
         <h2 className="font-extrabold text-sm text-slate-900 dark:text-slate-100 flex items-center gap-2">
           <MapPin className="w-4 h-4 text-emerald-500" />
-          <span>Default Shipping Address</span>
+          <span>Shipping Address Draft</span>
         </h2>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
@@ -381,20 +381,9 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           </div>
         </div>
 
-        <div className="flex justify-between items-center pt-2">
-          {isSaved && (
-            <span className="text-xs text-emerald-500 font-bold flex items-center gap-1">
-              <CheckCircle2 className="w-4 h-4" /> Address saved!
-            </span>
-          )}
-          <button
-            onClick={() => {
-              setIsSaved(true);
-              setTimeout(() => setIsSaved(false), 2000);
-            }}
-            className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs rounded-xl ml-auto"
-          >
-            Save Address
+        <div className="flex justify-end items-center pt-2">
+          <button disabled title="Address persistence is not connected yet" className="px-4 py-2 bg-slate-200 dark:bg-slate-800 text-slate-500 font-bold text-xs rounded-xl ml-auto cursor-not-allowed">
+            Saving unavailable
           </button>
         </div>
       </div>
