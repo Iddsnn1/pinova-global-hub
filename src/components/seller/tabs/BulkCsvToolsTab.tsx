@@ -32,13 +32,14 @@ export const BulkCsvToolsTab: React.FC<BulkCsvToolsTabProps> = ({
     errors: string[];
   } | null>(null);
 
+  // Inventory import requires the exact product ID from the catalog export.
   // Download real CSV template
   const handleDownloadTemplate = (type: 'products' | 'inventory') => {
     let csvContent = '';
     if (type === 'products') {
-      csvContent = 'title,description,pricePi,category,stock,tags\n"Authentic Merchant Watch","Premium Pioneer mechanical watch with sapphire glass",25.50,"electronics",10,"watch,luxury,hardware"\n"Pioneer Organic Coffee","Direct-trade high-altitude organic coffee beans 500g",3.20,"groceries",50,"coffee,organic,food"';
+      csvContent = 'title,description,pricePi,category,stock,tags\n"Authentic Merchant Watch","Premium Pioneer mechanical watch with sapphire glass",25.50,"electronics",10,"watch;luxury;hardware"\n"Pioneer Organic Coffee","Direct-trade high-altitude organic coffee beans 500g",3.20,"groceries",50,"coffee;organic;food"';
     } else {
-      csvContent = 'sku,productTitle,stockOnHand,warehouseLocation,reorderPoint\n"SKU-WATCH-01","Authentic Merchant Watch",10,"Primary Depot",3\n"SKU-COFFEE-02","Pioneer Organic Coffee",50,"Primary Depot",10';
+      csvContent = 'productId,stockOnHand\n"REPLACE_WITH_EXISTING_PRODUCT_ID",10';
     }
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
