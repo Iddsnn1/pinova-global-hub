@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { User, ShieldCheck, MapPin, Wallet, Key, Lock, ArrowRight, CheckCircle2, Package, Sparkles, Briefcase, Bell, Settings, ChevronRight, Users, BarChart3, Code } from 'lucide-react';
+import { User, ShieldCheck, MapPin, Wallet, Key, Lock, ArrowRight, Package, Sparkles, Briefcase, Bell, Settings, ChevronRight, Users, BarChart3, Code } from 'lucide-react';
 import { PiUser, UserRole } from '../../types';
 import { MainSection } from '../../types/navigation';
 import { ConnectPiButton, AuthStatus } from '../auth/ConnectPiButton';
@@ -35,7 +35,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
     country: '',
     postalCode: ''
   });
-  const [isSaved, setIsSaved] = useState(false);
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 space-y-8 pb-20 animate-fade-in">
@@ -342,6 +341,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           <span>Shipping Address Draft</span>
         </h2>
 
+        <p className="text-xs text-amber-600 dark:text-amber-300">This is a temporary draft on this screen only. Address persistence is not connected, so these details are not saved to your account.</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
           <div>
             <label className="text-[11px] font-bold text-slate-500 block mb-1">Street Address</label>
