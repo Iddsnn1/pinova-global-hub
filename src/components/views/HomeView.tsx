@@ -541,7 +541,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             Sell Your Products & Services for Pi
           </h3>
           <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-            Apply to become a Verified Vendor. Get guaranteed PSTP Escrow order protection, Seller Studio management dashboard, and reach Pi users worldwide.
+            Apply to become a Verified Vendor, manage your listings in Seller Studio, and connect with Pi users worldwide. PSTP Escrow order protection is not active in this development preview; never assume an order is protected unless coverage is explicitly confirmed.
           </p>
         </div>
 
