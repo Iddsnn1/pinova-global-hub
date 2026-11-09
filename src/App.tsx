@@ -803,7 +803,7 @@ function MainAppContent() {
     orderId: string,
     newStatus: PstpOrderStatus,
     noteOrExtra?: string | { trackingNumber?: string; carrier?: string; note?: string }
-  ) => {
+  ): Promise<boolean> => {
     const sellerLifecycleStatuses: PstpOrderStatus[] = [
       'Seller Accepted',
       'Preparing Order',
@@ -839,14 +839,15 @@ function MainAppContent() {
 
         if (!response.ok || data?.ok !== true || !data?.order) {
           console.error('[Seller Fulfillment] Server rejected lifecycle transition:', response.status, data || raw);
-          return;
+          return false;
         }
 
         handleOrderUpdated(data.order as Order);
+        return true;
       } catch (error) {
         console.error('[Seller Fulfillment] Server lifecycle request failed:', error);
+        return false;
       }
-      return;
     }
 
     // Non-seller lifecycle actions retain their existing local behavior for now.
@@ -876,6 +877,7 @@ function MainAppContent() {
         };
       })
     );
+    return true;
   };
 
   // Add Review
@@ -1446,9 +1448,9 @@ function MainAppContent() {
             onDeleteProduct={(id) => {
               setProducts((prev) => prev.filter((p) => p.id !== id));
             }}
-            onUpdateOrderStatus={(orderId, status, trackingNumber, carrier) => {
-              handleUpdateOrderStatus(orderId, status, { trackingNumber, carrier });
-            }}
+            onUpdateOrderStatus={(orderId, status, trackingNumber, carrier) =>
+              handleUpdateOrderStatus(orderId, status, { trackingNumber, carrier })
+            }
             onViewStorefront={(vendorId, vendorOverride) => {
               const v = vendorOverride || vendors.find((x) => x.id === vendorId || x.sellerUsername === vendorId) || vendors[0];
               if (v) setSelectedVendor(v);
