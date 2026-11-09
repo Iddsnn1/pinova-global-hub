@@ -217,6 +217,7 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
         <AdminOrderCenter
           orders={orders}
           onOrderUpdated={onOrderUpdated}
+          onOrdersRefreshed={onOrdersRefreshed}
         />
       )}
 
