@@ -185,6 +185,8 @@ export const EventsDiscovery: React.FC<EventsDiscoveryProps> = ({
 
   // Execute Pi Payment for Ticket
   const handleProcessTicketPayment = async () => {
+    setBookingErrorMessage('Pi event-ticket payments are disabled while PiNova Global Hub is in development. No payment or ticket issuance was started.');
+    return;
     if (!selectedEventForBooking || !selectedTier) return;
     if (!attendeeName.trim()) {
       setBookingErrorMessage('Please enter the attendee full name.');
