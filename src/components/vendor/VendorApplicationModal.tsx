@@ -1225,7 +1225,7 @@ export const VendorApplicationModal: React.FC<VendorApplicationModalProps> = ({
                   <Lock className="w-3.5 h-3.5 text-purple-400 mt-0.5 shrink-0" />
                   <div className="leading-relaxed">
                     <span className="font-semibold text-slate-300">Protected Server-Side Storage: </span>
-                    KYC documents are stored in private server-side object storage. The application does not independently verify the storage provider’s encryption-at-rest configuration.
+                    The server applies AES-256-GCM encryption before storing KYC documents. This Preview also requires its own encryption key and private object-storage settings; the provider’s additional encryption-at-rest controls are not independently verified.
                   </div>
                 </div>
               </div>
@@ -1345,7 +1345,7 @@ export const VendorApplicationModal: React.FC<VendorApplicationModalProps> = ({
                     {uploadedDocRef.startsWith('private://vendor-documents/') ? (
                       <>
                         <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                        <span>Private storage reference received — encryption not verified</span>
+                        <span>Server AES-256-GCM upload confirmed — provider controls unverified</span>
                       </>
                     ) : (
                       <span className="text-rose-400">Missing Upload</span>
