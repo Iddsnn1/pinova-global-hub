@@ -26,6 +26,9 @@ import {
   revalidateFlightOffer
 } from '../../modules/flight';
 
+// Flight booking payments remain disabled throughout development.
+const PI_FLIGHT_PAYMENTS_ENABLED = false;
+
 interface FlightBookingModalProps {
   offer: FlightOffer;
   piRateUsd: number;
@@ -596,6 +599,12 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
    */
   const handleExecutePiPayment = async () => {
     if (isProcessing) return;
+
+    if (!PI_FLIGHT_PAYMENTS_ENABLED) {
+      setFlowState('payment_failed');
+      setErrorMessage('Pi flight payments are disabled while PiNova Global Hub is in development. No wallet authentication, payment, or flight booking was started.');
+      return;
+    }
 
     const passengerValidationError = validatePassengerDetails();
     if (passengerValidationError) {
@@ -1262,7 +1271,7 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
                     id="flight-retry-payment-btn"
                     type="button"
                     onClick={handleExecutePiPayment}
-                    disabled={isProcessing}
+                    disabled={isProcessing || !PI_FLIGHT_PAYMENTS_ENABLED}
                     className="px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-200 font-bold rounded-xl text-[11px] flex items-center gap-1.5 disabled:opacity-50"
                   >
                     <RefreshCw
@@ -1274,7 +1283,7 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
                     />
 
                     <span>
-                      Retry Payment
+                      {PI_FLIGHT_PAYMENTS_ENABLED ? 'Retry Payment' : 'Payments Disabled'}
                     </span>
                   </button>
                 )}
@@ -1768,13 +1777,13 @@ export const FlightBookingModal: React.FC<FlightBookingModalProps> = ({
                   onClick={
                     handleExecutePiPayment
                   }
-                  disabled={isProcessing}
+                  disabled={isProcessing || !PI_FLIGHT_PAYMENTS_ENABLED}
                   className="px-6 py-2.5 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black text-xs rounded-xl shadow-lg shadow-amber-500/20 flex items-center gap-2 disabled:opacity-50"
                 >
                   <Lock className="w-4 h-4" />
 
                   <span>
-                    Confirm & Pay {formattedPi} π
+                    {PI_FLIGHT_PAYMENTS_ENABLED ? `Confirm & Pay ${formattedPi} π` : 'Pi Flight Payments Disabled'}
                   </span>
                 </button>
 
