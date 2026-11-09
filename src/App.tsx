@@ -86,7 +86,7 @@ function MainAppContent() {
   const [selectedEducationTab, setSelectedEducationTab] = useState<EducationTab>('directory');
   
   // Back navigation stack & History tracking
-  const [navigationStack, setNavigationStack] = useState<{ section: MainSection; category: MarketplaceCategory }[]>([
+  const [navigationStack, setNavigationStack] = useState<{ section: MainSection; category: MarketplaceCategory; aiSubTab?: AiHubSubTab }[]>([
     { section: 'home', category: 'all' }
   ]);
   const [recentlyVisitedCategories, setRecentlyVisitedCategories] = useState<VisitedCategory[]>([]);
@@ -305,7 +305,10 @@ function MainAppContent() {
             ? 'seller_studio'
             : (e.state?.section as MainSection) || 'home';
         const targetCategory = (e.state?.category || 'all') as MarketplaceCategory;
+        const targetAiSubTab = (e.state?.aiSubTab as AiHubSubTab | undefined) ||
+          (targetSection === 'ai_search' ? AI_CANONICAL_SUBTAB_MAP[String(e.state?.category || '')] : undefined);
         setActiveSection(targetSection);
+        if (targetSection === 'ai_search' && targetAiSubTab) setSelectedAiSubTab(targetAiSubTab);
         if (targetSection === 'marketplace') setSelectedMarketplaceCategory(targetCategory);
         if (targetSection === 'utilities') setSelectedUtilityCategory(String(targetCategory));
         if (targetSection === 'education' && targetCategory !== 'all') {
@@ -313,12 +316,12 @@ function MainAppContent() {
         }
         setNavigationStack((previous) => {
           const current = previous[previous.length - 1];
-          if (current?.section === targetSection && current?.category === targetCategory) return previous;
+          if (current?.section === targetSection && current?.category === targetCategory && current?.aiSubTab === targetAiSubTab) return previous;
           if (previous.length > 1 && previous[previous.length - 2]?.section === targetSection &&
-              previous[previous.length - 2]?.category === targetCategory) {
+              previous[previous.length - 2]?.category === targetCategory && previous[previous.length - 2]?.aiSubTab === targetAiSubTab) {
             return previous.slice(0, -1);
           }
-          return [...previous, { section: targetSection, category: targetCategory }];
+          return [...previous, { section: targetSection, category: targetCategory, aiSubTab: targetAiSubTab }];
         });
       };
       window.addEventListener('popstate', handlePopState);
@@ -465,14 +468,16 @@ function MainAppContent() {
         const nextPath = targetSection === 'seller_studio' ? '/seller-studio' : '/';
         const currentState = window.history.state;
         const nextCategory = (newCategory || 'all') as string;
+        const nextAiSubTab = targetSubTab || (targetSection === 'ai_search' ? selectedAiSubTab : undefined);
         if (
           currentState?.pinovaNavigation !== true ||
           currentState?.section !== targetSection ||
           currentState?.category !== nextCategory ||
+          currentState?.aiSubTab !== nextAiSubTab ||
           window.location.pathname !== nextPath
         ) {
           window.history.pushState(
-            { pinovaNavigation: true, section: targetSection, category: nextCategory },
+            { pinovaNavigation: true, section: targetSection, category: nextCategory, aiSubTab: nextAiSubTab },
             '',
             nextPath
           );
@@ -494,8 +499,9 @@ function MainAppContent() {
     // Push onto navigation history stack if distinct
     setNavigationStack((prev) => {
       const top = prev[prev.length - 1];
-      if (top && top.section === targetSection && top.category === newCategory) return prev;
-      return [...prev, { section: targetSection, category: (newCategory || 'all') as MarketplaceCategory }];
+      const nextAiSubTab = targetSubTab || (targetSection === 'ai_search' ? selectedAiSubTab : undefined);
+      if (top && top.section === targetSection && top.category === newCategory && top.aiSubTab === nextAiSubTab) return prev;
+      return [...prev, { section: targetSection, category: (newCategory || 'all') as MarketplaceCategory, aiSubTab: nextAiSubTab }];
     });
 
     try {
@@ -598,6 +604,7 @@ function MainAppContent() {
     setNavigationStack(newStack);
     if (previous) {
       setActiveSection(previous.section);
+      if (previous.section === 'ai_search' && previous.aiSubTab) setSelectedAiSubTab(previous.aiSubTab);
       if (previous.section === 'marketplace') {
         setSelectedMarketplaceCategory(previous.category as MarketplaceCategory);
       } else if (previous.section === 'utilities') {
