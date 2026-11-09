@@ -204,6 +204,8 @@ export const ElectricityDiscovery: React.FC<ElectricityDiscoveryProps> = ({
 
   // Handle Payment Settlement
   const handleProceedPayment = async () => {
+    setErrorMessage('Pi electricity payments are disabled while PiNova Global Hub is in development. No payment or electricity token was requested.');
+    return;
     if (!selectedProvider) {
       setErrorMessage('Please select a utility distribution provider.');
       return;
