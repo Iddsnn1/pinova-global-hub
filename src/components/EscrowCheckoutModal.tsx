@@ -166,8 +166,11 @@ export const EscrowCheckoutModal: React.FC<EscrowCheckoutModalProps> = ({
               if (!verifyRes.ok || verifyData?.verified !== true) {
                 throw new Error(verifyData?.message || verifyData?.error || 'Server-side Pi payment verification failed.');
               }
+              if (!verifyData?.order || verifyData.order.serverVerified !== true) {
+                throw new Error('The server did not return a persisted, server-verified order. The checkout cannot be marked successful.');
+              }
               setPaymentStep('success');
-              onPaymentSuccess(verifyData.order || { ...authoritativeOrder, piPaymentId: paymentId, piTxid: txid, serverVerified: true });
+              onPaymentSuccess(verifyData.order);
             })
             .catch((verifyErr) => {
               setPaymentStep('failed');
@@ -176,61 +179,7 @@ export const EscrowCheckoutModal: React.FC<EscrowCheckoutModalProps> = ({
             });
           return;
 
-          // Construct digital deliveries if any
-          const digitalDeliveries = cartItems
-            .filter((i) => i.product.category === 'digital' || i.product.category === 'giftcard' || i.product.category === 'airtime' || i.product.category === 'utility')
-            .map((i) => ({
-              productId: i.product.id,
-              codeOrUrl: i.product.digitalKey || i.product.digitalDownloadUrl || `DELIVERY-CODE-${Math.random().toString(36).substring(2, 10).toUpperCase()}`,
-              title: i.product.title
-            }));
 
-          const hasServiceOrder = cartItems.some((i) => i.product.category === 'service');
-
-          const newOrder = {
-            id: metadata.orderId,
-            buyerUsername: userUsername,
-            items: cartItems,
-            totalPi: totalAmountPi,
-            escrowStatus: isPhysicalOrder ? 'in_escrow' : (hasServiceOrder ? 'in_escrow' : 'released'),
-            piPaymentId: paymentId,
-            piTxid: txid,
-            pstpStatus: isPhysicalOrder ? 'Payment Verified' : (hasServiceOrder ? 'Payment Verified' : 'Completed'),
-            serverVerified: true,
-            shippingAddress: isPhysicalOrder ? shippingAddress : undefined,
-            digitalDeliveries: digitalDeliveries.length > 0 ? digitalDeliveries : undefined,
-            carrier: isPhysicalOrder ? 'Global Tracked Express Carrier' : (hasServiceOrder ? 'PSTP Remote Service Gateway' : 'Digital Direct Gateway'),
-            trackingNumber: isPhysicalOrder ? `PNV-TRK-${Math.floor(100000 + Math.random() * 900000)}` : (hasServiceOrder ? `SRV-${Math.floor(10000 + Math.random() * 90000)}` : undefined),
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            timeline: [
-              {
-                status: 'Pending Payment',
-                timestamp: new Date(Date.now() - 3000).toISOString(),
-                actor: userUsername,
-                actorRole: 'buyer',
-                note: 'Order initiated and payment created in Pi Browser SDK.'
-              },
-              {
-                status: 'Payment Verified',
-                timestamp: new Date().toISOString(),
-                actor: 'PSTP_Protection_Server',
-                actorRole: 'system',
-                note: 'Payment authorized and verified server-side via Pi Platform API.'
-              },
-              ...(isPhysicalOrder || hasServiceOrder ? [] : [
-                {
-                  status: 'Completed',
-                  timestamp: new Date().toISOString(),
-                  actor: cartItems[0]?.product.sellerName || 'Merchant',
-                  actorRole: 'seller',
-                  note: 'Digital assets and license tokens released to buyer vault.'
-                }
-              ])
-            ]
-          };
-
-          onPaymentSuccess(newOrder);
         },
         onError: (err) => {
           setPaymentStep('failed');
