@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { 
   Tag, 
   Plus, 
@@ -9,8 +9,10 @@ import {
   CheckCircle2, 
   Clock, 
   AlertCircle,
-  Copy
+  Copy,
+  RefreshCw
 } from 'lucide-react';
+import { vendorAuthenticatedFetch } from '../../../lib/vendorAuthBridge';
 
 interface MarketingPromosTabProps {
   userUsername: string;
@@ -39,23 +41,28 @@ export const MarketingPromosTab: React.FC<MarketingPromosTabProps> = ({
   const [promoLoading, setPromoLoading] = useState(true);
   const [promoError, setPromoError] = useState('');
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch('/api/vendor/promos');
-        const data = await res.json().catch(() => null);
-        if (!cancelled && res.ok && Array.isArray(data?.promos)) {
-          setPromosList(data.promos.filter((p: any) => p.sellerUsername === userUsername));
-        }
-      } catch {
-        if (!cancelled) setPromoError('Unable to load server promotions.');
-      } finally {
-        if (!cancelled) setPromoLoading(false);
+  const loadPromos = useCallback(async () => {
+    setPromoLoading(true);
+    setPromoError('');
+    try {
+      // GET is intentionally public for storefront coupon discovery; this view filters
+      // the public active campaigns to the signed-in merchant's own username.
+      const res = await fetch('/api/vendor/promos');
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !Array.isArray(data?.promos)) {
+        throw new Error(data?.message || data?.error || 'Unable to load server promotions.');
       }
-    })();
-    return () => { cancelled = true; };
+      setPromosList(data.promos.filter((p: any) => p.sellerUsername === userUsername));
+    } catch (error: any) {
+      setPromoError(error?.message || 'Unable to load server promotions.');
+    } finally {
+      setPromoLoading(false);
+    }
   }, [userUsername]);
+
+  useEffect(() => {
+    void loadPromos();
+  }, [loadPromos]);
 
   const handleCreatePromo = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -65,7 +72,7 @@ export const MarketingPromosTab: React.FC<MarketingPromosTabProps> = ({
     expiryDate.setDate(expiryDate.getDate() + expiryDays);
 
     try {
-      const res = await fetch('/api/vendor/promos', {
+      const res = await vendorAuthenticatedFetch('/api/vendor/promos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -118,14 +125,29 @@ export const MarketingPromosTab: React.FC<MarketingPromosTabProps> = ({
             </p>
           </div>
 
-          <button
-            id="create-promo-code-btn"
-            onClick={() => setShowCreateModal(true)}
-            className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs sm:text-sm font-semibold flex items-center justify-center gap-1.5 transition-colors shadow-xs shrink-0 min-h-[44px]"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Create Promo Code</span>
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              id="refresh-promo-codes-btn"
+              type="button"
+              onClick={() => void loadPromos()}
+              disabled={promoLoading}
+              aria-label="Refresh promotion list"
+              aria-busy={promoLoading}
+              title="Refresh server promotions"
+              className="px-3 py-2 rounded-xl border border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-200 text-xs font-semibold flex items-center justify-center gap-1.5 min-h-[44px] disabled:opacity-60"
+            >
+              <RefreshCw className={`w-4 h-4 ${promoLoading ? 'animate-spin' : ''}`} />
+              <span>{promoLoading ? 'Refreshing…' : 'Refresh'}</span>
+            </button>
+            <button
+              id="create-promo-code-btn"
+              onClick={() => setShowCreateModal(true)}
+              className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs sm:text-sm font-semibold flex items-center justify-center gap-1.5 transition-colors shadow-xs shrink-0 min-h-[44px]"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Create Promo Code</span>
+            </button>
+          </div>
         </div>
       </div>
 
