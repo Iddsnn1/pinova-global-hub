@@ -118,7 +118,7 @@ export const SecurityTab: React.FC<SecurityTabProps> = ({
           </div>
           <div className="space-y-1">
             <h4 className="text-base font-bold text-neutral-900 dark:text-neutral-100">
-              QR Order Verification & Instant PSTP Release
+              QR Order Handover Verification
             </h4>
             <p className="text-xs text-neutral-600 dark:text-neutral-400 leading-relaxed">
               QR handover should be treated as a delivery confirmation workflow only when the corresponding server endpoint confirms it. This panel does not claim on-chain confirmation or automatic fund release.
@@ -135,7 +135,7 @@ export const SecurityTab: React.FC<SecurityTabProps> = ({
             Order & Security Evidence
           </h4>
           <span className="text-[11px] font-mono text-neutral-500">
-            SHA-256 Chained Hashes
+            Status overview only
           </span>
         </div>
         <p className="text-xs text-neutral-500 mb-4 leading-relaxed">
