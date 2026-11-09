@@ -78,6 +78,10 @@ export interface PiPaymentCallbacks {
 
 export const BUILD_COMMIT = 'b89f21cd99e230aa7782ce477ba6190f10c5580a';
 
+// Fail-closed development lock: no app module may start a native Pi payment.
+// Keep disabled until checkout, fulfillment, and production readiness are explicitly approved.
+const PI_NATIVE_PAYMENTS_ENABLED = false;
+
 /* =========================================================
  * State
  * ========================================================= */
@@ -3444,6 +3448,13 @@ export class PiSdkManagerService {
     data?: any;
     errorType?: string;
   }> {
+    if (!PI_NATIVE_PAYMENTS_ENABLED) {
+      this.currentPaymentStage = 'FAILED';
+      this.lastErrorCode = 'PI_PAYMENTS_DISABLED_IN_DEVELOPMENT';
+      this.notifyDiagnosticStateChange();
+      throw new Error('Pi payments are disabled while PiNova Global Hub is in development. No native Pi payment was started.');
+    }
+
     if (
       !Number.isFinite(
         params.amountPi
