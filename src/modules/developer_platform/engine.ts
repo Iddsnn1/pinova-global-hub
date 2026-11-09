@@ -24,7 +24,7 @@ import {
 export class EnterpriseDeveloperPlatformEngine {
   private static instance: EnterpriseDeveloperPlatformEngine;
 
-  private activeEnvironment: EnvironmentProfile = 'PRODUCTION';
+  private activeEnvironment: EnvironmentProfile = 'SANDBOX';
 
   private endpoints: ApiEndpoint[] = [
     {
@@ -436,8 +436,8 @@ export class EnterpriseDeveloperPlatformEngine {
   ];
 
   private runtimeConfig: RuntimeConfigProfile = {
-    environment: 'PRODUCTION',
-    gatewayBaseUrl: 'https://api.pinova.app',
+    environment: 'SANDBOX',
+    gatewayBaseUrl: 'LOCAL_SIMULATION_ONLY',
     defaultRateLimitPerMin: 1200,
     hmacSignatureHeader: 'X-PiNova-Signature',
     webhookMaxRetries: 5,
@@ -514,8 +514,8 @@ export class EnterpriseDeveloperPlatformEngine {
     {
       id: 'key-001',
       name: 'Official Marketplace Partner App Key',
-      prefix: 'pn_live_pk_',
-      maskedKey: 'pn_live_pk_••••••••••••8841',
+      prefix: 'pn_test_',
+      maskedKey: 'pn_test_••••••••••••8841',
       role: 'FULL_DEVELOPER',
       scopes: ['pi:payments:write', 'orders:read_write', 'utility:fulfill', 'catalog:read'],
       createdIso: '2026-01-10T09:00:00Z',
@@ -526,8 +526,8 @@ export class EnterpriseDeveloperPlatformEngine {
     {
       id: 'key-002',
       name: 'Analytics Streamer Integration Key',
-      prefix: 'pn_live_pk_',
-      maskedKey: 'pn_live_pk_••••••••••••1192',
+      prefix: 'pn_test_',
+      maskedKey: 'pn_test_••••••••••••1192',
       role: 'READ_ONLY',
       scopes: ['analytics:write', 'catalog:read'],
       createdIso: '2026-03-22T14:30:00Z',
@@ -644,7 +644,7 @@ export class EnterpriseDeveloperPlatformEngine {
 
     this.recordAuditLog(
       'INTEGRATION_TEST_PING',
-      `Executed health ping test for ${conn.name}. Status verified optimal.`,
+      `Executed health ping test for ${conn.name}. Local simulation updated; no connection was tested.`,
       'Integration Hub',
       conn.provider,
       'PING_TEST'
@@ -652,7 +652,7 @@ export class EnterpriseDeveloperPlatformEngine {
 
     return {
       success: true,
-      message: `Connection test to ${conn.name} (${conn.provider}) completed successfully with HTTP 200 OK.`,
+      message: `Connection test to ${conn.name} (${conn.provider}) completed successfully with local mock response only; no external connection was attempted.`,
       latencyMs: Math.floor(Math.random() * 45) + 15
     };
   }
@@ -712,7 +712,7 @@ export class EnterpriseDeveloperPlatformEngine {
 
     this.recordAuditLog(
       'WEBHOOK_TEST_DISPATCHED',
-      `Dispatched manual test payload for webhook subscription: ${subName}`,
+      `Created a local mock webhook record for subscription: ${subName}; no external delivery occurred.`,
       'Webhook Engine',
       targetUrl,
       'TEST_DISPATCH'
@@ -738,7 +738,7 @@ export class EnterpriseDeveloperPlatformEngine {
     this.webhookLogs.unshift(replayed);
     this.recordAuditLog(
       'WEBHOOK_EVENT_REPLAYED',
-      `Replayed event ${existing.eventType} to ${existing.targetUrl}`,
+      `Created a local mock replay record for ${existing.eventType}; no external delivery occurred.`,
       'Webhook Engine',
       existing.targetUrl,
       'EVENT_REPLAY'
@@ -845,12 +845,12 @@ export class EnterpriseDeveloperPlatformEngine {
   }
 
   public createApiKey(name: string, role: DeveloperApiKey['role'], scopes: string[]): DeveloperApiKey {
-    const rawSecret = `pn_live_pk_${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}`;
+    const rawSecret = `pn_test_${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}`;
     const newKey: DeveloperApiKey = {
       id: `key-${Date.now().toString().slice(-4)}`,
       name,
-      prefix: 'pn_live_pk_',
-      maskedKey: `pn_live_pk_••••••••••••${rawSecret.slice(-4)}`,
+      prefix: 'pn_test_',
+      maskedKey: `pn_test_••••••••••••${rawSecret.slice(-4)}`,
       role,
       scopes,
       createdIso: new Date().toISOString(),
@@ -915,16 +915,16 @@ export class EnterpriseDeveloperPlatformEngine {
           'content-type': 'application/json; charset=utf-8',
           'x-pinova-request-id': `req_${Math.random().toString(36).slice(2, 10)}`,
           'x-ratelimit-remaining': '1198',
-          'x-pi-sdk-compliance': 'v2.0.0-verified'
+          'x-pinova-mode': 'LOCAL-SIMULATION-NOT-LIVE'
         },
         responseBody: {
-          status: 'VERIFIED',
+          status: 'SIMULATED — NOT VERIFIED',
           paymentId: 'pi_tx_99812401',
           amountPi: 12.5,
           currency: 'PI',
           txHash: '0x9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b',
           timestamp: new Date().toISOString(),
-          verificationStatus: 'VERIFIED_COMPLETED',
+          verificationStatus: 'SIMULATION_ONLY — NO PAYMENT CHECKED',
           compliance: {
             piSdkVersion: 'v2',
             zeroKeyCustody: true,
@@ -942,7 +942,7 @@ export class EnterpriseDeveloperPlatformEngine {
           'x-pinova-request-id': `req_${Math.random().toString(36).slice(2, 10)}`
         },
         responseBody: {
-          status: 'FULFILLED',
+          status: 'SIMULATED — NOT FULFILLED',
           refId: 'UTL-TELCO-99120',
           carrier: 'MTN Global Switch',
           amountLocal: 2000,
@@ -961,8 +961,8 @@ export class EnterpriseDeveloperPlatformEngine {
           'x-pinova-request-id': `req_${Math.random().toString(36).slice(2, 10)}`
         },
         responseBody: {
-          status: 'SUCCESS',
-          message: `Endpoint ${path} executed successfully under PiNova Developer Sandbox.`,
+          status: 'SIMULATED — NOT EXECUTED',
+          message: `Local mock response for ${path}; no API endpoint was called.`,
           environment: this.activeEnvironment,
           timestamp: new Date().toISOString()
         }
