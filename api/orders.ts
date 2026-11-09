@@ -467,6 +467,13 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
           const orders = (await listDurableOrders()).filter((order) => sellerOwnsOrder(order, merchantUsername));
           return json(res, 200, { ok: true, role: 'seller', merchantUsername, orders });
         }
+        if (requestedRole === 'admin') {
+          const roles = Array.isArray(user.roles) ? user.roles : [];
+          if (!roles.includes('PLATFORM_ADMIN') && !roles.includes('COMPLIANCE_OFFICER')) {
+            return json(res, 403, { ok: false, error: 'ADMIN_ORDER_ACCESS_REQUIRED' });
+          }
+          return json(res, 200, { ok: true, role: 'admin', orders: await listDurableOrders() });
+        }
         return json(res, 200, { ok: true, orders: await listDurableOrders(user.username) });
       }
       const order = await getDurableOrder(path);
