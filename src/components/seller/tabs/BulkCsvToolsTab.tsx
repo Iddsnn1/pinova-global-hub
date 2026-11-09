@@ -183,8 +183,11 @@ export const BulkCsvToolsTab: React.FC<BulkCsvToolsTabProps> = ({
                 <span className="text-xs font-bold text-neutral-900 dark:text-neutral-100 block">
                   Inventory Stock Update Template
                 </span>
-                <span className="text-[11px] text-neutral-500">
-                  Headers: sku, productTitle, stockOnHand, warehouseLocation
+                <span className="text-[11px] text-neutral-500 block">
+                  Headers: productId, stockOnHand
+                </span>
+                <span className="text-[11px] text-neutral-500 block mt-1">
+                  Replace the sample ID with an existing product ID from Export Catalog.
                 </span>
               </div>
               <button
