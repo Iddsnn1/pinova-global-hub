@@ -120,6 +120,22 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
           <p className="text-xs sm:text-sm text-slate-300 max-w-2xl">
             Live carrier tracking, server-verified Pi payments, instant digital delivery, official printable receipts, returns, and dispute arbitration.
           </p>
+          {activeTab === 'buyer' && onOrdersRefreshed && (
+            <div className="flex flex-wrap items-center gap-3 pt-1">
+              <button
+                type="button"
+                onClick={() => { void handleRefreshBuyerOrders(); }}
+                disabled={isRefreshingOrders}
+                aria-label="Refresh buyer orders from server"
+                aria-busy={isRefreshingOrders}
+                className="inline-flex items-center gap-2 rounded-xl border border-purple-400/40 bg-purple-700/40 px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-purple-600/60 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <RefreshCw className={`h-4 w-4 ${isRefreshingOrders ? 'animate-spin' : ''}`} />
+                {isRefreshingOrders ? 'Refreshing Orders…' : 'Refresh My Orders'}
+              </button>
+              {refreshOrdersError && <span role="status" className="text-xs font-semibold text-amber-200">{refreshOrdersError}</span>}
+            </div>
+          )}
         </div>
       </div>
 
