@@ -169,6 +169,17 @@ export const SellerFulfillmentCenter: React.FC<SellerFulfillmentCenterProps> = (
         <p className="text-xs mt-1">
           {queueLoading ? 'Loading the server-authoritative seller queue…' : queueError || 'There are no customer orders assigned to your verified storefront.'}
         </p>
+        <button
+          type="button"
+          onClick={() => { void handleRefreshQueue(); }}
+          disabled={queueLoading}
+          aria-label="Refresh seller order queue"
+          aria-busy={queueLoading}
+          className="inline-flex items-center gap-2 mt-4 rounded-xl border border-amber-400/40 bg-amber-500/10 px-4 py-2 text-xs font-bold text-amber-700 dark:text-amber-200 hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          <RefreshCw className={`h-4 w-4 ${queueLoading ? 'animate-spin' : ''}`} />
+          {queueLoading ? 'Refreshing…' : 'Refresh Queue'}
+        </button>
       </div>
     );
   }
