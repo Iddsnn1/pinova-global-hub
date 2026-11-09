@@ -747,52 +747,6 @@ export class EnterpriseDeveloperPlatformEngine {
     return replayed;
   }
 
-  // --- PLUGINS ---${Math.floor(Date.now()/1000)},v1=${Math.random().toString(36).slice(2, 18)}`
-    };
-
-    this.webhookLogs.unshift(newLog);
-    if (sub) {
-      sub.lastTriggeredIso = new Date().toISOString();
-      sub.totalDelivered24h += 1;
-    }
-
-    this.recordAuditLog(
-      'WEBHOOK_TEST_DISPATCHED',
-      `Created a local mock webhook record for subscription: ${subName}; no external delivery occurred.`,
-      'Webhook Engine',
-      targetUrl,
-      'TEST_DISPATCH'
-    );
-
-    return newLog;
-  }
-
-  public replayWebhookEvent(logId: string): WebhookDeliveryLog | null {
-    const existing = this.webhookLogs.find(l => l.id === logId);
-    if (!existing) return null;
-
-    const replayed: WebhookDeliveryLog = {
-      ...existing,
-      id: `log-replay-${Date.now().toString().slice(-4)}`,
-      timestampIso: new Date().toISOString(),
-      status: 'SUCCESS',
-      statusCode: 200,
-      deliveryDurationMs: Math.floor(Math.random() * 60) + 25,
-      signatureHeader: `t=${Math.floor(Date.now()/1000)},v1=replay_${Math.random().toString(36).slice(2, 10)}`
-    };
-
-    this.webhookLogs.unshift(replayed);
-    this.recordAuditLog(
-      'WEBHOOK_EVENT_REPLAYED',
-      `Created a local mock replay record for ${existing.eventType}; no external delivery occurred.`,
-      'Webhook Engine',
-      existing.targetUrl,
-      'EVENT_REPLAY'
-    );
-
-    return replayed;
-  }
-
   // --- PLUGINS ---
   public getPlugins(): MarketplacePlugin[] {
     return [...this.plugins];
