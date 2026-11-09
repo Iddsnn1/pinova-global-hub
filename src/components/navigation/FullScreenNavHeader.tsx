@@ -425,7 +425,7 @@ export const FullScreenNavHeader: React.FC<FullScreenNavHeaderProps> = ({
           </button>
         </div>
 
-        {/* Center Priority Control: 3. Connect with Pi Button OR Pioneer ID Profile (PERMANENTLY VISIBLE) */
+        {/* Center Priority Control: 3. Connect with Pi Button OR Pioneer ID Profile (PERMANENTLY VISIBLE) */}
         {isConnected ? (
           <div className="relative shrink-0 mx-0.5" ref={userDropdownRef}>
             <button
