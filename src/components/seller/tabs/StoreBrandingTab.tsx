@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Sparkles, 
   Upload, 
@@ -33,29 +33,32 @@ export const StoreBrandingTab: React.FC<StoreBrandingTabProps> = ({
 
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const [isUploadingBanner, setIsUploadingBanner] = useState(false);
+  const [isLoadingBranding, setIsLoadingBranding] = useState(true);
 
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  // Fetch verified branding status from server on mount
-  useEffect(() => {
-    let isMounted = true;
-    async function loadBrandingStatus() {
-      try {
-        const res = await vendorAuthenticatedFetch('/api/vendor/branding-status');
-        if (res.ok) {
-          const data = await res.json();
-          if (isMounted && data.success) {
-            if (data.storeLogo) setLogoUrl(data.storeLogo);
-            if (data.storeBanner) setBannerUrl(data.storeBanner);
-          }
-        }
-      } catch (err) {
-        console.warn('Failed to fetch branding status:', err);
+  // Branding state is read from the authenticated server source.
+  const loadBrandingStatus = useCallback(async () => {
+    setIsLoadingBranding(true);
+    try {
+      const res = await vendorAuthenticatedFetch('/api/vendor/branding-status');
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.success) {
+        throw new Error(data?.message || data?.error || 'Unable to refresh saved branding.');
       }
+      setLogoUrl(data.storeLogo || null);
+      setBannerUrl(data.storeBanner || null);
+      setMessage(null);
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err?.message || 'Failed to fetch branding status.' });
+    } finally {
+      setIsLoadingBranding(false);
     }
-    loadBrandingStatus();
-    return () => { isMounted = false; };
   }, []);
+
+  useEffect(() => {
+    void loadBrandingStatus();
+  }, [loadBrandingStatus]);
 
   const handleUploadAsset = async (file: File, assetType: 'logo' | 'banner') => {
     // 1. Validation: 5 MB ceiling
@@ -120,16 +123,11 @@ export const StoreBrandingTab: React.FC<StoreBrandingTabProps> = ({
   };
 
   const handleRemoveAsset = async (assetType: 'logo' | 'banner') => {
-    if (assetType === 'logo') {
-      setLogoUrl(null);
-      onBrandingUpdated(null, bannerUrl);
-    } else {
-      setBannerUrl(null);
-      onBrandingUpdated(logoUrl, null);
-    }
+    // No authenticated server-side delete endpoint is currently exposed.
+    // Do not clear local state or report success for an operation that was not persisted.
     setMessage({
-      type: 'success',
-      text: `${assetType === 'logo' ? 'Store logo' : 'Store banner'} removed.`
+      type: 'error',
+      text: `${assetType === 'logo' ? 'Store logo' : 'Store banner'} removal is not available yet. The saved server image has not been changed.`
     });
   };
 
@@ -146,13 +144,28 @@ export const StoreBrandingTab: React.FC<StoreBrandingTabProps> = ({
             Configure your official logo and showcase banner for buyers on PiNova Global Marketplace
           </p>
         </div>
-        <button
-          onClick={onOpenStorefrontPreview}
-          className="px-4 py-2 rounded-xl border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-300 text-xs font-semibold flex items-center justify-center gap-2 transition-colors shrink-0"
-        >
-          <Eye className="w-4 h-4 text-purple-600" />
-          Preview Storefront
-        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            id="refresh-store-branding-btn"
+            type="button"
+            onClick={() => void loadBrandingStatus()}
+            disabled={isLoadingBranding}
+            aria-label="Refresh saved store branding"
+            aria-busy={isLoadingBranding}
+            title="Refresh saved branding from server"
+            className="px-3 py-2 rounded-xl border border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-300 text-xs font-semibold flex items-center justify-center gap-1.5 min-h-[44px] disabled:opacity-60"
+          >
+            <RefreshCw className={`w-4 h-4 ${isLoadingBranding ? 'animate-spin' : ''}`} />
+            <span>{isLoadingBranding ? 'Refreshing…' : 'Refresh'}</span>
+          </button>
+          <button
+            onClick={onOpenStorefrontPreview}
+            className="px-4 py-2 rounded-xl border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-300 text-xs font-semibold flex items-center justify-center gap-2 transition-colors"
+          >
+            <Eye className="w-4 h-4 text-purple-600" />
+            Preview Storefront
+          </button>
+        </div>
       </div>
 
       {message && (
