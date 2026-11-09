@@ -14,6 +14,8 @@ interface EscrowCheckoutModalProps {
   onTrackOrder?: (orderId: string) => void;
 }
 
+const PI_CHECKOUT_ENABLED = false;
+
 export const EscrowCheckoutModal: React.FC<EscrowCheckoutModalProps> = ({
   cartItems,
   appliedCoupon,
@@ -67,6 +69,12 @@ export const EscrowCheckoutModal: React.FC<EscrowCheckoutModalProps> = ({
   };
 
   const handleStartPayment = async () => {
+    if (!PI_CHECKOUT_ENABLED) {
+      setPaymentStep('failed');
+      setErrorMessage('Pi checkout is disabled during development. No Pi payment or order was started.');
+      addLog('Preview safety lock: Pi checkout is disabled.');
+      return;
+    }
     setPaymentStep('processing');
     setStatusLogs([]);
     setErrorMessage('');
@@ -317,8 +325,8 @@ export const EscrowCheckoutModal: React.FC<EscrowCheckoutModalProps> = ({
                     <div className="text-2xl font-black text-slate-950 dark:text-white">{formatPiAmount(totalAmountPi)} π</div>
                   </div>
                   <div className="text-right max-w-[180px]">
-                    <span className="text-[11px] text-emerald-700 dark:text-emerald-300 font-bold block">100% Order Protection</span>
-                    <span className="text-[10px] text-slate-600 dark:text-slate-300">Protected by PiNova Order Protection</span>
+                    <span className="text-[11px] text-slate-500 dark:text-slate-300 font-bold block">Protection status: not active</span>
+                    <span className="text-[10px] text-slate-600 dark:text-slate-300">No escrow or payment is active in Preview.</span>
                   </div>
                 </div>
               </div>
@@ -326,9 +334,10 @@ export const EscrowCheckoutModal: React.FC<EscrowCheckoutModalProps> = ({
               {/* Action Button */}
               <button
                 onClick={handleStartPayment}
+                disabled={!PI_CHECKOUT_ENABLED}
                 className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-purple-600 via-indigo-600 to-amber-500 text-white font-black text-sm shadow-xl shadow-purple-500/20 hover:opacity-95 transition-opacity flex items-center justify-center gap-2"
               >
-                <span>Authorize Pi Payment ({formatPiAmount(totalAmountPi)} π)</span>
+                <span>{PI_CHECKOUT_ENABLED ? `Authorize Pi Payment (${formatPiAmount(totalAmountPi)} π)` : "Pi checkout disabled during development"}</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
             </>
