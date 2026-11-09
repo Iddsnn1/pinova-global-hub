@@ -540,7 +540,13 @@ function MainAppContent() {
       }
     }
 
-    setNavigationStack((prev) => [...prev, { section: 'marketplace', category: cat }]);
+    // Keep the in-app stack aligned with browser history. Re-selecting the
+    // current category must not create a phantom Back entry.
+    setNavigationStack((prev) => {
+      const top = prev[prev.length - 1];
+      if (top?.section === 'marketplace' && top?.category === cat) return prev;
+      return [...prev, { section: 'marketplace', category: cat }];
+    });
     try {
       window.scrollTo({ top: 0, behavior: 'instant' });
     } catch {
