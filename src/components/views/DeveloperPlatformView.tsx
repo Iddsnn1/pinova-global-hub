@@ -91,7 +91,7 @@ export const DeveloperPlatformView: React.FC<DeveloperPlatformViewProps> = ({
   // Interactive API Runner State
   const [apiTestPath, setApiTestPath] = useState<string>('/api/v2/pi/payments/verify');
   const [apiTestMethod, setApiTestMethod] = useState<string>('POST');
-  const [apiTestHeaders, setApiTestHeaders] = useState<string>('{\n  "Authorization": "Bearer pn_live_pk_demo8841",\n  "Content-Type": "application/json"\n}');
+  const [apiTestHeaders, setApiTestHeaders] = useState<string>('{\n  "Authorization": "Bearer pn_test_demo8841",\n  "Content-Type": "application/json"\n}');
   const [apiTestBody, setApiTestBody] = useState<string>('{\n  "paymentId": "pi_tx_99812401",\n  "amountPi": 12.5,\n  "currency": "PI"\n}');
   const [apiTestResult, setApiTestResult] = useState<any | null>(null);
   const [isExecutingApiTest, setIsExecutingApiTest] = useState<boolean>(false);
@@ -212,7 +212,7 @@ export const DeveloperPlatformView: React.FC<DeveloperPlatformViewProps> = ({
     setNewKeyName('');
     setApiKeys(engine.getApiKeys());
     refreshState();
-    showToast('Developer API key generated successfully!');
+    showToast('Local test key generated. It is not valid for API authentication.');
   };
 
   const handleRevokeKey = (id: string) => {
@@ -268,11 +268,11 @@ export const DeveloperPlatformView: React.FC<DeveloperPlatformViewProps> = ({
             </span>
           </div>
           <span className="px-2.5 py-1 rounded-full bg-emerald-950 text-emerald-400 text-[10px] font-extrabold border border-emerald-800">
-            Pi SDK v2 & Platform API Verified
+            Local Sandbox Simulation — Not Live
           </span>
         </div>
         <p className="text-[11px] text-slate-300 leading-relaxed">
-          <strong>Official Compliance Notice:</strong> PiNova Global Hub is built on a non-custodial architecture. Payment processing relies on the Official Pi SDK v2 and Pi Platform API. PiNova never stores or manages Pi wallet private keys, recovery phrases, passphrases, blockchain infrastructure, or official Pi Network services. Payment approval and completion are processed through the Official Pi SDK v2 payment workflow and Pi Platform API according to their documented integration flow, and PiNova never performs wallet custody, settlement, blockchain validation, or transaction finality. Certain capabilities rely on external service providers and official Pi Platform services; feature availability, response times, and service outcomes may vary depending on provider availability, network connectivity, and Official Pi Platform service status. All developer integrations, API routing gateways, and extensions operate strictly within the application sandbox for testing and validation.
+          <strong>SANDBOX NOTICE:</strong> This Developer Platform is a local in-browser simulation using sample data only. It does not make live API requests, contact external connectors, deliver or replay webhooks, provision server-side API keys, execute Pi payments, fulfill airtime, or trigger provider actions. Displayed health, SLA, latency, connector, event, queue, and audit figures are illustrative and are not production telemetry or evidence of a working integration.
         </p>
       </div>
 
@@ -284,7 +284,7 @@ export const DeveloperPlatformView: React.FC<DeveloperPlatformViewProps> = ({
             <span>Developer Platform & Integrations</span>
           </h1>
           <p className="text-xs text-slate-400">
-            Centralized API Gateway, Integration Hub, Webhook Engine, Extension Framework & Governance
+            Local simulation of API Gateway, Integration Hub, Webhooks & Extensions
           </p>
         </div>
 
@@ -294,7 +294,7 @@ export const DeveloperPlatformView: React.FC<DeveloperPlatformViewProps> = ({
             <Globe className="w-3.5 h-3.5 text-purple-400" />
             <span className="text-xs font-bold text-slate-400">Environment:</span>
             <div className="flex items-center gap-1">
-              {(['SANDBOX', 'STAGING', 'PRODUCTION'] as EnvironmentProfile[]).map(env => (
+              {(['SANDBOX'] as EnvironmentProfile[]).map(env => (
                 <button
                   key={env}
                   onClick={() => handleEnvChange(env)}
@@ -352,7 +352,7 @@ export const DeveloperPlatformView: React.FC<DeveloperPlatformViewProps> = ({
 
         <div className="p-3.5 rounded-2xl bg-slate-900 border border-slate-800 space-y-1">
           <span className="text-[10px] text-slate-400 font-bold block uppercase">Connectors</span>
-          <span className="text-lg font-black text-emerald-400">{health.connectedIntegrationsCount} Connected</span>
+          <span className="text-lg font-black text-emerald-400">{health.connectedIntegrationsCount} Simulated</span>
           <span className="text-[10px] text-slate-500 block">Payment, Utility, AI, ERP</span>
         </div>
 
@@ -365,7 +365,7 @@ export const DeveloperPlatformView: React.FC<DeveloperPlatformViewProps> = ({
         <div className="p-3.5 rounded-2xl bg-slate-900 border border-slate-800 space-y-1">
           <span className="text-[10px] text-slate-400 font-bold block uppercase">Webhook Success</span>
           <span className="text-lg font-black text-amber-400">{health.webhookSuccessRate24h}%</span>
-          <span className="text-[10px] text-slate-500 block">HMAC SHA-256 Verified</span>
+          <span className="text-[10px] text-slate-500 block">Sample data only</span>
         </div>
 
         <div className="p-3.5 rounded-2xl bg-slate-900 border border-slate-800 space-y-1">
@@ -414,10 +414,10 @@ export const DeveloperPlatformView: React.FC<DeveloperPlatformViewProps> = ({
             <div>
               <h3 className="font-bold text-white text-base flex items-center gap-2">
                 <Server className="w-5 h-5 text-purple-400" />
-                <span>Centralized API Gateway & Endpoint Registry</span>
+                <span>Simulated API Gateway & Sample Endpoint Registry</span>
               </h3>
               <p className="text-xs text-slate-400">
-                Manage versioning, endpoint rate limits, SLA metrics, latency distribution, and deprecation policies.
+                Demo configuration only. Changes remain in local in-memory state and do not alter deployed API routes.
               </p>
             </div>
             <button
@@ -613,7 +613,7 @@ export const DeveloperPlatformView: React.FC<DeveloperPlatformViewProps> = ({
                 <span>Webhook Management Engine & Dead Letter Queue (DLQ)</span>
               </h3>
               <p className="text-xs text-slate-400">
-                Manage event delivery targets, HMAC SHA-256 signature verification (<code className="text-amber-400 font-mono">X-PiNova-Signature</code>), retry queues, and event replay.
+                Explore simulated webhook settings and sample delivery records. No webhook is sent, signed, or replayed to an external destination.
               </p>
             </div>
           </div>
@@ -802,7 +802,7 @@ export const DeveloperPlatformView: React.FC<DeveloperPlatformViewProps> = ({
                 <span>Sandboxed Developer Playground & Integration Sandbox</span>
               </h3>
               <p className="text-xs text-slate-400">
-                Execute live API Request Testing payloads against PiNova developer endpoints, perform Pi SDK v2 Integration Testing & Pi Platform API Integration Testing, and achieve complete SDK Integration Validation.
+                Run a local mock response against sample endpoints. This does not call Pi Network, PiNova APIs, or any external provider and cannot verify a payment or integration.
               </p>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
@@ -931,7 +931,7 @@ export const DeveloperPlatformView: React.FC<DeveloperPlatformViewProps> = ({
                 ) : (
                   <div className="p-8 text-center text-slate-500 text-xs space-y-2">
                     <Terminal className="w-8 h-8 text-slate-700 mx-auto" />
-                    <p>Click "Execute API Request" to test endpoint routing in real-time.</p>
+                    <p>Click "Execute API Request" to generate a local simulated response only.</p>
                   </div>
                 )}
               </div>
@@ -968,7 +968,7 @@ const response = await pinova.payments.verify({
                   {selectedSdkTab === 'python' && (
                     <pre>{`from pinova import PiNovaClient
 
-client = PiNovaClient(api_key="pn_live_pk_demo8841")
+client = PiNovaClient(api_key="pn_test_demo8841")
 response = client.payments.verify(
     payment_id="pi_tx_99812401",
     amount_pi=12.5
@@ -976,7 +976,7 @@ response = client.payments.verify(
                   )}
                   {selectedSdkTab === 'curl' && (
                     <pre>{`curl -X POST https://api.pinova.app/api/v2/pi/payments/verify \\
-  -H "Authorization: Bearer pn_live_pk_demo8841" \\
+  -H "Authorization: Bearer pn_test_demo8841" \\
   -H "Content-Type: application/json" \\
   -d '{"paymentId":"pi_tx_99812401","amountPi":12.5}'`}</pre>
                   )}
@@ -1055,7 +1055,7 @@ response = client.payments.verify(
             <div className="space-y-3 p-5 rounded-2xl bg-slate-900 border border-slate-800">
               <h4 className="font-bold text-white text-sm flex items-center gap-2 border-b border-slate-800 pb-2">
                 <Radio className="w-4 h-4 text-purple-400" />
-                <span>Published System Event Stream</span>
+                <span>Sample Event Stream — Not Live</span>
               </h4>
               <div className="space-y-3">
                 {eventMessages.map(msg => (
@@ -1078,7 +1078,7 @@ response = client.payments.verify(
             <div className="space-y-3 p-5 rounded-2xl bg-slate-900 border border-slate-800">
               <h4 className="font-bold text-white text-sm flex items-center gap-2 border-b border-slate-800 pb-2">
                 <Cpu className="w-4 h-4 text-emerald-400" />
-                <span>Background Processing Queue Status</span>
+                <span>Sample Job Queue — Not Live</span>
               </h4>
               <div className="space-y-3">
                 {backgroundJobs.map(job => (
@@ -1127,26 +1127,26 @@ response = client.payments.verify(
                 <span>Observability, Telemetry & SLA Compliance</span>
               </h3>
               <p className="text-xs text-slate-400">
-                Real-time API latency breakdown, SLA tracking, error budgets, and system health metrics.
+                Illustrative sample metrics only — no live telemetry, SLA measurement, or runtime monitoring is connected.
               </p>
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-2">
-              <span className="text-xs font-bold text-slate-400 block uppercase">Gateway SLA Compliance</span>
+              <span className="text-xs font-bold text-slate-400 block uppercase">Sample SLA (not measured)</span>
               <div className="text-3xl font-black text-emerald-400">99.98%</div>
               <p className="text-[11px] text-slate-400">Exceeds target 99.90% SLA commitment across 6 endpoints.</p>
             </div>
 
             <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-2">
-              <span className="text-xs font-bold text-slate-400 block uppercase">Average Latency (P99)</span>
+              <span className="text-xs font-bold text-slate-400 block uppercase">Sample Latency (not measured)</span>
               <div className="text-3xl font-black text-purple-300">42 ms</div>
               <p className="text-[11px] text-slate-400">Optimized via in-memory cached configuration layers.</p>
             </div>
 
             <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-2">
-              <span className="text-xs font-bold text-slate-400 block uppercase">Error Budget Remaining</span>
+              <span className="text-xs font-bold text-slate-400 block uppercase">Illustrative Error Budget (not measured)</span>
               <div className="text-3xl font-black text-amber-400">98.4%</div>
               <p className="text-[11px] text-slate-400">Zero catastrophic outage incidents recorded in 30 days.</p>
             </div>
@@ -1164,7 +1164,7 @@ response = client.payments.verify(
                 <span>API Keys, OAuth Clients & Audit Governance</span>
               </h3>
               <p className="text-xs text-slate-400">
-                Manage developer credentials with granular scopes, secret revocation, and export append-only audit records.
+                Manage local demo key records only. These are not server-issued credentials; revocation and audit exports affect this browser-side simulation only.
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -1173,7 +1173,7 @@ response = client.payments.verify(
                 className="px-3.5 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold transition-all flex items-center gap-1.5 shadow-md shadow-purple-600/30"
               >
                 <Plus className="w-4 h-4" />
-                <span>Generate API Key</span>
+                <span>Generate Test Key</span>
               </button>
               <button
                 onClick={handleExportAuditCSV}
@@ -1187,7 +1187,7 @@ response = client.payments.verify(
 
           {/* API Keys Table */}
           <div className="space-y-3">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Active Developer API Keys</h4>
+            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Local Test Keys — Not Server-Issued</h4>
             <div className="overflow-x-auto rounded-2xl border border-slate-800 bg-slate-900">
               <table className="w-full text-left text-xs">
                 <thead className="bg-slate-950/80 text-slate-400 border-b border-slate-800 font-bold uppercase tracking-wider text-[10px]">
@@ -1293,7 +1293,7 @@ response = client.payments.verify(
           <div className="w-full max-w-md p-6 rounded-2xl bg-slate-900 border border-slate-800 space-y-4 shadow-2xl">
             <h3 className="text-base font-bold text-white flex items-center gap-2">
               <Key className="w-5 h-5 text-amber-400" />
-              <span>Generate New Developer API Key</span>
+              <span>Generate Local Test Key</span>
             </h3>
 
             <form onSubmit={handleCreateKeySubmit} className="space-y-4">
