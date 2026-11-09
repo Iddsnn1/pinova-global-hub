@@ -194,6 +194,9 @@ export const ScanToPayModal: React.FC<ScanToPayModalProps> = ({
   };
 
   const handleStartPayment = () => {
+    setPaymentStep('failed');
+    setErrorMessage('Pi Scan to Pay is disabled while PiNova Global Hub is in development. No wallet authentication or payment was started.');
+    return;
     if (!parsedQr || !parsedQr.isValid) {
       setErrorMessage('Invalid or corrupted QR payment target.');
       setPaymentStep('failed');
