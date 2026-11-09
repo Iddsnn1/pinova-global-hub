@@ -68,7 +68,7 @@ export const PoliciesTab: React.FC<PoliciesTabProps> = ({
         ...initialApplication,
         pioneerUsername: userUsername,
         policies: updatedPolicies,
-        pstpAgreementAccepted: true
+        pstpAgreementAccepted: Boolean(initialApplication?.pstpAgreementAccepted)
       };
 
       const res = await vendorAuthenticatedFetch('/api/vendor/apply', {
@@ -79,7 +79,7 @@ export const PoliciesTab: React.FC<PoliciesTabProps> = ({
 
       const data = await res.json();
       if (res.ok && data.success) {
-        setSuccessMsg('Store policies successfully saved and bound to PSTP Escrow.');
+        setSuccessMsg('Store policies successfully saved to your merchant application.');
         onPoliciesUpdated(updatedPolicies);
         setTimeout(() => setSuccessMsg(null), 5000);
       } else {
