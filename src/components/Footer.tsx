@@ -24,14 +24,13 @@ export const Footer: React.FC<FooterProps> = ({ onSelectCategory, onOpenLanguage
           {/* Column 1: Brand Info & Compliance */}
           <div className="space-y-3.5 sm:col-span-2 lg:col-span-1">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-purple-600 to-amber-500 flex items-center justify-center font-bold text-slate-950 text-lg">
-                π
-              </div>
+              <img src="/assets/pinova-global-logo.svg" alt="PiNova Global Hub" className="w-9 h-9 object-contain" />
               <span className="font-black text-lg text-white">{t('common.appName', undefined, 'PiNova Global Hub')}</span>
             </div>
             <p className="text-xs text-slate-400 leading-relaxed">
               {t('common.tagline', undefined, 'Enterprise global ecosystem & multi-vendor marketplace built for the Pi Network.')}
             </p>
+            <p className="text-[10px] text-amber-300/90 font-semibold tracking-wide">Owned and Operated by DANDATTI GLOBAL VENTURES LIMITED</p>
             <div className="flex items-center gap-2 text-xs font-semibold text-emerald-400">
               <ShieldCheck className="w-4 h-4" />
               <span>Platform Order Protection Standard</span>
