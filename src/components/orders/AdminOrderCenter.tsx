@@ -17,19 +17,23 @@ import {
   ShieldAlert,
   ChevronRight,
   Activity,
-  Layers
+  Layers,
+  RefreshCw
 } from 'lucide-react';
 import { Order, PstpOrderStatus, Dispute, AuditLogEntry } from '../../types';
 import { OrderOrchestrationService } from '../../modules/orders';
+import { vendorAuthenticatedFetch } from '../../lib/vendorAuthBridge';
 
 interface AdminOrderCenterProps {
   orders: Order[];
   onOrderUpdated?: (updatedOrder: Order) => void;
+  onOrdersRefreshed?: (orders: Order[]) => void;
 }
 
 export const AdminOrderCenter: React.FC<AdminOrderCenterProps> = ({
   orders = [],
-  onOrderUpdated
+  onOrderUpdated,
+  onOrdersRefreshed
 }) => {
   const service = new OrderOrchestrationService();
   const safeOrders = Array.isArray(orders) ? orders : [];
@@ -38,6 +42,33 @@ export const AdminOrderCenter: React.FC<AdminOrderCenterProps> = ({
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(safeOrders[0] || null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [isRefreshingOrders, setIsRefreshingOrders] = useState(false);
+  const [refreshError, setRefreshError] = useState('');
+
+  const handleRefreshAdminOrders = async () => {
+    if (!onOrdersRefreshed || isRefreshingOrders) return;
+    setIsRefreshingOrders(true);
+    setRefreshError('');
+    try {
+      const response = await vendorAuthenticatedFetch('/api/v1/orders?role=admin', {
+        method: 'GET',
+        headers: { Accept: 'application/json' }
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !Array.isArray(payload?.orders)) {
+        throw new Error(payload?.error || `ADMIN_ORDER_REFRESH_FAILED_${response.status}`);
+      }
+      onOrdersRefreshed(payload.orders as Order[]);
+      setSelectedOrder((current) => {
+        if (!current) return (payload.orders[0] as Order) || null;
+        return (payload.orders as Order[]).find((order) => order.id === current.id) || (payload.orders[0] as Order) || null;
+      });
+    } catch (error: any) {
+      setRefreshError(error?.message || 'Unable to refresh the admin order list.');
+    } finally {
+      setIsRefreshingOrders(false);
+    }
+  };
 
   // Dispute Arbitration Form State
   const [selectedDisputeId, setSelectedDisputeId] = useState<string>('DISP-01');
@@ -113,7 +144,21 @@ export const AdminOrderCenter: React.FC<AdminOrderCenterProps> = ({
             <p className="text-xs text-slate-400">Monitor all platform orders, inspect state timelines, arbitrate disputes, and approve refunds.</p>
           </div>
         </div>
+        {onOrdersRefreshed && (
+          <button
+            type="button"
+            onClick={() => { void handleRefreshAdminOrders(); }}
+            disabled={isRefreshingOrders}
+            aria-label="Refresh all platform orders"
+            aria-busy={isRefreshingOrders}
+            className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-purple-400/40 bg-purple-500/10 px-3 py-2 text-xs font-bold text-purple-200 hover:bg-purple-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <RefreshCw className={`h-4 w-4 ${isRefreshingOrders ? 'animate-spin' : ''}`} />
+            {isRefreshingOrders ? 'Refreshing…' : 'Refresh Global Orders'}
+          </button>
+        )}
       </div>
+      {refreshError && <div role="status" className="border-b border-rose-500/20 bg-rose-500/10 px-5 py-2 text-xs font-semibold text-rose-300">{refreshError}</div>}
 
       {/* Tabs */}
       <div className="flex border-b border-slate-200 dark:border-slate-800 gap-2 px-5 pt-3 overflow-x-auto bg-slate-50 dark:bg-slate-950">
