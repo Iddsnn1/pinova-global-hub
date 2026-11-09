@@ -551,8 +551,16 @@ function MainAppContent() {
   // Back Navigation Handler
   const handleGoBack = () => {
     if (navigationStack.length <= 1) return;
+
+    // Prefer the browser history entry created by app navigation. The popstate
+    // handler is the single source of truth for restoring section/category state.
+    if (typeof window !== 'undefined' && window.history.state?.pinovaNavigation === true) {
+      window.history.back();
+      return;
+    }
+
     const newStack = [...navigationStack];
-    newStack.pop(); // remove current
+    newStack.pop();
     const previous = newStack[newStack.length - 1];
     setNavigationStack(newStack);
     if (previous) {
@@ -560,7 +568,9 @@ function MainAppContent() {
       if (previous.section === 'marketplace') {
         setSelectedMarketplaceCategory(previous.category as MarketplaceCategory);
       } else if (previous.section === 'utilities') {
-        setSelectedUtilityCategory((previous.category && (previous.category as string) !== 'all' ? (previous.category as string) : 'all'));
+        setSelectedUtilityCategory(String(previous.category || 'all'));
+      } else if (previous.section === 'education') {
+        setSelectedEducationTab(previous.category as unknown as EducationTab);
       }
       try {
         window.scrollTo({ top: 0, behavior: 'instant' });
