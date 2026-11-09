@@ -137,9 +137,11 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
   // Keep Seller Studio module switching entirely in React state.
   // Pi Browser must not treat an internal module switch as a new document navigation.
   const handleSelectTab = useCallback((newTab: SellerStudioTabId) => {
-    setActiveTab(newTab);
     setIsMobileMenuOpen(false);
     setIsMobileModuleSheetOpen(false);
+    // Selecting the already-open module must not add a duplicate Back-stack entry.
+    if (newTab === activeTab) return;
+    setActiveTab(newTab);
 
     // Keep module navigation in browser history so Android/Pi Browser Back works
     // without leaving Seller Studio or forcing a full document navigation.
@@ -152,21 +154,27 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
         window.scrollTo({ top: 0, behavior: 'smooth' });
       } catch (_) {}
     }
-  }, []);
+  }, [activeTab]);
 
   // Listen for browser Back/Forward (popstate)
   useEffect(() => {
+    const validTabs: SellerStudioTabId[] = [
+      'overview', 'multi_store', 'products', 'inventory', 'orders', 'bulk_csv',
+      'payments', 'analytics', 'staff', 'customers', 'marketing', 'kyc',
+      'branding', 'policies', 'security', 'help'
+    ];
     const handlePopState = (e: PopStateEvent) => {
-      if (e.state && e.state.sellerTab) {
-        setActiveTab(e.state.sellerTab as SellerStudioTabId);
-      } else if (typeof window !== 'undefined') {
+      const stateTab = e.state?.sellerTab;
+      if (typeof stateTab === 'string' && validTabs.includes(stateTab as SellerStudioTabId)) {
+        setActiveTab(stateTab as SellerStudioTabId);
+        return;
+      }
+      if (typeof window !== 'undefined') {
         const params = new URLSearchParams(window.location.search);
-        const tabParam = (params.get('tab') || params.get('module')) as SellerStudioTabId;
-        if (tabParam) {
-          setActiveTab(tabParam);
-        } else {
-          setActiveTab('overview');
-        }
+        const tabParam = params.get('tab') || params.get('module');
+        setActiveTab(tabParam && validTabs.includes(tabParam as SellerStudioTabId)
+          ? tabParam as SellerStudioTabId
+          : 'overview');
       }
     };
     window.addEventListener('popstate', handlePopState);
