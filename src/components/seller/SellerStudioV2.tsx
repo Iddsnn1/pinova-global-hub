@@ -83,7 +83,7 @@ interface SellerStudioV2Props {
   onProductCreated?: (product: Product) => void;
   onUpdateProduct?: (product: Product) => void;
   onDeleteProduct?: (productId: string) => void;
-  onUpdateOrderStatus?: (orderId: string, status: Order['pstpStatus'], trackingNumber?: string, carrier?: string) => void;
+  onUpdateOrderStatus?: (orderId: string, status: Order['pstpStatus'], trackingNumber?: string, carrier?: string) => Promise<boolean> | boolean | void;
   onViewStorefront?: (vendorId: string, vendorOverride?: Vendor) => void;
   onOpenStorefrontPage?: (vendor: Vendor) => void;
   onNavigateHome?: () => void;
@@ -285,10 +285,10 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
   }, [fetchAuthoritativeStatus]);
 
   // Handle Order Fulfillment Action
-  const handleUpdateFulfillment = (orderId: string, trackingNumber: string, carrier: string) => {
-    if (onUpdateOrderStatus) {
-      onUpdateOrderStatus(orderId, 'Shipped', trackingNumber, carrier);
-    }
+  const handleUpdateFulfillment = async (orderId: string, trackingNumber: string, carrier: string): Promise<boolean> => {
+    if (!onUpdateOrderStatus) return false;
+    const result = await onUpdateOrderStatus(orderId, 'Shipped', trackingNumber, carrier);
+    return result !== false;
   };
 
   // Status Badge Component
