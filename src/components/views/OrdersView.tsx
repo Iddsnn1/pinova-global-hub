@@ -19,12 +19,14 @@ import {
   ShieldAlert,
   History,
   Barcode,
-  Package
+  Package,
+  RefreshCw
 } from 'lucide-react';
 import { Order, UserRole } from '../../types';
 import { BuyerOrderHub } from '../orders/BuyerOrderHub';
 import { SellerFulfillmentCenter } from '../orders/SellerFulfillmentCenter';
 import { AdminOrderCenter } from '../orders/AdminOrderCenter';
+import { vendorAuthenticatedFetch } from '../../lib/vendorAuthBridge';
 
 interface OrdersViewProps {
   orders: Order[];
@@ -39,6 +41,7 @@ interface OrdersViewProps {
   onResolveDispute: (orderId: string, resolution: 'buyer_refund' | 'seller_payout', note: string) => void;
   onExploreMarketplace?: () => void;
   onOrderUpdated?: (updatedOrder: Order) => void;
+  onOrdersRefreshed?: (orders: Order[]) => void;
 }
 
 export const OrdersView: React.FC<OrdersViewProps> = ({
@@ -53,9 +56,33 @@ export const OrdersView: React.FC<OrdersViewProps> = ({
   onOpenDispute,
   onResolveDispute,
   onExploreMarketplace,
-  onOrderUpdated
+  onOrderUpdated,
+  onOrdersRefreshed
 }) => {
   const [activeTab, setActiveTab] = useState<'buyer' | 'seller' | 'admin' | 'audit'>('buyer');
+  const [isRefreshingOrders, setIsRefreshingOrders] = useState(false);
+  const [refreshOrdersError, setRefreshOrdersError] = useState('');
+
+  const handleRefreshBuyerOrders = async () => {
+    if (!onOrdersRefreshed || isRefreshingOrders) return;
+    setIsRefreshingOrders(true);
+    setRefreshOrdersError('');
+    try {
+      const response = await vendorAuthenticatedFetch('/api/v1/orders', {
+        method: 'GET',
+        headers: { Accept: 'application/json' }
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !Array.isArray(payload?.orders)) {
+        throw new Error(payload?.error || `ORDER_REFRESH_FAILED_${response.status}`);
+      }
+      onOrdersRefreshed(payload.orders as Order[]);
+    } catch (error: any) {
+      setRefreshOrdersError(error?.message || 'Unable to refresh orders from the server.');
+    } finally {
+      setIsRefreshingOrders(false);
+    }
+  };
 
   // Switch to buyer tracking if initialOrderId is provided
   useEffect(() => {
