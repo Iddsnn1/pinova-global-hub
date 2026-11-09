@@ -287,7 +287,7 @@ export class EnterpriseDeveloperPlatformEngine {
       payloadSnippet: '{"orderId":"ORD-88291","amountPi":14.5,"currency":"PI","status":"PAID"}',
       statusCode: 200,
       deliveryDurationMs: 84,
-      status: 'WARNING',
+      status: 'FAILED',
       timestampIso: new Date(Date.now() - 120000).toISOString(),
       retryCount: 0,
       signatureHeader: 't=1785892000,v1=9f8a7b6c5d4e3f2a1b'
@@ -300,7 +300,7 @@ export class EnterpriseDeveloperPlatformEngine {
       payloadSnippet: '{"refId":"UTL-77102","phone":"+2348031234567","carrier":"MTN Nigeria","amountNgn":1000}',
       statusCode: 200,
       deliveryDurationMs: 142,
-      status: 'WARNING',
+      status: 'FAILED',
       timestampIso: new Date(Date.now() - 450000).toISOString(),
       retryCount: 0,
       signatureHeader: 't=1785891600,v1=3c2b1a0f9e8d7c6b5a'
@@ -453,7 +453,7 @@ export class EnterpriseDeveloperPlatformEngine {
       sourceModule: 'Pi Payments & Verification',
       payloadSummary: 'SAMPLE ONLY — no Pi payment verification was performed',
       publishedIso: new Date(Date.now() - 60000).toISOString(),
-      status: 'PENDING',
+      status: 'QUEUED',
       subscribersCount: 0
     },
     {
@@ -462,7 +462,7 @@ export class EnterpriseDeveloperPlatformEngine {
       sourceModule: 'Airtime & Utilities',
       payloadSummary: 'SAMPLE ONLY — no airtime fulfillment was performed',
       publishedIso: new Date(Date.now() - 180000).toISOString(),
-      status: 'PENDING',
+      status: 'QUEUED',
       subscribersCount: 0
     },
     {
@@ -698,7 +698,7 @@ export class EnterpriseDeveloperPlatformEngine {
       }),
       statusCode: 200,
       deliveryDurationMs: Math.floor(Math.random() * 80) + 20,
-      status: 'WARNING',
+      status: 'FAILED',
       timestampIso: new Date().toISOString(),
       retryCount: 0,
       signatureHeader: `LOCAL-SIMULATION-NO-SIGNATURE` // no signature was generated or sent
@@ -729,7 +729,7 @@ export class EnterpriseDeveloperPlatformEngine {
       ...existing,
       id: `log-replay-${Date.now().toString().slice(-4)}`,
       timestampIso: new Date().toISOString(),
-      status: 'WARNING',
+      status: 'FAILED',
       statusCode: 0,
       deliveryDurationMs: 0,
       signatureHeader: 'LOCAL-SIMULATION-NO-SIGNATURE'
