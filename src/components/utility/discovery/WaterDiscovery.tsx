@@ -184,6 +184,8 @@ export const WaterDiscovery: React.FC<WaterDiscoveryProps> = ({
 
   // Handle Pi Payment Execution
   const handleProcessPayment = async () => {
+    setErrorMessage('Pi water-service payments are disabled while PiNova Global Hub is in development. No payment or utility order was started.');
+    return;
     if (!selectedProvider || !selectedWaterService) {
       setErrorMessage('Please select a water service provider and service type.');
       return;
