@@ -70,6 +70,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
         id="hero-banner" 
         className="relative rounded-2xl sm:rounded-3xl bg-gradient-to-br from-slate-950 via-purple-950 to-slate-900 text-white p-4 sm:p-7 md:p-9 border border-purple-800/40 shadow-xl sm:shadow-2xl overflow-hidden"
       >
+        <img src="/assets/pinova-global-banner.svg" alt="" aria-hidden="true" className="absolute inset-0 w-full h-full object-cover opacity-45 pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-r from-slate-950/90 via-purple-950/65 to-slate-950/45 pointer-events-none" />
         {/* Subtle Brand Ambient Glows */}
         <div className="absolute top-0 right-0 w-80 sm:w-96 h-80 sm:h-96 bg-purple-600/15 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute bottom-0 left-1/4 w-60 sm:w-80 h-60 sm:h-80 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
@@ -86,11 +88,14 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 <span>PiNova Global Hub</span>
               </div>
               <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-black tracking-tight text-white leading-tight">
-                Enterprise Pi Commerce & Utilities
+                One Global Hub. Endless Possibilities.
               </h1>
+              <p className="text-xs sm:text-sm font-bold text-amber-300 tracking-wide">Enterprise Pi Commerce & Utilities</p>
               <p className="text-xs sm:text-sm text-slate-300 leading-relaxed max-w-lg">
                 Non-custodial merchant ecosystem, instant global utility fulfillment, and protected transactions.
               </p>
+              <p className="text-[10px] sm:text-xs text-slate-400 font-semibold tracking-wide">Innovating Today • Empowering Tomorrow</p>
+              <p className="text-[9px] sm:text-[10px] text-amber-200/90 font-semibold">Owned and Operated by DANDATTI GLOBAL VENTURES LIMITED</p>
             </div>
 
             {/* Compact Trust & Protection Strip */}
