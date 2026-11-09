@@ -28,7 +28,8 @@ import {
   ChevronRight,
   ChevronDown,
   Layers,
-  Building2
+  Building2,
+  RefreshCw
 } from 'lucide-react';
 import { PiUser as User, Product, Order, Vendor } from '../../types';
 import { vendorAuthenticatedFetch } from '../../lib/vendorAuthBridge';
@@ -416,11 +417,23 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
             </div>
           </div>
 
-          {/* Right: Status badge & Actions */}
+          {/* Right: Server status refresh & Actions */}
           <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
             <div className="hidden sm:block">
               {renderStatusBadge()}
             </div>
+            <button
+              id="seller-refresh-status-btn"
+              type="button"
+              onClick={() => { void fetchAuthoritativeStatus(); }}
+              disabled={isLoadingStatus}
+              aria-label="Refresh merchant verification status"
+              aria-busy={isLoadingStatus}
+              title="Refresh merchant verification status"
+              className="p-2 rounded-xl border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-600 dark:text-neutral-300 transition-colors disabled:opacity-50 disabled:cursor-wait min-h-[40px] min-w-[40px] flex items-center justify-center"
+            >
+              <RefreshCw className={`w-4 h-4 ${isLoadingStatus ? 'animate-spin' : ''}`} />
+            </button>
 
             {onViewStorefront && (
               <button
