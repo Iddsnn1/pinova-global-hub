@@ -287,7 +287,7 @@ export class EnterpriseDeveloperPlatformEngine {
       payloadSnippet: '{"orderId":"ORD-88291","amountPi":14.5,"currency":"PI","status":"PAID"}',
       statusCode: 200,
       deliveryDurationMs: 84,
-      status: 'SUCCESS',
+      status: 'WARNING',
       timestampIso: new Date(Date.now() - 120000).toISOString(),
       retryCount: 0,
       signatureHeader: 't=1785892000,v1=9f8a7b6c5d4e3f2a1b'
@@ -300,7 +300,7 @@ export class EnterpriseDeveloperPlatformEngine {
       payloadSnippet: '{"refId":"UTL-77102","phone":"+2348031234567","carrier":"MTN Nigeria","amountNgn":1000}',
       statusCode: 200,
       deliveryDurationMs: 142,
-      status: 'SUCCESS',
+      status: 'WARNING',
       timestampIso: new Date(Date.now() - 450000).toISOString(),
       retryCount: 0,
       signatureHeader: 't=1785891600,v1=3c2b1a0f9e8d7c6b5a'
@@ -451,19 +451,19 @@ export class EnterpriseDeveloperPlatformEngine {
       id: 'evt-901',
       topic: 'payment.completed',
       sourceModule: 'Pi Payments & Verification',
-      payloadSummary: 'Payment ID #PI-99402 verified on Pi Mainnet Proxy',
+      payloadSummary: 'SAMPLE ONLY — no Pi payment verification was performed',
       publishedIso: new Date(Date.now() - 60000).toISOString(),
-      status: 'COMPLETED',
-      subscribersCount: 4
+      status: 'PENDING',
+      subscribersCount: 0
     },
     {
       id: 'evt-902',
       topic: 'utility.fulfilled',
       sourceModule: 'Airtime & Utilities',
-      payloadSummary: 'Airtime token top-up #UTL-88102 delivered to recipient',
+      payloadSummary: 'SAMPLE ONLY — no airtime fulfillment was performed',
       publishedIso: new Date(Date.now() - 180000).toISOString(),
-      status: 'COMPLETED',
-      subscribersCount: 3
+      status: 'PENDING',
+      subscribersCount: 0
     },
     {
       id: 'evt-903',
@@ -698,10 +698,56 @@ export class EnterpriseDeveloperPlatformEngine {
       }),
       statusCode: 200,
       deliveryDurationMs: Math.floor(Math.random() * 80) + 20,
-      status: 'SUCCESS',
+      status: 'WARNING',
       timestampIso: new Date().toISOString(),
       retryCount: 0,
-      signatureHeader: `t=${Math.floor(Date.now()/1000)},v1=${Math.random().toString(36).slice(2, 18)}`
+      signatureHeader: `LOCAL-SIMULATION-NO-SIGNATURE` // no signature was generated or sent
+    };
+
+    this.webhookLogs.unshift(newLog);
+    if (sub) {
+      sub.lastTriggeredIso = new Date().toISOString();
+      sub.totalDelivered24h += 0;
+    }
+
+    this.recordAuditLog(
+      'WEBHOOK_TEST_SIMULATED',
+      `Created a local mock webhook record for subscription: ${subName}; no external delivery or signature occurred.`,
+      'Webhook Engine',
+      targetUrl,
+      'SIMULATION'
+    );
+
+    return newLog;
+  }
+
+  public replayWebhookEvent(logId: string): WebhookDeliveryLog | null {
+    const existing = this.webhookLogs.find(l => l.id === logId);
+    if (!existing) return null;
+
+    const replayed: WebhookDeliveryLog = {
+      ...existing,
+      id: `log-replay-${Date.now().toString().slice(-4)}`,
+      timestampIso: new Date().toISOString(),
+      status: 'WARNING',
+      statusCode: 0,
+      deliveryDurationMs: 0,
+      signatureHeader: 'LOCAL-SIMULATION-NO-SIGNATURE'
+    };
+
+    this.webhookLogs.unshift(replayed);
+    this.recordAuditLog(
+      'WEBHOOK_REPLAY_SIMULATED',
+      `Created a local mock replay record for ${existing.eventType}; no external delivery occurred.`,
+      'Webhook Engine',
+      existing.targetUrl,
+      'SIMULATION'
+    );
+
+    return replayed;
+  }
+
+  // --- PLUGINS ---${Math.floor(Date.now()/1000)},v1=${Math.random().toString(36).slice(2, 18)}`
     };
 
     this.webhookLogs.unshift(newLog);
@@ -927,8 +973,9 @@ export class EnterpriseDeveloperPlatformEngine {
           verificationStatus: 'SIMULATION_ONLY — NO PAYMENT CHECKED',
           compliance: {
             piSdkVersion: 'v2',
-            zeroKeyCustody: true,
-            serverVerified: true
+            simulationOnly: true,
+            paymentChecked: false,
+            serverVerified: false
           }
         }
       };
