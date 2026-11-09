@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { 
   ShieldCheck, 
   Lock, 
@@ -9,11 +9,8 @@ import {
   Clock, 
   Database, 
   Server, 
-  AlertCircle,
-  Copy,
-  Check
+  AlertCircle
 } from 'lucide-react';
-import { getVendorUsername, getVendorAuthToken } from '../../../lib/vendorAuthBridge';
 
 interface SecurityTabProps {
   userUsername: string;
@@ -29,17 +26,6 @@ export const SecurityTab: React.FC<SecurityTabProps> = ({
   userUsername,
   serverStatus
 }) => {
-  const [copiedToken, setCopiedToken] = useState(false);
-  const token = getVendorAuthToken();
-
-  const handleCopySession = () => {
-    if (token) {
-      navigator.clipboard.writeText(token);
-      setCopiedToken(true);
-      setTimeout(() => setCopiedToken(false), 2000);
-    }
-  };
-
   return (
     <div className="max-w-4xl mx-auto space-y-6" id="seller-security-tab">
       {/* Header */}
@@ -56,7 +42,7 @@ export const SecurityTab: React.FC<SecurityTabProps> = ({
           </div>
           <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 flex items-center gap-1">
             <CheckCircle2 className="w-3.5 h-3.5" />
-            Security Active
+            Server Status
           </span>
         </div>
 
@@ -69,11 +55,11 @@ export const SecurityTab: React.FC<SecurityTabProps> = ({
               Cryptographic Server Session
             </div>
             <p className="text-xs text-neutral-600 dark:text-neutral-400 leading-relaxed">
-              Negotiated via <code>POST /api/auth/session</code> using Pi Network SDK access tokens. Client claims and local storage roles are never trusted as security boundaries.
+              Merchant access is evaluated by the server for protected operations. This panel displays the current status returned by the merchant status endpoint; it does not expose session tokens.
             </p>
             <div className="pt-2 flex items-center justify-between text-[11px] font-mono text-neutral-500">
-              <span>Binding: @{userUsername}</span>
-              <span className="text-emerald-600 dark:text-emerald-400 font-semibold">Active Session</span>
+              <span>Merchant: @{userUsername}</span>
+              <span className={serverStatus.verified ? 'text-emerald-600 dark:text-emerald-400 font-semibold' : 'text-amber-600 dark:text-amber-400 font-semibold'}>{serverStatus.verified ? 'Verified' : 'Not verified'}</span>
             </div>
           </div>
 
@@ -84,11 +70,11 @@ export const SecurityTab: React.FC<SecurityTabProps> = ({
               Private KYC Document Encryption
             </div>
             <p className="text-xs text-neutral-600 dark:text-neutral-400 leading-relaxed">
-              Uploaded passports and corporate certificates are encrypted using AES-256-GCM authenticated cipher with 12-byte nonces and 16-byte tags. Written with POSIX 0600 permissions.
+              Private document uploads require the server-side document storage and encryption configuration. Confirm successful upload and storage status from the server response; this panel does not independently inspect stored files.
             </p>
             <div className="pt-2 flex items-center justify-between text-[11px] font-mono text-neutral-500">
-              <span>Storage: Restricted 0600</span>
-              <span className="text-purple-600 dark:text-purple-400 font-semibold">Zero Public Exposure</span>
+              <span>Access: Server-controlled</span>
+              <span className="text-purple-600 dark:text-purple-400 font-semibold">Configuration-dependent</span>
             </div>
           </div>
 
@@ -99,11 +85,11 @@ export const SecurityTab: React.FC<SecurityTabProps> = ({
               PSTP Escrow Payment Protection
             </div>
             <p className="text-xs text-neutral-600 dark:text-neutral-400 leading-relaxed">
-              Funds are held in smart cryptographic escrow throughout the fulfillment lifecycle. Automatic fund release occurs when the buyer signals receipt or verified courier delivery completes.
+              This panel displays the PSTP authorization state returned by the server. It does not initiate Pi payments, hold funds, or release escrow.
             </p>
             <div className="pt-2 flex items-center justify-between text-[11px] font-mono text-neutral-500">
-              <span>Agreement: Accepted</span>
-              <span className="text-emerald-600 dark:text-emerald-400 font-semibold">Escrow Enforced</span>
+              <span>Authorization: {serverStatus.pstpAuthorized ? 'Granted' : 'Not granted'}</span>
+              <span className={serverStatus.pstpAuthorized ? 'text-emerald-600 dark:text-emerald-400 font-semibold' : 'text-amber-600 dark:text-amber-400 font-semibold'}>{serverStatus.pstpAuthorized ? 'Authorized' : 'Pending'}</span>
             </div>
           </div>
 
@@ -114,11 +100,11 @@ export const SecurityTab: React.FC<SecurityTabProps> = ({
               Pi Payment Server-Verified
             </div>
             <p className="text-xs text-neutral-600 dark:text-neutral-400 leading-relaxed">
-              Pi blockchain payments are validated server-to-server with official Pi platform endpoints. Client-side payment claims or manipulated responses are strictly rejected.
+              Payment verification must be confirmed by the payment backend for each transaction. This security overview does not establish that a payment was sent, received, or settled.
             </p>
             <div className="pt-2 flex items-center justify-between text-[11px] font-mono text-neutral-500">
-              <span>Validation: Server-Side</span>
-              <span className="text-emerald-600 dark:text-emerald-400 font-semibold">Fail-Closed</span>
+              <span>Evidence: Per transaction</span>
+              <span className="text-amber-600 dark:text-amber-400 font-semibold">Not verified here</span>
             </div>
           </div>
         </div>
@@ -135,7 +121,7 @@ export const SecurityTab: React.FC<SecurityTabProps> = ({
               QR Order Verification & Instant PSTP Release
             </h4>
             <p className="text-xs text-neutral-600 dark:text-neutral-400 leading-relaxed">
-              When delivering goods in person or through local merchant hubs, buyers scan the order's unique QR code to cryptographically confirm receipt on-chain. This instantly triggers PSTP escrow release to your seller balance with zero chargeback risk.
+              QR handover should be treated as a delivery confirmation workflow only when the corresponding server endpoint confirms it. This panel does not claim on-chain confirmation or automatic fund release.
             </p>
           </div>
         </div>
@@ -146,28 +132,28 @@ export const SecurityTab: React.FC<SecurityTabProps> = ({
         <div className="flex items-center justify-between mb-3">
           <h4 className="text-base font-bold text-neutral-900 dark:text-neutral-100 flex items-center gap-2">
             <Database className="w-4 h-4 text-purple-600" />
-            Append-only Lifecycle Audit Trail
+            Order & Security Evidence
           </h4>
           <span className="text-[11px] font-mono text-neutral-500">
             SHA-256 Chained Hashes
           </span>
         </div>
         <p className="text-xs text-neutral-500 mb-4 leading-relaxed">
-          Every status transition from order placement, payment verification, fulfillment tracking, to escrow release is immutably logged to the centralized audit repository with server-verified timestamps.
+          This overview is not an append-only audit log. Use the order timeline and available server records for transaction-specific evidence; immutable hash chaining is not asserted here.
         </p>
 
         <div className="p-4 rounded-xl bg-neutral-50 dark:bg-neutral-800/60 border border-neutral-200 dark:border-neutral-700 text-xs font-mono space-y-2">
           <div className="flex items-center justify-between text-neutral-600 dark:text-neutral-300">
-            <span>[AUDIT_ACTIVE] Merchant identity verified:</span>
-            <span className="text-emerald-600 dark:text-emerald-400 font-bold">PASS</span>
+            <span>Merchant identity verification:</span>
+            <span className={serverStatus.verified ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-amber-600 dark:text-amber-400 font-bold'}>{serverStatus.verified ? 'VERIFIED' : 'PENDING'}</span>
           </div>
           <div className="flex items-center justify-between text-neutral-600 dark:text-neutral-300">
-            <span>[AUDIT_ACTIVE] Authoritative governance check:</span>
+            <span>Server merchant status:</span>
             <span className="text-purple-600 dark:text-purple-400 font-bold">{serverStatus.status || 'UNREGISTERED'}</span>
           </div>
           <div className="flex items-center justify-between text-neutral-600 dark:text-neutral-300">
-            <span>[AUDIT_ACTIVE] PSTP Escrow protocol enforcement:</span>
-            <span className="text-emerald-600 dark:text-emerald-400 font-bold">ACTIVE</span>
+            <span>PSTP authorization:</span>
+            <span className={serverStatus.pstpAuthorized ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-amber-600 dark:text-amber-400 font-bold'}>{serverStatus.pstpAuthorized ? 'AUTHORIZED' : 'PENDING'}</span>
           </div>
         </div>
       </div>
