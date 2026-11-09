@@ -381,24 +381,12 @@ export const FinanceAnalyticsView: React.FC<FinanceAnalyticsViewProps> = ({
     setTimeout(() => setShowExportNotice(false), 3000);
   };
 
-  // Refresh Analytics Engine
+  // Refreshes the local illustrative preview only; no live financial source is queried.
   const refreshAnalyticsEngine = () => {
     setIsCacheHit(false);
-    setQueryLatencyMs(Number((Math.random() * 0.4 + 0.1).toFixed(2)));
     setTimeout(() => setIsCacheHit(true), 600);
 
-    financeAnalyticsEngine.logAuditRecord(
-      `Pioneer (${userRole})`,
-      userRole,
-      'CALCULATE_BI_FORECAST',
-      'ENGINE_MANUAL_REFRESH',
-      'calculated_marketplace_metric',
-      undefined,
-      'Refreshed analytics engine calculations and cache indices'
-    );
-    setAuditLogs(financeAnalyticsEngine.getAuditLogs());
-
-    setExportNoticeMessage('Analytics Engine refreshed. All metrics and forecasts re-indexed.');
+    setExportNoticeMessage('Preview refreshed using local sample calculations. No live orders, Pi payments, payouts, or provider data were fetched.');
     setShowExportNotice(true);
     setTimeout(() => setShowExportNotice(false), 3000);
   };
@@ -509,11 +497,11 @@ export const FinanceAnalyticsView: React.FC<FinanceAnalyticsViewProps> = ({
             </span>
             <span className="px-3 py-1 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30 text-xs font-bold flex items-center gap-1">
               <ShieldCheck className="w-3.5 h-3.5 text-purple-400" />
-              Pi SDK v2 Payment Verification
+              Illustrative Metrics — Not Live
             </span>
             <span className="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-bold flex items-center gap-1">
               <Activity className="w-3.5 h-3.5 text-emerald-400" />
-              Latency: {queryLatencyMs}ms (Cached Index)
+              Sample Data Preview
             </span>
           </div>
 
@@ -521,7 +509,7 @@ export const FinanceAnalyticsView: React.FC<FinanceAnalyticsViewProps> = ({
             Finance, Analytics & Business Intelligence Engine
           </h1>
           <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-            Real-time Gross Marketplace Sales (GMS), verified Pi payment completion metrics, merchant liquidity tracking, and AI-driven predictive intelligence.
+            Illustrative marketplace analytics generated from sample and estimated inputs. These figures are not live GMS, verified Pi payments, merchant payouts, escrow balances, or on-chain settlement records.
           </p>
         </div>
 
