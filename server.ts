@@ -1656,7 +1656,7 @@ app.get(
     const isAdmin = adminAuth.authenticated && adminAuth.authorized;
     const isOwner = req.user?.username && req.user.username.toLowerCase() === username.toLowerCase();
 
-    if (isProduction && !isAdmin && !isOwner) {
+    if (!isAdmin && !isOwner) {
       res.status(403).json({
         success: false,
         error: 'FORBIDDEN',
@@ -1665,29 +1665,46 @@ app.get(
       return;
     }
 
-    const application = vendorApplicationRepo.findByUsername(username);
-    if (!application) {
-      res.json({ success: true, application: null });
+    if (!durableVendorStorageEnabled()) {
+      res.status(503).json({
+        success: false,
+        error: 'DURABLE_VENDOR_STORAGE_UNAVAILABLE',
+        message: 'Vendor application storage is not configured for this Preview deployment.'
+      });
       return;
     }
 
-    // Protect sensitive document numbers from non-owner/non-admin callers
-    const sanitizedApplication = {
-      ...application,
-      documents: application.documents.map((doc) => ({
-        ...doc,
-        documentNumber: (isAdmin || isOwner) ? doc.documentNumber : undefined
-      }))
-    };
+    try {
+      const application = await getDurableVendorApplication(username);
+      if (!application) {
+        res.json({ success: true, application: null });
+        return;
+      }
 
-    res.json({ success: true, application: sanitizedApplication });
+      res.json({ success: true, application });
+    } catch {
+      res.status(503).json({
+        success: false,
+        error: 'DURABLE_VENDOR_STORAGE_UNAVAILABLE',
+        message: 'Vendor application storage could not be reached.'
+      });
+    }
   }
 );
 
 // POST /api/vendor/apply & /api/v1/vendor/apply
 app.post(['/api/vendor/apply', '/api/v1/vendor/apply'], authenticate, async (req: AuthenticatedRequest, res) => {
   try {
-    const effectiveUsername = req.user?.username || req.body?.pioneerUsername;
+    const authenticatedUser = req.authenticatedUser || req.user;
+    const effectiveUsername = String(authenticatedUser?.username || '').trim().replace(/^@/, '');
+    if (!effectiveUsername) {
+      res.status(401).json({
+        success: false,
+        error: 'AUTHENTICATION_REQUIRED',
+        message: 'An authenticated Pioneer identity is required.'
+      });
+      return;
+    }
     const {
       pioneerUid,
       storeName,
@@ -1741,24 +1758,62 @@ app.post(['/api/vendor/apply', '/api/v1/vendor/apply'], authenticate, async (req
       return;
     }
 
-    // Validate that every document reference starts with private://vendor-documents/
-    // Rejects http://, https://, arbitrary external URLs, base64 data URLs, or fake references
-    const hasInvalidDoc = rawSubmittedDocs.some((doc: any) => {
-      const ref = (doc?.fileUrl || doc?.url || '').trim();
-      return !ref.startsWith('private://vendor-documents/');
-    });
+    // Validate each private reference against durable upload metadata and bind it
+    // to the authenticated owner. A matching URL prefix alone is not proof of upload.
+    const validatedDocumentMetadata: Array<Record<string, any>> = [];
+    for (const doc of rawSubmittedDocs) {
+      const reference = String(doc?.fileUrl || doc?.url || '').trim();
+      const referenceMatch = reference.match(/^private:\/\/vendor-documents\/([a-f0-9]{32})$/i);
+      if (!referenceMatch) {
+        res.status(400).json({
+          success: false,
+          error: 'INVALID_VERIFICATION_DOCUMENT',
+          message: 'A valid private encrypted document reference is required.'
+        });
+        return;
+      }
 
-    if (hasInvalidDoc) {
-      res.status(400).json({
-        success: false,
-        error: 'VERIFICATION_DOCUMENT_REQUIRED',
-        message: 'A securely uploaded verification document is required. Public URLs and external references are strictly prohibited.'
-      });
-      return;
+      const metadataObject = await getVendorDocument(`vendor-documents/${referenceMatch[1]}.meta.json`);
+      if (!metadataObject) {
+        res.status(400).json({
+          success: false,
+          error: 'VERIFICATION_DOCUMENT_NOT_FOUND',
+          message: 'The uploaded verification document could not be found.'
+        });
+        return;
+      }
+
+      let metadata: Record<string, any>;
+      try {
+        metadata = JSON.parse(Buffer.from(metadataObject.body).toString('utf8'));
+      } catch {
+        res.status(400).json({
+          success: false,
+          error: 'VERIFICATION_DOCUMENT_METADATA_INVALID',
+          message: 'The verification document metadata is invalid.'
+        });
+        return;
+      }
+
+      if (String(metadata.id || '').toLowerCase() !== referenceMatch[1].toLowerCase()) {
+        res.status(400).json({ success: false, error: 'VERIFICATION_DOCUMENT_METADATA_INVALID' });
+        return;
+      }
+      if (String(metadata.owner || '').toLowerCase() !== effectiveUsername.toLowerCase()) {
+        res.status(403).json({
+          success: false,
+          error: 'VERIFICATION_DOCUMENT_OWNER_MISMATCH',
+          message: 'A verification document must belong to the authenticated Pioneer.'
+        });
+        return;
+      }
+      validatedDocumentMetadata.push(metadata);
     }
 
-    // Normalize into canonical internal VendorApplicationDoc representation
+    // Normalize into canonical internal VendorApplicationDoc representation.
+    // File identity, filename, type and upload time come from server metadata.
     const canonicalDocs = rawSubmittedDocs.map((doc: any, idx: number) => {
+      const metadata = validatedDocumentMetadata[idx];
       const rawType = doc.type || doc.docType || 'identity_proof';
       let mappedType: 'identity_proof' | 'address_proof' | 'business_registration' | 'tax_cert' | 'store_license' = 'identity_proof';
       if (rawType === 'business_cert' || rawType === 'business_registration') mappedType = 'business_registration';
@@ -1768,11 +1823,11 @@ app.post(['/api/vendor/apply', '/api/v1/vendor/apply'], authenticate, async (req
       else mappedType = 'identity_proof';
 
       return {
-        id: doc.id || `doc_${Date.now()}_${idx}`,
+        id: String(metadata.id),
         docType: mappedType,
-        fileName: sanitizeVendorFilename(doc.name || doc.fileName || 'KYC_Verification_Document'),
-        fileUrl: (doc.fileUrl || doc.url || '').trim(),
-        uploadedAt: doc.uploadedAt || new Date().toISOString(),
+        fileName: sanitizeVendorFilename(metadata.originalFilename || 'KYC_Verification_Document'),
+        fileUrl: `private://vendor-documents/${metadata.id}`,
+        uploadedAt: metadata.uploadedAt || new Date().toISOString(),
         documentNumber: doc.documentNumber ? String(doc.documentNumber).trim() : undefined
       };
     });
@@ -1783,7 +1838,7 @@ app.post(['/api/vendor/apply', '/api/v1/vendor/apply'], authenticate, async (req
     const applicationRecord = {
       id: appId,
       pioneerUsername: effectiveUsername,
-      pioneerUid: pioneerUid || `UID_${effectiveUsername.toUpperCase()}`,
+      pioneerUid: authenticatedUser?.piUid || existing?.pioneerUid || null,
       storeName,
       sellerType: (sellerType as any) || 'individual',
       country: country || 'Global',
@@ -1805,8 +1860,8 @@ app.post(['/api/vendor/apply', '/api/v1/vendor/apply'], authenticate, async (req
       categoriesToSell: Array.isArray(categoriesToSell) ? categoriesToSell : ['physical'],
       documents: canonicalDocs,
       policies: policies || {
-        returnRefundPolicy: '14-day standard return on unused goods under PSTP buyer protection.',
-        deliveryShippingPolicy: 'Standard dispatch within 24-48 business hours with tracking.'
+        returnRefundPolicy: 'Returns and refunds are handled according to the seller’s published policy and applicable consumer protection requirements.',
+        deliveryShippingPolicy: 'Shipping method, dispatch timing, and tracking availability are confirmed by the seller for each order.'
       },
       pstpAgreementAccepted: Boolean(pstpAgreementAccepted),
       // Seller application submission can never preserve or create approval.
