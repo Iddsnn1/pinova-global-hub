@@ -252,7 +252,7 @@ export const CartView: React.FC<CartViewProps> = ({
             )}
             <div className="flex justify-between">
               <span>Escrow Order Protection Fee:</span>
-              <span className="text-emerald-400 font-bold">0.00 π (FREE)</span>
+              <span className="text-slate-400 font-bold">Not configured</span>
             </div>
             <div className="flex justify-between text-sm font-black text-white pt-2 border-t border-slate-800">
               <span>Total Payment Required:</span>
@@ -263,7 +263,7 @@ export const CartView: React.FC<CartViewProps> = ({
           {/* PSTP Protection Note */}
           <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-start gap-2 text-[11px] text-slate-400">
             <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-            <p>Your payment is locked in PSTP Escrow. Funds are released to sellers only when you confirm receipt.</p>
+            <p>Adding items to your cart does not activate escrow or order protection. Any protection status must be confirmed by the server after checkout.</p>
           </div>
 
           {/* Checkout Trigger */}
