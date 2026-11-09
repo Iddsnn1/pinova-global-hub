@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">PiNova Global Hub</title><desc id="desc">A royal navy, purple and metallic gold orbital monogram combining the Pi symbol and a global network.</desc>
+  <defs>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#FFF0B3"/><stop offset=".42" stop-color="#D6A83F"/><stop offset="1" stop-color="#8E641B"/></linearGradient>
+    <linearGradient id="purple" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#A78BFA"/><stop offset="1" stop-color="#5B21B6"/></linearGradient>
+    <linearGradient id="navy" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#182B55"/><stop offset="1" stop-color="#070D20"/></linearGradient>
+    <filter id="glow"><feGaussianBlur stdDeviation="8" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <circle cx="256" cy="256" r="222" fill="none" stroke="url(#purple)" stroke-width="12" opacity=".9"/>
+  <circle cx="256" cy="256" r="196" fill="url(#navy)" stroke="url(#gold)" stroke-width="7"/>
+  <ellipse cx="256" cy="256" rx="174" ry="74" fill="none" stroke="url(#gold)" stroke-width="9" transform="rotate(-34 256 256)" opacity=".95"/>
+  <ellipse cx="256" cy="256" rx="174" ry="74" fill="none" stroke="url(#purple)" stroke-width="8" transform="rotate(34 256 256)" opacity=".95"/>
+  <path d="M143 174h226v34h-92v151h-40V208h-94z" fill="url(#gold)" filter="url(#glow)"/>
+  <path d="M185 238h142v28H185z" fill="url(#purple)" opacity=".95"/>
+  <circle cx="398" cy="148" r="17" fill="#F5D477" stroke="#FFF0B3" stroke-width="5"/>
+  <circle cx="112" cy="350" r="12" fill="#A78BFA" stroke="#DDD6FE" stroke-width="4"/>
+</svg>
