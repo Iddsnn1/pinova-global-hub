@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { formatPiAmount } from '../../../utils/formatters';
 import { 
   Boxes, 
@@ -32,23 +32,31 @@ export const InventoryWarehousesTab: React.FC<InventoryWarehousesTabProps> = ({
   const [warehouseName, setWarehouseName] = useState('');
   const [warehouseLocation, setWarehouseLocation] = useState('');
   const [warehousesList, setWarehousesList] = useState<Array<{ id: string; name: string; location: string; country: string; isPrimary: boolean }>>([]);
+  const [warehouseLoading, setWarehouseLoading] = useState(true);
   const [inventorySaving, setInventorySaving] = useState(false);
   const [warehouseSaving, setWarehouseSaving] = useState(false);
   const [inventoryError, setInventoryError] = useState('');
 
-  React.useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await vendorAuthenticatedFetch('/api/vendor/warehouses');
-        const data = await res.json().catch(() => null);
-        if (!cancelled && res.ok && Array.isArray(data?.warehouses)) setWarehousesList(data.warehouses);
-      } catch {
-        if (!cancelled) setInventoryError('Unable to load durable warehouse records.');
+  const loadWarehouses = useCallback(async () => {
+    setWarehouseLoading(true);
+    setInventoryError('');
+    try {
+      const res = await vendorAuthenticatedFetch('/api/vendor/warehouses');
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !Array.isArray(data?.warehouses)) {
+        throw new Error(data?.message || data?.error || 'Unable to load durable warehouse records.');
       }
-    })();
-    return () => { cancelled = true; };
+      setWarehousesList(data.warehouses);
+    } catch (error: any) {
+      setInventoryError(error?.message || 'Unable to load durable warehouse records.');
+    } finally {
+      setWarehouseLoading(false);
+    }
   }, []);
+
+  React.useEffect(() => {
+    void loadWarehouses();
+  }, [loadWarehouses]);
 
   const filteredProducts = products.filter(p => 
     p.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -155,14 +163,29 @@ export const InventoryWarehousesTab: React.FC<InventoryWarehousesTabProps> = ({
             </div>
 
             {activeSubView === 'warehouses' && (
-              <button
-                id="add-warehouse-btn"
-                onClick={() => setShowWarehouseModal(true)}
-                className="px-3.5 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-xs shrink-0 min-h-[44px]"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Add Warehouse</span>
-              </button>
+              <>
+                <button
+                  id="refresh-warehouses-btn"
+                  type="button"
+                  onClick={() => void loadWarehouses()}
+                  disabled={warehouseLoading}
+                  aria-label="Refresh warehouse records"
+                  aria-busy={warehouseLoading}
+                  title="Refresh server warehouse records"
+                  className="px-3 py-2 rounded-xl border border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-200 text-xs font-semibold flex items-center gap-1.5 min-h-[44px] disabled:opacity-60"
+                >
+                  <RefreshCw className={`w-4 h-4 ${warehouseLoading ? 'animate-spin' : ''}`} />
+                  <span>{warehouseLoading ? 'Refreshing…' : 'Refresh'}</span>
+                </button>
+                <button
+                  id="add-warehouse-btn"
+                  onClick={() => setShowWarehouseModal(true)}
+                  className="px-3.5 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-xs shrink-0 min-h-[44px]"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Add Warehouse</span>
+                </button>
+              </>
             )}
           </div>
         </div>
