@@ -136,11 +136,7 @@ export const FullScreenNavHeader: React.FC<FullScreenNavHeaderProps> = ({
             onClick={() => onNavigateSection('home')}
             className="flex items-center gap-2 cursor-pointer group"
           >
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-purple-600 via-indigo-600 to-amber-500 p-0.5 shadow-lg shadow-purple-500/20 group-hover:scale-105 transition-transform">
-              <div className="w-full h-full bg-slate-950 rounded-[10px] flex items-center justify-center font-bold text-amber-400 text-base tracking-tighter">
-                π
-              </div>
-            </div>
+            <img src="/assets/pinova-global-logo.svg" alt="PiNova Global Hub" className="w-9 h-9 object-contain drop-shadow-[0_0_10px_rgba(167,139,250,0.25)] group-hover:scale-105 transition-transform" />
             <div>
               <div className="flex items-center gap-1.5">
                 <span className="font-black text-base tracking-tight bg-gradient-to-r from-purple-400 via-indigo-300 to-amber-400 bg-clip-text text-transparent">
@@ -383,6 +379,9 @@ export const FullScreenNavHeader: React.FC<FullScreenNavHeaderProps> = ({
         
         {/* Left Priority Controls: 1. Back button, 2. Wallet Balance */}
         <div className="flex items-center gap-1 shrink-0">
+          <button type="button" onClick={() => onNavigateSection('home')} aria-label="PiNova Global Hub home" className="shrink-0 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400">
+            <img src="/assets/pinova-global-logo.svg" alt="PiNova" className="w-7 h-7 object-contain" />
+          </button>
           {canGoBack && (
             <button
               onClick={onGoBack}
