@@ -1384,6 +1384,7 @@ function MainAppContent() {
             onResolveDispute={handleResolveDispute}
             onExploreMarketplace={() => handleNavigateSection('marketplace')}
             onOrderUpdated={handleOrderUpdated}
+            onOrdersRefreshed={setOrders}
           />
         )}
 
