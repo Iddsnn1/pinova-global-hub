@@ -136,6 +136,8 @@ export const SchoolFeesEngine: React.FC<SchoolFeesEngineProps> = ({
   const nativeSettlementCurrency = 'PI';
 
   const handleExecutePayment = async () => {
+    setErrorMessage('Pi school-fee payments are disabled while PiNova Global Hub is in development. No wallet authentication, payment, or invoice settlement was started.');
+    return;
     if (!selectedInvoice) return;
     if (String(selectedInvoice.currency || '').trim().toUpperCase() !== nativeSettlementCurrency) {
       setErrorMessage('This invoice is not Pi-native and cannot be settled through native Pi checkout.');
