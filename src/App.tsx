@@ -554,6 +554,33 @@ function MainAppContent() {
     }
   };
 
+  // Select Global Utilities category and record it in both browser and app history.
+  const handleSelectUtilityCategory = (category: string) => {
+    const nextCategory = category || 'all';
+    setSelectedUtilityCategory(nextCategory);
+    if (typeof window !== 'undefined') {
+      try {
+        const state = { pinovaNavigation: true, section: 'utilities', category: nextCategory };
+        const current = window.history.state;
+        if (current?.section !== 'utilities' || current?.category !== nextCategory) {
+          window.history.pushState(state, '', '/');
+        }
+      } catch (error) {
+        console.warn('[Navigation] Unable to record utilities category history:', error);
+      }
+    }
+    setNavigationStack((previous) => {
+      const top = previous[previous.length - 1];
+      if (top?.section === 'utilities' && String(top?.category || 'all') === nextCategory) return previous;
+      return [...previous, { section: 'utilities', category: nextCategory as MarketplaceCategory }];
+    });
+    try {
+      window.scrollTo({ top: 0, behavior: 'instant' });
+    } catch {
+      window.scrollTo(0, 0);
+    }
+  };
+
   // Back Navigation Handler
   const handleGoBack = () => {
     if (navigationStack.length <= 1) return;
@@ -1083,7 +1110,7 @@ function MainAppContent() {
             utilityConfig={utilityConfig}
             userBalancePi={userBalancePi}
             buyerUsername={user.username}
-            onSelectCategory={(cat) => setSelectedUtilityCategory(cat)}
+            onSelectCategory={handleSelectUtilityCategory}
             onTransactionSuccess={(receipt) => {
               const transactionId = receipt.transactionId || `UTIL-TX-${Date.now()}`;
               const orderId = transactionId.startsWith('ORD-') ? transactionId : `ORD-${transactionId}`;
