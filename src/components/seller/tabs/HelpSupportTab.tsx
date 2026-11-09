@@ -7,7 +7,6 @@ import {
   ChevronDown, 
   ChevronUp, 
   Send, 
-  CheckCircle2, 
   ExternalLink 
 } from 'lucide-react';
 
@@ -19,7 +18,7 @@ export const HelpSupportTab: React.FC<HelpSupportTabProps> = ({ userUsername }) 
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(0);
   const [ticketSubject, setTicketSubject] = useState('');
   const [ticketMessage, setTicketMessage] = useState('');
-  const [ticketSent, setTicketSent] = useState(false);
+  const [ticketUnavailable, setTicketUnavailable] = useState(false);
 
   const faqs = [
     {
@@ -43,10 +42,8 @@ export const HelpSupportTab: React.FC<HelpSupportTabProps> = ({ userUsername }) 
   const handleSendTicket = (e: React.FormEvent) => {
     e.preventDefault();
     if (!ticketSubject.trim() || !ticketMessage.trim()) return;
-    setTicketSent(true);
-    setTicketSubject('');
-    setTicketMessage('');
-    setTimeout(() => setTicketSent(false), 6000);
+    // No support-ticket API is connected yet. Keep the user's draft and report this honestly.
+    setTicketUnavailable(true);
   };
 
   return (
@@ -140,10 +137,9 @@ export const HelpSupportTab: React.FC<HelpSupportTabProps> = ({ userUsername }) 
           Need assistance with verification, a transaction dispute, or store settings?
         </p>
 
-        {ticketSent && (
-          <div className="mb-4 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-400 text-xs font-semibold flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 shrink-0" />
-            Your inquiry has been submitted to Platform Compliance. Reference: TCK-{Date.now().toString().slice(-6)}
+        {ticketUnavailable && (
+          <div role="status" className="mb-4 p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-400 text-xs font-semibold">
+            Support-ticket submission is not connected yet. Your inquiry has NOT been sent. Your draft remains below so you can copy it.
           </div>
         )}
 
