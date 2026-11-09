@@ -147,6 +147,8 @@ export const GovernmentDiscovery: React.FC<GovernmentDiscoveryProps> = ({
   const effectivePiAmount = effectiveFiatAmount > 0 ? calculateAuthoritativePiAmount(effectiveFiatAmount, activeRate) : 0;
 
   const handleProcessPayment = async () => {
+    setErrorMessage('Pi government-service payments are disabled while PiNova Global Hub is in development. No payment or service order was started.');
+    return;
     if (!selectedAgency || !selectedCivicService) {
       setErrorMessage('Please select a government agency and civic service.');
       return;
