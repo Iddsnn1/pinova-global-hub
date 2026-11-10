@@ -13,36 +13,55 @@ import { getAuthenticatedPiUser, PiSdkManager } from './piSdk';
  * - Sensitive credentials & secrets are never leaked.
  */
 
+const SERVER_SESSION_TOKEN_PREFIX = 'pinova_sess_v1_';
+
+function isServerSessionToken(value: unknown): value is string {
+  return typeof value === 'string' &&
+    value.startsWith(SERVER_SESSION_TOKEN_PREFIX) &&
+    value.includes('.');
+}
+
 let inMemoryServerToken: string | null = null;
 let tokenExpiresAt: number | null = null;
 
 export function getVendorAuthToken(): string | null {
   try {
-    // 1. Check in-memory server session token if still valid
-    if (inMemoryServerToken && (!tokenExpiresAt || Date.now() < tokenExpiresAt)) {
+    // Only accept tokens minted by POST /api/auth/session. Pi access tokens and
+    // legacy aliases must never be mistaken for portable PiNova server sessions.
+    if (isServerSessionToken(inMemoryServerToken) &&
+        (!tokenExpiresAt || Date.now() < tokenExpiresAt)) {
       return inMemoryServerToken;
     }
 
     if (typeof window !== 'undefined' && window.localStorage) {
-      // 2. Check storage for established server auth_token
-      const token =
-        localStorage.getItem('auth_token') ||
-        localStorage.getItem('pi_auth_token') ||
-        localStorage.getItem('pinova_token') ||
-        localStorage.getItem('pinova_access_token');
-      if (token && token.trim()) {
-        inMemoryServerToken = token.trim();
-        return token.trim();
+      const storageKeys = ['auth_token', 'pi_auth_token', 'pinova_token', 'pinova_access_token'];
+      for (const key of storageKeys) {
+        const stored = localStorage.getItem(key);
+        if (!stored) continue;
+        if (isServerSessionToken(stored.trim())) {
+          inMemoryServerToken = stored.trim();
+          tokenExpiresAt = null; // The server remains authoritative for expiry.
+          return inMemoryServerToken;
+        }
+        // Remove stale or raw-Pi values from legacy server-session slots.
+        localStorage.removeItem(key);
       }
 
-      // 3. Check sessionStorage
-      const sessionToken = sessionStorage.getItem('auth_token') || sessionStorage.getItem('pi_auth_token');
-      if (sessionToken && sessionToken.trim()) return sessionToken.trim();
+      // Older builds also wrote session credentials to sessionStorage.
+      for (const key of ['auth_token', 'pi_auth_token']) {
+        const stored = sessionStorage.getItem(key);
+        if (!stored) continue;
+        if (isServerSessionToken(stored.trim())) {
+          inMemoryServerToken = stored.trim();
+          tokenExpiresAt = null;
+          return inMemoryServerToken;
+        }
+        sessionStorage.removeItem(key);
+      }
     }
   } catch {
     // Ignore storage errors in restricted contexts
   }
-  // Rule 8: NEVER substitute raw Pi access token as the protected vendor authorization credential.
   return null;
 }
 
@@ -67,7 +86,7 @@ export function getVendorUsername(): string | null {
 }
 
 export function syncVendorAuth(token?: string | null, username?: string | null, expiresAt?: number | null): void {
-  if (token) {
+  if (token && isServerSessionToken(token)) {
     inMemoryServerToken = token;
     tokenExpiresAt = expiresAt || null;
   }
@@ -94,6 +113,10 @@ export function clearVendorAuthToken(): void {
     localStorage.removeItem('pi_auth_token');
     localStorage.removeItem('pinova_token');
     localStorage.removeItem('pinova_access_token');
+    if (typeof window !== 'undefined' && window.sessionStorage) {
+      sessionStorage.removeItem('auth_token');
+      sessionStorage.removeItem('pi_auth_token');
+    }
   } catch {
     // Ignore
   }
