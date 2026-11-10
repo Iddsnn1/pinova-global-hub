@@ -119,57 +119,38 @@ export async function ensureServerSession(forceRefresh: boolean = false): Promis
   }
 
   let rawAccessToken: string | undefined;
-  let username = 'pioneer_user';
-  let uid = `pi-uid-${Date.now()}`;
+  let username: string | undefined;
+  let uid: string | undefined;
 
-  // 1. Reuse the canonical Pi SDK manager first. This preserves an already
-  // authenticated Pioneer session and avoids launching a second native
-  // Pi.authenticate() call from the vendor flow.
+  // Use only the canonical Pi SDK manager. Its authentication flow has a
+  // bounded timeout and single-flight protection. Do not launch a second,
+  // unbounded native Pi.authenticate() call if that flow fails.
   try {
     const managedUser = getAuthenticatedPiUser() || await PiSdkManager.authenticate(
       ['username', 'payments'],
       undefined,
       false
     );
-    if (managedUser?.accessToken) {
+
+    if (
+      managedUser?.accessToken &&
+      typeof managedUser.username === 'string' &&
+      managedUser.username.trim() &&
+      typeof managedUser.uid === 'string' &&
+      managedUser.uid.trim()
+    ) {
       rawAccessToken = managedUser.accessToken;
-      if (managedUser.username) username = managedUser.username;
-      if (managedUser.uid) uid = managedUser.uid;
+      username = managedUser.username.trim();
+      uid = managedUser.uid.trim();
     }
   } catch (piAuthErr) {
     console.warn('[vendorAuthBridge] canonical Pi SDK authentication unavailable:', piAuthErr);
   }
 
-  // 2. Fallback to the raw Pi SDK only when the canonical manager could not
-  // provide a verified active user.
-  if (!rawAccessToken && typeof window !== 'undefined' && window.Pi && typeof window.Pi.authenticate === 'function') {
-    try {
-      const authResult = await window.Pi.authenticate(
-        ['username', 'payments'],
-        (payment: any) => {
-          console.log('[vendorAuthBridge] Incomplete payment found during Pi auth:', payment);
-        }
-      );
-      if (authResult?.accessToken) {
-        rawAccessToken = authResult.accessToken;
-        if (authResult.user?.username) username = authResult.user.username;
-        if (authResult.user?.uid) uid = authResult.user.uid;
-      }
-    } catch (piAuthErr) {
-      console.warn('[vendorAuthBridge] raw window.Pi.authenticate encountered an issue:', piAuthErr);
-    }
-  }
-
-  // 3. Fallback to stored Pioneer username
-  if (!username || username === 'pioneer_user') {
-    const storedUsername = getVendorUsername();
-    if (storedUsername) username = storedUsername;
-  }
-
-  // If no Pi access token can be acquired:
-  if (!rawAccessToken) {
-    if (!forceRefresh && currentToken) return currentToken;
-    return null;
+  // Never invent a Pioneer username or UID. Without a verified Pi identity,
+  // do not negotiate a server session or send placeholder identity data.
+  if (!rawAccessToken || !username || !uid) {
+    return currentToken || null;
   }
 
   try {
