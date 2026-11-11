@@ -64,22 +64,18 @@ export const PoliciesTab: React.FC<PoliciesTabProps> = ({
         warrantyTerms: warrantyTerms.trim()
       };
 
-      const payload = {
-        ...initialApplication,
-        pioneerUsername: userUsername,
-        policies: updatedPolicies,
-        pstpAgreementAccepted: true
-      };
-
-      const res = await vendorAuthenticatedFetch('/api/vendor/apply', {
-        method: 'POST',
+      const res = await vendorAuthenticatedFetch('/api/vendor/policies', {
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({
+          pioneerUsername: userUsername,
+          policies: updatedPolicies
+        })
       });
 
       const data = await res.json();
       if (res.ok && data.success) {
-        setSuccessMsg('Store policies successfully saved and bound to PSTP Escrow.');
+        setSuccessMsg('Store policies successfully saved. Merchant review status and PSTP acceptance were preserved.');
         onPoliciesUpdated(updatedPolicies);
         setTimeout(() => setSuccessMsg(null), 5000);
       } else {
