@@ -2252,15 +2252,34 @@ export class PiSdkManagerService {
         }
 
         try {
-          // Pi.init() is async in the current Pi SDK contract.
-          // Await it so authentication/payment calls cannot race SDK initialization.
-          await Promise.resolve(
-            window.Pi.init({
-              version: '2.0',
-              sandbox:
-                resolvedSandbox
-            })
-          );
+          // Pi.init() may remain pending in a stalled Pi Browser bridge.
+          // Bound initialization so the app can surface a diagnostic instead of
+          // leaving the global connection/loading state active indefinitely.
+          let initTimeoutHandle: ReturnType<typeof setTimeout> | null = null;
+          try {
+            await Promise.race([
+              Promise.resolve(
+                window.Pi.init({
+                  version: '2.0',
+                  sandbox: resolvedSandbox
+                })
+              ),
+              new Promise<never>((_, reject) => {
+                initTimeoutHandle = setTimeout(() => {
+                  const timeoutError = new Error(
+                    'Pi SDK initialization did not complete within 10 seconds.'
+                  );
+                  (timeoutError as any).code = 'PI_INIT_TIMEOUT';
+                  reject(timeoutError);
+                }, 10_000);
+              })
+            ]);
+          } finally {
+            if (initTimeoutHandle) {
+              clearTimeout(initTimeoutHandle);
+              initTimeoutHandle = null;
+            }
+          }
 
           this.sdkLoaded = true;
           this.sdkInitialized = true;
