@@ -100,12 +100,23 @@ export const KycVerificationTab: React.FC<KycVerificationTabProps> = ({
 
       const data = await response.json();
 
-      if (response.ok && data.success) {
-        setUploadSuccess(`Document "${selectedFile.name}" encrypted with AES-256-GCM and submitted securely.`);
+      if (response.ok && data.success && typeof data.reference === 'string') {
+        const linkResponse = await vendorAuthenticatedFetch('/api/vendor/document-link', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reference: data.reference })
+        });
+        const linkData = await linkResponse.json().catch(() => ({}));
+        if (!linkResponse.ok || !linkData.success || !linkData.linked) {
+          setUploadError(linkData.message || linkData.error || 'The encrypted upload succeeded, but it could not be linked to your merchant application. Please refresh and retry linking.');
+          return;
+        }
+        setUploadSuccess(`Document "${selectedFile.name}" encrypted and linked to your merchant application securely.`);
         setSelectedFile(null);
         setDocNumber('');
-        // Refresh server status to display newly registered document
-        onRefreshStatus();
+        await onRefreshStatus();
+      } else if (response.ok && data.success) {
+        setUploadError('The upload service did not return a private document reference, so the document was not linked.');
       } else {
         setUploadError(data.message || data.error || 'Failed to upload verification document.');
       }
