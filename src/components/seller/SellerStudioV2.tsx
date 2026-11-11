@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { 
   LayoutDashboard, 
   Store, 
@@ -220,11 +220,30 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
     }
   );
 
+  // Prevent overlapping status requests and guarantee the UI exits its loading
+  // state even if Pi authentication or the server endpoint stops responding.
+  const statusRequestInFlight = useRef(false);
+
   // Load authoritative server status on mount
   const fetchAuthoritativeStatus = useCallback(async () => {
+    if (statusRequestInFlight.current) return;
+    statusRequestInFlight.current = true;
     setIsLoadingStatus(true);
+
+    const controller = new AbortController();
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
     try {
-      const res = await vendorAuthenticatedFetch('/api/vendor/status');
+      const request = vendorAuthenticatedFetch('/api/vendor/status', {
+        signal: controller.signal
+      });
+      const timeout = new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => {
+          controller.abort();
+          reject(new Error('STATUS_REQUEST_TIMEOUT'));
+        }, 15000);
+      });
+      const res = await Promise.race([request, timeout]);
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
         setStatusDiagnostic(null);
@@ -280,6 +299,8 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
         storeName: null
       });
     } finally {
+      if (timeoutId) clearTimeout(timeoutId);
+      statusRequestInFlight.current = false;
       setIsLoadingStatus(false);
     }
   }, [userUsername]);
