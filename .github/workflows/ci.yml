@@ -5,10 +5,12 @@ on:
     branches:
       - main
       - "fix/auth-durable-session-revocation"
+      - "fix/seller-studio-kyc-policy-integrity"
   pull_request:
     branches:
       - main
       - "design/premium-landing-preview"
+      - "fix/auth-durable-session-revocation"
 
 permissions:
   contents: read
