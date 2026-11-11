@@ -29,6 +29,14 @@
       "destination": "/api/index?__path=/products"
     },
     {
+      "source": "/api/vendor/document-link",
+      "destination": "/api/vendor/document-link-durable"
+    },
+    {
+      "source": "/api/vendor/policies",
+      "destination": "/api/vendor/policies-durable"
+    },
+    {
       "source": "/api/vendor/apply",
       "destination": "/api/vendor/apply-durable"
     },
