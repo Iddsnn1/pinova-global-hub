@@ -133,7 +133,7 @@ export function clearVendorAuthToken(): void {
  * 4. Stores token as auth_token in memory and storage.
  * 5. Returns server session token for Authorization: Bearer header.
  */
-export async function ensureServerSession(forceRefresh: boolean = false): Promise<string | null> {
+export async function ensureServerSession(forceRefresh: boolean = false, signal?: AbortSignal): Promise<string | null> {
   const currentToken = getVendorAuthToken();
 
   // If token already valid and refresh not requested, reuse
@@ -154,6 +154,13 @@ export async function ensureServerSession(forceRefresh: boolean = false): Promis
       undefined,
       false
     );
+
+    // A timed-out caller must not continue into session negotiation later.
+    if (signal?.aborted) {
+      const abortError = new Error('The operation was aborted');
+      abortError.name = 'AbortError';
+      throw abortError;
+    }
 
     if (
       managedUser?.accessToken &&
@@ -177,8 +184,15 @@ export async function ensureServerSession(forceRefresh: boolean = false): Promis
   }
 
   try {
+    if (signal?.aborted) {
+      const abortError = new Error('The operation was aborted');
+      abortError.name = 'AbortError';
+      throw abortError;
+    }
+
     const res = await fetch('/api/auth/session', {
       method: 'POST',
+      signal,
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json'
@@ -238,7 +252,7 @@ export async function vendorAuthenticatedFetch(
   init: RequestInit = {}
 ): Promise<Response> {
   // Establish a verified server session before protected vendor requests.
-  let token = await ensureServerSession(false);
+  let token = await ensureServerSession(false, init.signal || undefined);
   let username = getVendorUsername();
 
   const mergeHeaders = (authToken: string | null): HeadersInit => {
@@ -264,7 +278,7 @@ export async function vendorAuthenticatedFetch(
     if (response.status === 401) {
       console.warn('[vendorAuthBridge] 401 received. Refreshing server session.');
       clearVendorAuthToken();
-      token = await ensureServerSession(true);
+      token = await ensureServerSession(true, init.signal || undefined);
       username = getVendorUsername();
       if (token) response = await request(token);
     }
