@@ -98,6 +98,8 @@ export default async function handler(req: any, res: any) {
       pstpAuthorized: access.canReceivePstpOrders,
       storeName: application?.storeName || null,
       applicationId: application?.id || null,
+      // Return only the authenticated merchant's own application for Seller Studio hydration.
+      application: application || null,
       access
     });
   } catch (error: any) {

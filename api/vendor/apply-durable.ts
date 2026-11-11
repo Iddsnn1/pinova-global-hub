@@ -6,6 +6,8 @@ type ServerModule = {
   getDurableVendorApplication: (username: string) => Promise<any>;
   saveDurableVendorApplication: (application: any) => Promise<any>;
   durableVendorStorageEnabled: () => boolean;
+  vendorDocumentStorageEnabled: () => boolean;
+  getVendorDocument: (key: string) => Promise<{ body: Uint8Array; contentType: string } | null>;
   pstpAuditRepo: { appendLog: (entry: any) => Promise<any> | any };
 };
 
@@ -77,10 +79,50 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    const documents = Array.isArray(body.documents) ? body.documents : [];
-    if (!documents.length) return res.status(400).json({ success: false, error: 'VERIFICATION_DOCUMENT_REQUIRED', message: 'A securely uploaded verification document is required.' });
-    if (documents.some((d: any) => !String(d?.fileUrl || '').startsWith('private://vendor-documents/'))) {
-      return res.status(400).json({ success: false, error: 'VERIFICATION_DOCUMENT_REQUIRED', message: 'Public URLs and external references are prohibited.' });
+    const submittedDocuments = Array.isArray(body.documents) ? body.documents : [];
+    if (!submittedDocuments.length) {
+      return res.status(400).json({ success: false, error: 'VERIFICATION_DOCUMENT_REQUIRED', message: 'A securely uploaded verification document is required.' });
+    }
+    if (!getServerModule().vendorDocumentStorageEnabled()) {
+      return res.status(503).json({ success: false, error: 'VENDOR_DOCUMENT_STORAGE_NOT_CONFIGURED' });
+    }
+
+    // Never trust a client-supplied private:// prefix alone. Confirm both objects
+    // exist and the server-written metadata binds the document to this Pioneer.
+    const normalizeIdentity = (value: unknown) => String(value || '').trim().replace(/^@/, '').toLowerCase();
+    const documents: any[] = [];
+    for (const submitted of submittedDocuments) {
+      const reference = String(submitted?.fileUrl || '').trim();
+      const match = reference.match(/^private:\/\/vendor-documents\/([a-f0-9]{32})$/);
+      if (!match) {
+        return res.status(400).json({ success: false, error: 'VERIFICATION_DOCUMENT_REQUIRED', message: 'Public URLs and external references are prohibited.' });
+      }
+      const documentId = match[1];
+      const metadataObject = await getServerModule().getVendorDocument(`vendor-documents/${documentId}.meta.json`);
+      if (!metadataObject) return res.status(400).json({ success: false, error: 'VERIFICATION_DOCUMENT_NOT_FOUND' });
+      let metadata: any;
+      try {
+        metadata = JSON.parse(Buffer.from(metadataObject.body).toString('utf8'));
+      } catch {
+        return res.status(400).json({ success: false, error: 'VERIFICATION_DOCUMENT_METADATA_INVALID' });
+      }
+      if (metadata?.id !== documentId || normalizeIdentity(metadata?.owner) !== normalizeIdentity(effectiveUsername)) {
+        return res.status(403).json({ success: false, error: 'VERIFICATION_DOCUMENT_OWNER_MISMATCH' });
+      }
+      const encryptedObject = await getServerModule().getVendorDocument(`vendor-documents/${documentId}.enc`);
+      if (!encryptedObject || encryptedObject.body.byteLength === 0) {
+        return res.status(400).json({ success: false, error: 'VERIFICATION_DOCUMENT_CIPHERTEXT_MISSING' });
+      }
+      documents.push({
+        id: documentId,
+        docType: String(metadata.documentType || submitted.docType || 'identity_proof'),
+        fileName: String(metadata.originalFilename || submitted.fileName || 'verification-document'),
+        fileUrl: reference,
+        mimeType: String(metadata.mimeType || 'application/octet-stream'),
+        uploadedAt: String(metadata.uploadedAt || new Date().toISOString()),
+        encrypted: true,
+        storage: 'private'
+      });
     }
 
     const existing = await getDurableVendorApplication(effectiveUsername);
@@ -91,13 +133,28 @@ export default async function handler(req: any, res: any) {
     const now = new Date().toISOString();
     const application = {
       ...(existing || {}),
-      ...body,
+      // Explicit merchant-editable allowlist. Never persist arbitrary client fields
+      // such as review state, approval flags, role metadata, or server-owned IDs.
       storeName,
+      storeDescription: typeof body.storeDescription === 'string' ? body.storeDescription.trim() : (existing?.storeDescription || ''),
+      sellerType: typeof body.sellerType === 'string' ? body.sellerType.trim() : (existing?.sellerType || ''),
       contactEmail,
+      contactPhone: typeof body.contactPhone === 'string' ? body.contactPhone.trim() : (existing?.contactPhone || ''),
       country,
+      countryCode: typeof body.countryCode === 'string' ? body.countryCode.trim().toUpperCase() : (existing?.countryCode || ''),
+      stateRegion: typeof body.stateRegion === 'string' ? body.stateRegion.trim() : (existing?.stateRegion || ''),
+      city: typeof body.city === 'string' ? body.city.trim() : (existing?.city || ''),
+      storeLogo: typeof body.storeLogo === 'string' ? body.storeLogo : (existing?.storeLogo || ''),
+      storeBanner: typeof body.storeBanner === 'string' ? body.storeBanner : (existing?.storeBanner || ''),
       categoriesToSell,
       documents,
-      policies: { ...policies, returnRefundPolicy, deliveryShippingPolicy },
+      policies: {
+        ...(existing?.policies || {}),
+        returnRefundPolicy,
+        deliveryShippingPolicy,
+        ...(typeof policies.cancellationPolicy === 'string' ? { cancellationPolicy: policies.cancellationPolicy.trim() } : {}),
+        ...(typeof policies.warrantyTerms === 'string' ? { warrantyTerms: policies.warrantyTerms.trim() } : {})
+      },
       pstpAgreementAccepted,
       id: existing?.id || `VAPP-${String(body.countryCode || 'GL').slice(0, 2).toUpperCase()}-${Date.now().toString().slice(-8)}`,
       pioneerUsername: effectiveUsername,
