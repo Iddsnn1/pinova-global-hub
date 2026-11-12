@@ -276,10 +276,10 @@ export const PiBrowserBanner: React.FC<PiBrowserBannerProps> = ({
               {inPiBrowser && diagState.authState !== 'AUTH_SUCCESS' && (
                 <button
                   onClick={handleRetryAuth}
-                  disabled={diagState.hasActiveAuthPromise || isRetrying}
+                  disabled={diagState.hasActiveAuthPromise || diagState.nativeBridgeState === 'promise_pending' || diagState.nativeBridgeState === 'calling_invocation' || isRetrying}
                   className="bg-rose-900/80 hover:bg-rose-800 text-rose-100 px-2 py-0.5 rounded text-[10px] font-sans font-medium transition-colors shrink-0 cursor-pointer disabled:opacity-50"
                 >
-                  {isRetrying ? 'Retrying...' : 'Retry Now'}
+                  {diagState.nativeBridgeState === 'promise_pending' ? 'Waiting for Pi Browser...' : isRetrying ? 'Retrying...' : 'Retry Now'}
                 </button>
               )}
             </div>
