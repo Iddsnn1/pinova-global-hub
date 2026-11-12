@@ -95,7 +95,10 @@ export class AuthorizationService {
     } else if (this.legacyRepo && requestedRoles?.length) {
       // Local test adapter only: preserve historical role-based fixtures.
       const safeRoles = requestedRoles.filter(role => !PRIVILEGED_ROLES.includes(role));
-      const updated = await this.authRepo.setAuthoritativeRoles(user.id, safeRoles);
+      const updated = await this.authRepo.setAuthoritativeRoles(
+        user.id,
+        safeRoles.length ? safeRoles : ['PIONEER']
+      );
       if (updated) user = updated;
     }
 
