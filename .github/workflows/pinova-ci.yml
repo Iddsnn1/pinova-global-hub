@@ -2,9 +2,9 @@ name: PiNova CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, design/premium-landing-preview, migration/neon-durable-storage]
   pull_request:
-    branches: [main]
+    branches: [main, migration/neon-durable-storage]
   workflow_dispatch:
 
 jobs:
