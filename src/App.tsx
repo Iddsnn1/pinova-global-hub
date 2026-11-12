@@ -993,8 +993,6 @@ function MainAppContent() {
             onConfirmReceipt={handleConfirmReceipt}
             onTrackOrder={handleTrackOrder}
             onOpenVendorApplication={() => setIsVendorApplicationOpen(true)}
-            onConnectPi={handleConnectPi}
-            authStatus={authStatus}
           />
         )}
 
