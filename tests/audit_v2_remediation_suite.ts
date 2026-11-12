@@ -77,7 +77,7 @@ async function runTestSuite() {
   assert(tokenUser !== null && !tokenUser.roles.includes('PLATFORM_ADMIN'), 'Scenario 1.9: Token cannot be spoofed to elevate privileges');
 
   // 1.5 Logout & Session Invalidation
-  authService.invalidateSession(pioneerSession.token);
+  await authService.invalidateSession(pioneerSession.token);
   const invalidatedUser = await authService.authenticateToken(pioneerSession.token);
   assert(invalidatedUser === null, 'Scenario 1.10: Invalidated session token rejected upon subsequent authentication');
 
