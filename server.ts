@@ -221,7 +221,7 @@ app.use((req, res, next) => {
 async function checkAdminAuth(req: express.Request): Promise<{ authenticated: boolean; authorized: boolean; user?: AuthenticatedUser }> {
   const authHeader = req.headers['authorization'] as string | undefined;
   const adminKeyHeader = req.headers['x-admin-key'] as string | undefined;
-  const adminSecret = process.env.ADMIN_API_KEY || process.env.PI_API_KEY || process.env.PI_SERVER_KEY;
+  const adminSecret = (process.env.ADMIN_API_KEY || '').trim();
 
   // 1. Machine/Server Key Verification
   if (adminSecret && adminSecret !== 'YOUR_PI_PLATFORM_API_KEY' && adminSecret !== 'MY_PI_API_KEY') {
