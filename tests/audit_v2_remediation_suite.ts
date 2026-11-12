@@ -77,10 +77,33 @@ async function runTestSuite() {
   assert(tokenUser !== null && !tokenUser.roles.includes('PLATFORM_ADMIN'), 'Scenario 1.9: Token cannot be spoofed to elevate privileges');
 
   // 1.5 Logout & Session Invalidation
-  authService.invalidateSession(pioneerSession.token);
+  await authService.invalidateSession(pioneerSession.token);
   const invalidatedUser = await authService.authenticateToken(pioneerSession.token);
   assert(invalidatedUser === null, 'Scenario 1.10: Invalidated session token rejected upon subsequent authentication');
 
+
+  // 1.6 Pi Platform credentials must never act as machine-admin credentials.
+  const previousAdminKey = process.env.ADMIN_API_KEY;
+  const previousPiKey = process.env.PI_API_KEY;
+  const piPlatformSecret = 'pi-platform-secret-regression-test';
+  delete process.env.ADMIN_API_KEY;
+  process.env.PI_API_KEY = piPlatformSecret;
+  const piKeyAsAdmin = await authService.authenticateToken(piPlatformSecret);
+  assert(piKeyAsAdmin === null, 'Scenario 1.11: PI_API_KEY is rejected as a machine-admin credential');
+  process.env.ADMIN_API_KEY = 'dedicated-admin-secret-regression-test';
+  const dedicatedAdmin = await authService.authenticateToken('dedicated-admin-secret-regression-test');
+  assert(dedicatedAdmin?.isMachineKey === true, 'Scenario 1.12: Dedicated ADMIN_API_KEY remains accepted for machine administration');
+  if (previousAdminKey === undefined) delete process.env.ADMIN_API_KEY;
+  else process.env.ADMIN_API_KEY = previousAdminKey;
+  if (previousPiKey === undefined) delete process.env.PI_API_KEY;
+  else process.env.PI_API_KEY = previousPiKey;
+
+  // 1.7 Session authorization must always use current authoritative identity state.
+  const authorizationSource = await import('fs/promises').then((fs) =>
+    fs.readFile(path.join(process.cwd(), 'src/server/auth/AuthorizationService.ts'), 'utf8'));
+  assert(authorizationSource.includes("active.user.status !== 'ACTIVE'"), 'Scenario 1.13: Suspended identities cannot reuse existing sessions');
+  assert(authorizationSource.includes('toAuthenticatedUser(active.user'), 'Scenario 1.14: Session roles are rebuilt from the authoritative repository user');
+  assert(authorizationSource.includes("if (token.startsWith('pinova_sess_v1_')) return null"), 'Scenario 1.15: Legacy stateless v1 session tokens are rejected');
 
   // 1.6 Education API BOLA/BFLA source-level regression guards
   // These guards ensure the fail-closed authorization contracts remain present in server.ts.
@@ -88,12 +111,12 @@ async function runTestSuite() {
   const authTypeSource = await import('fs/promises').then((fs) => fs.readFile(path.join(process.cwd(), 'src/server/auth/types.ts'), 'utf8'));
   assert(authTypeSource.includes('institutionId?: string'), 'Scenario 1.11: Authenticated user carries institution binding');
   assert(serverSource.includes('DOCUMENT_SCOPE_UNAVAILABLE'), 'Scenario 1.12: Institution document access fails closed when scoped listing is unavailable');
-  assert(serverSource.includes('INSTITUTION_ADMIN') && serverSource.includes('req.user?.institutionId === admission.institutionId'), 'Scenario 1.13: Institution admin document access is institution-scoped');
-  assert(serverSource.includes('INSTITUTION_ADMIN') && serverSource.includes('cannot upload documents on behalf of applicants'), 'Scenario 1.14: Institution admin cannot impersonate applicant document uploads');
+  assert(serverSource.includes('isInstitutionAdmin') && serverSource.includes('req.user.institutionId !== admission.institutionId') && serverSource.includes('DOCUMENT_SCOPE_UNAVAILABLE'), 'Scenario 1.13: Institution admin document access is restricted to its institution and fails closed until scoped listing exists');
+  assert(serverSource.includes('if (isInstitutionAdmin)') && serverSource.includes('cannot upload academic documents on behalf of applicants'), 'Scenario 1.14: Institution admin cannot impersonate applicant document uploads');
   assert(serverSource.includes('req.user?.institutionId !== requestedInstitution'), 'Scenario 1.15: Institution invoice access rejects cross-institution requests');
   assert(serverSource.includes('requestedGuardianId') && serverSource.includes('scopedChildren'), 'Scenario 1.16: Guardian children endpoint enforces caller ownership/institution scope');
-  assert(serverSource.includes('req.user?.institutionId === admission.institutionId') && serverSource.includes('offer/accept'), 'Scenario 1.17: Admission offer acceptance enforces institution scope');
-  assert(serverSource.includes('req.user?.institutionId === admission.institutionId') && serverSource.includes('admissions/:id/status'), 'Scenario 1.18: Admission status mutation enforces institution scope');
+  assert(serverSource.includes('isInstitutionAdmin &&') && serverSource.includes('req.user.institutionId === admission.institutionId') && serverSource.includes('offer/accept'), 'Scenario 1.17: Admission offer acceptance enforces institution scope');
+  assert(serverSource.includes('isInstitutionAdmissionsAdmin &&') && serverSource.includes('req.user.institutionId !== admissionForAuthorization.institutionId') && serverSource.includes('admissions/:id/status'), 'Scenario 1.18: Admission status mutation enforces institution scope');
 
   // --- 2. PSTP DISPUTE RESOLUTION & SECURITY ---
   console.log('\n--- SECTION 2: PSTP DISPUTE SECURITY & STATE MACHINE AUDIT ---');
