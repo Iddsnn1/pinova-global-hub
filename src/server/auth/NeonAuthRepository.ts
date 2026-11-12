@@ -92,11 +92,11 @@ export class NeonAuthRepository implements AuthRepository {
   }
 
   public async upsertVerifiedPiIdentity(input: {
-    await this.ensureSchemaReady();
     username: string;
     piUid: string;
     email?: string;
   }): Promise<UserIdentityEntity> {
+    await this.ensureSchemaReady();
     const username = input.username.trim().replace(/^@/, '');
     const normalized = normalizeUsername(username);
     const piUid = input.piUid.trim();
@@ -119,10 +119,10 @@ export class NeonAuthRepository implements AuthRepository {
 
   /** Caller must enforce server-side administrator authorization before role changes. */
   public async setAuthoritativeRoles(
-    await this.ensureSchemaReady();
     userId: string,
     roles: UserRole[]
   ): Promise<UserIdentityEntity | null> {
+    await this.ensureSchemaReady();
     const uniqueRoles = [...new Set(roles)];
     const rows = await this.sql`
       UPDATE user_identities
@@ -150,9 +150,9 @@ export class NeonAuthRepository implements AuthRepository {
   }
 
   public async findActiveSession(
-    await this.ensureSchemaReady();
     token: string
   ): Promise<{ user: UserIdentityEntity; expiresAt: number } | null> {
+    await this.ensureSchemaReady();
     if (!token) return null;
     const hash = createHash('sha256').update(token).digest('hex');
     const rows = await this.sql`
