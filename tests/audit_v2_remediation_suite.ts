@@ -82,6 +82,29 @@ async function runTestSuite() {
   assert(invalidatedUser === null, 'Scenario 1.10: Invalidated session token rejected upon subsequent authentication');
 
 
+  // 1.6 Pi Platform credentials must never act as machine-admin credentials.
+  const previousAdminKey = process.env.ADMIN_API_KEY;
+  const previousPiKey = process.env.PI_API_KEY;
+  const piPlatformSecret = 'pi-platform-secret-regression-test';
+  delete process.env.ADMIN_API_KEY;
+  process.env.PI_API_KEY = piPlatformSecret;
+  const piKeyAsAdmin = await authService.authenticateToken(piPlatformSecret);
+  assert(piKeyAsAdmin === null, 'Scenario 1.11: PI_API_KEY is rejected as a machine-admin credential');
+  process.env.ADMIN_API_KEY = 'dedicated-admin-secret-regression-test';
+  const dedicatedAdmin = await authService.authenticateToken('dedicated-admin-secret-regression-test');
+  assert(dedicatedAdmin?.isMachineKey === true, 'Scenario 1.12: Dedicated ADMIN_API_KEY remains accepted for machine administration');
+  if (previousAdminKey === undefined) delete process.env.ADMIN_API_KEY;
+  else process.env.ADMIN_API_KEY = previousAdminKey;
+  if (previousPiKey === undefined) delete process.env.PI_API_KEY;
+  else process.env.PI_API_KEY = previousPiKey;
+
+  // 1.7 Session authorization must always use current authoritative identity state.
+  const authorizationSource = await import('fs/promises').then((fs) =>
+    fs.readFile(path.join(process.cwd(), 'src/server/auth/AuthorizationService.ts'), 'utf8'));
+  assert(authorizationSource.includes("active.user.status !== 'ACTIVE'"), 'Scenario 1.13: Suspended identities cannot reuse existing sessions');
+  assert(authorizationSource.includes('toAuthenticatedUser(active.user'), 'Scenario 1.14: Session roles are rebuilt from the authoritative repository user');
+  assert(authorizationSource.includes("if (token.startsWith('pinova_sess_v1_')) return null"), 'Scenario 1.15: Legacy stateless v1 session tokens are rejected');
+
   // 1.6 Education API BOLA/BFLA source-level regression guards
   // These guards ensure the fail-closed authorization contracts remain present in server.ts.
   const serverSource = await import('fs/promises').then((fs) => fs.readFile(path.join(process.cwd(), 'server.ts'), 'utf8'));
