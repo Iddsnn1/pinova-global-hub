@@ -31,17 +31,18 @@ function mapUser(row: any): UserIdentityEntity {
 /**
  * Neon-backed auth persistence for the pre-provisioned Preview schema.
  * Stores only SHA-256 session-token hashes, never bearer tokens.
- * This adapter is intentionally not wired into runtime until the service
- * and test adapters are migrated together.
+ * Runtime selects this adapter whenever DATABASE_URL is configured. Schema
+ * readiness is checked before every operation and failures remain fail-closed.
  */
 export class NeonAuthRepository implements AuthRepository {
   private readonly sql: Sql;
+  private schemaReady: Promise<void> | null = null;
 
   constructor(sql: Sql = getNeonSql()) {
     this.sql = sql;
   }
 
-  public async assertSchemaReady(): Promise<void> {
+  private async checkSchema(): Promise<void> {
     const rows = await this.sql`
       SELECT
         to_regclass('public.user_identities') AS identities,
@@ -54,7 +55,22 @@ export class NeonAuthRepository implements AuthRepository {
     }
   }
 
+  private async ensureSchemaReady(): Promise<void> {
+    if (!this.schemaReady) {
+      this.schemaReady = this.checkSchema().catch((error) => {
+        this.schemaReady = null;
+        throw error;
+      });
+    }
+    await this.schemaReady;
+  }
+
+  public async assertSchemaReady(): Promise<void> {
+    await this.ensureSchemaReady();
+  }
+
   public async findUserByUsername(username: string): Promise<UserIdentityEntity | null> {
+    await this.ensureSchemaReady();
     const key = normalizeUsername(username);
     if (!key) return null;
     const rows = await this.sql`
@@ -66,6 +82,7 @@ export class NeonAuthRepository implements AuthRepository {
   }
 
   public async findUserById(id: string): Promise<UserIdentityEntity | null> {
+    await this.ensureSchemaReady();
     const rows = await this.sql`
       SELECT * FROM user_identities
       WHERE id = ${id}::uuid
@@ -75,6 +92,7 @@ export class NeonAuthRepository implements AuthRepository {
   }
 
   public async upsertVerifiedPiIdentity(input: {
+    await this.ensureSchemaReady();
     username: string;
     piUid: string;
     email?: string;
@@ -101,6 +119,7 @@ export class NeonAuthRepository implements AuthRepository {
 
   /** Caller must enforce server-side administrator authorization before role changes. */
   public async setAuthoritativeRoles(
+    await this.ensureSchemaReady();
     userId: string,
     roles: UserRole[]
   ): Promise<UserIdentityEntity | null> {
@@ -115,6 +134,7 @@ export class NeonAuthRepository implements AuthRepository {
   }
 
   public async createSession(token: string, userId: string, expiresAt: number): Promise<void> {
+    await this.ensureSchemaReady();
     if (!token || !Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
       throw new Error('AUTH_SESSION_INVALID');
     }
@@ -130,6 +150,7 @@ export class NeonAuthRepository implements AuthRepository {
   }
 
   public async findActiveSession(
+    await this.ensureSchemaReady();
     token: string
   ): Promise<{ user: UserIdentityEntity; expiresAt: number } | null> {
     if (!token) return null;
@@ -158,6 +179,7 @@ export class NeonAuthRepository implements AuthRepository {
 
   /** Revocation is persisted before the secondary session-row update. */
   public async revokeSession(token: string, _expiresAt: number): Promise<void> {
+    await this.ensureSchemaReady();
     if (!token) return;
     const hash = createHash('sha256').update(token).digest('hex');
     await this.sql`
@@ -174,6 +196,7 @@ export class NeonAuthRepository implements AuthRepository {
   }
 
   public async pruneExpiredAuthRows(): Promise<void> {
+    await this.ensureSchemaReady();
     await this.sql`DELETE FROM user_sessions WHERE expires_at <= now()`;
     await this.sql`
       DELETE FROM revoked_sessions
