@@ -285,7 +285,7 @@ export class AuthorizationService {
     return null;
   }
 
-  public invalidateSession(token: string): boolean {
+  public async invalidateSession(token: string): Promise<boolean> {
     let cleanToken = token.trim();
     if (cleanToken.startsWith('Bearer ')) cleanToken = cleanToken.substring(7).trim();
     if (cleanToken.startsWith('Key ')) cleanToken = cleanToken.substring(4).trim();
