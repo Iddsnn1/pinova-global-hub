@@ -3392,8 +3392,11 @@ export class PiSdkManagerService {
     this.diagnosticCategory =
       null;
 
-    this.nativeBridgeState =
-      'idle';
+    // A UI reset cannot cancel an unresolved native Pi Browser promise.
+    // Keep the diagnostic state truthful and prevent overlapping retries.
+    this.nativeBridgeState = this.nativeAuthBridgePromise
+      ? 'promise_pending'
+      : 'idle';
 
     this.authenticationError =
       null;
