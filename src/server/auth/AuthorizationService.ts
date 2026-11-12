@@ -138,7 +138,7 @@ export class AuthorizationService {
     else if (token.startsWith('Key ')) token = token.slice(4).trim();
     if (!token) return null;
 
-    const adminSecret = process.env.ADMIN_API_KEY || process.env.PI_API_KEY || process.env.PI_SERVER_KEY;
+    const adminSecret = (process.env.ADMIN_API_KEY || '').trim();
     if (adminSecret && !['YOUR_PI_PLATFORM_API_KEY', 'MY_PI_API_KEY'].includes(adminSecret) && token === adminSecret) {
       const roles: UserRole[] = ['PLATFORM_ADMIN', 'COMPLIANCE_ADMIN'];
       return {
