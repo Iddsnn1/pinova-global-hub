@@ -892,6 +892,37 @@ function getVendorDocumentEncryptionKey(): Buffer | null {
 }
 
 /**
+ * Confirms a submitted KYC reference points to an existing encrypted object pair
+ * whose metadata is bound to the authenticated Pioneer. A URL prefix alone is
+ * never proof that a document was uploaded or belongs to the applicant.
+ */
+export async function verifyVendorDocumentReference(reference: string, username: string): Promise<boolean> {
+  const match = /^private:\/\/vendor-documents\/([a-f0-9]{32})$/i.exec(String(reference || '').trim());
+  const owner = String(username || '').trim().toLowerCase();
+  if (!match || !owner || !getVendorDocumentEncryptionKey() || !vendorDocumentStorageEnabled()) return false;
+
+  const id = match[1].toLowerCase();
+  try {
+    const [metadataObject, encryptedObject] = await Promise.all([
+      getVendorDocument(`vendor-documents/${id}.meta.json`),
+      getVendorDocument(`vendor-documents/${id}.enc`)
+    ]);
+    if (!metadataObject || !encryptedObject) return false;
+    const metadata = JSON.parse(Buffer.from(metadataObject.body).toString('utf8'));
+    return (
+      String(metadata?.id || '').toLowerCase() === id &&
+      String(metadata?.owner || '').trim().toLowerCase() === owner &&
+      /^[a-f0-9]{24}$/i.test(String(metadata?.iv || '')) &&
+      /^[a-f0-9]{32}$/i.test(String(metadata?.authTag || '')) &&
+      Number(metadata?.encryptedByteLength) === encryptedObject.body.length &&
+      encryptedObject.body.length > 0
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Resolves the directory for storing encrypted vendor verification documents.
  * Stored under PINOVA_DATA_DIR/vendor-documents/ with restricted directory permissions.
  */
