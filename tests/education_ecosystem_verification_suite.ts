@@ -3,6 +3,7 @@ import path from 'path';
 process.env.PINOVA_DATA_DIR = path.join(os.tmpdir(), 'pinova_edu_safety_' + Date.now());
 import { EducationRepository } from '../src/server/db/repositories/EducationRepository';
 import { getTaxonomyByCountry } from '../src/data/educationTaxonomyData';
+import { GLOBAL_EDUCATION_REGISTRY_VERSION, GLOBAL_EDUCATION_SOURCE_POLICY } from '../src/data/globalEducationRegistry';
 import { SEED_STUDENTS, SEED_CHILDREN_SUMMARIES, SEED_INVOICES, SEED_RECEIPTS, SEED_PAYMENTS, SEED_ADMISSION_APPLICATIONS, SEED_SCHOLARSHIPS, SEED_MARKETPLACE_ITEMS, SEED_PARENT_USER_ID } from '../src/data/educationSeedData';
 const ok=(v:boolean,n:string)=>{if(!v) throw new Error('FAILED: '+n); console.log('[PASS] '+n);};
 async function run(){
@@ -16,7 +17,8 @@ async function run(){
  ok(SEED_SCHOLARSHIPS.length===0,'no seeded scholarships');
  ok(SEED_MARKETPLACE_ITEMS.length===0,'no seeded marketplace items');
  ok(SEED_PARENT_USER_ID==='','no seeded guardian identity');
- ok(repo.getInstitutions().length>0,'global institution registry is loaded');
+ ok(repo.getInstitutions().length===0,'unverified institution records are not seeded into the production repository');
+ ok(GLOBAL_EDUCATION_REGISTRY_VERSION==='1.0.0' && GLOBAL_EDUCATION_SOURCE_POLICY.higherEducation.includes('NATIONAL_AUTHORITY'),'global education registry governance policy is loaded');
  ok(repo.getInvoices().length===0,'invoice repository starts empty');
  ok(repo.getScholarships().length===0,'scholarship repository starts empty');
  ok(repo.getStudentsByGuardian('authenticated-user').length===0,'student lookup fails closed');
