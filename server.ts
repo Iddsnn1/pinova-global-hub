@@ -1685,13 +1685,14 @@ app.get(
 app.get(
   ['/api/vendor/application/:username', '/api/v1/vendor/application/:username'],
   authenticate,
+  requireAuthenticatedUser,
   async (req: AuthenticatedRequest, res) => {
     const { username } = req.params;
     const adminAuth = await checkAdminAuth(req);
     const isAdmin = adminAuth.authenticated && adminAuth.authorized;
     const isOwner = req.user?.username && req.user.username.toLowerCase() === username.toLowerCase();
 
-    if (isProduction && !isAdmin && !isOwner) {
+    if (!isAdmin && !isOwner) {
       res.status(403).json({
         success: false,
         error: 'FORBIDDEN',
@@ -3638,7 +3639,7 @@ app.post('/api/education/invoices/:id/apply-scholarship', authenticate, requireR
 });
 
 // 5. Secure Pi School Fees Settlement & Digital Receipt Issuance (Phase 5 & 12 Remediation)
-app.post('/api/education/invoices/pay', paymentRateLimiter, authenticate, async (req: AuthenticatedRequest, res) => {
+app.post('/api/education/invoices/pay', paymentRateLimiter, authenticate, requireAuthenticatedUser, async (req: AuthenticatedRequest, res) => {
   try {
     const {
       invoiceId,
@@ -3701,7 +3702,7 @@ app.post('/api/education/invoices/pay', paymentRateLimiter, authenticate, async 
     );
     const isInvoiceOwner = isGuardianOwner || isStudentOwner;
 
-    if (isProduction && !isPlatformAdmin && !isInstitutionStaff && !isInvoiceOwner) {
+    if (!isPlatformAdmin && !isInstitutionStaff && !isInvoiceOwner) {
       res.status(403).json({
         success: false,
         error: 'FORBIDDEN',
@@ -3865,7 +3866,7 @@ app.post('/api/education/invoices/pay', paymentRateLimiter, authenticate, async 
 });
 
 // 5b. Get Payment History for Specific Invoice (Ownership Protected)
-app.get('/api/education/invoices/:id/payments', authenticate, (req: AuthenticatedRequest, res) => {
+app.get('/api/education/invoices/:id/payments', authenticate, requireAuthenticatedUser, (req: AuthenticatedRequest, res) => {
   try {
     const { id } = req.params;
     const invoice = educationRepo.getInvoiceById(id);
@@ -3893,7 +3894,7 @@ app.get('/api/education/invoices/:id/payments', authenticate, (req: Authenticate
     );
     const isAuthorized = isPlatformAdmin || isInstitutionStaff || isGuardianOwner || isStudentOwner;
 
-    if (isProduction && !isAuthorized) {
+    if (!isAuthorized) {
       res.status(403).json({
         success: false,
         error: 'FORBIDDEN',
