@@ -221,7 +221,7 @@ app.use((req, res, next) => {
 async function checkAdminAuth(req: express.Request): Promise<{ authenticated: boolean; authorized: boolean; user?: AuthenticatedUser }> {
   const authHeader = req.headers['authorization'] as string | undefined;
   const adminKeyHeader = req.headers['x-admin-key'] as string | undefined;
-  const adminSecret = process.env.ADMIN_API_KEY || process.env.PI_API_KEY || process.env.PI_SERVER_KEY;
+  const adminSecret = String(process.env.ADMIN_API_KEY || '').trim();
 
   // 1. Machine/Server Key Verification
   if (adminSecret && adminSecret !== 'YOUR_PI_PLATFORM_API_KEY' && adminSecret !== 'MY_PI_API_KEY') {
@@ -657,10 +657,14 @@ app.get(['/api/pstp/audit-logs', '/api/v1/pstp/audit-logs'], async (req, res) =>
 });
 
 // Create Audit Log Entry (Strict Server-Side Protected Ingestion)
-app.post(['/api/pstp/audit-logs', '/api/v1/pstp/audit-logs'], authenticate, async (req: AuthenticatedRequest, res) => {
+app.post(['/api/pstp/audit-logs', '/api/v1/pstp/audit-logs'], authenticate, requireAuthenticatedUser, async (req: AuthenticatedRequest, res) => {
   const auth = await checkAdminAuth(req);
   if (!auth.authenticated) {
     res.status(401).json({ success: false, error: 'UNAUTHORIZED', message: 'Authentication required to post audit log' });
+    return;
+  }
+  if (!auth.authorized) {
+    res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Administrative privileges required to post audit logs.' });
     return;
   }
 
@@ -682,17 +686,13 @@ app.post(['/api/pstp/audit-logs', '/api/v1/pstp/audit-logs'], authenticate, asyn
 });
 
 // 2. Disputes API (Phase 2 Remediation)
-app.get(['/api/pstp/disputes', '/api/v1/pstp/disputes'], authenticate, async (req: AuthenticatedRequest, res) => {
+app.get(['/api/pstp/disputes', '/api/v1/pstp/disputes'], authenticate, requireAuthenticatedUser, async (req: AuthenticatedRequest, res) => {
   const adminAuth = await checkAdminAuth(req);
   const isAdmin = adminAuth.authenticated && adminAuth.authorized;
   const currentUser = req.user?.username;
 
   let disputes = pstpDisputeRepo.getAll();
-  if (isProduction && !isAdmin) {
-    if (!currentUser) {
-      res.status(401).json({ success: false, error: 'UNAUTHORIZED', message: 'Authentication required to view disputes.' });
-      return;
-    }
+  if (!isAdmin) {
     disputes = disputes.filter(
       (d) =>
         d.buyerUsername.toLowerCase() === currentUser.toLowerCase() ||
@@ -702,7 +702,7 @@ app.get(['/api/pstp/disputes', '/api/v1/pstp/disputes'], authenticate, async (re
   res.json({ success: true, count: disputes.length, disputes });
 });
 
-app.get(['/api/pstp/disputes/:id', '/api/v1/pstp/disputes/:id'], authenticate, async (req: AuthenticatedRequest, res) => {
+app.get(['/api/pstp/disputes/:id', '/api/v1/pstp/disputes/:id'], authenticate, requireAuthenticatedUser, async (req: AuthenticatedRequest, res) => {
   const { id } = req.params;
   const dispute = pstpDisputeRepo.findById(id);
   if (!dispute) {
@@ -718,7 +718,7 @@ app.get(['/api/pstp/disputes/:id', '/api/v1/pstp/disputes/:id'], authenticate, a
     dispute.sellerUsername.toLowerCase() === currentUser.toLowerCase()
   );
 
-  if (isProduction && !isAdmin && !isParty) {
+  if (!isAdmin && !isParty) {
     res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Access denied: You are not authorized to view this dispute.' });
     return;
   }
@@ -726,14 +726,34 @@ app.get(['/api/pstp/disputes/:id', '/api/v1/pstp/disputes/:id'], authenticate, a
   res.json({ success: true, dispute });
 });
 
-app.post(['/api/pstp/disputes', '/api/v1/pstp/disputes'], disputeRateLimiter, authenticate, async (req: AuthenticatedRequest, res) => {
+app.post(['/api/pstp/disputes', '/api/v1/pstp/disputes'], disputeRateLimiter, authenticate, requireAuthenticatedUser, async (req: AuthenticatedRequest, res) => {
   try {
-    const { orderId, reason, description, amountPi, evidenceFiles } = req.body;
+    const { orderId, reason, description, evidenceFiles } = req.body;
     const idempotencyKey = (req.headers['idempotency-key'] as string) || (req.headers['x-idempotency-key'] as string) || req.body.idempotencyKey || `DISP-${orderId}-${Date.now()}`;
-
-    // Derive buyer identity authoritatively from server authenticated user
-    const buyerUsername = req.user?.username || req.body.buyerUsername || 'Pioneer_User';
-    const sellerUsername = req.body.sellerUsername || 'Seller_Merchant';
+    const buyerUsername = String(req.user?.username || '').trim();
+    if (!buyerUsername || !orderId || typeof orderId !== 'string') {
+      res.status(400).json({ success: false, error: 'ORDER_AND_AUTHENTICATED_BUYER_REQUIRED' });
+      return;
+    }
+    const order = await getDurableOrder(orderId.trim());
+    if (!order) {
+      res.status(404).json({ success: false, error: 'ORDER_NOT_FOUND' });
+      return;
+    }
+    if (order.buyerUsername.toLowerCase() !== buyerUsername.toLowerCase()) {
+      res.status(403).json({ success: false, error: 'ORDER_BUYER_MISMATCH' });
+      return;
+    }
+    if (order.serverVerified !== true) {
+      res.status(409).json({ success: false, error: 'ORDER_PAYMENT_NOT_SERVER_VERIFIED' });
+      return;
+    }
+    const sellerNames = [...new Set((order.items || []).map((item: any) => String(item?.product?.sellerId || '').trim()).filter(Boolean))];
+    if (sellerNames.length !== 1) {
+      res.status(409).json({ success: false, error: 'SINGLE_SELLER_ORDER_REQUIRED', message: 'A dispute must be opened against one seller per order.' });
+      return;
+    }
+    const sellerUsername = sellerNames[0];
 
     // Atomic idempotency reservation to prevent race conditions & duplicate tickets
     const reservation = await idempotencyRepo.reserveIdempotencyKey(
@@ -753,7 +773,7 @@ app.post(['/api/pstp/disputes', '/api/v1/pstp/disputes'], disputeRateLimiter, au
       sellerUsername,
       reason: reason || 'Item issue',
       description: description || 'Buyer submitted a dispute',
-      amountPi: Number(amountPi) || 0,
+      amountPi: Number(order.totalPi) || 0,
       status: 'open',
       evidenceFiles: evidenceFiles || [],
       comments: [
@@ -787,7 +807,7 @@ app.post(['/api/pstp/disputes', '/api/v1/pstp/disputes'], disputeRateLimiter, au
 });
 
 // Protected Dispute Comments (Restricted to Buyer, Seller, or Compliance Admin)
-app.post(['/api/pstp/disputes/:id/comment', '/api/v1/pstp/disputes/:id/comment'], disputeRateLimiter, authenticate, (req: AuthenticatedRequest, res) => {
+app.post(['/api/pstp/disputes/:id/comment', '/api/v1/pstp/disputes/:id/comment'], disputeRateLimiter, authenticate, requireAuthenticatedUser, (req: AuthenticatedRequest, res) => {
   const { id } = req.params;
   const { text } = req.body;
   const dispute = pstpDisputeRepo.findById(id);
@@ -797,10 +817,11 @@ app.post(['/api/pstp/disputes/:id/comment', '/api/v1/pstp/disputes/:id/comment']
     return;
   }
 
-  const currentUser = req.user?.username || req.body.sender || 'User';
-  const isAdmin = req.user?.roles.some((r) => r === 'PLATFORM_ADMIN' || r === 'COMPLIANCE_OFFICER');
-  const isSeller = dispute.sellerUsername === currentUser;
-  const isBuyer = dispute.buyerUsername === currentUser;
+  const currentUser = String(req.user?.username || '').trim();
+  const currentUserKey = currentUser.toLowerCase();
+  const isAdmin = req.user?.roles.some((r) => r === 'PLATFORM_ADMIN' || r === 'COMPLIANCE_OFFICER' || r === 'COMPLIANCE_ADMIN');
+  const isSeller = dispute.sellerUsername.toLowerCase() === currentUserKey;
+  const isBuyer = dispute.buyerUsername.toLowerCase() === currentUserKey;
 
   if (!isAdmin && !isSeller && !isBuyer) {
     res.status(403).json({
@@ -1699,9 +1720,9 @@ app.get(
 );
 
 // POST /api/vendor/apply & /api/v1/vendor/apply
-app.post(['/api/vendor/apply', '/api/v1/vendor/apply'], authenticate, async (req: AuthenticatedRequest, res) => {
+app.post(['/api/vendor/apply', '/api/v1/vendor/apply'], authenticate, requireAuthenticatedUser, async (req: AuthenticatedRequest, res) => {
   try {
-    const effectiveUsername = req.user?.username || req.body?.pioneerUsername;
+    const effectiveUsername = String(req.user?.username || '').trim();
     const {
       pioneerUid,
       storeName,
@@ -1797,7 +1818,7 @@ app.post(['/api/vendor/apply', '/api/v1/vendor/apply'], authenticate, async (req
     const applicationRecord = {
       id: appId,
       pioneerUsername: effectiveUsername,
-      pioneerUid: pioneerUid || `UID_${effectiveUsername.toUpperCase()}`,
+      pioneerUid: String(req.user?.piUid || '').trim(),
       storeName,
       sellerType: (sellerType as any) || 'individual',
       country: country || 'Global',
@@ -2108,7 +2129,7 @@ app.post(['/api/pstp/security-events', '/api/v1/pstp/security-events'], security
     const newEvent = securityEventRepo.recordEvent({
       eventType: eventType || 'suspicious_login',
       severity: severity || 'info',
-      username: req.user?.username || req.body.username || 'anonymous_client',
+      username: req.user?.username || 'anonymous_client',
       actorId: req.user?.id,
       correlationId,
       resourceType,
