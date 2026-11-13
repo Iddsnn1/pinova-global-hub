@@ -62,10 +62,10 @@ async function run() {
   const previousPiApiKey = process.env.PI_API_KEY;
   const previousPiServerKey = process.env.PI_SERVER_KEY;
   delete process.env.ADMIN_API_KEY;
-  process.env.PI_API_KEY = 'pi-platform-secret-for-test';
-  process.env.PI_SERVER_KEY = 'pi-server-secret-for-test';
-  assert.equal(await auth.verifyToken('pi-platform-secret-for-test'), null, 'PI_API_KEY cannot grant application admin');
-  assert.equal(await auth.verifyToken('pi-server-secret-for-test'), null, 'PI_SERVER_KEY cannot grant application admin');
+  process.env.PI_API_KEY = 'pi-api-key-test';
+  process.env.PI_SERVER_KEY = 'pi-server-test';
+  assert.equal(await auth.verifyToken('pi-api-key-test'), null, 'PI_API_KEY cannot grant application admin');
+  assert.equal(await auth.verifyToken('pi-server-test'), null, 'PI_SERVER_KEY cannot grant application admin');
   process.env.ADMIN_API_KEY = 'dedicated-admin-secret-for-test';
   assert.equal((await auth.verifyToken('dedicated-admin-secret-for-test'))?.isMachineKey, true, 'Dedicated ADMIN_API_KEY may authenticate machine admin');
   if (previousAdminKey === undefined) delete process.env.ADMIN_API_KEY; else process.env.ADMIN_API_KEY = previousAdminKey;
