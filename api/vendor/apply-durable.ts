@@ -5,7 +5,8 @@ type ServerModule = {
   authenticateVendorRequest: (req: any) => Promise<any>;
   getDurableVendorApplication: (username: string) => Promise<any>;
   saveDurableVendorApplication: (application: any) => Promise<any>;
-  durableVendorStorageEnabled: () => boolean;\n  verifyVendorDocumentReference: (reference: string, username: string) => Promise<boolean>;
+  durableVendorStorageEnabled: () => boolean;
+  verifyVendorDocumentReference: (reference: string, username: string) => Promise<boolean>;
   pstpAuditRepo: { appendLog: (entry: any) => Promise<any> | any };
 };
 
@@ -27,7 +28,8 @@ function getServerModule(): ServerModule {
 const authenticateRequest = (req: any) => getServerModule().authenticateVendorRequest(req);
 const getDurableVendorApplication = (username: string) => getServerModule().getDurableVendorApplication(username);
 const saveDurableVendorApplication = (application: any) => getServerModule().saveDurableVendorApplication(application);
-const durableVendorStorageEnabled = () => getServerModule().durableVendorStorageEnabled();\nconst verifyVendorDocumentReference = (reference: string, username: string) => getServerModule().verifyVendorDocumentReference(reference, username);
+const durableVendorStorageEnabled = () => getServerModule().durableVendorStorageEnabled();
+const verifyVendorDocumentReference = (reference: string, username: string) => getServerModule().verifyVendorDocumentReference(reference, username);
 const pstpAuditRepo = {
   appendLog: (entry: any) => getServerModule().pstpAuditRepo.appendLog(entry)
 };
