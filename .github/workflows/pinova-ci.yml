@@ -27,6 +27,9 @@ jobs:
       - name: Typecheck
         run: npm run lint
 
+      - name: Typecheck critical API route
+        run: npx tsc --noEmit --target ES2022 --module ESNext --moduleResolution bundler --skipLibCheck --esModuleInterop --allowSyntheticDefaultImports --types node api/vendor/apply-durable.ts
+
       - name: Build
         run: npm run build
 
