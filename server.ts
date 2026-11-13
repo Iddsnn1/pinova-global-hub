@@ -45,6 +45,7 @@ import { durableOrderStorageEnabled, getDurableOrder, listDurableOrders, saveDur
 import { durableVendorStorageEnabled, getDurableVendorApplication, getDurableVendorApplicationByIdentity, listDurableVendorApplications, saveDurableVendorApplication } from './src/server/services/DurableVendorApplicationStore';
 import { objectStorageEnabled, putObject, getObject, deleteObject, publicObjectUrl } from './src/server/services/ObjectStorage';
 import { vendorDocumentStorageEnabled, putVendorDocument, getVendorDocument } from './src/server/services/VendorDocumentStorage';
+import { verifyVendorDocumentIntegrity } from './src/server/services/VendorDocumentIntegrity';
 import { saveEducationAdmissionDocument, listEducationAdmissionDocuments, educationDocumentStorageEnabled, EDUCATION_DOCUMENT_MAX_BYTES, EDUCATION_DOCUMENT_TYPES } from './src/server/services/EducationDocumentStorage';
 import { quoteFiatToPiReference, signPiNovaFxQuote, verifyPiNovaFxQuoteToken, FxConfigurationError, FxProviderError } from './src/server/services/PiNovaFxService';
 
@@ -899,7 +900,8 @@ function getVendorDocumentEncryptionKey(): Buffer | null {
 export async function verifyVendorDocumentReference(reference: string, username: string): Promise<boolean> {
   const match = /^private:\/\/vendor-documents\/([a-f0-9]{32})$/i.exec(String(reference || '').trim());
   const owner = String(username || '').trim().toLowerCase();
-  if (!match || !owner || !getVendorDocumentEncryptionKey() || !vendorDocumentStorageEnabled()) return false;
+  const encryptionKey = getVendorDocumentEncryptionKey();
+  if (!match || !owner || !encryptionKey || !vendorDocumentStorageEnabled()) return false;
 
   const id = match[1].toLowerCase();
   try {
@@ -909,14 +911,13 @@ export async function verifyVendorDocumentReference(reference: string, username:
     ]);
     if (!metadataObject || !encryptedObject) return false;
     const metadata = JSON.parse(Buffer.from(metadataObject.body).toString('utf8'));
-    return (
-      String(metadata?.id || '').toLowerCase() === id &&
-      String(metadata?.owner || '').trim().toLowerCase() === owner &&
-      /^[a-f0-9]{24}$/i.test(String(metadata?.iv || '')) &&
-      /^[a-f0-9]{32}$/i.test(String(metadata?.authTag || '')) &&
-      Number(metadata?.encryptedByteLength) === encryptedObject.body.length &&
-      encryptedObject.body.length > 0
-    );
+    return verifyVendorDocumentIntegrity({
+      id,
+      owner,
+      metadata,
+      encryptedBytes: encryptedObject.body,
+      encryptionKey
+    });
   } catch {
     return false;
   }
