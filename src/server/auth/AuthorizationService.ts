@@ -104,7 +104,7 @@ export class AuthorizationService {
     if (!token) return null;
 
     // Machine credentials are a separate server-to-server mechanism, not user sessions.
-    const machineSecret = process.env.ADMIN_API_KEY || process.env.PI_API_KEY || process.env.PI_SERVER_KEY;
+    const machineSecret = String(process.env.ADMIN_API_KEY || '').trim();
     if (machineSecret && !['YOUR_PI_PLATFORM_API_KEY', 'MY_PI_API_KEY'].includes(machineSecret) && token === machineSecret) {
       const roles: UserRole[] = ['PLATFORM_ADMIN', 'COMPLIANCE_ADMIN'];
       return {
