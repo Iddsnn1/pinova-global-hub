@@ -1724,7 +1724,6 @@ app.post(['/api/vendor/apply', '/api/v1/vendor/apply'], authenticate, requireAut
   try {
     const effectiveUsername = String(req.user?.username || '').trim();
     const {
-      pioneerUid,
       storeName,
       sellerType,
       country,
@@ -1754,7 +1753,16 @@ app.post(['/api/vendor/apply', '/api/v1/vendor/apply'], authenticate, requireAut
       res.status(400).json({
         success: false,
         error: 'MISSING_REQUIRED_FIELDS',
-        message: 'Pioneer username, store name, and contact email are required.'
+        message: 'Authenticated Pioneer username, store name, and contact email are required.'
+      });
+      return;
+    }
+    const verifiedPiUid = String(req.user?.piUid || '').trim();
+    if (!verifiedPiUid) {
+      res.status(401).json({
+        success: false,
+        error: 'VERIFIED_PI_IDENTITY_REQUIRED',
+        message: 'A server-verified Pi identity is required to submit a merchant application.'
       });
       return;
     }
@@ -1818,7 +1826,7 @@ app.post(['/api/vendor/apply', '/api/v1/vendor/apply'], authenticate, requireAut
     const applicationRecord = {
       id: appId,
       pioneerUsername: effectiveUsername,
-      pioneerUid: String(req.user?.piUid || '').trim(),
+      pioneerUid: verifiedPiUid,
       storeName,
       sellerType: (sellerType as any) || 'individual',
       country: country || 'Global',
