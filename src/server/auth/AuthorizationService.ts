@@ -191,26 +191,16 @@ export class AuthorizationService {
           return null;
         }
 
-        let user = this.userRepo.findByUsername(String(decoded.username));
-        if (user?.status === 'SUSPENDED') return null;
+        const user = this.userRepo.findByUsername(String(decoded.username));
 
-        // Vercel serverless instances do not share the file-backed identity
-        // repository. A valid signed session therefore must remain portable.
-        // Roles are copied from the server-issued, sanitized session payload;
-        // they are never accepted from the client request itself.
-        const tokenRoles = Array.isArray(decoded.roles)
-          ? decoded.roles.filter((role: any) => typeof role === 'string') as UserRole[]
-          : [];
+        // A signed token proves issuance and integrity, not that its former
+        // permissions are still current. Never recreate an identity or restore
+        // roles from token claims when the authoritative identity is absent.
+        // Until identities/revocations use shared durable storage, fail closed
+        // on instances that cannot load the current user record.
+        if (!user || user.status !== 'ACTIVE') return null;
 
-        if (!user) {
-          user = this.userRepo.upsertUser({
-            username: String(decoded.username),
-            piUid: typeof decoded.uid === 'string' ? decoded.uid : undefined,
-            roles: tokenRoles.length ? tokenRoles : ['PIONEER']
-          });
-        }
-
-        const roles = tokenRoles.length ? tokenRoles : user.roles;
+        const roles = Array.isArray(user.roles) ? user.roles : [];
         return {
           id: user.id,
           username: user.username,

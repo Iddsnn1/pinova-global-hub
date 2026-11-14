@@ -19,6 +19,7 @@
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
+import { verifyVendorDocumentIntegrity } from '../src/server/services/VendorDocumentIntegrity';
 
 // Set up test environment
 const TEST_DATA_DIR = path.resolve(process.cwd(), 'tmp', 'test-kyc-data');
@@ -129,6 +130,48 @@ try {
   tamperCaught = true;
 }
 assert(tamperCaught === true, 'Tampered ciphertext is detected and rejected by GCM authentication tag');
+
+// --- SECTION 3B: DURABLE REFERENCE OWNERSHIP & AUTHENTICITY ---
+console.log('\\n--- SECTION 3B: DURABLE REFERENCE OWNERSHIP & AUTHENTICITY ---');
+
+const integrityId = crypto.randomBytes(16).toString('hex');
+const integrityOwner = 'seller_alice';
+const integrityIv = crypto.randomBytes(12);
+const integrityPayload = Buffer.from('AUTHENTICATED_KYC_DOCUMENT_PAYLOAD');
+const integrityCipher = crypto.createCipheriv('aes-256-gcm', testKey, integrityIv);
+const integrityCiphertext = Buffer.concat([integrityCipher.update(integrityPayload), integrityCipher.final()]);
+const integrityMetadata = {
+  id: integrityId,
+  owner: integrityOwner,
+  iv: integrityIv.toString('hex'),
+  authTag: integrityCipher.getAuthTag().toString('hex'),
+  encryptedByteLength: integrityCiphertext.length,
+  originalSize: integrityPayload.length
+};
+const integrityInput = {
+  id: integrityId,
+  owner: integrityOwner,
+  metadata: integrityMetadata,
+  encryptedBytes: integrityCiphertext,
+  encryptionKey: testKey
+};
+
+assert(verifyVendorDocumentIntegrity(integrityInput), 'Valid encrypted document and owner metadata are accepted');
+assert(!verifyVendorDocumentIntegrity({ ...integrityInput, owner: 'seller_bob' }), 'Cross-owner KYC reference is rejected');
+assert(!verifyVendorDocumentIntegrity({ ...integrityInput, id: crypto.randomBytes(16).toString('hex') }), 'Mismatched document ID is rejected');
+
+const modifiedCiphertext = Buffer.from(integrityCiphertext);
+modifiedCiphertext[0] ^= 0x01;
+assert(!verifyVendorDocumentIntegrity({ ...integrityInput, encryptedBytes: modifiedCiphertext }), 'Tampered durable ciphertext is rejected');
+assert(!verifyVendorDocumentIntegrity({
+  ...integrityInput,
+  metadata: { ...integrityMetadata, authTag: crypto.randomBytes(16).toString('hex') }
+}), 'Forged AES-GCM authentication tag is rejected');
+assert(!verifyVendorDocumentIntegrity({
+  ...integrityInput,
+  metadata: { ...integrityMetadata, encryptedByteLength: integrityCiphertext.length + 1 }
+}), 'Incorrect encrypted object length is rejected');
+
 
 // --- SECTION 4: PRIVATE REFERENCE & RESTRICTED STORAGE AUDIT ---
 console.log('\n--- SECTION 4: PRIVATE REFERENCE & RESTRICTED STORAGE AUDIT ---');

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ShieldCheck, Info, Sparkles, Terminal, ChevronDown, ChevronUp, RefreshCw, Smartphone, Download } from 'lucide-react';
-import { isPiBrowser, subscribePiSdkState, getPiSdkDiagnosticState, authenticatePiUser, resetPiAuthState, setCustomSandboxMode, PiSdkDiagnosticState } from '../lib/piSdk';
+import { isPiBrowser, subscribePiSdkState, getPiSdkDiagnosticState, authenticatePiUser, setCustomSandboxMode, PiSdkDiagnosticState } from '../lib/piSdk';
 
 interface PiBrowserBannerProps {
   sandboxMode: boolean;
@@ -63,7 +63,7 @@ export const PiBrowserBanner: React.FC<PiBrowserBannerProps> = ({
 
   const handleRetryAuth = async () => {
     setIsRetrying(true);
-    resetPiAuthState();
+    // Do not clear an in-flight native Pi request; authenticate() already deduplicates it.
     try {
       await authenticatePiUser(undefined, true);
     } catch (err) {
@@ -92,7 +92,7 @@ export const PiBrowserBanner: React.FC<PiBrowserBannerProps> = ({
         return `Connected to Pi (@${diagState.username || 'user'})`;
       case 'AUTH_NOT_STARTED':
       default:
-        return 'Connecting to Pi...';
+        return 'Not connected';
     }
   };
 
@@ -171,19 +171,6 @@ export const PiBrowserBanner: React.FC<PiBrowserBannerProps> = ({
               <Sparkles className="w-3.5 h-3.5" />
               <span className="hidden lg:inline">{getStatusText()}</span>
             </div>
-          )}
-
-          {/* Retry Button */}
-          {inPiBrowser && diagState.authState !== 'AUTH_SUCCESS' && (
-            <button
-              onClick={handleRetryAuth}
-              disabled={diagState.hasActiveAuthPromise || isRetrying}
-              className="flex items-center gap-1 bg-purple-700 hover:bg-purple-600 disabled:bg-slate-800 disabled:text-slate-500 disabled:border-slate-700 text-white font-medium text-[11px] px-2.5 py-0.5 rounded border border-purple-500/50 transition-colors shrink-0 cursor-pointer disabled:cursor-not-allowed"
-              title="Manually retry Pi Network authentication"
-            >
-              <RefreshCw className={`w-3 h-3 ${diagState.hasActiveAuthPromise || isRetrying ? 'animate-spin' : ''}`} />
-              <span>Retry Pi Authentication</span>
-            </button>
           )}
 
           {/* Diagnostic Summary Badge */}
@@ -289,10 +276,10 @@ export const PiBrowserBanner: React.FC<PiBrowserBannerProps> = ({
               {inPiBrowser && diagState.authState !== 'AUTH_SUCCESS' && (
                 <button
                   onClick={handleRetryAuth}
-                  disabled={diagState.hasActiveAuthPromise || isRetrying}
+                  disabled={diagState.hasActiveAuthPromise || diagState.nativeBridgeState === 'promise_pending' || diagState.nativeBridgeState === 'calling_invocation' || isRetrying}
                   className="bg-rose-900/80 hover:bg-rose-800 text-rose-100 px-2 py-0.5 rounded text-[10px] font-sans font-medium transition-colors shrink-0 cursor-pointer disabled:opacity-50"
                 >
-                  {isRetrying ? 'Retrying...' : 'Retry Now'}
+                  {diagState.nativeBridgeState === 'promise_pending' ? 'Waiting for Pi Browser...' : isRetrying ? 'Retrying...' : 'Retry Now'}
                 </button>
               )}
             </div>

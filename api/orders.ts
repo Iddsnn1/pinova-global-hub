@@ -501,8 +501,29 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       }
       const order = await getDurableOrder(path);
       if (!order) return json(res, 404, { ok: false, error: 'ORDER_NOT_FOUND' });
-      if (!canViewOrder(order, user.username, user.roles || [])) return json(res, 403, { ok: false, error: 'ORDER_ACCESS_DENIED' });
-      return json(res, 200, { ok: true, order });
+
+      if (canViewOrder(order, user.username, user.roles || [])) {
+        return json(res, 200, { ok: true, order });
+      }
+
+      // An approved seller may open an order containing their own items.
+      // Return the same seller-scoped projection as the seller order list so
+      // mixed-seller checkout details and totals are not exposed across merchants.
+      const merchant = await getApprovedActiveMerchant(user);
+      if (merchant) {
+        const merchantUsername = normalizeUsername(merchant.pioneerUsername);
+        const sellerOrder = sellerOrderView(order, merchantUsername);
+        if (sellerOrder) {
+          return json(res, 200, {
+            ok: true,
+            role: 'seller',
+            merchantUsername,
+            order: sellerOrder
+          });
+        }
+      }
+
+      return json(res, 403, { ok: false, error: 'ORDER_ACCESS_DENIED' });
     }
 
     if (req.method === 'POST' && path.endsWith('/payment-verify')) {

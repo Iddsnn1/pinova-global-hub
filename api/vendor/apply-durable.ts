@@ -6,6 +6,7 @@ type ServerModule = {
   getDurableVendorApplication: (username: string) => Promise<any>;
   saveDurableVendorApplication: (application: any) => Promise<any>;
   durableVendorStorageEnabled: () => boolean;
+  verifyVendorDocumentReference: (reference: string, username: string) => Promise<boolean>;
   pstpAuditRepo: { appendLog: (entry: any) => Promise<any> | any };
 };
 
@@ -28,6 +29,7 @@ const authenticateRequest = (req: any) => getServerModule().authenticateVendorRe
 const getDurableVendorApplication = (username: string) => getServerModule().getDurableVendorApplication(username);
 const saveDurableVendorApplication = (application: any) => getServerModule().saveDurableVendorApplication(application);
 const durableVendorStorageEnabled = () => getServerModule().durableVendorStorageEnabled();
+const verifyVendorDocumentReference = (reference: string, username: string) => getServerModule().verifyVendorDocumentReference(reference, username);
 const pstpAuditRepo = {
   appendLog: (entry: any) => getServerModule().pstpAuditRepo.appendLog(entry)
 };
@@ -79,8 +81,15 @@ export default async function handler(req: any, res: any) {
 
     const documents = Array.isArray(body.documents) ? body.documents : [];
     if (!documents.length) return res.status(400).json({ success: false, error: 'VERIFICATION_DOCUMENT_REQUIRED', message: 'A securely uploaded verification document is required.' });
-    if (documents.some((d: any) => !String(d?.fileUrl || '').startsWith('private://vendor-documents/'))) {
-      return res.status(400).json({ success: false, error: 'VERIFICATION_DOCUMENT_REQUIRED', message: 'Public URLs and external references are prohibited.' });
+    const invalidDocumentReference = documents.some((d: any) => !/^private:\/\/vendor-documents\/[a-f0-9]{32}$/i.test(String(d?.fileUrl || '').trim()));
+    if (invalidDocumentReference) {
+      return res.status(400).json({ success: false, error: 'VERIFICATION_DOCUMENT_REQUIRED', message: 'A valid private KYC document reference is required. Public URLs and external references are prohibited.' });
+    }
+    const verifiedDocuments = await Promise.all(
+      documents.map((d: any) => verifyVendorDocumentReference(String(d.fileUrl).trim(), effectiveUsername))
+    );
+    if (verifiedDocuments.some((valid: boolean) => !valid)) {
+      return res.status(400).json({ success: false, error: 'VERIFICATION_DOCUMENT_NOT_VERIFIED', message: 'Each KYC document must exist in encrypted storage and belong to the authenticated Pioneer.' });
     }
 
     const existing = await getDurableVendorApplication(effectiveUsername);
