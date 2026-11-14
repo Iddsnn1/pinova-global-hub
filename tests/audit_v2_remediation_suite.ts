@@ -64,7 +64,8 @@ async function runTestSuite() {
   const adminSession = await authService.createSession({
     username: 'admin_bob',
     uid: 'pi-uid-bob-admin',
-    roles: ['PLATFORM_ADMIN']
+    roles: ['PLATFORM_ADMIN'],
+    isAuthorizedAdmin: true
   });
   assert(authService.hasRole(adminSession.user, 'PLATFORM_ADMIN'), 'Scenario 1.6: Platform admin possesses PLATFORM_ADMIN role');
   assert(authService.hasPermission(adminSession.user, 'pstp:disputes:resolve'), 'Scenario 1.7: Platform admin possesses dispute resolution permission');
@@ -87,12 +88,12 @@ async function runTestSuite() {
   const authTypeSource = await import('fs/promises').then((fs) => fs.readFile(path.join(process.cwd(), 'src/server/auth/types.ts'), 'utf8'));
   assert(authTypeSource.includes('institutionId?: string'), 'Scenario 1.11: Authenticated user carries institution binding');
   assert(serverSource.includes('DOCUMENT_SCOPE_UNAVAILABLE'), 'Scenario 1.12: Institution document access fails closed when scoped listing is unavailable');
-  assert(serverSource.includes('INSTITUTION_ADMIN') && serverSource.includes('req.user?.institutionId === admission.institutionId'), 'Scenario 1.13: Institution admin document access is institution-scoped');
-  assert(serverSource.includes('INSTITUTION_ADMIN') && serverSource.includes('cannot upload documents on behalf of applicants'), 'Scenario 1.14: Institution admin cannot impersonate applicant document uploads');
+  assert(serverSource.includes('INSTITUTION_ADMIN') && serverSource.includes('req.user.institutionId !== admission.institutionId') && serverSource.includes('DOCUMENT_SCOPE_UNAVAILABLE'), 'Scenario 1.13: Institution admin document access is institution-scoped and fails closed');
+  assert(serverSource.includes('INSTITUTION_ADMIN') && serverSource.includes('Institution administrators cannot upload academic documents on behalf of applicants.'), 'Scenario 1.14: Institution admin cannot impersonate applicant document uploads');
   assert(serverSource.includes('req.user?.institutionId !== requestedInstitution'), 'Scenario 1.15: Institution invoice access rejects cross-institution requests');
   assert(serverSource.includes('requestedGuardianId') && serverSource.includes('scopedChildren'), 'Scenario 1.16: Guardian children endpoint enforces caller ownership/institution scope');
-  assert(serverSource.includes('req.user?.institutionId === admission.institutionId') && serverSource.includes('offer/accept'), 'Scenario 1.17: Admission offer acceptance enforces institution scope');
-  assert(serverSource.includes('req.user?.institutionId === admission.institutionId') && serverSource.includes('admissions/:id/status'), 'Scenario 1.18: Admission status mutation enforces institution scope');
+  assert(serverSource.includes('req.user.institutionId === admission.institutionId') && serverSource.includes('/api/education/admissions/:id/offer/accept'), 'Scenario 1.17: Admission offer acceptance enforces institution scope');
+  assert(serverSource.includes('req.user.institutionId !== admissionForAuthorization.institutionId') && serverSource.includes('/api/education/admissions/:id/status'), 'Scenario 1.18: Admission status mutation enforces institution scope');
 
   // --- 2. PSTP DISPUTE RESOLUTION & SECURITY ---
   console.log('\n--- SECTION 2: PSTP DISPUTE SECURITY & STATE MACHINE AUDIT ---');

@@ -59,10 +59,38 @@ function normalizeUsername(value: unknown): string {
 }
 
 
-function sellerOwnsOrder(order: Order, username: string): boolean {
+function sellerOrderView(order: Order, username: string): Order | null {
   const seller = normalizeUsername(username);
-  if (!seller) return false;
-  return order.items.length > 0 && order.items.every((item) => normalizeUsername(item.product?.sellerId) === seller);
+  if (!seller) return null;
+  const sellerItems = (Array.isArray(order.items) ? order.items : []).filter(
+    (item) => normalizeUsername(item.product?.sellerId) === seller
+  );
+  if (!sellerItems.length) return null;
+
+  // A mixed-seller checkout is visible to each seller only as their own line items.
+  // Recalculate the seller subtotal so another merchant's catalog/value is not exposed.
+  const sellerSubtotal = sellerItems.reduce((sum, item) => {
+    const discountPercent = Number(item.product?.discountPercent || 0);
+    const discountMultiplier = Number.isFinite(discountPercent) && discountPercent > 0
+      ? Math.max(0, 1 - discountPercent / 100)
+      : 1;
+    const unitPrice = (Number(item.product?.pricePi || 0) * discountMultiplier) +
+      Number(item.customDetails?.variant?.priceDeltaPi || 0);
+    return sum + (Number.isFinite(unitPrice) ? unitPrice : 0) * Math.max(0, Number(item.quantity) || 0);
+  }, 0);
+  const sellerTotalPi = Number(sellerSubtotal.toFixed(12));
+  // Remove checkout-wide totals and promotion metadata: in a mixed-seller order
+  // those values can reveal another merchant's sales. Seller view exposes only
+  // this merchant's own item subtotal and item value.
+  return {
+    ...order,
+    items: sellerItems,
+    subtotalPi: sellerTotalPi,
+    discountPi: 0,
+    shippingPi: 0,
+    promoCode: undefined,
+    totalPi: sellerTotalPi
+  };
 }
 
 async function getApprovedActiveMerchant(user: any): Promise<any | null> {
@@ -464,15 +492,38 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
           const merchant = await getApprovedActiveMerchant(user);
           if (!merchant) return json(res, 403, { ok: false, error: 'ACTIVE_VERIFIED_MERCHANT_REQUIRED' });
           const merchantUsername = normalizeUsername(merchant.pioneerUsername);
-          const orders = (await listDurableOrders()).filter((order) => sellerOwnsOrder(order, merchantUsername));
+          const orders = (await listDurableOrders())
+            .map((order) => sellerOrderView(order, merchantUsername))
+            .filter((order): order is Order => order !== null);
           return json(res, 200, { ok: true, role: 'seller', merchantUsername, orders });
         }
         return json(res, 200, { ok: true, orders: await listDurableOrders(user.username) });
       }
       const order = await getDurableOrder(path);
       if (!order) return json(res, 404, { ok: false, error: 'ORDER_NOT_FOUND' });
-      if (!canViewOrder(order, user.username, user.roles || [])) return json(res, 403, { ok: false, error: 'ORDER_ACCESS_DENIED' });
-      return json(res, 200, { ok: true, order });
+
+      if (canViewOrder(order, user.username, user.roles || [])) {
+        return json(res, 200, { ok: true, order });
+      }
+
+      // An approved seller may open an order containing their own items.
+      // Return the same seller-scoped projection as the seller order list so
+      // mixed-seller checkout details and totals are not exposed across merchants.
+      const merchant = await getApprovedActiveMerchant(user);
+      if (merchant) {
+        const merchantUsername = normalizeUsername(merchant.pioneerUsername);
+        const sellerOrder = sellerOrderView(order, merchantUsername);
+        if (sellerOrder) {
+          return json(res, 200, {
+            ok: true,
+            role: 'seller',
+            merchantUsername,
+            order: sellerOrder
+          });
+        }
+      }
+
+      return json(res, 403, { ok: false, error: 'ORDER_ACCESS_DENIED' });
     }
 
     if (req.method === 'POST' && path.endsWith('/payment-verify')) {
@@ -594,7 +645,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         return json(res, 403, { ok: false, error: 'ACTIVE_VERIFIED_MERCHANT_REQUIRED' });
       }
       const merchantUsername = normalizeUsername(merchant.pioneerUsername);
-      if (!sellerOwnsOrder(order, merchantUsername)) {
+      if (!sellerOrderView(order, merchantUsername)) {
         return json(res, 403, { ok: false, error: 'SELLER_ORDER_OWNERSHIP_REQUIRED' });
       }
       if (order.serverVerified !== true) {
