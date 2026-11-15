@@ -162,8 +162,8 @@ export const Footer: React.FC<FooterProps> = ({ onSelectCategory, onOpenLanguage
         <div className="pt-6 border-t border-slate-900 flex flex-wrap items-center justify-between gap-4 text-xs text-slate-500">
           <p>© 2026 PiNova Global Hub. Built for the Pi Network Ecosystem.</p>
           <div className="flex items-center gap-4">
-            <span>Privacy Policy</span>
-            <span>Escrow Terms</span>
+            <a href="/privacy-policy.html" className="hover:text-purple-300 transition-colors underline-offset-4 hover:underline">Privacy Policy</a>
+            <a href="/terms-of-service.html" className="hover:text-purple-300 transition-colors underline-offset-4 hover:underline">Terms of Service</a>
             <span>Pi Network API Compliance</span>
           </div>
         </div>
