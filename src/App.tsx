@@ -35,21 +35,22 @@ import { FullScreenMobileBottomNav } from './components/navigation/FullScreenMob
 import { QRScannerModal } from './components/QRScannerModal';
 import { ScanToPayModal } from './components/ScanToPayModal';
 
-import { HomeView } from './components/views/HomeView';
-import { MarketplaceView } from './components/views/MarketplaceView';
-import { UtilitiesView } from './components/views/UtilitiesView';
-import { ServicesView } from './components/views/ServicesView';
-import { AiSearchView } from './components/views/AiSearchView';
-import { CartView } from './components/views/CartView';
-import { OrdersView } from './components/views/OrdersView';
-import { ProfileView } from './components/views/ProfileView';
-import { FinanceAnalyticsView } from './components/views/FinanceAnalyticsView';
-import { PlatformAdminView } from './components/views/PlatformAdminView';
-import { EnterpriseSecurityView } from './components/views/EnterpriseSecurityView';
-import { DeveloperPlatformView } from './components/views/DeveloperPlatformView';
-import { FutureServicesView } from './components/views/FutureServicesView';
-import { PiDiagnosticView } from './components/PiDiagnosticView';
-import { EducationHub, EducationTab } from './components/education/EducationHub';
+const HomeView = React.lazy(() => import('./components/views/HomeView').then((module) => ({ default: module.HomeView })));
+const MarketplaceView = React.lazy(() => import('./components/views/MarketplaceView').then((module) => ({ default: module.MarketplaceView })));
+const UtilitiesView = React.lazy(() => import('./components/views/UtilitiesView').then((module) => ({ default: module.UtilitiesView })));
+const ServicesView = React.lazy(() => import('./components/views/ServicesView').then((module) => ({ default: module.ServicesView })));
+const AiSearchView = React.lazy(() => import('./components/views/AiSearchView').then((module) => ({ default: module.AiSearchView })));
+const CartView = React.lazy(() => import('./components/views/CartView').then((module) => ({ default: module.CartView })));
+const OrdersView = React.lazy(() => import('./components/views/OrdersView').then((module) => ({ default: module.OrdersView })));
+const ProfileView = React.lazy(() => import('./components/views/ProfileView').then((module) => ({ default: module.ProfileView })));
+const FinanceAnalyticsView = React.lazy(() => import('./components/views/FinanceAnalyticsView').then((module) => ({ default: module.FinanceAnalyticsView })));
+const PlatformAdminView = React.lazy(() => import('./components/views/PlatformAdminView').then((module) => ({ default: module.PlatformAdminView })));
+const EnterpriseSecurityView = React.lazy(() => import('./components/views/EnterpriseSecurityView').then((module) => ({ default: module.EnterpriseSecurityView })));
+const DeveloperPlatformView = React.lazy(() => import('./components/views/DeveloperPlatformView').then((module) => ({ default: module.DeveloperPlatformView })));
+const FutureServicesView = React.lazy(() => import('./components/views/FutureServicesView').then((module) => ({ default: module.FutureServicesView })));
+const PiDiagnosticView = React.lazy(() => import('./components/PiDiagnosticView').then((module) => ({ default: module.PiDiagnosticView })));
+import type { EducationTab } from './components/education/EducationHub';
+const EducationHub = React.lazy(() => import('./components/education/EducationHub').then((module) => ({ default: module.EducationHub })));
 
 import { UniversalSearchModal } from './components/UniversalSearchModal';
 import { PiBrowserBanner } from './components/PiBrowserBanner';
@@ -74,6 +75,13 @@ import { SellerStudioV2 } from './components/seller/SellerStudioV2';
 import { VendorApplicationModal } from './components/vendor/VendorApplicationModal';
 import { formatPiAmount } from './utils/formatters';
 import { vendorAuthenticatedFetch } from './lib/vendorAuthBridge';
+
+
+const lazyModuleFallback = (
+  <div className="mx-auto flex min-h-[40vh] max-w-7xl items-center justify-center px-6 py-16 text-sm font-semibold text-slate-500" role="status" aria-live="polite">
+    Loading PiNova module…
+  </div>
+);
 
 function MainAppContent() {
   // Dark mode
@@ -971,6 +979,7 @@ function MainAppContent() {
 
       {/* Dedicated View Rendering */}
       <main className="flex-1 mt-4">
+        <React.Suspense fallback={lazyModuleFallback}>
         
         {activeSection === 'home' && (
           <HomeView
@@ -1468,6 +1477,7 @@ function MainAppContent() {
           </div>
         )}
 
+        </React.Suspense>
       </main>
 
       {/* Footer */}
