@@ -32,8 +32,8 @@ import { MARKETPLACE_CATEGORIES, UTILITY_CATEGORIES } from './data/categoryData'
 
 import { FullScreenNavHeader } from './components/navigation/FullScreenNavHeader';
 import { FullScreenMobileBottomNav } from './components/navigation/FullScreenMobileBottomNav';
-import { QRScannerModal } from './components/QRScannerModal';
-import { ScanToPayModal } from './components/ScanToPayModal';
+const QRScannerModal = React.lazy(() => import('./components/QRScannerModal').then((module) => ({ default: module.QRScannerModal })));
+const ScanToPayModal = React.lazy(() => import('./components/ScanToPayModal').then((module) => ({ default: module.ScanToPayModal })));
 
 const HomeView = React.lazy(() => import('./components/views/HomeView').then((module) => ({ default: module.HomeView })));
 const MarketplaceView = React.lazy(() => import('./components/views/MarketplaceView').then((module) => ({ default: module.MarketplaceView })));
@@ -52,27 +52,27 @@ const PiDiagnosticView = React.lazy(() => import('./components/PiDiagnosticView'
 import type { EducationTab } from './components/education/EducationHub';
 const EducationHub = React.lazy(() => import('./components/education/EducationHub').then((module) => ({ default: module.EducationHub })));
 
-import { UniversalSearchModal } from './components/UniversalSearchModal';
+const UniversalSearchModal = React.lazy(() => import('./components/UniversalSearchModal').then((module) => ({ default: module.UniversalSearchModal })));
 import { PiBrowserBanner } from './components/PiBrowserBanner';
 import { isSandboxMode } from './lib/piSdk';
 import { Footer } from './components/Footer';
-import { ProductDetailModal } from './components/ProductDetailModal';
-import { QuickViewModal } from './components/QuickViewModal';
-import { EscrowCheckoutModal } from './components/EscrowCheckoutModal';
-import { MessagingModal } from './components/MessagingModal';
-import { NotificationCenter } from './components/NotificationCenter';
-import { PstpShieldCenter } from './components/PstpShieldCenter';
-import { SellerStorefrontModal } from './components/SellerStorefrontModal';
-import { MerchantStorefrontView } from './components/merchant/MerchantStorefrontView';
+const ProductDetailModal = React.lazy(() => import('./components/ProductDetailModal').then((module) => ({ default: module.ProductDetailModal })));
+const QuickViewModal = React.lazy(() => import('./components/QuickViewModal').then((module) => ({ default: module.QuickViewModal })));
+const EscrowCheckoutModal = React.lazy(() => import('./components/EscrowCheckoutModal').then((module) => ({ default: module.EscrowCheckoutModal })));
+const MessagingModal = React.lazy(() => import('./components/MessagingModal').then((module) => ({ default: module.MessagingModal })));
+const NotificationCenter = React.lazy(() => import('./components/NotificationCenter').then((module) => ({ default: module.NotificationCenter })));
+const PstpShieldCenter = React.lazy(() => import('./components/PstpShieldCenter').then((module) => ({ default: module.PstpShieldCenter })));
+const SellerStorefrontModal = React.lazy(() => import('./components/SellerStorefrontModal').then((module) => ({ default: module.SellerStorefrontModal })));
+const MerchantStorefrontView = React.lazy(() => import('./components/merchant/MerchantStorefrontView').then((module) => ({ default: module.MerchantStorefrontView })));
 const SocialCommunityHub = React.lazy(() => import('./components/social/SocialCommunityHub').then((module) => ({ default: module.SocialCommunityHub })));
 
 import { PiConversionConfig, ConversionRateLog } from './types/utility';
 import { INITIAL_PI_CONVERSION_CONFIG, INITIAL_CONVERSION_RATE_LOGS } from './data/utilityData';
 
 import { LanguageProvider } from './context/LanguageContext';
-import { LanguageSelectorModal } from './components/i18n/LanguageSelectorModal';
+const LanguageSelectorModal = React.lazy(() => import('./components/i18n/LanguageSelectorModal').then((module) => ({ default: module.LanguageSelectorModal })));
 const SellerStudioV2 = React.lazy(() => import('./components/seller/SellerStudioV2').then((module) => ({ default: module.SellerStudioV2 })));
-import { VendorApplicationModal } from './components/vendor/VendorApplicationModal';
+const VendorApplicationModal = React.lazy(() => import('./components/vendor/VendorApplicationModal').then((module) => ({ default: module.VendorApplicationModal })));
 import { formatPiAmount } from './utils/formatters';
 import { vendorAuthenticatedFetch } from './lib/vendorAuthBridge';
 
@@ -1495,6 +1495,7 @@ function MainAppContent() {
         cartCount={cartItems.reduce((acc, item) => acc + item.quantity, 0)}
       />
 
+      <React.Suspense fallback={lazyModuleFallback}>
       {/* Universal Search Modal Overlay */}
       <UniversalSearchModal
         isOpen={isUniversalSearchOpen}
@@ -1736,6 +1737,7 @@ function MainAppContent() {
           }}
         />
       )}
+      </React.Suspense>
 
     </div>
   );
