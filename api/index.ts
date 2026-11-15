@@ -504,20 +504,8 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   if (await handleVendorStatus(req, res)) return;
   if (await handleDurableProducts(req, res)) return;
 
-  if (
-    reqUrl === '/api/health' ||
-    reqUrl === '/health' ||
-    reqUrl.startsWith('/api/health?') ||
-    reqUrl.startsWith('/health?') ||
-    reqUrl.includes('__path=/health') ||
-    reqUrl.includes('__path=%2Fhealth')
-  ) {
-    res.setHeader('Content-Type', 'application/json');
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.statusCode = 200;
-    res.end(JSON.stringify({ status: 'ok', runtime: 'vercel' }));
-    return;
-  }
+  // Health requests must flow through the Express route below. That route
+  // checks Neon durable-auth tables and returns 503 when persistence is unavailable.
 
   if (
     reqUrl === '/api/debug/runtime' ||
