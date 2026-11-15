@@ -118,6 +118,17 @@ async function run() {
   if (oldDatabaseUrl === undefined) delete process.env.DATABASE_URL;
   else process.env.DATABASE_URL = oldDatabaseUrl;
 
+  // A Pi Platform API key is not an administrative machine credential.
+  const previousAdminKey = process.env.ADMIN_API_KEY;
+  const previousPiKey = process.env.PI_API_KEY;
+  delete process.env.ADMIN_API_KEY;
+  process.env.PI_API_KEY = 'pi-platform-key-is-not-admin';
+  assert.equal(await auth.verifyToken('pi-platform-key-is-not-admin'), null, 'Pi Platform API key cannot authenticate as a platform administrator');
+  if (previousAdminKey === undefined) delete process.env.ADMIN_API_KEY;
+  else process.env.ADMIN_API_KEY = previousAdminKey;
+  if (previousPiKey === undefined) delete process.env.PI_API_KEY;
+  else process.env.PI_API_KEY = previousPiKey;
+
   // A session cannot be created for an identity absent from the authoritative store.
   await assert.rejects(
     () => auth.createSession({ username: 'unknown', uid: 'pi-unknown' }),
