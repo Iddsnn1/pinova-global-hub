@@ -129,6 +129,7 @@ async function runTestSuite() {
   const authTypeSource = await import('fs/promises').then((fs) => fs.readFile(path.join(process.cwd(), 'src/server/auth/types.ts'), 'utf8'));
   assert(authTypeSource.includes('institutionId?: string'), 'Scenario 1.11: Authenticated user carries institution binding');
   assert(serverSource.includes('DOCUMENT_SCOPE_UNAVAILABLE'), 'Scenario 1.12: Institution document access fails closed when scoped listing is unavailable');
+  assert(serverSource.includes("to_regclass('public.user_identities')") && serverSource.includes("res.status(503)") && serverSource.includes('durablePersistence: false'), 'Scenario 1.12a: Health endpoint fails closed when Neon durable auth persistence is unavailable');
   assert(serverSource.includes('INSTITUTION_ADMIN') && serverSource.includes('req.user.institutionId !== admission.institutionId') && serverSource.includes('DOCUMENT_SCOPE_UNAVAILABLE'), 'Scenario 1.13: Institution admin document access is institution-scoped and fails closed');
   assert(serverSource.includes('INSTITUTION_ADMIN') && serverSource.includes('Institution administrators cannot upload academic documents on behalf of applicants.'), 'Scenario 1.14: Institution admin cannot impersonate applicant document uploads');
   assert(serverSource.includes('req.user?.institutionId !== requestedInstitution'), 'Scenario 1.15: Institution invoice access rejects cross-institution requests');
