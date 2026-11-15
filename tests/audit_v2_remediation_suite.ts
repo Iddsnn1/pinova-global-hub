@@ -127,6 +127,11 @@ async function runTestSuite() {
   // These guards ensure the fail-closed authorization contracts remain present in server.ts.
   const serverSource = await import('fs/promises').then((fs) => fs.readFile(path.join(process.cwd(), 'server.ts'), 'utf8'));
   const authTypeSource = await import('fs/promises').then((fs) => fs.readFile(path.join(process.cwd(), 'src/server/auth/types.ts'), 'utf8'));
+  const authorizationServiceSource = await import('fs/promises').then((fs) => fs.readFile(path.join(process.cwd(), 'src/server/auth/AuthorizationService.ts'), 'utf8'));
+  assert(serverSource.includes("const adminSecret = String(process.env.ADMIN_API_KEY || '').trim();"), 'Scenario 1.10a: Admin machine authentication uses ADMIN_API_KEY only');
+  assert(!serverSource.includes('process.env.ADMIN_API_KEY || process.env.PI_API_KEY || process.env.PI_SERVER_KEY'), 'Scenario 1.10b: Pi platform credentials cannot fall back into server admin authentication');
+  assert(serverSource.includes("const piApiKey = (process.env.PI_API_KEY || process.env.PI_SERVER_KEY || '').trim();"), 'Scenario 1.10c: Pi platform credentials remain available for Pi payment verification only');
+  assert(authorizationServiceSource.includes("const machineSecret = String(process.env.ADMIN_API_KEY || '').trim();"), 'Scenario 1.10d: AuthorizationService machine authentication uses ADMIN_API_KEY only');
   assert(authTypeSource.includes('institutionId?: string'), 'Scenario 1.11: Authenticated user carries institution binding');
   assert(serverSource.includes('DOCUMENT_SCOPE_UNAVAILABLE'), 'Scenario 1.12: Institution document access fails closed when scoped listing is unavailable');
   assert(serverSource.includes("to_regclass('public.user_identities')") && serverSource.includes("res.status(503)") && serverSource.includes('durablePersistence: false'), 'Scenario 1.12a: Health endpoint fails closed when Neon durable auth persistence is unavailable');
