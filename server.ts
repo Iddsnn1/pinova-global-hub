@@ -33,6 +33,7 @@ import {
   Permission
 } from './src/server/auth';
 import { createRateLimiter } from './src/server/auth/rateLimit';
+import { getNeonSql } from './src/server/db/NeonDatabase';
 import { AuditService } from './src/server/services/AuditService';
 import { EducationClassificationEngine } from './src/server/services/EducationClassificationEngine';
 import { StudentVerificationService } from './src/server/services/StudentVerificationService';
@@ -478,14 +479,41 @@ app.post('/api/fx/quote-to-pi', fxQuoteRateLimiter, async (req, res) => {
   }
 });
 
-// System health check - minimal, safe public response without internal metrics
-app.get(['/api/health', '/health'], (req, res) => {
+// System health check verifies the durable auth persistence dependency instead
+// of reporting success unconditionally. Never expose connection details or SQL errors.
+app.get(['/api/health', '/health'], async (req, res) => {
   res.setHeader('Content-Type', 'application/json');
-  res.status(200).json({
-    status: 'ok',
-    runtime: 'vercel',
-    durablePersistence: true
-  });
+  res.setHeader('Cache-Control', 'no-store');
+  try {
+    const sql = getNeonSql();
+    const rows = await sql`
+      SELECT
+        to_regclass('public.user_identities') AS identities,
+        to_regclass('public.user_sessions') AS sessions,
+        to_regclass('public.revoked_sessions') AS revocations
+    `;
+    const row = rows[0];
+    const ready = Boolean(row?.identities && row?.sessions && row?.revocations);
+    if (!ready) {
+      res.status(503).json({
+        status: 'degraded',
+        runtime: 'vercel',
+        durablePersistence: false
+      });
+      return;
+    }
+    res.status(200).json({
+      status: 'ok',
+      runtime: 'vercel',
+      durablePersistence: true
+    });
+  } catch {
+    res.status(503).json({
+      status: 'degraded',
+      runtime: 'vercel',
+      durablePersistence: false
+    });
+  }
 });
 
 // Pi Network Domain Ownership Validation Key
