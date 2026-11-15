@@ -64,14 +64,14 @@ import { NotificationCenter } from './components/NotificationCenter';
 import { PstpShieldCenter } from './components/PstpShieldCenter';
 import { SellerStorefrontModal } from './components/SellerStorefrontModal';
 import { MerchantStorefrontView } from './components/merchant/MerchantStorefrontView';
-import { SocialCommunityHub } from './components/social/SocialCommunityHub';
+const SocialCommunityHub = React.lazy(() => import('./components/social/SocialCommunityHub').then((module) => ({ default: module.SocialCommunityHub })));
 
 import { PiConversionConfig, ConversionRateLog } from './types/utility';
 import { INITIAL_PI_CONVERSION_CONFIG, INITIAL_CONVERSION_RATE_LOGS } from './data/utilityData';
 
 import { LanguageProvider } from './context/LanguageContext';
 import { LanguageSelectorModal } from './components/i18n/LanguageSelectorModal';
-import { SellerStudioV2 } from './components/seller/SellerStudioV2';
+const SellerStudioV2 = React.lazy(() => import('./components/seller/SellerStudioV2').then((module) => ({ default: module.SellerStudioV2 })));
 import { VendorApplicationModal } from './components/vendor/VendorApplicationModal';
 import { formatPiAmount } from './utils/formatters';
 import { vendorAuthenticatedFetch } from './lib/vendorAuthBridge';
