@@ -6,6 +6,14 @@ import {defineConfig} from 'vite';
 export default defineConfig(() => {
   return {
     base: '/',
+    // Expose the immutable Vercel source revision in client diagnostics.
+    define: {
+      __PINOVA_BUILD_COMMIT__: JSON.stringify(
+        process.env.VERCEL_GIT_COMMIT_SHA ||
+        process.env.GITHUB_SHA ||
+        'local-build'
+      ),
+    },
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {

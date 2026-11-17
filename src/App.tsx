@@ -32,48 +32,56 @@ import { MARKETPLACE_CATEGORIES, UTILITY_CATEGORIES } from './data/categoryData'
 
 import { FullScreenNavHeader } from './components/navigation/FullScreenNavHeader';
 import { FullScreenMobileBottomNav } from './components/navigation/FullScreenMobileBottomNav';
-import { QRScannerModal } from './components/QRScannerModal';
-import { ScanToPayModal } from './components/ScanToPayModal';
+const QRScannerModal = React.lazy(() => import('./components/QRScannerModal').then((module) => ({ default: module.QRScannerModal })));
+const ScanToPayModal = React.lazy(() => import('./components/ScanToPayModal').then((module) => ({ default: module.ScanToPayModal })));
 
-import { HomeView } from './components/views/HomeView';
-import { MarketplaceView } from './components/views/MarketplaceView';
-import { UtilitiesView } from './components/views/UtilitiesView';
-import { ServicesView } from './components/views/ServicesView';
-import { AiSearchView } from './components/views/AiSearchView';
-import { CartView } from './components/views/CartView';
-import { OrdersView } from './components/views/OrdersView';
-import { ProfileView } from './components/views/ProfileView';
-import { FinanceAnalyticsView } from './components/views/FinanceAnalyticsView';
-import { PlatformAdminView } from './components/views/PlatformAdminView';
-import { EnterpriseSecurityView } from './components/views/EnterpriseSecurityView';
-import { DeveloperPlatformView } from './components/views/DeveloperPlatformView';
-import { FutureServicesView } from './components/views/FutureServicesView';
-import { PiDiagnosticView } from './components/PiDiagnosticView';
-import { EducationHub, EducationTab } from './components/education/EducationHub';
+const HomeView = React.lazy(() => import('./components/views/HomeView').then((module) => ({ default: module.HomeView })));
+const MarketplaceView = React.lazy(() => import('./components/views/MarketplaceView').then((module) => ({ default: module.MarketplaceView })));
+const UtilitiesView = React.lazy(() => import('./components/views/UtilitiesView').then((module) => ({ default: module.UtilitiesView })));
+const ServicesView = React.lazy(() => import('./components/views/ServicesView').then((module) => ({ default: module.ServicesView })));
+const AiSearchView = React.lazy(() => import('./components/views/AiSearchView').then((module) => ({ default: module.AiSearchView })));
+const CartView = React.lazy(() => import('./components/views/CartView').then((module) => ({ default: module.CartView })));
+const OrdersView = React.lazy(() => import('./components/views/OrdersView').then((module) => ({ default: module.OrdersView })));
+const ProfileView = React.lazy(() => import('./components/views/ProfileView').then((module) => ({ default: module.ProfileView })));
+const FinanceAnalyticsView = React.lazy(() => import('./components/views/FinanceAnalyticsView').then((module) => ({ default: module.FinanceAnalyticsView })));
+const PlatformAdminView = React.lazy(() => import('./components/views/PlatformAdminView').then((module) => ({ default: module.PlatformAdminView })));
+const EnterpriseSecurityView = React.lazy(() => import('./components/views/EnterpriseSecurityView').then((module) => ({ default: module.EnterpriseSecurityView })));
+const DeveloperPlatformView = React.lazy(() => import('./components/views/DeveloperPlatformView').then((module) => ({ default: module.DeveloperPlatformView })));
+const FutureServicesView = React.lazy(() => import('./components/views/FutureServicesView').then((module) => ({ default: module.FutureServicesView })));
+const PiDiagnosticView = React.lazy(() => import('./components/PiDiagnosticView').then((module) => ({ default: module.PiDiagnosticView })));
+import type { EducationTab } from './components/education/EducationHub';
+const EducationHub = React.lazy(() => import('./components/education/EducationHub').then((module) => ({ default: module.EducationHub })));
 
-import { UniversalSearchModal } from './components/UniversalSearchModal';
+const UniversalSearchModal = React.lazy(() => import('./components/UniversalSearchModal').then((module) => ({ default: module.UniversalSearchModal })));
 import { PiBrowserBanner } from './components/PiBrowserBanner';
 import { isSandboxMode } from './lib/piSdk';
 import { Footer } from './components/Footer';
-import { ProductDetailModal } from './components/ProductDetailModal';
-import { QuickViewModal } from './components/QuickViewModal';
-import { EscrowCheckoutModal } from './components/EscrowCheckoutModal';
-import { MessagingModal } from './components/MessagingModal';
-import { NotificationCenter } from './components/NotificationCenter';
-import { PstpShieldCenter } from './components/PstpShieldCenter';
-import { SellerStorefrontModal } from './components/SellerStorefrontModal';
-import { MerchantStorefrontView } from './components/merchant/MerchantStorefrontView';
-import { SocialCommunityHub } from './components/social/SocialCommunityHub';
+const ProductDetailModal = React.lazy(() => import('./components/ProductDetailModal').then((module) => ({ default: module.ProductDetailModal })));
+const QuickViewModal = React.lazy(() => import('./components/QuickViewModal').then((module) => ({ default: module.QuickViewModal })));
+const EscrowCheckoutModal = React.lazy(() => import('./components/EscrowCheckoutModal').then((module) => ({ default: module.EscrowCheckoutModal })));
+const MessagingModal = React.lazy(() => import('./components/MessagingModal').then((module) => ({ default: module.MessagingModal })));
+const NotificationCenter = React.lazy(() => import('./components/NotificationCenter').then((module) => ({ default: module.NotificationCenter })));
+const PstpShieldCenter = React.lazy(() => import('./components/PstpShieldCenter').then((module) => ({ default: module.PstpShieldCenter })));
+const SellerStorefrontModal = React.lazy(() => import('./components/SellerStorefrontModal').then((module) => ({ default: module.SellerStorefrontModal })));
+const MerchantStorefrontView = React.lazy(() => import('./components/merchant/MerchantStorefrontView').then((module) => ({ default: module.MerchantStorefrontView })));
+const SocialCommunityHub = React.lazy(() => import('./components/social/SocialCommunityHub').then((module) => ({ default: module.SocialCommunityHub })));
 
 import { PiConversionConfig, ConversionRateLog } from './types/utility';
 import { INITIAL_PI_CONVERSION_CONFIG, INITIAL_CONVERSION_RATE_LOGS } from './data/utilityData';
 
 import { LanguageProvider } from './context/LanguageContext';
-import { LanguageSelectorModal } from './components/i18n/LanguageSelectorModal';
-import { SellerStudioV2 } from './components/seller/SellerStudioV2';
-import { VendorApplicationModal } from './components/vendor/VendorApplicationModal';
+const LanguageSelectorModal = React.lazy(() => import('./components/i18n/LanguageSelectorModal').then((module) => ({ default: module.LanguageSelectorModal })));
+const SellerStudioV2 = React.lazy(() => import('./components/seller/SellerStudioV2').then((module) => ({ default: module.SellerStudioV2 })));
+const VendorApplicationModal = React.lazy(() => import('./components/vendor/VendorApplicationModal').then((module) => ({ default: module.VendorApplicationModal })));
 import { formatPiAmount } from './utils/formatters';
 import { vendorAuthenticatedFetch } from './lib/vendorAuthBridge';
+
+
+const lazyModuleFallback = (
+  <div className="mx-auto flex min-h-[40vh] max-w-7xl items-center justify-center px-6 py-16 text-sm font-semibold text-slate-500" role="status" aria-live="polite">
+    Loading PiNova module…
+  </div>
+);
 
 function MainAppContent() {
   // Dark mode
@@ -971,6 +979,7 @@ function MainAppContent() {
 
       {/* Dedicated View Rendering */}
       <main className="flex-1 mt-4">
+        <React.Suspense fallback={lazyModuleFallback}>
         
         {activeSection === 'home' && (
           <HomeView
@@ -993,8 +1002,6 @@ function MainAppContent() {
             onConfirmReceipt={handleConfirmReceipt}
             onTrackOrder={handleTrackOrder}
             onOpenVendorApplication={() => setIsVendorApplicationOpen(true)}
-            onConnectPi={handleConnectPi}
-            authStatus={authStatus}
           />
         )}
 
@@ -1470,6 +1477,7 @@ function MainAppContent() {
           </div>
         )}
 
+        </React.Suspense>
       </main>
 
       {/* Footer */}
@@ -1487,6 +1495,7 @@ function MainAppContent() {
         cartCount={cartItems.reduce((acc, item) => acc + item.quantity, 0)}
       />
 
+      <React.Suspense fallback={lazyModuleFallback}>
       {/* Universal Search Modal Overlay */}
       <UniversalSearchModal
         isOpen={isUniversalSearchOpen}
@@ -1728,6 +1737,7 @@ function MainAppContent() {
           }}
         />
       )}
+      </React.Suspense>
 
     </div>
   );

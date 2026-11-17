@@ -33,6 +33,7 @@ import {
   Permission
 } from './src/server/auth';
 import { createRateLimiter } from './src/server/auth/rateLimit';
+import { getNeonSql } from './src/server/db/NeonDatabase';
 import { AuditService } from './src/server/services/AuditService';
 import { EducationClassificationEngine } from './src/server/services/EducationClassificationEngine';
 import { StudentVerificationService } from './src/server/services/StudentVerificationService';
@@ -45,6 +46,7 @@ import { durableOrderStorageEnabled, getDurableOrder, listDurableOrders, saveDur
 import { durableVendorStorageEnabled, getDurableVendorApplication, getDurableVendorApplicationByIdentity, listDurableVendorApplications, saveDurableVendorApplication } from './src/server/services/DurableVendorApplicationStore';
 import { objectStorageEnabled, putObject, getObject, deleteObject, publicObjectUrl } from './src/server/services/ObjectStorage';
 import { vendorDocumentStorageEnabled, putVendorDocument, getVendorDocument } from './src/server/services/VendorDocumentStorage';
+import { verifyVendorDocumentIntegrity } from './src/server/services/VendorDocumentIntegrity';
 import { saveEducationAdmissionDocument, listEducationAdmissionDocuments, educationDocumentStorageEnabled, EDUCATION_DOCUMENT_MAX_BYTES, EDUCATION_DOCUMENT_TYPES } from './src/server/services/EducationDocumentStorage';
 import { quoteFiatToPiReference, signPiNovaFxQuote, verifyPiNovaFxQuoteToken, FxConfigurationError, FxProviderError } from './src/server/services/PiNovaFxService';
 
@@ -221,7 +223,7 @@ app.use((req, res, next) => {
 async function checkAdminAuth(req: express.Request): Promise<{ authenticated: boolean; authorized: boolean; user?: AuthenticatedUser }> {
   const authHeader = req.headers['authorization'] as string | undefined;
   const adminKeyHeader = req.headers['x-admin-key'] as string | undefined;
-  const adminSecret = process.env.ADMIN_API_KEY || process.env.PI_API_KEY || process.env.PI_SERVER_KEY;
+  const adminSecret = String(process.env.ADMIN_API_KEY || '').trim();
 
   // 1. Machine/Server Key Verification
   if (adminSecret && adminSecret !== 'YOUR_PI_PLATFORM_API_KEY' && adminSecret !== 'MY_PI_API_KEY') {
@@ -477,14 +479,41 @@ app.post('/api/fx/quote-to-pi', fxQuoteRateLimiter, async (req, res) => {
   }
 });
 
-// System health check - minimal, safe public response without internal metrics
-app.get(['/api/health', '/health'], (req, res) => {
+// System health check verifies the durable auth persistence dependency instead
+// of reporting success unconditionally. Never expose connection details or SQL errors.
+app.get(['/api/health', '/health'], async (req, res) => {
   res.setHeader('Content-Type', 'application/json');
-  res.status(200).json({
-    status: 'ok',
-    runtime: 'vercel',
-    durablePersistence: true
-  });
+  res.setHeader('Cache-Control', 'no-store');
+  try {
+    const sql = getNeonSql();
+    const rows = await sql`
+      SELECT
+        to_regclass('public.user_identities') AS identities,
+        to_regclass('public.user_sessions') AS sessions,
+        to_regclass('public.revoked_sessions') AS revocations
+    `;
+    const row = rows[0];
+    const ready = Boolean(row?.identities && row?.sessions && row?.revocations);
+    if (!ready) {
+      res.status(503).json({
+        status: 'degraded',
+        runtime: 'vercel',
+        durablePersistence: false
+      });
+      return;
+    }
+    res.status(200).json({
+      status: 'ok',
+      runtime: 'vercel',
+      durablePersistence: true
+    });
+  } catch {
+    res.status(503).json({
+      status: 'degraded',
+      runtime: 'vercel',
+      durablePersistence: false
+    });
+  }
 });
 
 // Pi Network Domain Ownership Validation Key
@@ -563,13 +592,27 @@ app.get(['/api/auth/me', '/api/v1/auth/me'], authenticate, requireAuthenticatedU
   });
 });
 
-app.post(['/api/auth/logout', '/api/v1/auth/logout'], authenticate, (req: AuthenticatedRequest, res) => {
+app.post(['/api/auth/logout', '/api/v1/auth/logout'], authenticate, async (req: AuthenticatedRequest, res) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7).trim() : authHeader?.trim();
-  if (token) {
-    authService.invalidateSession(token);
+  if (!token) {
+    res.status(400).json({ success: false, error: 'SESSION_TOKEN_REQUIRED' });
+    return;
   }
-  res.json({ success: true, message: 'Session invalidated successfully' });
+  try {
+    const revoked = await authService.invalidateSession(token);
+    if (!revoked) {
+      res.status(401).json({ success: false, error: 'INVALID_SESSION_TOKEN' });
+      return;
+    }
+    res.json({ success: true, message: 'Session invalidated successfully' });
+  } catch {
+    res.status(503).json({
+      success: false,
+      error: 'SESSION_REVOCATION_UNAVAILABLE',
+      message: 'Session revocation could not be confirmed. Please retry.'
+    });
+  }
 });
 
 // Diagnostic API Endpoint (Protected in Production)
@@ -889,6 +932,37 @@ function getVendorDocumentEncryptionKey(): Buffer | null {
     return null;
   }
   return Buffer.from(trimmed, 'hex');
+}
+
+/**
+ * Confirms a submitted KYC reference points to an existing encrypted object pair
+ * whose metadata is bound to the authenticated Pioneer. A URL prefix alone is
+ * never proof that a document was uploaded or belongs to the applicant.
+ */
+export async function verifyVendorDocumentReference(reference: string, username: string): Promise<boolean> {
+  const match = /^private:\/\/vendor-documents\/([a-f0-9]{32})$/i.exec(String(reference || '').trim());
+  const owner = String(username || '').trim().toLowerCase();
+  const encryptionKey = getVendorDocumentEncryptionKey();
+  if (!match || !owner || !encryptionKey || !vendorDocumentStorageEnabled()) return false;
+
+  const id = match[1].toLowerCase();
+  try {
+    const [metadataObject, encryptedObject] = await Promise.all([
+      getVendorDocument(`vendor-documents/${id}.meta.json`),
+      getVendorDocument(`vendor-documents/${id}.enc`)
+    ]);
+    if (!metadataObject || !encryptedObject) return false;
+    const metadata = JSON.parse(Buffer.from(metadataObject.body).toString('utf8'));
+    return verifyVendorDocumentIntegrity({
+      id,
+      owner,
+      metadata,
+      encryptedBytes: encryptedObject.body,
+      encryptionKey
+    });
+  } catch {
+    return false;
+  }
 }
 
 /**

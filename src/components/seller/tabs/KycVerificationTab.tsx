@@ -13,7 +13,7 @@ import {
   AlertTriangle,
   RefreshCw
 } from 'lucide-react';
-import { vendorAuthenticatedFetch, getVendorAuthHeaders } from '../../../lib/vendorAuthBridge';
+import { vendorAuthenticatedFetch } from '../../../lib/vendorAuthBridge';
 
 interface KycVerificationTabProps {
   userUsername: string;
@@ -84,12 +84,9 @@ export const KycVerificationTab: React.FC<KycVerificationTabProps> = ({
 
     try {
       const buffer = await selectedFile.arrayBuffer();
-      const authHeaders = getVendorAuthHeaders();
-
-      const response = await fetch('/api/vendor/document-upload', {
+      const response = await vendorAuthenticatedFetch('/api/vendor/document-upload', {
         method: 'POST',
         headers: {
-          ...authHeaders,
           'Content-Type': selectedFile.type,
           'X-Filename': encodeURIComponent(selectedFile.name),
           'X-Document-Type': docType,

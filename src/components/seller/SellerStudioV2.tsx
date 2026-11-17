@@ -483,6 +483,18 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
                 <span className="xs:hidden">Verify</span>
               </button>
             )}
+            {serverStatus.status === 'STATUS_UNAVAILABLE' && (
+              <button
+                id="seller-open-verification-center-btn"
+                type="button"
+                onClick={() => handleSelectTab('kyc')}
+                className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold flex items-center gap-1 transition-colors shadow-xs min-h-[40px]"
+              >
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span className="hidden xs:inline">Open Verification Center</span>
+                <span className="xs:hidden">Verification</span>
+              </button>
+            )}
 
             {/* Mobile Menu Toggle Button (Drawer) */}
             <button

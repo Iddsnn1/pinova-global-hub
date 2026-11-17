@@ -252,17 +252,37 @@ async function handleDurableProducts(req: any, res: any): Promise<boolean> {
     const viewerMerchant = viewerUsername
       ? await resolveApprovedMerchant(viewerUsername, [viewer?.piUid, viewer?.id])
       : null;
-    const canonicalSellerId = String(viewerMerchant?.pioneerUsername || viewerUsername).trim().replace(/^@/, '');
-    const products = viewerUsername
-      ? (await listDurableProducts({ includeDeleted: false, category: category as any, q }))
-          .filter((product: any) =>
-            String(product?.sellerId || '').trim().replace(/^@/, '').toLowerCase() === canonicalSellerId.toLowerCase()
-          )
-      : await listDurableProducts({
-          activeOnly: true,
-          category: category as any,
-          q
-        });
+    const publicProducts = await listDurableProducts({
+      activeOnly: true,
+      category: category as any,
+      q
+    });
+
+    // A Pi-authenticated buyer must still receive the public marketplace catalog.
+    // Only a user with a durable merchant application gets the additional
+    // seller-private view of their own pending/inactive products.
+    let products = publicProducts;
+    if (viewerUsername && viewerMerchant) {
+      const canonicalSellerId = String(viewerMerchant.pioneerUsername || viewerUsername)
+        .trim()
+        .replace(/^@/, '')
+        .toLowerCase();
+      const sellerProducts = await listDurableProducts({
+        includeDeleted: false,
+        category: category as any,
+        q
+      });
+      const merged = new Map<string, any>(
+        publicProducts.map((product: any) => [String(product.id), product])
+      );
+      for (const product of sellerProducts) {
+        const owner = String(product?.sellerId || '').trim().replace(/^@/, '').toLowerCase();
+        if (owner === canonicalSellerId && product?.isDeleted !== true) {
+          merged.set(String(product.id), product);
+        }
+      }
+      products = Array.from(merged.values());
+    }
     return res.json({ ok: true, products });
   }
 
@@ -484,20 +504,8 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   if (await handleVendorStatus(req, res)) return;
   if (await handleDurableProducts(req, res)) return;
 
-  if (
-    reqUrl === '/api/health' ||
-    reqUrl === '/health' ||
-    reqUrl.startsWith('/api/health?') ||
-    reqUrl.startsWith('/health?') ||
-    reqUrl.includes('__path=/health') ||
-    reqUrl.includes('__path=%2Fhealth')
-  ) {
-    res.setHeader('Content-Type', 'application/json');
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.statusCode = 200;
-    res.end(JSON.stringify({ status: 'ok', runtime: 'vercel' }));
-    return;
-  }
+  // Health requests must flow through the Express route below. That route
+  // checks Neon durable-auth tables and returns 503 when persistence is unavailable.
 
   if (
     reqUrl === '/api/debug/runtime' ||

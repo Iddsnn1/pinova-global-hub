@@ -1,7 +1,10 @@
 import { StorageEngine } from '../db/StorageEngine';
 import { UserIdentityEntity, UserRole } from './types';
 
-const INITIAL_USERS: UserIdentityEntity[] = [
+// Demo identities (including privileged demo administrators) must never be
+// bootstrapped into a production runtime. Production identities are created
+// only through the verified authentication and governed provisioning flows.
+const INITIAL_USERS: UserIdentityEntity[] = process.env.NODE_ENV === 'production' ? [] : [
   {
     id: 'usr-admin-001',
     username: 'admin',
