@@ -262,7 +262,9 @@ export class DurableEducationStore {
     };
 
     const amountDb = piDecimalForStorage(amount);
-    const rows = await sql`WITH updated_invoice AS (
+    let rows: DbRow[];
+    try {
+      rows = await sql`WITH updated_invoice AS (
         UPDATE education_invoices
         SET amount_paid = amount_paid + ${amountDb}::numeric,
             outstanding_balance = GREATEST(outstanding_balance - ${amountDb}::numeric, 0),
@@ -309,6 +311,30 @@ export class DurableEducationStore {
              (SELECT data FROM updated_invoice) AS invoice,
              (SELECT data FROM inserted_receipt) AS receipt,
              (SELECT id FROM inserted_audit) AS audit_id` as unknown as DbRow[];
+    } catch (error) {
+      if (String((error as any)?.code || '') !== '23505') throw error;
+      const racedRows = await sql`SELECT p.data AS payment, r.data AS receipt, i.data AS invoice
+        FROM education_payments p
+        JOIN education_receipts r ON r.payment_id = p.id
+        JOIN education_invoices i ON i.id = p.invoice_id
+        WHERE p.idempotency_key = ${idempotencyKey}
+           OR p.pi_payment_id = ${paymentIdOnPi}
+           OR p.pi_txid = ${txid}
+        LIMIT 1` as unknown as DbRow[];
+      if (!racedRows.length) throw new Error('EDUCATION_PAYMENT_REPLAY_CONFLICT');
+      const racedPayment = decodeJson<EducationPaymentTransaction>(racedRows[0].payment);
+      const racedInvoice = decodeJson<EducationInvoice>(racedRows[0].invoice);
+      const racedReceipt = decodeJson<DigitalEducationReceipt>(racedRows[0].receipt);
+      const sameBinding = racedPayment.invoiceId === invoiceId
+        && racedPayment.idempotencyKey === idempotencyKey
+        && racedPayment.piPaymentId === paymentIdOnPi
+        && racedPayment.piTxid === txid
+        && racedPayment.payerUsername.toLowerCase() === payer.toLowerCase()
+        && Math.abs(racedPayment.amountPaid - amount) <= 1e-12
+        && Math.abs(racedPayment.piAmount - piAmount) <= 1e-12;
+      if (!sameBinding) throw new Error('EDUCATION_PAYMENT_REPLAY_BINDING_MISMATCH');
+      return { success: true, payment: racedPayment, invoice: racedInvoice, receipt: racedReceipt, replayed: true };
+    }
 
     if (!rows.length || !rows[0].payment || !rows[0].receipt || !rows[0].invoice || !rows[0].audit_id) {
       const current = await this.getInvoice(invoiceId);
