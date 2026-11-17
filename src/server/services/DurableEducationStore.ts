@@ -22,7 +22,7 @@ function clean(value: unknown): string {
   return String(value ?? '').trim();
 }
 
-type PaymentBinding = {
+export type PaymentBinding = {
   invoiceId: string;
   idempotencyKey: string;
   piPaymentId: string;
@@ -32,7 +32,7 @@ type PaymentBinding = {
   piAmount: number;
 };
 
-function matchesPaymentBinding(payment: EducationPaymentTransaction, expected: PaymentBinding): boolean {
+export function matchesPaymentBinding(payment: EducationPaymentTransaction, expected: PaymentBinding): boolean {
   return payment.invoiceId === expected.invoiceId
     && payment.idempotencyKey === expected.idempotencyKey
     && payment.piPaymentId === expected.piPaymentId
@@ -186,8 +186,7 @@ export class DurableEducationStore {
       JOIN education_invoices i ON i.id = p.invoice_id
       WHERE p.idempotency_key = ${idempotencyKey}
          OR p.pi_payment_id = ${paymentIdOnPi}
-         OR p.pi_txid = ${txid}
-      LIMIT 1` as unknown as DbRow[];
+         OR p.pi_txid = ${txid}` as unknown as DbRow[];
 
     if (existingRows.length) {
       const matched = existingRows.map((row) => ({
@@ -343,8 +342,7 @@ export class DurableEducationStore {
         JOIN education_invoices i ON i.id = p.invoice_id
         WHERE p.idempotency_key = ${idempotencyKey}
            OR p.pi_payment_id = ${paymentIdOnPi}
-           OR p.pi_txid = ${txid}
-        LIMIT 1` as unknown as DbRow[];
+           OR p.pi_txid = ${txid}` as unknown as DbRow[];
       if (!racedRows.length) throw new Error('EDUCATION_PAYMENT_REPLAY_CONFLICT');
       const raced = racedRows.map((row) => ({
         payment: decodeJson<EducationPaymentTransaction>(row.payment),
@@ -371,8 +369,7 @@ export class DurableEducationStore {
         JOIN education_invoices i ON i.id = p.invoice_id
         WHERE p.idempotency_key = ${idempotencyKey}
            OR p.pi_payment_id = ${paymentIdOnPi}
-           OR p.pi_txid = ${txid}
-        LIMIT 1` as unknown as DbRow[];
+           OR p.pi_txid = ${txid}` as unknown as DbRow[];
       if (committedRows.length) {
         const committed = committedRows.map((row) => ({
           payment: decodeJson<EducationPaymentTransaction>(row.payment),
