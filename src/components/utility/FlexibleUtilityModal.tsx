@@ -633,6 +633,7 @@ export const FlexibleUtilityModal: React.FC<FlexibleUtilityModalProps> = ({
           transactionId,
           piPaymentId,
           piTxid,
+          serverVerified: true,
           category: selectedCategory,
           providerId: selectedProvider.id,
           providerName: selectedProvider.name,
