@@ -3850,16 +3850,16 @@ export class PiSdkManagerService {
                         const metadata = params.metadata || {};
                         const normalizedCategory = String(metadata.category || '').trim().toLowerCase();
                         const requiresUtilityFulfillment = ['airtime', 'mobile_data', 'data'].includes(normalizedCategory);
-                        let fulfillmentStatus: 'FULFILLED' | 'FULFILLMENT_PENDING' = requiresUtilityFulfillment
-                          ? 'FULFILLMENT_PENDING'
-                          : 'FULFILLED';
+                        // Payment completion alone never proves that the utility provider fulfilled the service.
+                        // Only the dedicated provider workflow below may promote this to FULFILLED.
+                        let fulfillmentStatus: 'FULFILLED' | 'FULFILLMENT_PENDING' = 'FULFILLMENT_PENDING';
                         let resultData: any = {
                           ...data,
                           transactionId: data.transactionId || paymentId,
                           paymentId,
                           txid
                         };
-                        let resultMessage = 'Pi payment completed and verified successfully.';
+                        let resultMessage = 'Pi payment completed and server-verified. Provider fulfillment is pending confirmation.';
 
                         if (requiresUtilityFulfillment) {
                           try {
