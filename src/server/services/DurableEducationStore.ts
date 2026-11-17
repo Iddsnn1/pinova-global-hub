@@ -22,6 +22,26 @@ function clean(value: unknown): string {
   return String(value ?? '').trim();
 }
 
+type PaymentBinding = {
+  invoiceId: string;
+  idempotencyKey: string;
+  piPaymentId: string;
+  piTxid: string;
+  payerUsername: string;
+  amountPaid: number;
+  piAmount: number;
+};
+
+function matchesPaymentBinding(payment: EducationPaymentTransaction, expected: PaymentBinding): boolean {
+  return payment.invoiceId === expected.invoiceId
+    && payment.idempotencyKey === expected.idempotencyKey
+    && payment.piPaymentId === expected.piPaymentId
+    && payment.piTxid === expected.piTxid
+    && payment.payerUsername.toLowerCase() === expected.payerUsername.toLowerCase()
+    && Math.abs(payment.amountPaid - expected.amountPaid) <= 1e-12
+    && Math.abs(Number(payment.piAmount) - expected.piAmount) <= 1e-12;
+}
+
 function digestReceipt(input: {
   receiptNumber: string;
   invoice: EducationInvoice;
@@ -170,18 +190,22 @@ export class DurableEducationStore {
       LIMIT 1` as unknown as DbRow[];
 
     if (existingRows.length) {
-      const payment = decodeJson<EducationPaymentTransaction>(existingRows[0].payment);
-      const invoice = decodeJson<EducationInvoice>(existingRows[0].invoice);
-      const receipt = decodeJson<DigitalEducationReceipt>(existingRows[0].receipt);
-      const sameBinding = payment.invoiceId === invoiceId
-        && payment.idempotencyKey === idempotencyKey
-        && payment.piPaymentId === paymentIdOnPi
-        && payment.piTxid === txid
-        && payment.payerUsername.toLowerCase() === payer.toLowerCase()
-        && Math.abs(payment.amountPaid - amount) <= 1e-12
-        && Math.abs(payment.piAmount - piAmount) <= 1e-12;
-      if (!sameBinding) throw new Error('EDUCATION_PAYMENT_REPLAY_BINDING_MISMATCH');
-      return { success: true, payment, invoice, receipt, replayed: true };
+      const matched = existingRows.map((row) => ({
+        payment: decodeJson<EducationPaymentTransaction>(row.payment),
+        invoice: decodeJson<EducationInvoice>(row.invoice),
+        receipt: decodeJson<DigitalEducationReceipt>(row.receipt)
+      }));
+      const expected: PaymentBinding = {
+        invoiceId, idempotencyKey, piPaymentId: paymentIdOnPi, piTxid: txid,
+        payerUsername: payer, amountPaid: amount, piAmount
+      };
+      // Every matching unique key must resolve to the same exact settlement.
+      // Checking only an arbitrary first row can hide a collision where, for
+      // example, the idempotency key belongs to payment A but the TXID to B.
+      if (!matched.every((entry) => matchesPaymentBinding(entry.payment, expected))) {
+        throw new Error('EDUCATION_PAYMENT_REPLAY_BINDING_MISMATCH');
+      }
+      return { success: true, ...matched[0], replayed: true };
     }
 
     const invoice = await this.getInvoice(invoiceId);
@@ -322,18 +346,19 @@ export class DurableEducationStore {
            OR p.pi_txid = ${txid}
         LIMIT 1` as unknown as DbRow[];
       if (!racedRows.length) throw new Error('EDUCATION_PAYMENT_REPLAY_CONFLICT');
-      const racedPayment = decodeJson<EducationPaymentTransaction>(racedRows[0].payment);
-      const racedInvoice = decodeJson<EducationInvoice>(racedRows[0].invoice);
-      const racedReceipt = decodeJson<DigitalEducationReceipt>(racedRows[0].receipt);
-      const sameBinding = racedPayment.invoiceId === invoiceId
-        && racedPayment.idempotencyKey === idempotencyKey
-        && racedPayment.piPaymentId === paymentIdOnPi
-        && racedPayment.piTxid === txid
-        && racedPayment.payerUsername.toLowerCase() === payer.toLowerCase()
-        && Math.abs(racedPayment.amountPaid - amount) <= 1e-12
-        && Math.abs(racedPayment.piAmount - piAmount) <= 1e-12;
-      if (!sameBinding) throw new Error('EDUCATION_PAYMENT_REPLAY_BINDING_MISMATCH');
-      return { success: true, payment: racedPayment, invoice: racedInvoice, receipt: racedReceipt, replayed: true };
+      const raced = racedRows.map((row) => ({
+        payment: decodeJson<EducationPaymentTransaction>(row.payment),
+        invoice: decodeJson<EducationInvoice>(row.invoice),
+        receipt: decodeJson<DigitalEducationReceipt>(row.receipt)
+      }));
+      const expected: PaymentBinding = {
+        invoiceId, idempotencyKey, piPaymentId: paymentIdOnPi, piTxid: txid,
+        payerUsername: payer, amountPaid: amount, piAmount
+      };
+      if (!raced.every((entry) => matchesPaymentBinding(entry.payment, expected))) {
+        throw new Error('EDUCATION_PAYMENT_REPLAY_BINDING_MISMATCH');
+      }
+      return { success: true, ...raced[0], replayed: true };
     }
 
     if (!rows.length || !rows[0].payment || !rows[0].receipt || !rows[0].invoice || !rows[0].audit_id) {
@@ -349,18 +374,19 @@ export class DurableEducationStore {
            OR p.pi_txid = ${txid}
         LIMIT 1` as unknown as DbRow[];
       if (committedRows.length) {
-        const committedPayment = decodeJson<EducationPaymentTransaction>(committedRows[0].payment);
-        const committedInvoice = decodeJson<EducationInvoice>(committedRows[0].invoice);
-        const committedReceipt = decodeJson<DigitalEducationReceipt>(committedRows[0].receipt);
-        const sameBinding = committedPayment.invoiceId === invoiceId
-          && committedPayment.idempotencyKey === idempotencyKey
-          && committedPayment.piPaymentId === paymentIdOnPi
-          && committedPayment.piTxid === txid
-          && committedPayment.payerUsername.toLowerCase() === payer.toLowerCase()
-          && Math.abs(committedPayment.amountPaid - amount) <= 1e-12
-          && Math.abs(committedPayment.piAmount - piAmount) <= 1e-12;
-        if (!sameBinding) throw new Error('EDUCATION_PAYMENT_REPLAY_BINDING_MISMATCH');
-        return { success: true, payment: committedPayment, invoice: committedInvoice, receipt: committedReceipt, replayed: true };
+        const committed = committedRows.map((row) => ({
+          payment: decodeJson<EducationPaymentTransaction>(row.payment),
+          invoice: decodeJson<EducationInvoice>(row.invoice),
+          receipt: decodeJson<DigitalEducationReceipt>(row.receipt)
+        }));
+        const expected: PaymentBinding = {
+          invoiceId, idempotencyKey, piPaymentId: paymentIdOnPi, piTxid: txid,
+          payerUsername: payer, amountPaid: amount, piAmount
+        };
+        if (!committed.every((entry) => matchesPaymentBinding(entry.payment, expected))) {
+          throw new Error('EDUCATION_PAYMENT_REPLAY_BINDING_MISMATCH');
+        }
+        return { success: true, ...committed[0], replayed: true };
       }
       const current = await this.getInvoice(invoiceId);
       if (!current) throw new Error('DURABLE_EDUCATION_INVOICE_NOT_FOUND');
