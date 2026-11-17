@@ -408,7 +408,6 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     if (!token) return json(res, 401, { ok: false, error: 'AUTHENTICATION_REQUIRED' });
     const user = await authService.authenticateToken(token);
     if (!user?.username) return json(res, 401, { ok: false, error: 'INVALID_SESSION' });
-    if (!durableProductStorageEnabled()) return json(res, 503, { ok: false, error: 'DURABLE_PRODUCT_STORAGE_UNAVAILABLE' });
     if (!durableOrderStorageEnabled()) return json(res, 503, { ok: false, error: 'DURABLE_ORDER_STORAGE_UNAVAILABLE' });
     // Dedicated durable service-order intake. Utility payments are verified against Pi
     // here; browser callback flags and transaction identifiers are never settlement authority.
@@ -416,6 +415,8 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       const body = await readJson(req);
       const paymentId = String(body.paymentId || '').trim();
       if (!paymentId) return json(res, 400, { ok: false, error: 'PI_PAYMENT_ID_REQUIRED' });
+      const requestKey = idempotencyKey(req);
+      if (!requestKey || requestKey !== paymentId) return json(res, 400, { ok: false, error: 'UTILITY_IDEMPOTENCY_KEY_MUST_MATCH_PAYMENT_ID' });
 
       const category = String(body.category || '').trim().toLowerCase();
       const providerName = String(body.providerName || '').trim().slice(0, 120);
@@ -438,6 +439,12 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         return json(res, 403, { ok: false, verified: false, error: 'PI_PAYMENT_BUYER_MISMATCH' });
       }
       const txid = getPiAuthoritativeTransactionId(paymentData);
+      // Durable orders are the replay authority; the in-process payment ledger is only a cache.
+      const durableOrdersForReplay = await listDurableOrders();
+      const txidReplay = txid ? durableOrdersForReplay.find((candidate: any) => String(candidate.piTxid || '').trim() === txid) : null;
+      if (txidReplay && String(txidReplay.piPaymentId || '').trim() !== paymentId) {
+        return json(res, 409, { ok: false, verified: false, error: 'PI_TRANSACTION_ALREADY_USED' });
+      }
       if (process.env.NODE_ENV === 'production' && !txid) {
         return json(res, 409, { ok: false, verified: false, error: 'PI_TRANSACTION_ID_REQUIRED' });
       }
@@ -918,6 +925,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     }
 
     if (req.method === 'POST' && !path) {
+      if (!durableProductStorageEnabled()) return json(res, 503, { ok: false, error: 'DURABLE_PRODUCT_STORAGE_UNAVAILABLE' });
       const body = await readJson(req);
       if (!Array.isArray(body.items) || body.items.length === 0) return json(res, 400, { ok: false, error: 'ORDER_ITEMS_REQUIRED' });
       const key = idempotencyKey(req);
