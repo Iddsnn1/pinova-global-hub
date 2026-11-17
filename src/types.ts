@@ -209,6 +209,11 @@ export interface Order {
   id: string; // UUID primary key
   buyerUsername: string;
   items: OrderItem[];
+  /** Optional seller-scoped totals returned by the merchant order view. */
+  subtotalPi?: number;
+  discountPi?: number;
+  shippingPi?: number;
+  promoCode?: string;
   totalPi: number;
   escrowStatus: EscrowStatus;
   pstpStatus: PstpOrderStatus;

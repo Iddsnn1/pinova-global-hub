@@ -58,6 +58,15 @@ if (!rootElement) {
     }
   });
 
+  // Register the network-only PWA worker. It deliberately does not cache API or payment data.
+  if ('serviceWorker' in navigator && window.location.protocol === 'https:') {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch((error) => {
+        console.warn('[PiNova PWA] Service worker registration failed:', error);
+      });
+    }, { once: true });
+  }
+
   installVendorAuthBridge();
 
   createRoot(rootElement).render(

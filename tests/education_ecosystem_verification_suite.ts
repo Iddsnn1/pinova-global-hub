@@ -3,6 +3,7 @@ import path from 'path';
 process.env.PINOVA_DATA_DIR = path.join(os.tmpdir(), 'pinova_edu_safety_' + Date.now());
 import { EducationRepository } from '../src/server/db/repositories/EducationRepository';
 import { getTaxonomyByCountry } from '../src/data/educationTaxonomyData';
+import { GLOBAL_EDUCATION_INSTITUTIONS } from '../src/data/educationInstitutionsData';
 import { SEED_STUDENTS, SEED_CHILDREN_SUMMARIES, SEED_INVOICES, SEED_RECEIPTS, SEED_PAYMENTS, SEED_ADMISSION_APPLICATIONS, SEED_SCHOLARSHIPS, SEED_MARKETPLACE_ITEMS, SEED_PARENT_USER_ID } from '../src/data/educationSeedData';
 const ok=(v:boolean,n:string)=>{if(!v) throw new Error('FAILED: '+n); console.log('[PASS] '+n);};
 async function run(){
@@ -16,7 +17,8 @@ async function run(){
  ok(SEED_SCHOLARSHIPS.length===0,'no seeded scholarships');
  ok(SEED_MARKETPLACE_ITEMS.length===0,'no seeded marketplace items');
  ok(SEED_PARENT_USER_ID==='','no seeded guardian identity');
- ok(repo.getInstitutions().length>0,'global institution registry is loaded');
+ ok(GLOBAL_EDUCATION_INSTITUTIONS.length>0,'global institution reference dataset is loaded');
+ ok(repo.getInstitutions().length===0,'runtime institution repository does not silently seed static records');
  ok(repo.getInvoices().length===0,'invoice repository starts empty');
  ok(repo.getScholarships().length===0,'scholarship repository starts empty');
  ok(repo.getStudentsByGuardian('authenticated-user').length===0,'student lookup fails closed');

@@ -22,7 +22,6 @@ import {
 } from 'lucide-react';
 import { Product, Order, Vendor, PiUser } from '../../types';
 import { MainSection, MarketplaceCategory } from '../../types/navigation';
-import { ConnectPiButton, AuthStatus } from '../auth/ConnectPiButton';
 
 interface HomeViewProps {
   user: PiUser;
@@ -44,8 +43,6 @@ interface HomeViewProps {
   onConfirmReceipt?: (orderId: string) => void;
   onTrackOrder?: (orderId?: string) => void;
   onOpenVendorApplication?: () => void;
-  onConnectPi?: () => void;
-  authStatus?: AuthStatus;
 }
 
 export const HomeView: React.FC<HomeViewProps> = ({
@@ -55,154 +52,124 @@ export const HomeView: React.FC<HomeViewProps> = ({
   onOpenUniversalSearch,
   onOpenPstpShield,
   onTrackOrder,
-  onOpenVendorApplication,
-  onConnectPi,
-  authStatus = user?.authenticated ? 'connected' : 'disconnected'
+  onOpenVendorApplication
 }) => {
   const [trackingQuery, setTrackingQuery] = useState('');
   return (
-    <div className="max-w-7xl mx-auto px-3 sm:px-6 space-y-6 sm:space-y-7 pb-20 animate-fade-in">
+    <div className="relative max-w-7xl mx-auto px-3 sm:px-6 space-y-7 sm:space-y-9 pb-24 animate-fade-in">
       
-      {/* ========================================================================= */}
-      {/* 1. HERO BANNER: DISCOVERY + SEARCH + POPULAR SEARCHES                     */}
-      {/* ========================================================================= */}
-      <section 
-        id="hero-banner" 
-        className="relative rounded-2xl sm:rounded-3xl bg-gradient-to-br from-slate-950 via-purple-950 to-slate-900 text-white p-4 sm:p-7 md:p-9 border border-purple-800/40 shadow-xl sm:shadow-2xl overflow-hidden"
+      {/* PREMIUM GLOBAL DISCOVERY HERO */}
+      <section
+        id="hero-banner"
+        className="relative isolate overflow-hidden rounded-[1.75rem] sm:rounded-[2.25rem] bg-[#080b18] text-white border border-indigo-300/20 shadow-[0_28px_90px_-35px_rgba(79,70,229,.65)]"
       >
-        {/* Subtle Brand Ambient Glows */}
-        <div className="absolute top-0 right-0 w-80 sm:w-96 h-80 sm:h-96 bg-purple-600/15 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute bottom-0 left-1/4 w-60 sm:w-80 h-60 sm:h-80 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
-
-        <div className="relative z-10 space-y-4 sm:space-y-5">
-          
-          {/* Top Row: Brand Statement & Compact Trust Indicator */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-            
-            {/* Value Proposition */}
-            <div className="space-y-1 max-w-xl">
-              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-purple-900/70 border border-purple-700/50 text-purple-200 text-[11px] font-bold backdrop-blur-md">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                <span>PiNova Global Hub</span>
-              </div>
-              <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-black tracking-tight text-white leading-tight">
-                Enterprise Pi Commerce & Utilities
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_78%_18%,rgba(124,58,237,.48),transparent_34%),radial-gradient(ellipse_at_8%_95%,rgba(8,145,178,.24),transparent_38%),linear-gradient(125deg,#080b18_0%,#15102f_52%,#0b1727_100%)] pointer-events-none" />
+        <div className="absolute inset-0 opacity-[0.12] pointer-events-none [background-image:linear-gradient(rgba(255,255,255,.35)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.35)_1px,transparent_1px)] [background-size:42px_42px] [mask-image:linear-gradient(120deg,black,transparent_80%)]" />
+        <div className="absolute -right-20 top-8 w-72 h-72 sm:w-[27rem] sm:h-[27rem] rounded-full border border-violet-300/15 pointer-events-none" />
+        <div className="absolute -right-8 top-20 w-52 h-52 sm:w-[20rem] sm:h-[20rem] rounded-full border border-cyan-200/10 pointer-events-none" />
+        <div className="relative z-10 grid lg:grid-cols-[1.15fr_.85fr] items-center gap-4 sm:gap-6 lg:gap-7 p-3.5 sm:p-5 md:p-6 lg:p-7">
+          <div className="min-w-0 flex flex-col justify-center gap-3.5 sm:gap-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-2 rounded-full border border-violet-300/25 bg-violet-300/10 px-3 py-1.5 text-[10px] sm:text-xs font-extrabold uppercase tracking-[.18em] text-violet-100">
+                <Sparkles className="w-3.5 h-3.5 text-amber-300" /> PiNova Global Hub
+              </span>
+              <span className="inline-flex items-center gap-1.5 text-[10px] sm:text-xs font-bold text-emerald-300">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Built for the Pi ecosystem
+              </span>
+            </div>
+            <div className="space-y-3">
+              <h1 className="text-[1.8rem] sm:text-[2.55rem] lg:text-[3rem] font-black tracking-[-.055em] leading-[1.04] max-w-3xl">
+                One global hub.
+                <span className="block text-transparent bg-clip-text bg-gradient-to-r from-violet-300 via-fuchsia-200 to-cyan-200">Endless possibilities.</span>
               </h1>
-              <p className="text-xs sm:text-sm text-slate-300 leading-relaxed max-w-lg">
-                Non-custodial merchant ecosystem, instant global utility fulfillment, and protected transactions.
+              <p className="text-[13px] sm:text-sm lg:text-base text-slate-300 leading-relaxed max-w-xl">
+                Discover products, access everyday services, explore global utilities and connect with merchants across the Pi community.
               </p>
             </div>
-
-            {/* Compact Trust & Protection Strip */}
-            <div className="w-full sm:w-auto flex items-center justify-between sm:justify-end gap-2.5 bg-slate-900/80 border border-purple-500/30 px-3 py-2 rounded-xl backdrop-blur-md shrink-0">
-              <div className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
-                <span className="text-xs font-bold text-emerald-400 flex items-center gap-1">
-                  <ShieldCheck className="w-3.5 h-3.5" />
-                  PSTP Protected
-                </span>
-              </div>
-
-              <button
-                id="hero-pstp-shield-button"
-                onClick={onOpenPstpShield}
-                className="px-2.5 py-1 rounded-lg bg-purple-950 hover:bg-purple-900 border border-purple-700/60 text-amber-300 text-[11px] font-bold transition-all flex items-center gap-1 shadow-sm active:scale-95 shrink-0"
-                title="PSTP Protection Shield"
+            <div className="pt-1">
+              <div
+                id="hero-universal-search-bar"
+                onClick={() => onOpenUniversalSearch()}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onOpenUniversalSearch(); } }}
+                className="group cursor-pointer rounded-2xl border border-white/15 bg-slate-950/65 hover:bg-slate-950/85 px-4 py-4 flex items-center justify-between gap-3 shadow-xl transition-all hover:border-violet-300/50"
               >
-                <span>Shield Details</span>
-                <ChevronRight className="w-3 h-3 text-slate-400" />
-              </button>
-            </div>
-
-          </div>
-
-          {/* Universal Hero Search Input Trigger */}
-          <div className="pt-0.5">
-            <div
-              id="hero-universal-search-bar"
-              onClick={() => onOpenUniversalSearch()}
-              className="group relative cursor-pointer bg-slate-900/90 hover:bg-slate-850 text-slate-300 rounded-xl sm:rounded-2xl border border-purple-500/40 p-3 sm:p-3.5 md:p-4 shadow-lg flex items-center justify-between gap-3 transition-all hover:border-purple-400 hover:shadow-purple-900/20"
-            >
-              <div className="flex items-center gap-2.5 sm:gap-3 flex-1 min-w-0">
-                <Search className="w-4.5 h-4.5 sm:w-5 sm:h-5 text-purple-400 group-hover:scale-110 transition-transform shrink-0" />
-                <span className="text-xs sm:text-sm text-slate-300 font-medium truncate">
-                  Search products, merchants, services, utilities, or orders...
-                </span>
+                <div className="flex items-center gap-3 min-w-0">
+                  <Search className="w-5 h-5 text-violet-300 shrink-0" />
+                  <span className="text-xs sm:text-sm text-slate-300 truncate">Search products, merchants, services and utilities</span>
+                </div>
+                <span className="rounded-lg bg-white/10 px-3 py-2 text-xs font-bold text-white group-hover:bg-violet-500 shrink-0">Search</span>
               </div>
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg sm:rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white text-xs font-bold shadow-md shrink-0">
-                <Sparkles className="w-3 h-3 text-amber-300" />
-                <span className="hidden xs:inline">Search</span>
-              </div>
-            </div>
-
-            {/* Popular Searches Chips: Actual searchable products and services */}
-            <div className="relative pt-2.5">
-              <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar pb-1 text-xs">
-                <span className="text-slate-400 text-[11px] font-bold shrink-0 hidden xs:inline">Popular:</span>
+              <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pt-3 pb-1">
                 {[
-                  { id: 'pop-airtime', label: '⚡ Airtime Topup', action: () => onNavigateSection('utilities', 'airtime' as any) },
-                  { id: 'pop-phones', label: '📱 Flagship Phones', action: () => onNavigateSection('marketplace', 'phones_mobile') },
-                  { id: 'pop-electricity', label: '💡 Electricity Pay', action: () => onNavigateSection('utilities', 'electricity' as any) },
+                  { id: 'pop-airtime', label: '⚡ Airtime', action: () => onNavigateSection('utilities', 'airtime' as any) },
+                  { id: 'pop-phones', label: '📱 Phones', action: () => onNavigateSection('marketplace', 'phones_mobile') },
+                  { id: 'pop-electricity', label: '💡 Electricity', action: () => onNavigateSection('utilities', 'electricity' as any) },
                   { id: 'pop-laptops', label: '💻 Laptops', action: () => onNavigateSection('marketplace', 'computers_technology') },
-                  { id: 'pop-services', label: '🎨 Tech Services', action: () => onNavigateSection('marketplace', 'professional_services') },
-                  { id: 'pop-electronics', label: '🎧 Electronics', action: () => onNavigateSection('marketplace', 'electronics') }
+                  { id: 'pop-services', label: '🛠 Services', action: () => onNavigateSection('marketplace', 'professional_services') }
                 ].map((chip) => (
-                  <button
-                    key={chip.id}
-                    id={chip.id}
-                    onClick={chip.action}
-                    className="min-h-[34px] px-2.5 sm:px-3 py-1 rounded-full bg-slate-900/90 hover:bg-purple-950 text-slate-300 hover:text-amber-300 border border-slate-800 hover:border-purple-600/60 transition-all whitespace-nowrap font-medium text-[11px] active:scale-95 flex items-center shrink-0"
-                  >
-                    {chip.label}
-                  </button>
+                  <button key={chip.id} id={chip.id} onClick={chip.action} className="shrink-0 rounded-full border border-white/10 bg-white/[.06] px-3 py-1.5 text-[11px] font-semibold text-slate-300 hover:text-white hover:bg-white/15 transition-colors">{chip.label}</button>
                 ))}
               </div>
             </div>
           </div>
-
+          <div className="relative min-h-[170px] sm:min-h-[205px] flex items-center justify-center">
+            <div className="absolute w-56 h-56 sm:w-72 sm:h-72 rounded-full bg-violet-500/20 blur-3xl" />
+            <div className="relative w-full max-w-[19rem] rounded-[1.5rem] border border-white/15 bg-white/[.07] p-3 sm:p-3.5 backdrop-blur-xl shadow-2xl">
+              <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-400 to-indigo-600 flex items-center justify-center text-xl font-black text-white">π</div>
+                  <div>
+                    <div className="text-xs font-extrabold text-white">Global ecosystem</div>
+                    <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                      <button type="button" onClick={() => onNavigateSection('marketplace', 'all')} className="text-[10px] text-slate-300 hover:text-white underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300 rounded-sm" aria-label="Open Commerce marketplace">Commerce</button>
+                      <span className="text-[10px] text-slate-600">·</span>
+                      <button type="button" onClick={() => onNavigateSection('utilities')} className="text-[10px] text-slate-300 hover:text-white underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300 rounded-sm" aria-label="Open Global Utilities">Utilities</button>
+                      <span className="text-[10px] text-slate-600">·</span>
+                      <button type="button" onClick={() => onNavigateSection('services')} className="text-[10px] text-slate-300 hover:text-white underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300 rounded-sm" aria-label="Open Services">Services</button>
+                    </div>
+                  </div>
+                </div>
+                <span className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-2.5 py-1 text-[9px] font-bold text-emerald-300">Pi ecosystem</span>
+              </div>
+              <div className="space-y-2 py-2.5">
+                <div className="rounded-xl border border-violet-200/15 bg-gradient-to-r from-violet-500/15 via-indigo-500/10 to-cyan-500/10 p-3">
+                  <div className="flex items-center gap-2 text-violet-100">
+                    <Compass className="w-5 h-5 text-cyan-200" />
+                    <span className="text-xs font-extrabold tracking-wide">GLOBAL REACH</span>
+                  </div>
+                  <p className="mt-2 text-sm font-bold text-white">Connect beyond borders</p>
+                  <p className="mt-1 text-[11px] leading-relaxed text-slate-400">A connected experience for people, merchants and services across the Pi ecosystem.</p>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <button type="button" onClick={onOpenPstpShield} className="group rounded-xl border border-emerald-200/15 bg-emerald-500/10 p-2 text-left transition-all hover:border-emerald-200/40 hover:bg-emerald-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-200" aria-label="Open PSTP Security Center">
+                    <ShieldCheck className="mb-2 h-5 w-5 text-emerald-200 group-hover:scale-110 transition-transform" />
+                    <div className="text-xs font-extrabold text-white">PSTP framework <ArrowRight className="inline h-3 w-3 opacity-70" /></div>
+                    <div className="mt-1 text-[10px] text-slate-400">Protection-first flows</div>
+                  </button>
+                  <button type="button" onClick={() => document.getElementById('global-hub-modules')?.scrollIntoView({ behavior: 'smooth', block: 'start' })} className="group rounded-xl border border-amber-200/15 bg-amber-500/10 p-2 text-left transition-all hover:border-amber-200/40 hover:bg-amber-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-200" aria-label="Explore all PiNova Global Hub modules">
+                    <Sparkles className="mb-2 h-5 w-5 text-amber-200 group-hover:scale-110 transition-transform" />
+                    <div className="text-xs font-extrabold text-white">One ecosystem <ArrowRight className="inline h-3 w-3 opacity-70" /></div>
+                    <div className="mt-1 text-[10px] text-slate-400">Designed to work together</div>
+                  </button>
+                </div>
+              </div>
+              <div className="flex items-center justify-between rounded-xl bg-slate-950/50 border border-white/10 px-3 py-2">
+                <span className="text-[10px] font-semibold text-slate-300">A connected Pi experience</span>
+                <Sparkles className="w-4 h-4 text-amber-300" />
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
-      {/* Unauthenticated Quick Connect Banner */}
-      {(!user.authenticated || authStatus === 'disconnected') && onConnectPi && (
-        <section 
-          id="home-unauthenticated-connect-banner"
-          className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-purple-950/90 via-slate-900 to-indigo-950/90 border border-purple-600/50 shadow-lg text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-fade-in"
-        >
-          <div className="flex items-center gap-3.5">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-purple-600 via-indigo-600 to-amber-500 p-0.5 shadow-md shrink-0">
-              <div className="w-full h-full bg-slate-950 rounded-[10px] flex items-center justify-center font-black text-amber-400 text-lg">
-                π
-              </div>
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-black text-sm text-white">Connect with Pi Network</span>
-                <span className="px-2 py-0.5 rounded-full bg-purple-900/80 text-amber-300 border border-purple-700/60 text-[10px] font-bold">
-                  Testnet Ready
-                </span>
-              </div>
-              <p className="text-xs text-slate-300 mt-0.5">
-                Authenticate in Pi Browser to sync your Pioneer account, unlock zero-trust escrow payments, and manage your orders.
-              </p>
-            </div>
-          </div>
-          <div className="w-full sm:w-auto shrink-0">
-            <ConnectPiButton
-              user={user}
-              authStatus={authStatus}
-              onConnect={onConnectPi}
-              variant="standalone"
-              className="w-full sm:w-auto"
-            />
-          </div>
-        </section>
-      )}
+      {/* Connect with Pi is intentionally provided once in the global header. */}
 
       {/* ========================================================================= */}
       {/* 2. PINOVA GLOBAL HUB MODULES: CENTRAL SERVICE DISCOVERY                   */}
       {/* ========================================================================= */}
-      <section id="global-hub-modules" className="space-y-3">
+      <section id="global-hub-modules" className="space-y-4 sm:space-y-5">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-base sm:text-lg font-black text-slate-900 dark:text-slate-100 flex items-center gap-2">
@@ -218,13 +185,16 @@ export const HomeView: React.FC<HomeViewProps> = ({
           </span>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2.5 sm:gap-3.5">
+        <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-4 gap-3 sm:gap-4">
           
           {/* Module 1: Marketplace */}
           <div
             id="hub-module-marketplace"
             onClick={() => onNavigateSection('marketplace', 'all')}
-            className="p-3.5 sm:p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-purple-500 dark:hover:border-purple-500 transition-all cursor-pointer group shadow-sm flex flex-col items-center text-center space-y-2 hover:-translate-y-0.5 hover:shadow-md"
+            role="button"
+            tabIndex={0}
+            onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.currentTarget.click(); } }}
+            className="min-h-[142px] p-4 sm:p-5 rounded-[1.35rem] bg-white dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-700/70 hover:border-violet-400 dark:hover:border-violet-400 transition-all duration-300 cursor-pointer group shadow-[0_8px_24px_-18px_rgba(15,23,42,.35)] hover:shadow-[0_18px_38px_-20px_rgba(91,33,182,.28)] flex flex-col items-center justify-center text-center space-y-3 hover:-translate-y-1"
           >
             <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-purple-500/10 text-purple-500 dark:text-purple-400 flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
               <ShoppingBag className="w-5 h-5 sm:w-6 sm:h-6" />
@@ -241,7 +211,10 @@ export const HomeView: React.FC<HomeViewProps> = ({
           <div
             id="hub-module-utilities"
             onClick={() => onNavigateSection('utilities')}
-            className="p-3.5 sm:p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-emerald-500 dark:hover:border-emerald-500 transition-all cursor-pointer group shadow-sm flex flex-col items-center text-center space-y-2 hover:-translate-y-0.5 hover:shadow-md"
+            role="button"
+            tabIndex={0}
+            onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.currentTarget.click(); } }}
+            className="min-h-[142px] p-4 sm:p-5 rounded-[1.35rem] bg-white dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-700/70 hover:border-violet-400 dark:hover:border-violet-400 transition-all duration-300 cursor-pointer group shadow-[0_8px_24px_-18px_rgba(15,23,42,.35)] hover:shadow-[0_18px_38px_-20px_rgba(91,33,182,.28)] flex flex-col items-center justify-center text-center space-y-3 hover:-translate-y-1"
           >
             <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-emerald-500/10 text-emerald-500 dark:text-emerald-400 flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
               <Zap className="w-5 h-5 sm:w-6 sm:h-6" />
@@ -258,7 +231,10 @@ export const HomeView: React.FC<HomeViewProps> = ({
           <div
             id="hub-module-transport"
             onClick={() => onNavigateSection('utilities', 'transport' as any)}
-            className="p-3.5 sm:p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-cyan-500 dark:hover:border-cyan-500 transition-all cursor-pointer group shadow-sm flex flex-col items-center text-center space-y-2 hover:-translate-y-0.5 hover:shadow-md"
+            role="button"
+            tabIndex={0}
+            onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.currentTarget.click(); } }}
+            className="min-h-[142px] p-4 sm:p-5 rounded-[1.35rem] bg-white dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-700/70 hover:border-violet-400 dark:hover:border-violet-400 transition-all duration-300 cursor-pointer group shadow-[0_8px_24px_-18px_rgba(15,23,42,.35)] hover:shadow-[0_18px_38px_-20px_rgba(91,33,182,.28)] flex flex-col items-center justify-center text-center space-y-3 hover:-translate-y-1"
           >
             <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-cyan-500/10 text-cyan-500 dark:text-cyan-400 flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
               <Compass className="w-5 h-5 sm:w-6 sm:h-6" />
@@ -275,7 +251,10 @@ export const HomeView: React.FC<HomeViewProps> = ({
           <div
             id="hub-module-services"
             onClick={() => onNavigateSection('services')}
-            className="p-3.5 sm:p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-blue-500 dark:hover:border-blue-500 transition-all cursor-pointer group shadow-sm flex flex-col items-center text-center space-y-2 hover:-translate-y-0.5 hover:shadow-md"
+            role="button"
+            tabIndex={0}
+            onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.currentTarget.click(); } }}
+            className="min-h-[142px] p-4 sm:p-5 rounded-[1.35rem] bg-white dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-700/70 hover:border-violet-400 dark:hover:border-violet-400 transition-all duration-300 cursor-pointer group shadow-[0_8px_24px_-18px_rgba(15,23,42,.35)] hover:shadow-[0_18px_38px_-20px_rgba(91,33,182,.28)] flex flex-col items-center justify-center text-center space-y-3 hover:-translate-y-1"
           >
             <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-blue-500/10 text-blue-500 dark:text-blue-400 flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
               <Briefcase className="w-5 h-5 sm:w-6 sm:h-6" />
@@ -292,7 +271,10 @@ export const HomeView: React.FC<HomeViewProps> = ({
           <div
             id="hub-module-ai-concierge"
             onClick={() => onNavigateSection('ai_search')}
-            className="p-3.5 sm:p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-amber-500 dark:hover:border-amber-500 transition-all cursor-pointer group shadow-sm flex flex-col items-center text-center space-y-2 hover:-translate-y-0.5 hover:shadow-md"
+            role="button"
+            tabIndex={0}
+            onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.currentTarget.click(); } }}
+            className="min-h-[142px] p-4 sm:p-5 rounded-[1.35rem] bg-white dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-700/70 hover:border-violet-400 dark:hover:border-violet-400 transition-all duration-300 cursor-pointer group shadow-[0_8px_24px_-18px_rgba(15,23,42,.35)] hover:shadow-[0_18px_38px_-20px_rgba(91,33,182,.28)] flex flex-col items-center justify-center text-center space-y-3 hover:-translate-y-1"
           >
             <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-amber-500/10 text-amber-500 dark:text-amber-400 flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
               <Sparkles className="w-5 h-5 sm:w-6 sm:h-6" />
@@ -309,7 +291,10 @@ export const HomeView: React.FC<HomeViewProps> = ({
           <div
             id="hub-module-pstp-security"
             onClick={onOpenPstpShield}
-            className="p-3.5 sm:p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-emerald-500 dark:hover:border-emerald-500 transition-all cursor-pointer group shadow-sm flex flex-col items-center text-center space-y-2 hover:-translate-y-0.5 hover:shadow-md"
+            role="button"
+            tabIndex={0}
+            onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.currentTarget.click(); } }}
+            className="min-h-[142px] p-4 sm:p-5 rounded-[1.35rem] bg-white dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-700/70 hover:border-violet-400 dark:hover:border-violet-400 transition-all duration-300 cursor-pointer group shadow-[0_8px_24px_-18px_rgba(15,23,42,.35)] hover:shadow-[0_18px_38px_-20px_rgba(91,33,182,.28)] flex flex-col items-center justify-center text-center space-y-3 hover:-translate-y-1"
           >
             <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-emerald-500/10 text-emerald-500 dark:text-emerald-400 flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
               <ShieldCheck className="w-5 h-5 sm:w-6 sm:h-6" />
@@ -326,7 +311,10 @@ export const HomeView: React.FC<HomeViewProps> = ({
           <div
             id="hub-module-developer"
             onClick={() => onNavigateSection('developer_platform' as any)}
-            className="p-3.5 sm:p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-purple-500 dark:hover:border-purple-500 transition-all cursor-pointer group shadow-sm flex flex-col items-center text-center space-y-2 hover:-translate-y-0.5 hover:shadow-md"
+            role="button"
+            tabIndex={0}
+            onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.currentTarget.click(); } }}
+            className="min-h-[142px] p-4 sm:p-5 rounded-[1.35rem] bg-white dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-700/70 hover:border-violet-400 dark:hover:border-violet-400 transition-all duration-300 cursor-pointer group shadow-[0_8px_24px_-18px_rgba(15,23,42,.35)] hover:shadow-[0_18px_38px_-20px_rgba(91,33,182,.28)] flex flex-col items-center justify-center text-center space-y-3 hover:-translate-y-1"
           >
             <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-purple-500/10 text-purple-500 dark:text-purple-400 flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
               <Code className="w-5 h-5 sm:w-6 sm:h-6" />
@@ -343,7 +331,10 @@ export const HomeView: React.FC<HomeViewProps> = ({
           <div
             id="hub-module-future-services"
             onClick={() => onNavigateSection('future_services')}
-            className="p-3.5 sm:p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-indigo-500 dark:hover:border-indigo-500 transition-all cursor-pointer group shadow-sm flex flex-col items-center text-center space-y-2 hover:-translate-y-0.5 hover:shadow-md"
+            role="button"
+            tabIndex={0}
+            onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.currentTarget.click(); } }}
+            className="min-h-[142px] p-4 sm:p-5 rounded-[1.35rem] bg-white dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-700/70 hover:border-violet-400 dark:hover:border-violet-400 transition-all duration-300 cursor-pointer group shadow-[0_8px_24px_-18px_rgba(15,23,42,.35)] hover:shadow-[0_18px_38px_-20px_rgba(91,33,182,.28)] flex flex-col items-center justify-center text-center space-y-3 hover:-translate-y-1"
           >
             <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-indigo-500/10 text-indigo-500 dark:text-indigo-400 flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
               <Layers className="w-5 h-5 sm:w-6 sm:h-6" />
@@ -364,7 +355,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
       {/* ========================================================================= */}
       <section 
         id="track-order-section" 
-        className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 sm:p-5 shadow-sm space-y-4 transition-colors hover:border-purple-500/30"
+        className="rounded-[1.5rem] bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-700/70 p-4 sm:p-6 shadow-[0_16px_45px_-32px_rgba(15,23,42,.45)] space-y-5 transition-all hover:border-violet-400/50"
       >
         {/* Header: Concise Title + Status Badge + Single Subtitle */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -377,7 +368,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 TRACK ORDER
               </h2>
               <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-950/80 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
-                PSTP Live
+                Order Tracking
               </span>
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400 font-medium pl-8 sm:pl-8">
@@ -389,8 +380,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
         {/* Compact Active Order & Lifecycle Indicator Card */}
         {(() => {
           const displayOrder = activeOrders && activeOrders.length > 0 ? activeOrders[0] : null;
-          const orderId = displayOrder?.id || 'ORD-PI-892341';
-          const orderStatus = (displayOrder?.pstpStatus || displayOrder?.escrowStatus || 'IN TRANSIT').replace('_', ' ').toUpperCase();
+          const orderId = displayOrder?.id || '';
+          const orderStatus = displayOrder ? (displayOrder.pstpStatus || displayOrder.escrowStatus || 'STATUS PENDING').replace('_', ' ').toUpperCase() : 'NO ACTIVE ORDER';
 
           return (
             <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 p-3 sm:p-3.5 space-y-2.5">
@@ -398,7 +389,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <div className="flex items-center gap-2">
                   <span className="font-mono text-xs sm:text-sm font-black text-slate-900 dark:text-white">
-                    {orderId}
+                    {orderId || 'No active order'}
                   </span>
                   {displayOrder && (
                     <span className="text-[11px] text-amber-500 dark:text-amber-400 font-bold hidden sm:inline">
@@ -406,33 +397,39 @@ export const HomeView: React.FC<HomeViewProps> = ({
                     </span>
                   )}
                 </div>
-                <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 shrink-0">
+                <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider border shrink-0 ${displayOrder ? 'bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700'}`}>
                   {orderStatus}
                 </span>
               </div>
 
-              {/* Lifecycle Progress Sequence */}
-              <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap text-[11px] text-slate-600 dark:text-slate-300 pt-1 border-t border-slate-200/60 dark:border-slate-700/50">
-                <span className="inline-flex items-center gap-1 font-medium text-purple-600 dark:text-purple-400">
-                  <CreditCard className="w-3 h-3 text-purple-500 shrink-0" />
-                  <span>Payment</span>
-                </span>
-                <span className="text-slate-300 dark:text-slate-600 font-mono text-[10px]">→</span>
-                <span className="inline-flex items-center gap-1 font-medium text-blue-600 dark:text-blue-400">
-                  <Box className="w-3 h-3 text-blue-500 shrink-0" />
-                  <span>Fulfillment</span>
-                </span>
-                <span className="text-slate-300 dark:text-slate-600 font-mono text-[10px]">→</span>
-                <span className="inline-flex items-center gap-1 font-semibold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 rounded border border-amber-200/60 dark:border-amber-800/60">
-                  <Truck className="w-3 h-3 text-amber-500 shrink-0 animate-pulse" />
-                  <span>Shipment</span>
-                </span>
-                <span className="text-slate-300 dark:text-slate-600 font-mono text-[10px]">→</span>
-                <span className="inline-flex items-center gap-1 font-medium text-slate-400 dark:text-slate-500">
-                  <ShieldCheck className="w-3 h-3 text-slate-400 dark:text-slate-500 shrink-0" />
-                  <span>Delivery</span>
-                </span>
-              </div>
+              {/* Only show shipment progress for a real active order. */}
+              {displayOrder ? (
+                <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap text-[11px] text-slate-600 dark:text-slate-300 pt-2 border-t border-slate-200/60 dark:border-slate-700/50">
+                  <span className="inline-flex items-center gap-1 font-medium text-purple-600 dark:text-purple-400">
+                    <CreditCard className="w-3 h-3 text-purple-500 shrink-0" />
+                    <span>Payment</span>
+                  </span>
+                  <span className="text-slate-300 dark:text-slate-600 font-mono text-[10px]">→</span>
+                  <span className="inline-flex items-center gap-1 font-medium text-blue-600 dark:text-blue-400">
+                    <Box className="w-3 h-3 text-blue-500 shrink-0" />
+                    <span>Fulfillment</span>
+                  </span>
+                  <span className="text-slate-300 dark:text-slate-600 font-mono text-[10px]">→</span>
+                  <span className="inline-flex items-center gap-1 font-medium text-slate-500 dark:text-slate-400">
+                    <Truck className="w-3 h-3 shrink-0" />
+                    <span>Shipment</span>
+                  </span>
+                  <span className="text-slate-300 dark:text-slate-600 font-mono text-[10px]">→</span>
+                  <span className="inline-flex items-center gap-1 font-medium text-slate-400 dark:text-slate-500">
+                    <ShieldCheck className="w-3 h-3 text-slate-400 dark:text-slate-500 shrink-0" />
+                    <span>Delivery</span>
+                  </span>
+                </div>
+              ) : (
+                <p className="pt-2 border-t border-slate-200/60 dark:border-slate-700/50 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
+                  Your order journey will appear here when you have an active order.
+                </p>
+              )}
             </div>
           );
         })()}
@@ -443,7 +440,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             id="quick-order-track-form"
             onSubmit={(e) => {
               e.preventDefault();
-              const targetId = trackingQuery.trim() || (activeOrders && activeOrders.length > 0 ? activeOrders[0].id : 'ORD-PI-892341');
+              const targetId = trackingQuery.trim() || (activeOrders && activeOrders.length > 0 ? activeOrders[0].id : '');
               if (targetId) {
                 onTrackOrder?.(targetId);
               } else {
@@ -486,11 +483,11 @@ export const HomeView: React.FC<HomeViewProps> = ({
       </section>
 
       {/* ========================================================================= */}
-      {/* 4. PI MERCHANT WEEK: PROMOTIONAL CAMPAIGN SECTION                         */}
+      {/* 4. GLOBAL MARKETPLACE DISCOVERY                                           */}
       {/* ========================================================================= */}
       <section 
-        id="pi-merchant-week" 
-        className="p-5 sm:p-7 md:p-8 rounded-2xl sm:rounded-3xl bg-gradient-to-r from-purple-950 via-indigo-950 to-slate-950 text-white border border-purple-700/40 shadow-xl space-y-3 relative overflow-hidden"
+        id="global-marketplace-discovery" 
+        className="p-5 sm:p-7 md:p-8 rounded-[1.5rem] sm:rounded-[1.8rem] bg-[radial-gradient(ellipse_at_top_right,_rgba(168,85,247,.22),_transparent_48%),linear-gradient(115deg,#17102f_0%,#151c35_55%,#0b1220_100%)] text-white border border-violet-400/25 shadow-[0_22px_60px_-32px_rgba(76,29,149,.75)] space-y-3 relative overflow-hidden"
       >
         {/* Ambient Glow */}
         <div className="absolute top-0 right-0 w-72 sm:w-80 h-72 sm:h-80 bg-purple-500/10 rounded-full blur-2xl pointer-events-none" />
@@ -499,22 +496,22 @@ export const HomeView: React.FC<HomeViewProps> = ({
           <div className="space-y-1.5 sm:space-y-2 max-w-2xl">
             <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-400 text-slate-950 font-black text-[10px] uppercase tracking-wider shadow-sm">
               <Flame className="w-3.5 h-3.5" />
-              <span>Pi Merchant Week</span>
+              <span>Explore the Global Hub</span>
             </div>
             <h3 className="text-base sm:text-lg md:text-xl lg:text-2xl font-black text-white leading-snug">
-              Pi Merchant Fest: Verified Merchants & Protected Escrow
+              Discover products, services and everyday utilities
             </h3>
             <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-              Explore verified merchants across physical goods, utilities, and digital services with guaranteed non-custodial PSTP escrow protection and Pi Network SDK v2 protocol.
+              Browse marketplace categories and available services. Seller eligibility, payment options and protection features are shown in the relevant flows as they become available.
             </p>
           </div>
 
           <button
-            id="pi-merchant-week-shop-deals-btn"
+            id="global-marketplace-discovery-btn"
             onClick={() => onNavigateSection('marketplace', 'deals')}
             className="px-5 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs sm:text-sm rounded-xl shadow-lg shadow-purple-600/30 inline-flex items-center gap-2 transition-all shrink-0 active:scale-95"
           >
-            <span>Shop Deals</span>
+            <span>Explore Marketplace</span>
             <ArrowRight className="w-4 h-4" />
           </button>
         </div>
@@ -525,18 +522,18 @@ export const HomeView: React.FC<HomeViewProps> = ({
       {/* ========================================================================= */}
       <section 
         id="merchant-onboarding-open" 
-        className="p-5 sm:p-7 md:p-8 rounded-2xl sm:rounded-3xl bg-gradient-to-r from-amber-950/60 via-slate-900 to-purple-950/60 border border-amber-500/40 shadow-xl flex flex-wrap items-center justify-between gap-4 sm:gap-5 text-white"
+        className="p-5 sm:p-7 md:p-8 rounded-[1.5rem] sm:rounded-[1.8rem] bg-[radial-gradient(ellipse_at_top_left,_rgba(245,158,11,.16),_transparent_48%),linear-gradient(115deg,#211a19_0%,#111827_55%,#21143c_100%)] border border-amber-400/30 shadow-[0_22px_60px_-32px_rgba(120,53,15,.55)] flex flex-wrap items-center justify-between gap-4 sm:gap-5 text-white"
       >
         <div className="space-y-1.5 sm:space-y-2 max-w-xl">
           <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/40 text-[10px] font-black uppercase tracking-wider">
             <Store className="w-3.5 h-3.5 text-amber-400" />
-            <span>Merchant Onboarding Open</span>
+            <span>Merchant Applications</span>
           </div>
           <h3 className="text-base sm:text-lg md:text-xl font-black text-white">
             Sell Your Products & Services for Pi
           </h3>
           <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-            Apply to become a Verified Vendor. Get guaranteed PSTP Escrow order protection, Seller Studio management dashboard, and reach Pi users worldwide.
+            Submit a merchant application, complete the required verification steps and manage your store through Seller Studio. Available payment and order-protection options are presented during the relevant checkout flow.
           </p>
         </div>
 
@@ -548,7 +545,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
               className="px-4 sm:px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 via-amber-600 to-purple-600 hover:opacity-95 text-slate-950 font-black text-xs sm:text-sm shadow-lg flex items-center gap-2 transition-all active:scale-95"
             >
               <ShieldCheck className="w-4 h-4 text-slate-950" />
-              <span>Become a Verified Vendor</span>
+              <span>Apply to Become a Merchant</span>
             </button>
           )}
           <button

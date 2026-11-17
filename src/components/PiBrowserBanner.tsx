@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { ShieldCheck, Info, Sparkles, Terminal, ChevronDown, ChevronUp, RefreshCw } from 'lucide-react';
-import { isPiBrowser, subscribePiSdkState, getPiSdkDiagnosticState, authenticatePiUser, resetPiAuthState, setCustomSandboxMode, PiSdkDiagnosticState } from '../lib/piSdk';
+import { ShieldCheck, Info, Sparkles, Terminal, ChevronDown, ChevronUp, RefreshCw, Smartphone, Download } from 'lucide-react';
+import { isPiBrowser, subscribePiSdkState, getPiSdkDiagnosticState, authenticatePiUser, setCustomSandboxMode, PiSdkDiagnosticState } from '../lib/piSdk';
 
 interface PiBrowserBannerProps {
   sandboxMode: boolean;
@@ -16,14 +16,54 @@ export const PiBrowserBanner: React.FC<PiBrowserBannerProps> = ({
   const [diagState, setDiagState] = useState<PiSdkDiagnosticState>(getPiSdkDiagnosticState());
   const [showDiagPanel, setShowDiagPanel] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
+  const [installPrompt, setInstallPrompt] = useState<any>(null);
+  const [installHelp, setInstallHelp] = useState(false);
+
+  const handleCopyAppLink = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setLinkCopied(true);
+      window.setTimeout(() => setLinkCopied(false), 2500);
+    } catch (error) {
+      console.warn('[PI BANNER] Could not copy app link:', error);
+    }
+  };
 
   useEffect(() => {
     return subscribePiSdkState((st) => setDiagState(st));
   }, []);
 
+  useEffect(() => {
+    const onInstallPrompt = (event: Event) => {
+      event.preventDefault();
+      setInstallPrompt(event as any);
+    };
+    const onInstalled = () => {
+      setInstallPrompt(null);
+      setInstallHelp(false);
+    };
+    window.addEventListener('beforeinstallprompt', onInstallPrompt);
+    window.addEventListener('appinstalled', onInstalled);
+    return () => {
+      window.removeEventListener('beforeinstallprompt', onInstallPrompt);
+      window.removeEventListener('appinstalled', onInstalled);
+    };
+  }, []);
+
+  const handleInstallPiNova = async () => {
+    if (!installPrompt) {
+      setInstallHelp(true);
+      return;
+    }
+    await installPrompt.prompt();
+    await installPrompt.userChoice;
+    setInstallPrompt(null);
+  };
+
   const handleRetryAuth = async () => {
     setIsRetrying(true);
-    resetPiAuthState();
+    // Do not clear an in-flight native Pi request; authenticate() already deduplicates it.
     try {
       await authenticatePiUser(undefined, true);
     } catch (err) {
@@ -52,7 +92,7 @@ export const PiBrowserBanner: React.FC<PiBrowserBannerProps> = ({
         return `Connected to Pi (@${diagState.username || 'user'})`;
       case 'AUTH_NOT_STARTED':
       default:
-        return 'Connecting to Pi...';
+        return 'Not connected';
     }
   };
 
@@ -77,51 +117,60 @@ export const PiBrowserBanner: React.FC<PiBrowserBannerProps> = ({
 
         {/* Center: Environment & Diagnostic Info */}
         <div className="flex flex-wrap items-center gap-2 text-slate-300">
-          {diagState.authState === 'AUTH_PROMISE_RETURNED' || diagState.authState === 'AUTH_CALL_STARTED' ? (
-            <div className="flex items-center gap-1.5 bg-amber-500/20 border border-amber-500/50 text-amber-200 px-3 py-0.5 rounded-md animate-pulse">
-              <span className="w-2 h-2 rounded-full bg-amber-400" />
-              <span className="font-medium text-[11px]">{getStatusText()}</span>
+          {!inPiBrowser ? (
+            <div className="w-full basis-full rounded-xl border border-amber-400/30 bg-amber-950/35 p-3 sm:p-4 text-amber-100">
+              <div className="flex flex-wrap items-center gap-2">
+                <Info className="h-4 w-4 shrink-0 text-amber-300" />
+                <strong className="text-xs sm:text-sm">Standard browser detected</strong>
+                <span className="rounded-full border border-amber-300/30 bg-amber-400/10 px-2 py-0.5 text-[10px] font-semibold text-amber-200">Pi Browser recommended</span>
+              </div>
+              <p className="mt-1.5 max-w-3xl text-[11px] leading-relaxed text-amber-100/85">
+                Open PiNova Global Hub inside Pi Browser to use Pi Network authentication and authorized Pi payment features. Payments still require the normal Pi authorization and server verification steps.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button type="button" onClick={handleInstallPiNova} className="inline-flex items-center gap-2 rounded-lg border border-emerald-300/40 bg-emerald-400/10 px-3 py-2 text-[11px] font-semibold text-emerald-100 transition hover:bg-emerald-400/20">
+                  <Download className="h-3.5 w-3.5" />
+                  {installPrompt ? 'Install PiNova app' : 'How to install PiNova'}
+                </button>
+                <button type="button" onClick={handleCopyAppLink} className="inline-flex items-center gap-2 rounded-lg bg-amber-300 px-3 py-2 text-[11px] font-bold text-slate-950 transition hover:bg-amber-200">
+                  <Smartphone className="h-3.5 w-3.5" />
+                  {linkCopied ? 'App link copied' : 'Copy PiNova link for Pi Browser'}
+                </button>
+                <a href="https://play.google.com/store/apps/details?id=pi.browser" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-lg border border-amber-200/40 px-3 py-2 text-[11px] font-semibold text-amber-100 transition hover:bg-amber-400/10">
+                  <Download className="h-3.5 w-3.5" />
+                  Get Pi Browser (Google Play)
+                </a>
+                {onOpenDiagnostics && (
+                  <button type="button" onClick={onOpenDiagnostics} className="inline-flex items-center gap-2 rounded-lg border border-slate-400/30 px-3 py-2 text-[11px] font-semibold text-slate-100 transition hover:bg-white/5">
+                    <Terminal className="h-3.5 w-3.5" />
+                    Pi connection diagnostics
+                  </button>
+                )}
+              </div>
+              {installHelp && (
+                <p className="mt-2 rounded-lg border border-emerald-300/20 bg-emerald-400/5 p-2 text-[10px] leading-relaxed text-emerald-100">
+                  If your browser offers installation, use its menu and choose “Install app” or “Add to Home screen”. If this option is unavailable, continue using PiNova in your browser. Pi Browser access is still recommended for Pi Network authentication.
+                </p>
+              )}
+              <p className="mt-2 text-[10px] text-amber-200/70">
+                After installing, open Pi Browser, sign in, then paste the copied PiNova link into its address bar.
+              </p>
             </div>
-          ) : diagState.authState === 'AUTH_NATIVE_PENDING' ? (
+          ) : diagState.authState === 'AUTH_NATIVE_PENDING' || diagState.authState === 'AUTH_TIMEOUT' ? (
             <div className="flex items-center gap-1.5 bg-rose-500/20 border border-rose-500/50 text-rose-200 px-3 py-0.5 rounded-md">
               <span className="w-2 h-2 rounded-full bg-rose-400 animate-pulse" />
               <span className="font-medium text-[11px]">{getStatusText()}</span>
             </div>
-          ) : diagState.authState === 'PI_AUTHENTICATE_UNAVAILABLE' ? (
+          ) : diagState.authState === 'PI_AUTHENTICATE_UNAVAILABLE' || diagState.authState === 'AUTH_DENIED' || diagState.authState === 'AUTH_ERROR' ? (
             <div className="flex items-center gap-1.5 bg-rose-500/20 border border-rose-500/50 text-rose-200 px-3 py-0.5 rounded-md">
               <span className="w-2 h-2 rounded-full bg-rose-400" />
               <span className="font-medium text-[11px]">{getStatusText()}</span>
-            </div>
-          ) : diagState.authState === 'AUTH_DENIED' || diagState.authState === 'AUTH_ERROR' ? (
-            <div className="flex items-center gap-1.5 bg-rose-500/20 border border-rose-500/50 text-rose-200 px-3 py-0.5 rounded-md">
-              <span className="w-2 h-2 rounded-full bg-rose-400" />
-              <span className="font-medium text-[11px]">{getStatusText()}</span>
-            </div>
-          ) : !inPiBrowser ? (
-            <div className="hidden md:flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/30 text-amber-300 px-3 py-0.5 rounded-md">
-              <Info className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-              <span>
-                Web Browser Preview: Non-custodial payments require <strong>Pi Browser</strong>.
-              </span>
             </div>
           ) : (
             <div className="flex items-center gap-1.5 text-emerald-300 mr-2">
               <Sparkles className="w-3.5 h-3.5" />
               <span className="hidden lg:inline">{getStatusText()}</span>
             </div>
-          )}
-
-          {/* Retry Button */}
-          {inPiBrowser && diagState.authState !== 'AUTH_SUCCESS' && (
-            <button
-              onClick={handleRetryAuth}
-              disabled={diagState.hasActiveAuthPromise || isRetrying}
-              className="flex items-center gap-1 bg-purple-700 hover:bg-purple-600 disabled:bg-slate-800 disabled:text-slate-500 disabled:border-slate-700 text-white font-medium text-[11px] px-2.5 py-0.5 rounded border border-purple-500/50 transition-colors shrink-0 cursor-pointer disabled:cursor-not-allowed"
-              title="Manually retry Pi Network authentication"
-            >
-              <RefreshCw className={`w-3 h-3 ${diagState.hasActiveAuthPromise || isRetrying ? 'animate-spin' : ''}`} />
-              <span>Retry Pi Authentication</span>
-            </button>
           )}
 
           {/* Diagnostic Summary Badge */}
@@ -227,10 +276,10 @@ export const PiBrowserBanner: React.FC<PiBrowserBannerProps> = ({
               {inPiBrowser && diagState.authState !== 'AUTH_SUCCESS' && (
                 <button
                   onClick={handleRetryAuth}
-                  disabled={diagState.hasActiveAuthPromise || isRetrying}
+                  disabled={diagState.hasActiveAuthPromise || diagState.nativeBridgeState === 'promise_pending' || diagState.nativeBridgeState === 'calling_invocation' || isRetrying}
                   className="bg-rose-900/80 hover:bg-rose-800 text-rose-100 px-2 py-0.5 rounded text-[10px] font-sans font-medium transition-colors shrink-0 cursor-pointer disabled:opacity-50"
                 >
-                  {isRetrying ? 'Retrying...' : 'Retry Now'}
+                  {diagState.nativeBridgeState === 'promise_pending' ? 'Waiting for Pi Browser...' : isRetrying ? 'Retrying...' : 'Retry Now'}
                 </button>
               )}
             </div>

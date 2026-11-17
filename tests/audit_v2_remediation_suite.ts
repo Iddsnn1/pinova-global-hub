@@ -8,7 +8,6 @@ import path from 'path';
 process.env.PINOVA_DATA_DIR = path.join(os.tmpdir(), `pinova_audit_test_${Date.now()}`);
 
 import crypto from 'crypto';
-import { UserIdentityRepository } from '../src/server/auth/UserIdentityRepository';
 import { AuthorizationService } from '../src/server/auth/AuthorizationService';
 import { createRateLimiter } from '../src/server/auth/rateLimit';
 import { EducationRepository } from '../src/server/db/repositories/EducationRepository';
@@ -40,59 +39,108 @@ async function runTestSuite() {
   // --- 1. AUTHENTICATION & SERVER-SIDE AUTHORIZATION ---
   console.log('--- SECTION 1: SERVER-SIDE AUTHORIZATION & SESSION AUDIT ---');
 
-  const userRepo = new UserIdentityRepository();
-  const authService = new AuthorizationService(userRepo);
+  process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'test-only-session-secret-32-characters-min';
+  const identities = new Map<string, any>();
+  const sessions = new Map<string, { userId: string; expiresAt: number }>();
+  const fakeNeonRepository = {
+    async findUserByUsername(username: string) {
+      return identities.get(username.trim().replace(/^@/, '').toLowerCase()) || null;
+    },
+    async findActiveSession(token: string) {
+      const session = sessions.get(token);
+      if (!session || session.expiresAt <= Date.now()) return null;
+      const user = [...identities.values()].find((candidate) => candidate.id === session.userId);
+      return user ? { user: { ...user }, expiresAt: session.expiresAt } : null;
+    },
+    async createSession(token: string, userId: string, expiresAt: number) {
+      sessions.set(token, { userId, expiresAt });
+    },
+    async revokeSession(token: string) {
+      sessions.delete(token);
+    },
+    async setAuthoritativeRoles(userId: string, roles: any[]) {
+      const user = [...identities.values()].find((candidate) => candidate.id === userId);
+      if (!user) return null;
+      user.roles = [...roles];
+      return { ...user };
+    },
+    async upsertVerifiedPiIdentity({ username, piUid }: { username: string; piUid: string }) {
+      const key = username.trim().replace(/^@/, '').toLowerCase();
+      const existing = identities.get(key);
+      const user = existing || {
+        id: `test-${key}`, username, piUid, roles: ['PIONEER'], status: 'ACTIVE',
+        createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
+      };
+      if (existing && existing.piUid !== piUid) throw new Error('AUTH_PI_UID_MISMATCH');
+      identities.set(key, user);
+      return { ...user };
+    }
+  };
+  identities.set('pioneer_alice', {
+    id: 'test-alice', username: 'pioneer_alice', piUid: 'pi-uid-alice-123',
+    roles: ['PIONEER', 'STUDENT'], status: 'ACTIVE',
+    createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
+  });
+  identities.set('admin_bob', {
+    id: 'test-bob', username: 'admin_bob', piUid: 'pi-uid-bob-admin',
+    roles: ['PIONEER'], status: 'ACTIVE',
+    createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
+  });
+  const authService = new AuthorizationService(fakeNeonRepository as any);
 
   // 1.1 Session Creation & Identity Binding
   const pioneerSession = await authService.createSession({
     username: 'pioneer_alice',
     uid: 'pi-uid-alice-123',
-    roles: ['PIONEER', 'STUDENT']
+    roles: ['PLATFORM_ADMIN']
   });
-  assert(Boolean(pioneerSession.token), 'Scenario 1.1: Auth service issues secure random session token');
-  assert(pioneerSession.user.username === 'pioneer_alice', 'Scenario 1.2: Authenticated user profile bound to session');
-  assert(pioneerSession.user.roles.includes('PIONEER'), 'Scenario 1.3: User possesses assigned role');
+  assert(Boolean(pioneerSession.token), 'Scenario 1.1: Auth service issues a signed durable-session token');
+  assert(pioneerSession.user.username === 'pioneer_alice', 'Scenario 1.2: Authenticated user profile bound to Neon identity');
+  assert(pioneerSession.user.roles.includes('PIONEER'), 'Scenario 1.3: Roles are read from authoritative identity');
 
   // 1.2 Role Checking
   const isAliceAdmin = authService.hasRole(pioneerSession.user, 'PLATFORM_ADMIN');
   assert(!isAliceAdmin, 'Scenario 1.4: Regular Pioneer lacks PLATFORM_ADMIN role');
-
   const isAliceStudent = authService.hasRole(pioneerSession.user, 'STUDENT');
-  assert(isAliceStudent, 'Scenario 1.5: Regular Pioneer with student role possesses STUDENT role');
+  assert(isAliceStudent, 'Scenario 1.5: Existing authoritative STUDENT role is retained');
 
-  // 1.3 Admin Session & Permissions
+  // 1.3 Server-authorized admin role assignment
   const adminSession = await authService.createSession({
     username: 'admin_bob',
     uid: 'pi-uid-bob-admin',
-    roles: ['PLATFORM_ADMIN']
+    roles: ['PLATFORM_ADMIN'],
+    isAuthorizedAdmin: true
   });
-  assert(authService.hasRole(adminSession.user, 'PLATFORM_ADMIN'), 'Scenario 1.6: Platform admin possesses PLATFORM_ADMIN role');
-  assert(authService.hasPermission(adminSession.user, 'pstp:disputes:resolve'), 'Scenario 1.7: Platform admin possesses dispute resolution permission');
-  assert(authService.hasPermission(adminSession.user, 'education:fees:override'), 'Scenario 1.8: Platform admin possesses fee override permission');
+  assert(authService.hasRole(adminSession.user, 'PLATFORM_ADMIN'), 'Scenario 1.6: Explicit server-authorized admin receives PLATFORM_ADMIN role');
+  assert(authService.hasPermission(adminSession.user, 'pstp:dispute:resolve'), 'Scenario 1.7: Platform admin possesses dispute resolution permission');
 
-  // 1.4 Client Header Impersonation Rejection
-  // If a user token is regular pioneer, an attacker cannot claim admin permissions
+  // 1.4 Token cannot elevate roles beyond the authoritative identity
   const tokenUser = await authService.authenticateToken(pioneerSession.token);
-  assert(tokenUser !== null && !tokenUser.roles.includes('PLATFORM_ADMIN'), 'Scenario 1.9: Token cannot be spoofed to elevate privileges');
+  assert(tokenUser !== null && !tokenUser.roles.includes('PLATFORM_ADMIN'), 'Scenario 1.9: Signed token roles cannot elevate privileges');
 
-  // 1.5 Logout & Session Invalidation
-  authService.invalidateSession(pioneerSession.token);
+  // 1.5 Logout waits for durable revocation
+  await authService.invalidateSession(pioneerSession.token);
   const invalidatedUser = await authService.authenticateToken(pioneerSession.token);
-  assert(invalidatedUser === null, 'Scenario 1.10: Invalidated session token rejected upon subsequent authentication');
-
+  assert(invalidatedUser === null, 'Scenario 1.10: Revoked session rejected on subsequent authentication');
 
   // 1.6 Education API BOLA/BFLA source-level regression guards
   // These guards ensure the fail-closed authorization contracts remain present in server.ts.
   const serverSource = await import('fs/promises').then((fs) => fs.readFile(path.join(process.cwd(), 'server.ts'), 'utf8'));
   const authTypeSource = await import('fs/promises').then((fs) => fs.readFile(path.join(process.cwd(), 'src/server/auth/types.ts'), 'utf8'));
+  const authorizationServiceSource = await import('fs/promises').then((fs) => fs.readFile(path.join(process.cwd(), 'src/server/auth/AuthorizationService.ts'), 'utf8'));
+  assert(serverSource.includes("const adminSecret = String(process.env.ADMIN_API_KEY || '').trim();"), 'Scenario 1.10a: Admin machine authentication uses ADMIN_API_KEY only');
+  assert(!serverSource.includes('process.env.ADMIN_API_KEY || process.env.PI_API_KEY || process.env.PI_SERVER_KEY'), 'Scenario 1.10b: Pi platform credentials cannot fall back into server admin authentication');
+  assert(serverSource.includes("const piApiKey = (process.env.PI_API_KEY || process.env.PI_SERVER_KEY || '').trim();"), 'Scenario 1.10c: Pi platform credentials remain available for Pi payment verification only');
+  assert(authorizationServiceSource.includes("const machineSecret = String(process.env.ADMIN_API_KEY || '').trim();"), 'Scenario 1.10d: AuthorizationService machine authentication uses ADMIN_API_KEY only');
   assert(authTypeSource.includes('institutionId?: string'), 'Scenario 1.11: Authenticated user carries institution binding');
   assert(serverSource.includes('DOCUMENT_SCOPE_UNAVAILABLE'), 'Scenario 1.12: Institution document access fails closed when scoped listing is unavailable');
-  assert(serverSource.includes('INSTITUTION_ADMIN') && serverSource.includes('req.user?.institutionId === admission.institutionId'), 'Scenario 1.13: Institution admin document access is institution-scoped');
-  assert(serverSource.includes('INSTITUTION_ADMIN') && serverSource.includes('cannot upload documents on behalf of applicants'), 'Scenario 1.14: Institution admin cannot impersonate applicant document uploads');
+  assert(serverSource.includes("to_regclass('public.user_identities')") && serverSource.includes("res.status(503)") && serverSource.includes('durablePersistence: false'), 'Scenario 1.12a: Health endpoint fails closed when Neon durable auth persistence is unavailable');
+  assert(serverSource.includes('INSTITUTION_ADMIN') && serverSource.includes('req.user.institutionId !== admission.institutionId') && serverSource.includes('DOCUMENT_SCOPE_UNAVAILABLE'), 'Scenario 1.13: Institution admin document access is institution-scoped and fails closed');
+  assert(serverSource.includes('INSTITUTION_ADMIN') && serverSource.includes('Institution administrators cannot upload academic documents on behalf of applicants.'), 'Scenario 1.14: Institution admin cannot impersonate applicant document uploads');
   assert(serverSource.includes('req.user?.institutionId !== requestedInstitution'), 'Scenario 1.15: Institution invoice access rejects cross-institution requests');
   assert(serverSource.includes('requestedGuardianId') && serverSource.includes('scopedChildren'), 'Scenario 1.16: Guardian children endpoint enforces caller ownership/institution scope');
-  assert(serverSource.includes('req.user?.institutionId === admission.institutionId') && serverSource.includes('offer/accept'), 'Scenario 1.17: Admission offer acceptance enforces institution scope');
-  assert(serverSource.includes('req.user?.institutionId === admission.institutionId') && serverSource.includes('admissions/:id/status'), 'Scenario 1.18: Admission status mutation enforces institution scope');
+  assert(serverSource.includes('req.user.institutionId === admission.institutionId') && serverSource.includes('/api/education/admissions/:id/offer/accept'), 'Scenario 1.17: Admission offer acceptance enforces institution scope');
+  assert(serverSource.includes('req.user.institutionId !== admissionForAuthorization.institutionId') && serverSource.includes('/api/education/admissions/:id/status'), 'Scenario 1.18: Admission status mutation enforces institution scope');
 
   // --- 2. PSTP DISPUTE RESOLUTION & SECURITY ---
   console.log('\n--- SECTION 2: PSTP DISPUTE SECURITY & STATE MACHINE AUDIT ---');

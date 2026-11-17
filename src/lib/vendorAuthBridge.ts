@@ -15,6 +15,7 @@ import { getAuthenticatedPiUser, PiSdkManager } from './piSdk';
 
 let inMemoryServerToken: string | null = null;
 let tokenExpiresAt: number | null = null;
+let serverSessionPromise: Promise<string | null> | null = null;
 
 export function getVendorAuthToken(): string | null {
   try {
@@ -110,7 +111,17 @@ export function clearVendorAuthToken(): void {
  * 4. Stores token as auth_token in memory and storage.
  * 5. Returns server session token for Authorization: Bearer header.
  */
-export async function ensureServerSession(forceRefresh: boolean = false): Promise<string | null> {
+export function ensureServerSession(forceRefresh: boolean = false): Promise<string | null> {
+  if (serverSessionPromise) return serverSessionPromise;
+  const pending = establishServerSession(forceRefresh);
+  serverSessionPromise = pending;
+  void pending.finally(() => {
+    if (serverSessionPromise === pending) serverSessionPromise = null;
+  }).catch(() => undefined);
+  return pending;
+}
+
+async function establishServerSession(forceRefresh: boolean = false): Promise<string | null> {
   const currentToken = getVendorAuthToken();
 
   // If token already valid and refresh not requested, reuse
@@ -119,8 +130,8 @@ export async function ensureServerSession(forceRefresh: boolean = false): Promis
   }
 
   let rawAccessToken: string | undefined;
-  let username = 'pioneer_user';
-  let uid = `pi-uid-${Date.now()}`;
+  let username: string | undefined;
+  let uid: string | undefined;
 
   // 1. Reuse the canonical Pi SDK manager first. This preserves an already
   // authenticated Pioneer session and avoids launching a second native
@@ -140,28 +151,12 @@ export async function ensureServerSession(forceRefresh: boolean = false): Promis
     console.warn('[vendorAuthBridge] canonical Pi SDK authentication unavailable:', piAuthErr);
   }
 
-  // 2. Fallback to the raw Pi SDK only when the canonical manager could not
-  // provide a verified active user.
-  if (!rawAccessToken && typeof window !== 'undefined' && window.Pi && typeof window.Pi.authenticate === 'function') {
-    try {
-      const authResult = await window.Pi.authenticate(
-        ['username', 'payments'],
-        (payment: any) => {
-          console.log('[vendorAuthBridge] Incomplete payment found during Pi auth:', payment);
-        }
-      );
-      if (authResult?.accessToken) {
-        rawAccessToken = authResult.accessToken;
-        if (authResult.user?.username) username = authResult.user.username;
-        if (authResult.user?.uid) uid = authResult.user.uid;
-      }
-    } catch (piAuthErr) {
-      console.warn('[vendorAuthBridge] raw window.Pi.authenticate encountered an issue:', piAuthErr);
-    }
-  }
+  // Do not invoke window.Pi.authenticate() again here. PiSdkManager owns
+  // the native bridge and its single-flight lock; a second raw call can
+  // create overlapping native prompts after a timeout.
 
   // 3. Fallback to stored Pioneer username
-  if (!username || username === 'pioneer_user') {
+  if (!username) {
     const storedUsername = getVendorUsername();
     if (storedUsername) username = storedUsername;
   }

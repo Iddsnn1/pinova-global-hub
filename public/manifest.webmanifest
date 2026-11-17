@@ -1,0 +1,20 @@
+{
+  "id": "/",
+  "name": "PiNova Global Hub",
+  "short_name": "PiNova",
+  "description": "PiNova Global Hub — global marketplace and Pi Network services.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0b1020",
+  "theme_color": "#312e81",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/pinova-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

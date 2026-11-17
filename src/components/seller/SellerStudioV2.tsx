@@ -98,9 +98,7 @@ interface NavItem {
 
 export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
   user,
-  products,
-  orders,
-  vendors = [],
+    vendors = [],
   onAddProduct,
   onProductCreated,
   onUpdateProduct,
@@ -189,6 +187,8 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
   });
 
   const [applicationData, setApplicationData] = useState<any>(null);
+  const [sellerOrders, setSellerOrders] = useState<Order[]>([]);
+  const [sellerProducts, setSellerProducts] = useState<Product[]>([]);
   const [statusDiagnostic, setStatusDiagnostic] = useState<string | null>(null);
 
   // Find matching vendor profile or build fallback
@@ -219,7 +219,7 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
   const fetchAuthoritativeStatus = useCallback(async () => {
     setIsLoadingStatus(true);
     try {
-      const res = await vendorAuthenticatedFetch('/api/vendor/status');
+      const res = await vendorAuthenticatedFetch('/api/vendor/seller/access');
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
         setStatusDiagnostic(null);
@@ -283,6 +283,45 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
     fetchAuthoritativeStatus();
   }, [fetchAuthoritativeStatus]);
 
+  useEffect(() => {
+    let active = true;
+    const owner = userUsername.trim().replace(/^@/, '').toLowerCase();
+    // Fail closed: never issue seller-scoped reads without a verified Pioneer username.
+    if (!owner) {
+      setSellerProducts([]);
+      return () => { active = false; };
+    }
+    vendorAuthenticatedFetch('/api/products', { method: 'GET', cache: 'no-store' }).then(async (response) => {
+      const data = await response.json().catch(() => ({}));
+      if (!active) return;
+      const owned = response.ok && Array.isArray(data?.products)
+        ? data.products.filter((product: Product) => String(product?.sellerId || '').trim().replace(/^@/, '').toLowerCase() === owner)
+        : [];
+      setSellerProducts(owned);
+    }).catch(() => { if (active) setSellerProducts([]); });
+    return () => { active = false; };
+  }, [userUsername]);
+
+
+
+  useEffect(() => {
+    let active = true;
+    if (!userUsername.trim().replace(/^@/, '')) {
+      setSellerOrders([]);
+      return () => { active = false; };
+    }
+    void vendorAuthenticatedFetch('/api/orders?role=seller', { method: 'GET', cache: 'no-store' })
+      .then(async (response) => {
+        const data = await response.json().catch(() => ({}));
+        if (!active) return;
+        setSellerOrders(response.ok && Array.isArray(data?.orders) ? data.orders : []);
+      })
+      .catch(() => { if (active) setSellerOrders([]); });
+    return () => { active = false; };
+  }, [userUsername]);
+
+
+
   // Handle Order Fulfillment Action
   const handleUpdateFulfillment = (orderId: string, trackingNumber: string, carrier: string) => {
     if (onUpdateOrderStatus) {
@@ -345,9 +384,9 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
     // Operations & Catalog
     { id: 'overview', label: 'Ecosystem Dashboard', icon: LayoutDashboard, category: 'operations' },
     { id: 'multi_store', label: 'Multi-Store Manager', icon: Store, category: 'operations' },
-    { id: 'products', label: 'Products & Catalog', icon: Package, category: 'operations', count: products.length },
+    { id: 'products', label: 'Products & Catalog', icon: Package, category: 'operations', count: sellerProducts.length },
     { id: 'inventory', label: 'Inventory & Warehouses', icon: Boxes, category: 'operations' },
-    { id: 'orders', label: 'Orders & Fulfillment', icon: ShoppingBag, category: 'operations', count: orders.length },
+    { id: 'orders', label: 'Orders & Fulfillment', icon: ShoppingBag, category: 'operations', count: sellerOrders.length },
     { id: 'bulk_csv', label: 'Bulk CSV Tools', icon: FileSpreadsheet, category: 'operations' },
 
     // Finance & Growth
@@ -363,7 +402,7 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
     { id: 'policies', label: 'Store Policies', icon: FileText, category: 'trust' },
     { id: 'security', label: 'Security & Audit Logs', icon: Lock, category: 'trust' },
     { id: 'help', label: 'Merchant Support', icon: HelpCircle, category: 'trust' }
-  ], [products.length, orders.length]);
+  ], [sellerProducts.length, sellerOrders.length]);
 
   const currentTabItem = navItems.find(item => item.id === activeTab) || navItems[0];
   const CurrentIcon = currentTabItem.icon;
@@ -442,6 +481,18 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
                 <Plus className="w-3.5 h-3.5" />
                 <span className="hidden xs:inline">Complete Onboarding</span>
                 <span className="xs:hidden">Verify</span>
+              </button>
+            )}
+            {serverStatus.status === 'STATUS_UNAVAILABLE' && (
+              <button
+                id="seller-open-verification-center-btn"
+                type="button"
+                onClick={() => handleSelectTab('kyc')}
+                className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold flex items-center gap-1 transition-colors shadow-xs min-h-[40px]"
+              >
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span className="hidden xs:inline">Open Verification Center</span>
+                <span className="xs:hidden">Verification</span>
               </button>
             )}
 
@@ -739,8 +790,8 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
                 userUsername={userUsername}
                 serverStatus={serverStatus}
                 vendorProfile={vendorProfile}
-                products={products}
-                orders={orders}
+                products={sellerProducts}
+                orders={sellerOrders}
                 onNavigateTab={(tab) => handleSelectTab(tab as SellerStudioTabId)}
                 onOpenOnboarding={() => setIsOnboardingOpen(true)}
                 onAddProduct={() => {
@@ -768,7 +819,8 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
             {/* 3. Products & Catalog */}
             {activeTab === 'products' && (
               <ProductsTab
-                products={products}
+                products={sellerProducts}
+                sellerUsername={userUsername}
                 openCreateOnMount={openProductForm}
                 onCreateFormOpened={() => setOpenProductForm(false)}
                 onEditProduct={(prod) => {
@@ -783,7 +835,7 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
             {/* 4. Inventory & Warehouses */}
             {activeTab === 'inventory' && (
               <InventoryWarehousesTab
-                products={products}
+                products={sellerProducts}
                 onUpdateProduct={onUpdateProduct}
               />
             )}
@@ -791,7 +843,7 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
             {/* 5. Orders & Fulfillment */}
             {activeTab === 'orders' && (
               <OrdersTab
-                orders={orders}
+                orders={sellerOrders}
                 onUpdateFulfillment={handleUpdateFulfillment}
               />
             )}
@@ -799,7 +851,7 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
             {/* 6. Bulk CSV Tools */}
             {activeTab === 'bulk_csv' && (
               <BulkCsvToolsTab
-                products={products}
+                products={sellerProducts}
                 onAddProduct={onAddProduct}
                 onProductCreated={onProductCreated}
               />
@@ -808,7 +860,7 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
             {/* 7. Financials & Invoices */}
             {activeTab === 'payments' && (
               <PaymentsTab
-                orders={orders}
+                orders={sellerOrders}
                 serverPstpAuthorized={serverStatus.pstpAuthorized}
               />
             )}
@@ -816,8 +868,8 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
             {/* 8. Sales Analytics */}
             {activeTab === 'analytics' && (
               <SalesAnalyticsTab
-                orders={orders}
-                products={products}
+                orders={sellerOrders}
+                products={sellerProducts}
               />
             )}
 
@@ -831,7 +883,7 @@ export const SellerStudioV2: React.FC<SellerStudioV2Props> = ({
 
             {/* 10. Customer CRM */}
             {activeTab === 'customers' && (
-              <CustomersTab orders={orders} />
+              <CustomersTab orders={sellerOrders} />
             )}
 
             {/* 11. Marketing & Promos */}
