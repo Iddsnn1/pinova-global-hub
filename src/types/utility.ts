@@ -374,6 +374,8 @@ export interface UtilityTransactionReceipt {
   transactionId: string;
   piPaymentId?: string;
   piTxid?: string;
+  /** True only after the Pi payment completion endpoint accepts it server-side. */
+  serverVerified?: boolean;
   category: UtilityCategoryType;
   providerId: string;
   providerName: string;
