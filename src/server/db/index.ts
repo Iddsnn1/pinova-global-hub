@@ -10,6 +10,7 @@ export * from './repositories/IdempotencyRepository';
 export * from './repositories/PlatformConfigRepository';
 export * from './repositories/VendorApplicationRepository';
 export * from './repositories/EducationRepository';
+export * from '../services/DurableEducationStore';
 export * from './repositories/ProductRepository';
 export * from './repositories/OrderRepository';
 
@@ -23,6 +24,7 @@ import { IdempotencyRepository } from './repositories/IdempotencyRepository';
 import { PlatformConfigRepository } from './repositories/PlatformConfigRepository';
 import { VendorApplicationRepository } from './repositories/VendorApplicationRepository';
 import { EducationRepository } from './repositories/EducationRepository';
+import { DurableEducationStore } from '../services/DurableEducationStore';
 import { ProductRepository } from './repositories/ProductRepository';
 import { OrderRepository } from './repositories/OrderRepository';
 import { applyEducationHierarchyVerificationOverrides } from '../../data/educationHierarchyVerificationOverrides';
@@ -41,6 +43,8 @@ export const idempotencyRepo = new IdempotencyRepository();
 export const platformConfigRepo = new PlatformConfigRepository();
 export const vendorApplicationRepo = new VendorApplicationRepository();
 export const educationRepo = new EducationRepository();
+// Opt-in Neon adapter; legacy synchronous EducationRepository remains unchanged.
+export const durableEducationStore = new DurableEducationStore();
 export const productRepo = new ProductRepository();
 export const orderRepo = new OrderRepository();
 
