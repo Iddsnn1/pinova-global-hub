@@ -1233,7 +1233,8 @@ function MainAppContent() {
                   totalPi: receipt.amountPi || receipt.piAmount || 0,
                   // A verified payment is not evidence that Pi has been paid out to a provider.
                   escrowStatus: 'approved',
-                  pstpStatus: 'Completed',
+                  // A verified Pi payment alone does not prove academic/provider fulfillment.
+                  pstpStatus: 'Processing',
                   piPaymentId: receipt.piPaymentId,
                   piTxid: receipt.piTxid,
                   trackingNumber: receipt.receiptNumber || receipt.tokenOrCode || `EDU-REF-${transactionId}`,
