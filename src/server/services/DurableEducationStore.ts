@@ -337,6 +337,31 @@ export class DurableEducationStore {
     }
 
     if (!rows.length || !rows[0].payment || !rows[0].receipt || !rows[0].invoice || !rows[0].audit_id) {
+      // A concurrent exact retry can observe a zero-row conditional invoice
+      // update after the first request has consumed the full remaining balance.
+      // Re-read the unique payment bindings before classifying this as an error.
+      const committedRows = await sql`SELECT p.data AS payment, r.data AS receipt, i.data AS invoice
+        FROM education_payments p
+        JOIN education_receipts r ON r.payment_id = p.id
+        JOIN education_invoices i ON i.id = p.invoice_id
+        WHERE p.idempotency_key = ${idempotencyKey}
+           OR p.pi_payment_id = ${paymentIdOnPi}
+           OR p.pi_txid = ${txid}
+        LIMIT 1` as unknown as DbRow[];
+      if (committedRows.length) {
+        const committedPayment = decodeJson<EducationPaymentTransaction>(committedRows[0].payment);
+        const committedInvoice = decodeJson<EducationInvoice>(committedRows[0].invoice);
+        const committedReceipt = decodeJson<DigitalEducationReceipt>(committedRows[0].receipt);
+        const sameBinding = committedPayment.invoiceId === invoiceId
+          && committedPayment.idempotencyKey === idempotencyKey
+          && committedPayment.piPaymentId === paymentIdOnPi
+          && committedPayment.piTxid === txid
+          && committedPayment.payerUsername.toLowerCase() === payer.toLowerCase()
+          && Math.abs(committedPayment.amountPaid - amount) <= 1e-12
+          && Math.abs(committedPayment.piAmount - piAmount) <= 1e-12;
+        if (!sameBinding) throw new Error('EDUCATION_PAYMENT_REPLAY_BINDING_MISMATCH');
+        return { success: true, payment: committedPayment, invoice: committedInvoice, receipt: committedReceipt, replayed: true };
+      }
       const current = await this.getInvoice(invoiceId);
       if (!current) throw new Error('DURABLE_EDUCATION_INVOICE_NOT_FOUND');
       if (amount > current.outstandingBalance + 1e-12) throw new Error('EDUCATION_OVERPAYMENT_REJECTED');
