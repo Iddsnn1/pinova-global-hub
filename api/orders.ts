@@ -4,8 +4,65 @@ import { authService, paymentLedgerRepo, pstpAuditRepo, verifyPiPaymentAuthorita
 import { listDurableVendorApplications } from '../dist/server.cjs';
 import { durableProductStorageEnabled, getDurableProduct } from '../dist/server.cjs';
 import type { Order, OrderItem, PstpOrderStatus } from '../src/types';
-import { isAllowedOrderTransition, isAllowedSellerTransition, expectedCarrierTransition } from '../src/modules/orders/lifecycle';
-import { getPiAuthoritativeTransactionId, matchesPiAmountAt12Decimals } from '../src/server/services/PiOrderPaymentContract';
+// Keep API route helpers self-contained: Vercel compiles api/*.ts as isolated
+// functions and does not resolve extensionless imports from src/*.ts at runtime.
+const SELLER_FULFILLMENT_TRANSITIONS: Partial<Record<PstpOrderStatus, PstpOrderStatus[]>> = {
+  'Payment Verified': ['Seller Accepted'],
+  'Seller Accepted': ['Preparing Order'],
+  'Preparing Order': ['Packed'],
+  'Packed': ['Shipped'],
+};
+const CARRIER_FULFILLMENT_TRANSITIONS: Partial<Record<PstpOrderStatus, PstpOrderStatus>> = {
+  'Shipped': 'In Transit',
+  'In Transit': 'Out for Delivery',
+  'Out for Delivery': 'Delivered',
+};
+const ORDER_LIFECYCLE_TRANSITIONS: Partial<Record<PstpOrderStatus, PstpOrderStatus[]>> = {
+  'Draft': ['Pending Payment', 'Cancelled'],
+  'Pending Payment': ['Payment Authorized', 'Cancelled'],
+  'Payment Authorized': ['Payment Verified', 'Cancelled'],
+  'Payment Verified': ['Transaction Recorded', 'Seller Accepted', 'Refunded', 'Cancelled'],
+  'Transaction Recorded': ['Order Confirmed', 'Refunded', 'Cancelled'],
+  'Order Confirmed': ['Seller Accepted', 'Processing', 'Preparing Shipment', 'Refunded', 'Cancelled'],
+  'Seller Accepted': ['Preparing Order'],
+  'Processing': ['Preparing Order', 'Preparing Shipment'],
+  'Preparing Order': ['Packed'],
+  'Preparing Shipment': ['Packed'],
+  'Packed': ['Shipped'],
+  'Shipped': ['In Transit'],
+  'In Transit': ['Out for Delivery'],
+  'Out for Delivery': ['Delivered'],
+  'Delivered': ['Buyer Confirmation', 'Refund Requested', 'Disputed'],
+  'Buyer Confirmation': ['Completed', 'Disputed', 'Refunded'],
+  'Completed': ['Closed', 'Refunded', 'Disputed'],
+  'Cancelled': ['Closed'],
+  'Refund Requested': ['Refund Completed', 'Refunded', 'Disputed'],
+  'Refund Completed': ['Closed'],
+  'Refunded': ['Closed'],
+  'Disputed': ['Resolved', 'Completed', 'Refunded', 'Closed'],
+  'Resolved': ['Closed'],
+  'Closed': [],
+};
+function isAllowedOrderTransition(current: PstpOrderStatus, next: PstpOrderStatus): boolean {
+  return (ORDER_LIFECYCLE_TRANSITIONS[current] || []).includes(next);
+}
+function isAllowedSellerTransition(current: PstpOrderStatus, next: PstpOrderStatus): boolean {
+  return (SELLER_FULFILLMENT_TRANSITIONS[current] || []).includes(next);
+}
+function expectedCarrierTransition(current: PstpOrderStatus): PstpOrderStatus | null {
+  return CARRIER_FULFILLMENT_TRANSITIONS[current] || null;
+}
+function matchesPiAmountAt12Decimals(actual: unknown, expected: unknown): boolean {
+  const a = typeof actual === 'number' ? actual : Number(actual);
+  const e = typeof expected === 'number' ? expected : Number(expected);
+  return Number.isFinite(a) && Number.isFinite(e) && a > 0 && e > 0 && Math.round(a * 1e12) === Math.round(e * 1e12);
+}
+function getPiAuthoritativeTransactionId(paymentData: unknown): string {
+  if (!paymentData || typeof paymentData !== 'object') return '';
+  const data = paymentData as { transaction?: { txid?: unknown; hash?: unknown } | null };
+  const candidate = data.transaction?.txid || data.transaction?.hash || '';
+  return typeof candidate === 'string' || typeof candidate === 'number' ? String(candidate).trim() : '';
+}
 
 function json(res: ServerResponse, status: number, body: unknown) {
   res.statusCode = status;
