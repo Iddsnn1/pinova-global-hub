@@ -3671,9 +3671,11 @@ app.post('/api/education/invoices/:id/apply-scholarship', authenticate, requireR
 // 5. Secure Pi School Fees Settlement & Digital Receipt Issuance (Phase 5 & 12 Remediation)
 app.post('/api/education/invoices/pay', paymentRateLimiter, authenticate, async (req: AuthenticatedRequest, res) => {
   try {
-    // Fail closed: Education invoices, payments, receipts, and audit records still use
-    // process-local/file-backed StorageEngine. Do not accept Pi funds until the complete
-    // Neon-backed invoice + payment + receipt settlement transaction is implemented.
+    // Fail closed: DurableEducationStore and its atomic Neon settlement adapter exist,
+    // but the application still uses the legacy synchronous EducationRepository for
+    // invoice reads/writes. Do not accept Pi funds until legacy-data migration, durable
+    // repository integration, authoritative payment verification, and route-level tests
+    // are complete.
     res.status(503).json({
       success: false,
       error: 'EDUCATION_DURABLE_SETTLEMENT_NOT_READY',
