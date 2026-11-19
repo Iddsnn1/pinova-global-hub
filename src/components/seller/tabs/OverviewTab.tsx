@@ -438,8 +438,8 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
 
           <div className="pt-4 mt-4 border-t border-neutral-100 dark:border-neutral-800 flex items-center justify-between text-xs text-neutral-500">
             <span className="flex items-center gap-1">
-              <Lock className="w-3.5 h-3.5 text-emerald-500" />
-              Session Verified
+              <Lock className="w-3.5 h-3.5 text-neutral-400" />
+              Pi account
             </span>
             <span>@{userUsername}</span>
           </div>
