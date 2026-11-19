@@ -73,9 +73,14 @@ export function syncVendorAuth(token?: string | null, username?: string | null, 
   }
   if (typeof window === 'undefined' || !window.localStorage) return;
   try {
-    if (token) {
+    if (isServerSessionToken(token)) {
       localStorage.setItem('auth_token', token);
-      localStorage.setItem('pi_auth_token', token);
+      // Do not mirror server sessions into legacy Pi-token storage keys.
+      localStorage.removeItem('pi_auth_token');
+      localStorage.removeItem('pinova_token');
+      localStorage.removeItem('pinova_access_token');
+      sessionStorage.setItem('auth_token', token);
+      sessionStorage.removeItem('pi_auth_token');
     }
     if (username) {
       localStorage.setItem('pinova_pioneer_username', username);
