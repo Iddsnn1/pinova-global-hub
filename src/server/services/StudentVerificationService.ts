@@ -2,10 +2,6 @@ import { accreditationAdapterRegistry, StudentVerificationResult } from './Accre
 import { authoritativeEducationConnectorRegistry } from './AuthoritativeEducationConnectorRegistry';
 import { AuthoritativeEducationProviderId } from './AuthoritativeEducationProviderRegistry';
 import { EducationRepository } from '../db/repositories/EducationRepository';
-import {
-  getNigeriaAuthoritativeProviderForCapability,
-  getAuthoritativeEducationProvider
-} from './AuthoritativeEducationProviderRegistry';
 
 export interface VerifyStudentRequestParams {
   institutionId: string;
