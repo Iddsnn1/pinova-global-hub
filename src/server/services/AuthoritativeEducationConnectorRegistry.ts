@@ -4,6 +4,7 @@ import {
   StudentVerificationResult
 } from './AccreditationProviderAdapter';
 import {
+  AuthoritativeEducationProviderId,
   AuthoritativeProviderCapability,
   listAuthoritativeEducationProviders
 } from './AuthoritativeEducationProviderRegistry';
