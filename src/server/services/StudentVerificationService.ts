@@ -92,7 +92,7 @@ export class StudentVerificationService {
       return {
         verified: false,
         status: 'UNAVAILABLE',
-        verificationStatus: 'REJECTED',
+        verificationStatus: 'UNAVAILABLE',
         authorityName: 'Authoritative Student Verification Provider',
         referenceId: studentReference,
         notes: 'Institution context is required. No default institution is assumed.',
