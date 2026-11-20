@@ -147,6 +147,81 @@ export class DurableEducationStore {
   }
 
   /**
+   * Public receipt verification reads only the authoritative Neon records.
+   * It cross-binds receipt, payment and invoice rows before recomputing SHA-256.
+   */
+  async verifyReceipt(receiptNumber: string): Promise<{
+    found: boolean;
+    valid: boolean;
+    status: 'VERIFIED' | 'TAMPERED' | 'NOT_FOUND';
+    algorithm: 'SHA-256';
+    digest?: string;
+    receipt?: DigitalEducationReceipt;
+  }> {
+    const number = clean(receiptNumber).toUpperCase();
+    if (!number) return { found: false, valid: false, status: 'NOT_FOUND', algorithm: 'SHA-256' };
+    if (!neonDatabaseEnabled()) throw new Error('DURABLE_EDUCATION_STORAGE_UNAVAILABLE');
+
+    const sql = getNeonSql();
+    const rows = await sql`SELECT r.data AS receipt, r.verification_hash AS persisted_hash,
+        p.data AS payment, i.data AS invoice
+      FROM education_receipts r
+      JOIN education_payments p ON p.id = r.payment_id
+      JOIN education_invoices i ON i.id = r.invoice_id
+      WHERE r.receipt_number = ${number}
+      LIMIT 1` as unknown as DbRow[];
+
+    if (!rows.length) return { found: false, valid: false, status: 'NOT_FOUND', algorithm: 'SHA-256' };
+
+    const receipt = decodeJson<DigitalEducationReceipt>(rows[0].receipt);
+    const payment = decodeJson<EducationPaymentTransaction>(rows[0].payment);
+    const invoice = decodeJson<EducationInvoice>(rows[0].invoice);
+    const expected = digestReceipt({
+      receiptNumber: receipt.receiptNumber,
+      invoice,
+      paymentId: payment.id,
+      amount: payment.amountPaid,
+      paymentDate: payment.verifiedAt
+    });
+    const storedHash = clean(receipt.verificationHash).toLowerCase();
+    const persistedHash = clean(rows[0].persisted_hash).toLowerCase();
+    const auditHash = clean(payment.auditHash).toLowerCase();
+    const hashesMatch = [storedHash, persistedHash, auditHash].every((hash) => /^[a-f0-9]{64}$/.test(hash)
+      && crypto.timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(expected, 'hex')));
+    const bindingsMatch = receipt.receiptNumber.trim().toUpperCase() === number
+      && receipt.paymentId === payment.id
+      && payment.receiptNumber === receipt.receiptNumber
+      && receipt.invoiceId === invoice.id
+      && payment.invoiceId === invoice.id
+      && receipt.institutionId === invoice.institutionId
+      && payment.institutionId === invoice.institutionId
+      && receipt.studentId === invoice.studentId
+      && payment.studentId === invoice.studentId
+      && Math.abs(Number(receipt.amountPaid) - Number(payment.amountPaid)) <= 1e-12
+      && Math.abs(Number(payment.amountPaid) - Number(payment.piAmount)) <= 1e-12
+      && receipt.currency === 'PI'
+      && payment.currency === 'PI'
+      && payment.paymentMethod === 'PI_NETWORK'
+      && payment.status === 'VERIFIED_COMPLETED'
+      && receipt.settlementStatus === 'SETTLED'
+      && receipt.verifiedByServer === true
+      && Boolean(payment.piPaymentId && payment.piTxid)
+      && receipt.piPaymentId === payment.piPaymentId
+      && receipt.piTxid === payment.piTxid
+      && receipt.paymentDate === payment.verifiedAt;
+    const valid = bindingsMatch && hashesMatch;
+
+    return {
+      found: true,
+      valid,
+      status: valid ? 'VERIFIED' : 'TAMPERED',
+      algorithm: 'SHA-256',
+      digest: valid ? expected : undefined,
+      receipt: valid ? receipt : undefined
+    };
+  }
+
+  /**
    * Settles only a server-verified Pi payment. Invoice balance mutation,
    * payment, receipt and audit record are one PostgreSQL statement/transaction.
    * A row lock plus conditional balance update prevents concurrent overpayment;
