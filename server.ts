@@ -39,6 +39,7 @@ import { AuditService } from './src/server/services/AuditService';
 import { EducationClassificationEngine } from './src/server/services/EducationClassificationEngine';
 import { StudentVerificationService } from './src/server/services/StudentVerificationService';
 import { getNigeriaAuthoritativeProviderForCapability } from './src/server/services/AuthoritativeEducationProviderRegistry';
+import { authoritativeEducationConnectorRegistry } from './src/server/services/AuthoritativeEducationConnectorRegistry';
 import { verifyJambCapsAuthorization } from './src/server/services/JambCapsAuthorizationService';
 import { EducationRepository } from './src/server/db/repositories/EducationRepository';
 import { ProductRepository } from './src/server/db/repositories/ProductRepository';
@@ -4434,15 +4435,18 @@ app.post('/api/education/admin/institutions/:id/verify', async (req, res) => {
     // provider-backed verification result for this exact institution.
     if (authoritativeStatuses.has(requestedStatus)) {
       const providers = getNigeriaAuthoritativeProviderForCapability('INSTITUTION_REGISTRY');
-      const configuredProvider = providers.find((provider) => provider.integrationStatus === 'CONFIGURED');
+      const providerId = typeof req.body.providerId === 'string' ? req.body.providerId.trim() : '';
+      const configuredConnector = providerId
+        ? authoritativeEducationConnectorRegistry.resolve('NG', 'INSTITUTION_REGISTRY', providerId)
+        : null;
 
-      if (!configuredProvider) {
+      if (!configuredConnector?.isConfigured) {
         res.status(503).json({
           success: false,
           error: 'PROVIDER_INTEGRATION_REQUIRED',
           availability: 'UNAVAILABLE',
           provider: providers.map((provider) => provider.id),
-          message: 'Institution verification cannot be marked as authoritative until an authorized NUC/NBTE institution registry integration is configured.'
+          message: 'Select an explicitly authorized providerId with a configured institution-registry connector. No provider was guessed and no verification status was changed.'
         });
         return;
       }
@@ -4450,7 +4454,8 @@ app.post('/api/education/admin/institutions/:id/verify', async (req, res) => {
       const verification = await studentVerificationService.verifyInstitution(
         req.params.id,
         'NG',
-        typeof req.body.registryNumber === 'string' ? req.body.registryNumber : undefined
+        typeof req.body.registryNumber === 'string' ? req.body.registryNumber : undefined,
+        providerId
       );
 
       if (!verification.accredited) {
@@ -4470,7 +4475,10 @@ app.post('/api/education/admin/institutions/:id/verify', async (req, res) => {
       return;
     }
 
-    const updated = educationRepo.verifyInstitution(req.params.id, requestedStatus as any, notes);
+    const updated = educationRepo.verifyInstitution(req.params.id, requestedStatus as any, notes, {
+      username: auth.user?.username || 'system_admin',
+      role: auth.user?.roles?.[0] || 'PLATFORM_ADMIN'
+    });
     if (!updated) {
       res.status(404).json({ success: false, error: 'INSTITUTION_NOT_FOUND' });
       return;
