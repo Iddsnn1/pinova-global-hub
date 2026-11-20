@@ -1,6 +1,5 @@
 import { accreditationAdapterRegistry, StudentVerificationResult } from './AccreditationProviderAdapter';
 import { authoritativeEducationConnectorRegistry } from './AuthoritativeEducationConnectorRegistry';
-import { AuthoritativeEducationProviderId } from './AuthoritativeEducationProviderRegistry';
 import { EducationRepository } from '../db/repositories/EducationRepository';
 
 export interface VerifyStudentRequestParams {
@@ -10,7 +9,7 @@ export interface VerifyStudentRequestParams {
   dateOfBirth?: string;
   nationalId?: string;
   countryCode?: string;
-  providerId?: AuthoritativeEducationProviderId;
+  providerId?: string;
 }
 
 export class StudentVerificationService {
@@ -32,15 +31,11 @@ export class StudentVerificationService {
     institutionId: string,
     countryCode: string = 'NG',
     registryNumber?: string,
-    providerId?: AuthoritativeEducationProviderId
+    providerId?: string
   ) {
-    const code = (countryCode || 'GLOBAL').trim().toUpperCase();
-
-    if (code === 'NG') {
-      const connector = authoritativeEducationConnectorRegistry.resolveForCapability(
-        'INSTITUTION_REGISTRY',
-        providerId
-      );
+    const code = typeof countryCode === 'string' && countryCode.trim() ? countryCode.trim().toUpperCase() : 'GLOBAL';
+    const connector = authoritativeEducationConnectorRegistry.resolve(code, 'INSTITUTION_REGISTRY', providerId);
+    if (connector) {
       if (!connector) {
         return {
           accredited: false,
@@ -105,23 +100,23 @@ export class StudentVerificationService {
     }
 
     let verificationResult: StudentVerificationResult;
-    if (countryCode === 'NG') {
-      const connector = authoritativeEducationConnectorRegistry.resolveForCapability(
-        'ADMISSION_STATUS',
-        request.providerId
-      );
-      if (!connector) {
-        return {
-          verified: false,
-          status: 'UNAVAILABLE',
-          verificationStatus: 'UNAVAILABLE',
-          authorityName: 'JAMB CAPS',
-          referenceId: studentReference,
-          notes: 'No unambiguous Nigerian admission-status connector was selected. No verification claim was made.',
-          checkedAt: new Date().toISOString()
-        };
-      }
+    const connector = authoritativeEducationConnectorRegistry.resolve(
+      countryCode,
+      'ADMISSION_STATUS',
+      request.providerId
+    );
+    if (connector) {
       verificationResult = await connector.verifyStudent(institutionId, studentReference, academicSession);
+    } else if (countryCode === 'NG') {
+      return {
+        verified: false,
+        status: 'UNAVAILABLE',
+        verificationStatus: 'UNAVAILABLE',
+        authorityName: 'JAMB CAPS',
+        referenceId: studentReference,
+        notes: 'No unambiguous Nigerian admission-status connector was selected. No verification claim was made.',
+        checkedAt: new Date().toISOString()
+      };
     } else {
       const adapter = accreditationAdapterRegistry.getAdapter(countryCode);
       verificationResult = await adapter.verifyStudent(institutionId, studentReference, academicSession);
