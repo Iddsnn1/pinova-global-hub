@@ -7,11 +7,13 @@ import {
   AuthoritativeEducationProviderId,
   AuthoritativeProviderCapability,
   getAuthoritativeEducationProvider,
-  getNigeriaAuthoritativeProviderForCapability
+  listAuthoritativeEducationProviders
 } from './AuthoritativeEducationProviderRegistry';
 
 export interface IAuthoritativeEducationConnector extends IAccreditationProviderAdapter {
-  readonly providerId: AuthoritativeEducationProviderId;
+  readonly providerId: string;
+  readonly countryCode: string;
+  readonly capabilities: readonly string[];
   readonly isConfigured: boolean;
 }
 
@@ -19,16 +21,17 @@ class UnconfiguredEducationConnector implements IAuthoritativeEducationConnector
   readonly isConfigured = false;
 
   constructor(
-    public readonly providerId: AuthoritativeEducationProviderId,
+    public readonly providerId: string,
     public readonly countryCode: string,
-    public readonly authorities: string[]
+    public readonly authorities: string[],
+    public readonly capabilities: readonly string[]
   ) {}
 
   async verifyInstitution(_institutionCode: string): Promise<InstitutionVerificationResult> {
     return {
       valid: false,
       status: 'UNAVAILABLE',
-      authorityName: this.authorities[0],
+      authorityName: this.authorities[0] || this.providerId,
       notes: `${this.providerId} connector is not configured. No authoritative verification was performed.`,
       checkedAt: new Date().toISOString()
     };
@@ -38,7 +41,7 @@ class UnconfiguredEducationConnector implements IAuthoritativeEducationConnector
     return {
       verified: false,
       status: 'UNAVAILABLE',
-      authorityName: this.authorities[0],
+      authorityName: this.authorities[0] || this.providerId,
       referenceId: studentReference,
       notes: `${this.providerId} connector is not configured. No authoritative verification was performed.`,
       checkedAt: new Date().toISOString()
@@ -47,44 +50,57 @@ class UnconfiguredEducationConnector implements IAuthoritativeEducationConnector
 }
 
 /**
- * Each authority owns an independent connector slot. Registering or replacing one
- * provider never mutates another provider's connector.
+ * Global connector slots are keyed by provider ID, not by country.
+ * Any country's regulator or authorized provider can register its own adapter.
  */
 export class AuthoritativeEducationConnectorRegistry {
-  private readonly connectors = new Map<AuthoritativeEducationProviderId, IAuthoritativeEducationConnector>();
+  private readonly connectors = new Map<string, IAuthoritativeEducationConnector>();
 
   constructor() {
-    for (const id of ['NUC', 'NBTE', 'JAMB_CAPS'] as const) {
-      const descriptor = getAuthoritativeEducationProvider(id);
-      this.connectors.set(id, new UnconfiguredEducationConnector(
-        id,
+    for (const descriptor of listAuthoritativeEducationProviders()) {
+      this.connectors.set(descriptor.id, new UnconfiguredEducationConnector(
+        descriptor.id,
         descriptor.countryCode,
-        [descriptor.authorityName]
+        [descriptor.authorityName],
+        descriptor.capabilities
       ));
     }
   }
 
   register(connector: IAuthoritativeEducationConnector): void {
-    this.connectors.set(connector.providerId, connector);
+    const providerId = connector.providerId.trim();
+    if (!providerId) throw new Error('Education connector providerId is required');
+    if (!connector.countryCode.trim()) throw new Error(`Education connector ${providerId} requires a countryCode`);
+    this.connectors.set(providerId, connector);
   }
 
-  get(providerId: AuthoritativeEducationProviderId): IAuthoritativeEducationConnector {
+  get(providerId: string): IAuthoritativeEducationConnector {
     const connector = this.connectors.get(providerId);
     if (!connector) throw new Error(`No connector slot exists for ${providerId}`);
     return connector;
+  }
+
+  resolve(
+    countryCode: string,
+    capability: string,
+    preferredProviderId?: string
+  ): IAuthoritativeEducationConnector | null {
+    const country = countryCode.trim().toUpperCase();
+    const candidates = [...this.connectors.values()].filter((connector) =>
+      connector.countryCode.toUpperCase() === country &&
+      connector.capabilities.includes(capability)
+    );
+    if (preferredProviderId) {
+      return candidates.find((connector) => connector.providerId === preferredProviderId) || null;
+    }
+    return candidates.length === 1 ? candidates[0] : null;
   }
 
   resolveForCapability(
     capability: AuthoritativeProviderCapability,
     preferredProviderId?: AuthoritativeEducationProviderId
   ): IAuthoritativeEducationConnector | null {
-    const candidates = getNigeriaAuthoritativeProviderForCapability(capability);
-    if (preferredProviderId) {
-      const descriptor = candidates.find((provider) => provider.id === preferredProviderId);
-      return descriptor ? this.get(preferredProviderId) : null;
-    }
-    if (candidates.length !== 1) return null;
-    return this.get(candidates[0].id);
+    return this.resolve('NG', capability, preferredProviderId);
   }
 }
 
