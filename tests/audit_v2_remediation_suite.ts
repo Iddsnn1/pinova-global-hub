@@ -259,7 +259,7 @@ async function runTestSuite() {
     countryCode: 'NG'
   });
   assert(!validVerification.verified, 'Scenario 5.1: Student verification fails closed without an authoritative provider');
-  assert(validVerification.verificationStatus === 'REJECTED' && validVerification.status === 'UNAVAILABLE', 'Scenario 5.2: Verification status remains unavailable/rejected');
+  assert(validVerification.verificationStatus === 'UNAVAILABLE' && validVerification.status === 'UNAVAILABLE', 'Scenario 5.2: Unconfigured provider remains UNAVAILABLE, not REJECTED');
 
   // 5.2 Invalid Student Rejection
   const invalidVerification = await verificationService.verifyStudent({
