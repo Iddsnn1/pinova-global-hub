@@ -19,7 +19,7 @@ class TestConnector implements IAuthoritativeEducationConnector {
   constructor(
     public readonly providerId: string,
     public readonly countryCode = 'NG',
-    public readonly capabilities: readonly string[] = ['INSTITUTION_REGISTRY', 'ADMISSION_STATUS']
+    public readonly capabilities: readonly string[] = ['INSTITUTION_REGISTRY', 'APPROVED_PROGRAMMES']
   ) {
     this.authorities = [providerId];
   }
