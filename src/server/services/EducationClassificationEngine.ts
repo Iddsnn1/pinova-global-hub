@@ -28,7 +28,8 @@ export class EducationClassificationEngine {
   }
 
   public getAllTaxonomies(): Record<string, CountryEducationTaxonomy> {
-    return this.taxonomies;
+    // Never expose the mutable in-memory taxonomy catalogue to API callers.
+    return structuredClone(this.taxonomies);
   }
 
   /**
@@ -43,7 +44,8 @@ export class EducationClassificationEngine {
    */
   public getTaxonomy(countryCode: string = 'GLOBAL'): CountryEducationTaxonomy | null {
     const code = (countryCode || 'GLOBAL').toUpperCase().trim();
-    return this.taxonomies[code] || null;
+    const taxonomy = this.taxonomies[code];
+    return taxonomy ? structuredClone(taxonomy) : null;
   }
 
   /**
@@ -61,7 +63,8 @@ export class EducationClassificationEngine {
   public validateSubGrade(countryCode: string, tier: EducationTier, subGrade: string): boolean {
     const level = this.getLevelDefinition(countryCode, tier);
     if (!level) return false;
-    const clean = subGrade.trim().toLowerCase();
+    const clean = typeof subGrade === 'string' ? subGrade.trim().toLowerCase() : '';
+    if (!clean) return false;
     return level.subGrades.some((sg) => sg.toLowerCase().includes(clean) || clean.includes(sg.toLowerCase()));
   }
 
