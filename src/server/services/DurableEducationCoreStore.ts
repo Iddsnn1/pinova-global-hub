@@ -1,0 +1,193 @@
+import type {
+  InstitutionProfile,
+  StudentIdentity,
+  GuardianChildSummary,
+  AdmissionApplication,
+  AdmissionApplicationStatus,
+  ScholarshipOpportunity
+} from '../../types/education';
+import { getNeonSql, neonDatabaseEnabled } from '../db/NeonDatabase';
+
+type DbRow = Record<string, any>;
+const clean = (value: unknown) => String(value ?? '').trim();
+const decode = <T>(value: unknown): T => typeof value === 'string' ? JSON.parse(value) as T : value as T;
+
+/**
+ * Neon-backed Education core records.
+ * This repository is intentionally additive and is not yet wired into legacy
+ * synchronous routes. Route cutover must happen only after a verified,
+ * idempotent import of the legacy dataset and endpoint-by-endpoint tests.
+ */
+export class DurableEducationCoreStore {
+  private assertReady(): void {
+    if (!neonDatabaseEnabled()) throw new Error('DURABLE_EDUCATION_STORAGE_UNAVAILABLE');
+  }
+
+  async getInstitutions(filter?: { countryCode?: string; institutionType?: string; verificationStatus?: string }): Promise<InstitutionProfile[]> {
+    this.assertReady();
+    const sql = getNeonSql();
+    const country = clean(filter?.countryCode).toUpperCase() || null;
+    const type = clean(filter?.institutionType) || null;
+    const status = clean(filter?.verificationStatus) || null;
+    const rows = await sql`SELECT data FROM education_institutions
+      WHERE (${country}::text IS NULL OR country_code = ${country})
+        AND (${type}::text IS NULL OR institution_type = ${type})
+        AND (${status}::text IS NULL OR verification_status = ${status})
+      ORDER BY created_at DESC` as unknown as DbRow[];
+    return rows.map(row => decode<InstitutionProfile>(row.data));
+  }
+
+  async getInstitutionById(id: string): Promise<InstitutionProfile | null> {
+    this.assertReady();
+    const key = clean(id);
+    if (!key) return null;
+    const sql = getNeonSql();
+    const rows = await sql`SELECT data FROM education_institutions WHERE id = ${key} LIMIT 1` as unknown as DbRow[];
+    return rows.length ? decode<InstitutionProfile>(rows[0].data) : null;
+  }
+
+  async createInstitution(record: InstitutionProfile): Promise<InstitutionProfile> {
+    this.assertReady();
+    const id = clean(record?.id);
+    if (!id || !clean(record.countryCode) || !clean(record.institutionType)) throw new Error('EDUCATION_INSTITUTION_FIELDS_REQUIRED');
+    const sql = getNeonSql();
+    const rows = await sql`INSERT INTO education_institutions
+      (id, country_code, institution_type, verification_status, data)
+      VALUES (${id}, ${clean(record.countryCode).toUpperCase()}, ${clean(record.institutionType)},
+        ${clean(record.verificationStatus)}, ${JSON.stringify(record)}::jsonb)
+      ON CONFLICT (id) DO NOTHING RETURNING data` as unknown as DbRow[];
+    if (!rows.length) throw new Error('EDUCATION_INSTITUTION_ALREADY_EXISTS');
+    return decode<InstitutionProfile>(rows[0].data);
+  }
+
+  async getStudentById(id: string): Promise<StudentIdentity | null> {
+    this.assertReady();
+    const key = clean(id);
+    if (!key) return null;
+    const sql = getNeonSql();
+    const rows = await sql`SELECT data FROM education_students WHERE id = ${key} LIMIT 1` as unknown as DbRow[];
+    return rows.length ? decode<StudentIdentity>(rows[0].data) : null;
+  }
+
+  async getStudentsByGuardian(guardianId: string): Promise<StudentIdentity[]> {
+    this.assertReady();
+    const guardian = clean(guardianId);
+    if (!guardian) return [];
+    const sql = getNeonSql();
+    const rows = await sql`SELECT data FROM education_students WHERE guardian_id = ${guardian} ORDER BY created_at DESC` as unknown as DbRow[];
+    return rows.map(row => decode<StudentIdentity>(row.data));
+  }
+
+  async createStudent(record: StudentIdentity): Promise<StudentIdentity> {
+    this.assertReady();
+    const id = clean(record?.id);
+    if (!id || !clean(record.currentInstitutionId) || !clean(record.status)) throw new Error('EDUCATION_STUDENT_FIELDS_REQUIRED');
+    const sql = getNeonSql();
+    const rows = await sql`INSERT INTO education_students
+      (id, institution_id, guardian_id, status, data)
+      VALUES (${id}, ${clean(record.currentInstitutionId)}, ${clean(record.guardianId) || null},
+        ${clean(record.status)}, ${JSON.stringify(record)}::jsonb)
+      ON CONFLICT (id) DO NOTHING RETURNING data` as unknown as DbRow[];
+    if (!rows.length) throw new Error('EDUCATION_STUDENT_ALREADY_EXISTS');
+    return decode<StudentIdentity>(rows[0].data);
+  }
+
+  async getGuardianChildren(guardianId: string): Promise<GuardianChildSummary[]> {
+    this.assertReady();
+    const guardian = clean(guardianId);
+    if (!guardian) return [];
+    const sql = getNeonSql();
+    const rows = await sql`SELECT data FROM education_guardian_children WHERE guardian_id = ${guardian} ORDER BY updated_at DESC` as unknown as DbRow[];
+    return rows.map(row => decode<GuardianChildSummary>(row.data));
+  }
+
+  async saveGuardianChildSummary(record: GuardianChildSummary): Promise<GuardianChildSummary> {
+    this.assertReady();
+    const studentId = clean(record?.studentId);
+    const guardianId = clean(record?.guardianId);
+    const institutionId = clean(record?.institutionId);
+    if (!studentId || !guardianId || !institutionId) throw new Error('EDUCATION_GUARDIAN_CHILD_FIELDS_REQUIRED');
+    const sql = getNeonSql();
+    const rows = await sql`INSERT INTO education_guardian_children
+      (student_id, guardian_id, institution_id, data, updated_at)
+      VALUES (${studentId}, ${guardianId}, ${institutionId}, ${JSON.stringify(record)}::jsonb, NOW())
+      ON CONFLICT (student_id) DO UPDATE SET
+        guardian_id = EXCLUDED.guardian_id,
+        institution_id = EXCLUDED.institution_id,
+        data = EXCLUDED.data,
+        updated_at = NOW()
+      RETURNING data` as unknown as DbRow[];
+    return decode<GuardianChildSummary>(rows[0].data);
+  }
+
+  async getAdmissions(filter?: { institutionId?: string; status?: AdmissionApplicationStatus; applicantEmail?: string }): Promise<AdmissionApplication[]> {
+    this.assertReady();
+    const sql = getNeonSql();
+    const institution = clean(filter?.institutionId) || null;
+    const status = clean(filter?.status) || null;
+    const email = clean(filter?.applicantEmail).toLowerCase() || null;
+    const rows = await sql`SELECT data FROM education_admissions
+      WHERE (${institution}::text IS NULL OR institution_id = ${institution})
+        AND (${status}::text IS NULL OR status = ${status})
+        AND (${email}::text IS NULL OR lower(applicant_email) = ${email})
+      ORDER BY created_at DESC` as unknown as DbRow[];
+    return rows.map(row => decode<AdmissionApplication>(row.data));
+  }
+
+  async getAdmissionById(id: string): Promise<AdmissionApplication | null> {
+    this.assertReady();
+    const key = clean(id);
+    if (!key) return null;
+    const sql = getNeonSql();
+    const rows = await sql`SELECT data FROM education_admissions WHERE id = ${key} LIMIT 1` as unknown as DbRow[];
+    return rows.length ? decode<AdmissionApplication>(rows[0].data) : null;
+  }
+
+  async createAdmission(record: AdmissionApplication): Promise<AdmissionApplication> {
+    this.assertReady();
+    const id = clean(record?.id);
+    const institutionId = clean(record.institutionId);
+    const applicantEmail = clean(record.applicantEmail).toLowerCase();
+    if (!id || !institutionId || !applicantEmail) throw new Error('EDUCATION_ADMISSION_FIELDS_REQUIRED');
+    const sql = getNeonSql();
+    const rows = await sql`INSERT INTO education_admissions
+      (id, institution_id, status, applicant_email, data)
+      VALUES (${id}, ${institutionId}, ${clean(record.status)}, ${applicantEmail}, ${JSON.stringify(record)}::jsonb)
+      ON CONFLICT (id) DO NOTHING RETURNING data` as unknown as DbRow[];
+    if (!rows.length) throw new Error('EDUCATION_ADMISSION_ALREADY_EXISTS');
+    return decode<AdmissionApplication>(rows[0].data);
+  }
+
+  async updateAdmissionStatus(id: string, status: AdmissionApplicationStatus, updated: AdmissionApplication): Promise<AdmissionApplication | null> {
+    this.assertReady();
+    const key = clean(id);
+    if (!key || clean(updated.id) !== key || clean(updated.status) !== clean(status)) throw new Error('EDUCATION_ADMISSION_UPDATE_BINDING_MISMATCH');
+    const sql = getNeonSql();
+    const rows = await sql`UPDATE education_admissions
+      SET status = ${clean(status)}, data = ${JSON.stringify(updated)}::jsonb, updated_at = NOW()
+      WHERE id = ${key} RETURNING data` as unknown as DbRow[];
+    return rows.length ? decode<AdmissionApplication>(rows[0].data) : null;
+  }
+
+  async getScholarships(): Promise<ScholarshipOpportunity[]> {
+    this.assertReady();
+    const sql = getNeonSql();
+    const rows = await sql`SELECT data FROM education_scholarships ORDER BY deadline ASC NULLS LAST, created_at DESC` as unknown as DbRow[];
+    return rows.map(row => decode<ScholarshipOpportunity>(row.data));
+  }
+
+  async createScholarship(record: ScholarshipOpportunity): Promise<ScholarshipOpportunity> {
+    this.assertReady();
+    const id = clean(record?.id);
+    const sponsorType = clean(record.sponsorType);
+    if (!id || !sponsorType) throw new Error('EDUCATION_SCHOLARSHIP_FIELDS_REQUIRED');
+    const deadline = clean(record.deadline) || null;
+    const sql = getNeonSql();
+    const rows = await sql`INSERT INTO education_scholarships
+      (id, sponsor_type, deadline, data)
+      VALUES (${id}, ${sponsorType}, ${deadline}::timestamptz, ${JSON.stringify(record)}::jsonb)
+      ON CONFLICT (id) DO NOTHING RETURNING data` as unknown as DbRow[];
+    if (!rows.length) throw new Error('EDUCATION_SCHOLARSHIP_ALREADY_EXISTS');
+    return decode<ScholarshipOpportunity>(rows[0].data);
+  }
+}
