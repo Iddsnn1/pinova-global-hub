@@ -10,16 +10,16 @@ if (!fs.existsSync(file)) {
 
 const source = fs.readFileSync(file, 'utf8');
 const forbiddenFallbacks = [
-  ['fabricated verified merchant bio', /Official verified PiNova Merchant Store\./],
-  ['fabricated five-star rating', /rating:\\s*5\\.0\\s*,/],
-  ['stock banner image fallback', /photo-1441986300917-64674bd600d8/],
-  ['stock logo image fallback', /photo-1472851294608-062f824d29cc/],
-  ['fabricated joined date', /joinedDate:\\s*['"]2025-01-01['"]/],
-  ['fabricated global shipping claim', /shippingCountries:\\s*\\[['"]Global['"]\\]/]
+  ['fabricated verified merchant bio', 'Official verified PiNova Merchant Store.'],
+  ['fabricated five-star rating', 'rating: 5.0,'],
+  ['stock banner image fallback', 'photo-1441986300917-64674bd600d8'],
+  ['stock logo image fallback', 'photo-1472851294608-062f824d29cc'],
+  ['fabricated joined date', "joinedDate: '2025-01-01'"],
+  ['fabricated global shipping claim', "shippingCountries: ['Global']"]
 ];
 
 const violations = forbiddenFallbacks
-  .filter(([, pattern]) => pattern.test(source))
+  .filter(([, value]) => source.includes(value))
   .map(([label]) => label);
 
 if (violations.length) {
