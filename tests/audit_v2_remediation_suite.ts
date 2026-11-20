@@ -339,6 +339,12 @@ async function runTestSuite() {
   // 6.3 Overpayment Prevention in EducationRepository
   const eduRepo = new EducationRepository();
 
+  // Seed a minimal institution in the isolated test StorageEngine.
+  (eduRepo as any).institutionsEngine.set('audit-test-institution', {
+    id: 'audit-test-institution',
+    name: 'Audit Test Institution',
+    accreditation: { officialNotes: 'Initial test state' }
+  });
   // Institution verification audit must preserve the verified actor, not a hard-coded service identity.
   const auditTestInstitution = eduRepo.getInstitutions()[0];
   if (auditTestInstitution) {
