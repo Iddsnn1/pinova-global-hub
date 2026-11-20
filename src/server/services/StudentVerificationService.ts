@@ -36,14 +36,6 @@ export class StudentVerificationService {
     const code = typeof countryCode === 'string' && countryCode.trim() ? countryCode.trim().toUpperCase() : 'GLOBAL';
     const connector = authoritativeEducationConnectorRegistry.resolve(code, 'INSTITUTION_REGISTRY', providerId);
     if (connector) {
-      if (!connector) {
-        return {
-          accredited: false,
-          status: 'UNAVAILABLE',
-          authority: providerId || 'NUC / NBTE',
-          notes: 'Select the specific Nigerian authority (NUC or NBTE). PiNova will not guess which regulator should verify this institution.'
-        };
-      }
       const result = await connector.verifyInstitution(registryNumber || institutionId);
       return {
         accredited: result.valid,
@@ -51,6 +43,15 @@ export class StudentVerificationService {
         authority: result.authorityName,
         accreditationReference: result.accreditationReference,
         notes: result.notes
+      };
+    }
+
+    if (code === 'NG') {
+      return {
+        accredited: false,
+        status: 'UNAVAILABLE',
+        authority: providerId || 'NUC / NBTE',
+        notes: 'No matching Nigerian authority connector was selected. No verification claim was made.'
       };
     }
 
