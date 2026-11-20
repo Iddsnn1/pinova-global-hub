@@ -15,6 +15,7 @@ import {
   idempotencyRepo,
   vendorApplicationRepo,
   educationRepo,
+  durableEducationStore,
   FlightFulfillmentEntity,
   orderRepo,
   productRepo
@@ -3955,39 +3956,56 @@ app.get('/api/education/invoices/:id/payments', authenticate, (req: Authenticate
 });
 
 // 6. Digital Receipt Verification (Tamper-Resistant Cryptographic Validation)
-app.get('/api/education/receipts/:receiptNumber/verify', receiptVerifyRateLimiter, (req, res) => {
+// Public verification is Neon-authoritative; legacy in-memory/Blob snapshots are never trusted.
+app.get('/api/education/receipts/:receiptNumber/verify', receiptVerifyRateLimiter, async (req, res) => {
   try {
     const { receiptNumber } = req.params;
-    const verification = educationRepo.verifyReceipt(receiptNumber);
-    if (!verification.found || !verification.receipt) {
+    const verification = await durableEducationStore.verifyReceipt(receiptNumber);
+    if (!verification.found) {
       res.status(404).json({
         success: false,
         status: 'NOT_FOUND',
         isAuthentic: false,
         error: 'RECEIPT_NOT_FOUND',
-        message: `No authentic education fee receipt matches reference "${receiptNumber}".`
+        message: `No verified educational fee record was found matching reference "${receiptNumber}". Please check the spelling or contact the issuing institution.`
+      });
+      return;
+    }
+
+    if (!verification.valid || !verification.receipt) {
+      res.status(200).json({
+        success: false,
+        status: 'TAMPERED',
+        isAuthentic: false,
+        algorithm: verification.algorithm,
+        error: 'RECEIPT_INTEGRITY_CHECK_FAILED',
+        message: 'The receipt record failed its integrity checks. Do not accept it as proof of payment.'
       });
       return;
     }
 
     res.json({
       success: true,
-      status: verification.status,
-      isAuthentic: verification.status === 'VERIFIED',
+      status: 'VERIFIED',
+      isAuthentic: true,
       algorithm: verification.algorithm,
       digest: verification.digest,
       receiptNumber: verification.receipt.receiptNumber,
       verificationReference: verification.receipt.verificationReference,
-      verificationHash: verification.receipt.verificationHash,
       institutionName: verification.receipt.institutionName,
       academicSession: verification.receipt.academicSession,
       termOrSemester: verification.receipt.termOrSemester,
       educationLevel: verification.receipt.educationLevel,
-      verifiedByServer: verification.receipt.verifiedByServer,
+      verifiedByServer: true,
       publicSummary: verification.receipt.publicSafeSummary
     });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: 'VERIFICATION_FAILED', message: err.message });
+    const unavailable = String(err?.message || '').includes('DURABLE_EDUCATION_STORAGE_UNAVAILABLE');
+    res.status(unavailable ? 503 : 500).json({
+      success: false,
+      error: unavailable ? 'DURABLE_EDUCATION_STORAGE_UNAVAILABLE' : 'VERIFICATION_FAILED',
+      message: unavailable ? 'Receipt verification is temporarily unavailable.' : 'Unable to verify this receipt right now.'
+    });
   }
 });
 
