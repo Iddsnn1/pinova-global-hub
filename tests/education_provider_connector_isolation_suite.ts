@@ -14,10 +14,13 @@ const ok = (value: boolean, name: string) => {
 
 class TestConnector implements IAuthoritativeEducationConnector {
   readonly isConfigured = true;
-  readonly countryCode = 'NG';
   readonly authorities: string[];
 
-  constructor(public readonly providerId: 'NUC' | 'NBTE' | 'JAMB_CAPS') {
+  constructor(
+    public readonly providerId: string,
+    public readonly countryCode = 'NG',
+    public readonly capabilities: readonly string[] = ['INSTITUTION_REGISTRY', 'ADMISSION_STATUS']
+  ) {
     this.authorities = [providerId];
   }
 
@@ -44,6 +47,10 @@ ok(registry.resolveForCapability('INSTITUTION_REGISTRY', 'NUC')?.providerId === 
 ok(registry.resolveForCapability('INSTITUTION_REGISTRY', 'NBTE')?.providerId === 'NBTE', 'explicit NBTE routing selects only NBTE');
 ok(registry.resolveForCapability('INSTITUTION_REGISTRY') === null, 'ambiguous institution-registry routing requires an explicit authority');
 ok(registry.resolveForCapability('ADMISSION_STATUS')?.providerId === 'JAMB_CAPS', 'admission-status routing resolves to JAMB CAPS only');
+
+registry.register(new TestConnector('US-EDUCATION-AUTHORITY', 'US', ['INSTITUTION_REGISTRY']));
+ok(registry.resolve('US', 'INSTITUTION_REGISTRY')?.providerId === 'US-EDUCATION-AUTHORITY', 'a new country authority can register without changing the provider ID union');
+ok(registry.resolve('US', 'ADMISSION_STATUS') === null, 'country connectors cannot be selected for capabilities they do not declare');
 
 const nucResult = await registry.get('NUC').verifyInstitution('NUC-123');
 ok(nucResult.valid && nucResult.authorityName === 'NUC', 'NUC connector response retains its own authority identity');
