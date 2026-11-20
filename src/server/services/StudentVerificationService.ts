@@ -71,10 +71,14 @@ export class StudentVerificationService {
   }
 
   public async verifyStudent(params: VerifyStudentRequestParams | any): Promise<StudentVerificationResult & { verificationStatus?: string }> {
-    const institutionId = params.institutionId;
-    const studentReference = params.studentReference || params.matricOrRegistrationNumber || params.studentId;
-    const academicSession = params.academicSession;
-    const countryCode = (params.countryCode || 'NG').trim().toUpperCase();
+    const request = params && typeof params === 'object' ? params : {};
+    const institutionId = typeof request.institutionId === 'string' ? request.institutionId.trim() : '';
+    const rawStudentReference = request.studentReference || request.matricOrRegistrationNumber || request.studentId;
+    const studentReference = typeof rawStudentReference === 'string' ? rawStudentReference.trim() : '';
+    const academicSession = typeof request.academicSession === 'string' ? request.academicSession.trim() : undefined;
+    const countryCode = typeof request.countryCode === 'string' && request.countryCode.trim()
+      ? request.countryCode.trim().toUpperCase()
+      : 'NG';
 
     if (!studentReference) {
       return {
@@ -88,7 +92,7 @@ export class StudentVerificationService {
       };
     }
 
-    if (!institutionId || !institutionId.trim()) {
+    if (!institutionId) {
       return {
         verified: false,
         status: 'UNAVAILABLE',
@@ -104,7 +108,7 @@ export class StudentVerificationService {
     if (countryCode === 'NG') {
       const connector = authoritativeEducationConnectorRegistry.resolveForCapability(
         'ADMISSION_STATUS',
-        params.providerId
+        request.providerId
       );
       if (!connector) {
         return {
@@ -117,10 +121,10 @@ export class StudentVerificationService {
           checkedAt: new Date().toISOString()
         };
       }
-      verificationResult = await connector.verifyStudent(institutionId.trim(), studentReference, academicSession);
+      verificationResult = await connector.verifyStudent(institutionId, studentReference, academicSession);
     } else {
       const adapter = accreditationAdapterRegistry.getAdapter(countryCode);
-      verificationResult = await adapter.verifyStudent(institutionId.trim(), studentReference, academicSession);
+      verificationResult = await adapter.verifyStudent(institutionId, studentReference, academicSession);
     }
 
     if (verificationResult.verified && verificationResult.verifiedProfile) {
