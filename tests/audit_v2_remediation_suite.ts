@@ -339,6 +339,25 @@ async function runTestSuite() {
   // 6.3 Overpayment Prevention in EducationRepository
   const eduRepo = new EducationRepository();
 
+  // Institution verification audit must preserve the verified actor, not a hard-coded service identity.
+  const auditTestInstitution = eduRepo.getInstitutions()[0];
+  if (auditTestInstitution) {
+    const auditedInstitution = eduRepo.verifyInstitution(
+      auditTestInstitution.id,
+      'REJECTED',
+      'Preview audit actor regression test',
+      { username: 'test_compliance_admin', role: 'COMPLIANCE_OFFICER' }
+    );
+    const institutionAudit = eduRepo.getAuditLogs('INSTITUTION').find((entry) =>
+      entry.entityId === auditTestInstitution.id && entry.action === 'VERIFY_INSTITUTION'
+    );
+    assert(Boolean(auditedInstitution), 'Scenario 6.0a: Institution verification updates an existing institution');
+    assert(institutionAudit?.actorUsername === 'test_compliance_admin', 'Scenario 6.0b: Institution audit records the authenticated admin username');
+    assert(institutionAudit?.actorRole === 'COMPLIANCE_OFFICER', 'Scenario 6.0c: Institution audit records the authenticated admin role');
+  } else {
+    assert(false, 'Scenario 6.0a: Seed institution available for audit actor regression test');
+  }
+
   const invoice = eduRepo.createInvoice({
     id: `inv-test-${Date.now()}`,
     invoiceNumber: `INV-TEST-001`,
