@@ -4011,23 +4011,30 @@ app.get('/api/education/receipts/:receiptNumber/verify', receiptVerifyRateLimite
   }
 });
 
-app.get('/api/education/receipts/:receiptNumber', authenticate, (req: AuthenticatedRequest, res) => {
+app.get('/api/education/receipts/:receiptNumber', authenticate, async (req: AuthenticatedRequest, res) => {
   try {
-    const receipt = educationRepo.getReceiptByNumber(req.params.receiptNumber);
+    // Keep authenticated receipt retrieval on the same Neon-authoritative source
+    // as public cryptographic verification; never fall back to local snapshots.
+    const receipt = await durableEducationStore.getReceiptByNumber(req.params.receiptNumber);
     if (!receipt) {
       res.status(404).json({ success: false, error: 'RECEIPT_NOT_FOUND' });
       return;
     }
     const roles = req.user?.roles || [];
     const isAdmin = roles.some((r: string) => ['PLATFORM_ADMIN', 'BURSAR', 'FINANCE_ADMIN', 'INSTITUTION_ADMIN'].includes(r));
-    const userRefs = [String(req.user?.id || ''), String(req.user?.username || ''), ''].map(v => v.trim().toLowerCase()).filter(Boolean);
+    const userRefs = [String(req.user?.id || ''), String(req.user?.username || '')].map(v => v.trim().toLowerCase()).filter(Boolean);
     if (!isAdmin && (!receipt.studentId || !userRefs.includes(receipt.studentId.trim().toLowerCase()))) {
       res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Receipt access requires the authenticated student context.' });
       return;
     }
     res.json({ success: true, receipt });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: 'RECEIPT_FETCH_FAILED', message: 'Unable to retrieve receipt.' });
+    const unavailable = String(err?.message || '').includes('DURABLE_EDUCATION_STORAGE_UNAVAILABLE');
+    res.status(unavailable ? 503 : 500).json({
+      success: false,
+      error: unavailable ? 'DURABLE_EDUCATION_STORAGE_UNAVAILABLE' : 'RECEIPT_FETCH_FAILED',
+      message: unavailable ? 'Receipt retrieval is temporarily unavailable.' : 'Unable to retrieve receipt.'
+    });
   }
 });
 
