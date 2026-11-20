@@ -1,4 +1,6 @@
 import { accreditationAdapterRegistry, StudentVerificationResult } from './AccreditationProviderAdapter';
+import { authoritativeEducationConnectorRegistry } from './AuthoritativeEducationConnectorRegistry';
+import { AuthoritativeEducationProviderId } from './AuthoritativeEducationProviderRegistry';
 import { EducationRepository } from '../db/repositories/EducationRepository';
 import {
   getNigeriaAuthoritativeProviderForCapability,
@@ -12,6 +14,7 @@ export interface VerifyStudentRequestParams {
   dateOfBirth?: string;
   nationalId?: string;
   countryCode?: string;
+  providerId?: AuthoritativeEducationProviderId;
 }
 
 export class StudentVerificationService {
@@ -29,20 +32,35 @@ export class StudentVerificationService {
     this.educationRepo = educationRepo;
   }
 
-  public async verifyInstitution(institutionId: string, countryCode: string = 'NG', registryNumber?: string) {
+  public async verifyInstitution(
+    institutionId: string,
+    countryCode: string = 'NG',
+    registryNumber?: string,
+    providerId?: AuthoritativeEducationProviderId
+  ) {
     const code = (countryCode || 'GLOBAL').trim().toUpperCase();
 
     if (code === 'NG') {
-      const providers = getNigeriaAuthoritativeProviderForCapability('INSTITUTION_REGISTRY');
-      const configured = providers.find((provider) => provider.integrationStatus === 'CONFIGURED');
-      if (!configured) {
+      const connector = authoritativeEducationConnectorRegistry.resolveForCapability(
+        'INSTITUTION_REGISTRY',
+        providerId
+      );
+      if (!connector) {
         return {
           accredited: false,
           status: 'UNAVAILABLE',
-          authority: providers.map((provider) => provider.id).join(', '),
-          notes: 'Authoritative Nigerian institution registry integration is not configured. No verification claim was made.'
+          authority: providerId || 'NUC / NBTE',
+          notes: 'Select the specific Nigerian authority (NUC or NBTE). PiNova will not guess which regulator should verify this institution.'
         };
       }
+      const result = await connector.verifyInstitution(registryNumber || institutionId);
+      return {
+        accredited: result.valid,
+        status: result.status,
+        authority: result.authorityName,
+        accreditationReference: result.accreditationReference,
+        notes: result.notes
+      };
     }
 
     const adapter = accreditationAdapterRegistry.getAdapter(code);
@@ -86,33 +104,28 @@ export class StudentVerificationService {
       };
     }
 
+    let verificationResult: StudentVerificationResult;
     if (countryCode === 'NG') {
-      const admissionProviders = getNigeriaAuthoritativeProviderForCapability('ADMISSION_STATUS');
-      const configuredAdmissionProvider = admissionProviders.find(
-        (provider) => provider.integrationStatus === 'CONFIGURED'
+      const connector = authoritativeEducationConnectorRegistry.resolveForCapability(
+        'ADMISSION_STATUS',
+        params.providerId
       );
-      const registryProviders = getNigeriaAuthoritativeProviderForCapability('INSTITUTION_REGISTRY');
-      const configuredRegistryProvider = registryProviders.find(
-        (provider) => provider.integrationStatus === 'CONFIGURED'
-      );
-
-      if (!configuredAdmissionProvider && !configuredRegistryProvider) {
+      if (!connector) {
         return {
           verified: false,
           status: 'UNAVAILABLE',
-          verificationStatus: 'REJECTED',
-          authorityName: admissionProviders
-            .map((provider) => getAuthoritativeEducationProvider(provider.id).authorityName)
-            .join(' / '),
+          verificationStatus: 'UNAVAILABLE',
+          authorityName: 'JAMB CAPS',
           referenceId: studentReference,
-          notes: 'Authoritative Nigerian student/admission provider integration is not configured. No verification claim was made.',
+          notes: 'No unambiguous Nigerian admission-status connector was selected. No verification claim was made.',
           checkedAt: new Date().toISOString()
         };
       }
+      verificationResult = await connector.verifyStudent(institutionId.trim(), studentReference, academicSession);
+    } else {
+      const adapter = accreditationAdapterRegistry.getAdapter(countryCode);
+      verificationResult = await adapter.verifyStudent(institutionId.trim(), studentReference, academicSession);
     }
-
-    const adapter = accreditationAdapterRegistry.getAdapter(countryCode);
-    const verificationResult = await adapter.verifyStudent(institutionId.trim(), studentReference, academicSession);
 
     if (verificationResult.verified && verificationResult.verifiedProfile) {
       const institution = this.educationRepo.getInstitutionById(institutionId);
@@ -123,7 +136,7 @@ export class StudentVerificationService {
 
     return {
       ...verificationResult,
-      verificationStatus: verificationResult.verified ? 'VERIFIED' : 'REJECTED'
+      verificationStatus: verificationResult.verified ? 'VERIFIED' : verificationResult.status === 'UNAVAILABLE' ? 'UNAVAILABLE' : verificationResult.status === 'PENDING' ? 'PENDING' : verificationResult.status === 'REQUIRES_MANUAL_REVIEW' ? 'UNDER_REVIEW' : verificationResult.status === 'NOT_FOUND' ? 'NOT_FOUND' : 'REJECTED'
     };
   }
 }
