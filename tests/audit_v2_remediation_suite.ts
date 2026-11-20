@@ -261,14 +261,14 @@ async function runTestSuite() {
   assert(!validVerification.verified, 'Scenario 5.1: Student verification fails closed without an authoritative provider');
   assert(validVerification.verificationStatus === 'UNAVAILABLE' && validVerification.status === 'UNAVAILABLE', 'Scenario 5.2: Unconfigured provider remains UNAVAILABLE, not REJECTED');
 
-  // 5.2 Invalid Student Rejection
+  // 5.2 Unknown Student With No Authoritative Provider
   const invalidVerification = await verificationService.verifyStudent({
     studentReference: 'FAKE/999/000',
     institutionId: 'inst-unilag-001',
     countryCode: 'NG'
   });
   assert(!invalidVerification.verified, 'Scenario 5.3: Unknown student fails verification');
-  assert(invalidVerification.verificationStatus === 'REJECTED', 'Scenario 5.4: Status is REJECTED');
+  assert(invalidVerification.verificationStatus === 'UNAVAILABLE' && invalidVerification.status === 'UNAVAILABLE', 'Scenario 5.4: Unknown student is UNAVAILABLE until an authoritative provider can check the record');
 
   // 5.3 Institution Accreditation
   const instAccreditation = await verificationService.verifyInstitution('NG-FED-001', 'NG');
