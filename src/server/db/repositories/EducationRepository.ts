@@ -133,7 +133,8 @@ export class EducationRepository {
   public verifyInstitution(
     id: string,
     status: 'VERIFIED' | 'VERIFIED_WITH_LIMITATIONS' | 'SUSPENDED' | 'REJECTED',
-    adminNotes?: string
+    adminNotes?: string,
+    actor: { username: string; role: string } = { username: 'unknown_admin', role: 'UNKNOWN' }
   ): InstitutionProfile | null {
     const inst = this.institutionsEngine.get(id);
     if (!inst) return null;
@@ -153,8 +154,8 @@ export class EducationRepository {
       action: 'VERIFY_INSTITUTION',
       entityType: 'INSTITUTION',
       entityId: id,
-      actorUsername: 'compliance_admin',
-      actorRole: 'COMPLIANCE_ADMIN',
+      actorUsername: actor.username.trim() || 'unknown_admin',
+      actorRole: actor.role.trim() || 'UNKNOWN',
       details: `Institution ${inst.name} verification updated to ${status}. Notes: ${adminNotes || 'None'}`
     });
 
