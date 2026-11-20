@@ -3442,7 +3442,7 @@ app.get(['/api/education/taxonomy', '/api/education/taxonomy/:countryCode?'], (r
 // 3. Student Identity & Verification Engine (Phase 7 Remediation)
 app.post('/api/education/students/verify', studentVerifyRateLimiter, authenticate, async (req: AuthenticatedRequest, res) => {
   try {
-    const { studentId, matricOrRegistrationNumber, institutionId, countryCode, claimedFullName, nationalStudentNumber } = req.body;
+    const { studentId, matricOrRegistrationNumber, institutionId, countryCode, providerId, claimedFullName, nationalStudentNumber } = req.body;
     if (!studentId && !matricOrRegistrationNumber) {
       res.status(400).json({
         success: false,
@@ -3457,6 +3457,7 @@ app.post('/api/education/students/verify', studentVerifyRateLimiter, authenticat
       matricOrRegistrationNumber,
       institutionId,
       countryCode: countryCode || 'NG',
+      providerId,
       claimedFullName,
       nationalStudentNumber
     });
@@ -3473,8 +3474,8 @@ app.post('/api/education/students/verify', studentVerifyRateLimiter, authenticat
 app.post('/api/education/institutions/:id/verify-accreditation', studentVerifyRateLimiter, authenticate, async (req: AuthenticatedRequest, res) => {
   try {
     const { id } = req.params;
-    const { countryCode, registryNumber } = req.body;
-    const result = await studentVerificationService.verifyInstitution(id, countryCode || 'NG', registryNumber);
+    const { countryCode, registryNumber, providerId } = req.body;
+    const result = await studentVerificationService.verifyInstitution(id, countryCode || 'NG', registryNumber, providerId);
     res.json({ success: true, accreditation: result });
   } catch (err: any) {
     res.status(500).json({ success: false, error: 'ACCREDITATION_CHECK_FAILED', message: err.message });
