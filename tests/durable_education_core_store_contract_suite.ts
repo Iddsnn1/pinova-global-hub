@@ -14,3 +14,10 @@ assert.match(source, /DURABLE_EDUCATION_STORAGE_UNAVAILABLE/);
 assert.match(source, /ON CONFLICT \(id\) DO NOTHING/);
 assert.match(source, /EDUCATION_ADMISSION_UPDATE_BINDING_MISMATCH/);
 console.log('EDUCATION CORE STORE CONTRACT: PASS');
+
+for (const filter of ['state', 'tier', 'isPublic', 'search']) {
+  assert.match(source, new RegExp('filter\\?\\.' + filter), 'institution directory must preserve ' + filter + ' filtering');
+}
+assert.match(source, /normalizeCountryCode/);
+assert.match(source, /matchesSubdivision/);
+console.log('EDUCATION INSTITUTION FILTER PARITY: PASS');
