@@ -96,7 +96,14 @@ export async function getInstitutionPage(
     throw new EducationDirectoryV2Error('The institution directory returned an invalid page response.', 502, 'EDUCATION_DIRECTORY_RESPONSE_INVALID');
   }
 
-  if (page.institutions.length > limit || meta.limit !== limit || meta.offset !== offset || meta.total < 0) {
+  const expectedHasMore = offset + page.institutions.length < meta.total;
+  if (
+    page.institutions.length > limit ||
+    meta.limit !== limit ||
+    meta.offset !== offset ||
+    meta.total < 0 ||
+    meta.hasMore !== expectedHasMore
+  ) {
     throw new EducationDirectoryV2Error('The institution directory returned inconsistent pagination metadata.', 502, 'EDUCATION_DIRECTORY_RESPONSE_INVALID');
   }
 
