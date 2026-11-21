@@ -69,6 +69,7 @@ export class NeonEducationRepository {
 
   public async listInstitutions(filter: {
     countryCode?: string;
+    country?: string;
     state?: string;
     tier?: string;
     institutionType?: string;
@@ -80,7 +81,7 @@ export class NeonEducationRepository {
   } = {}): Promise<InstitutionProfile[]> {
     const limit = Math.min(100, Math.max(1, Math.trunc(filter.limit ?? 50)));
     const offset = Math.max(0, Math.trunc(filter.offset ?? 0));
-    const normalizedCountry = normalizeCountryCode(filter.countryCode);
+    const normalizedCountry = normalizeCountryCode(filter.countryCode || filter.country);
     const countryCode = normalizedCountry && normalizedCountry !== 'ALL' ? normalizedCountry : null;
     const state = filter.state?.trim() && filter.state.trim().toLowerCase() !== 'all' ? filter.state.trim() : null;
     const tier = filter.tier?.trim() && filter.tier !== 'all' ? filter.tier.trim() : null;
