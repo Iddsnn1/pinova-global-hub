@@ -62,6 +62,26 @@ try {
   assert.equal(seeded.get('seed-record')?.id, 'seed-record',
     'first-time initialization must still seed a genuinely missing collection');
 
+  const failedSeedPath = path.join(tempDir, 'failed_seed_collection.json');
+  const originalRenameSyncForSeed = fs.renameSync;
+  const mutableFsForSeed = fs as unknown as { renameSync: typeof fs.renameSync };
+  try {
+    mutableFsForSeed.renameSync = (() => { throw new Error('simulated initial seed commit failure'); }) as typeof fs.renameSync;
+    assert.throws(
+      () => new StorageEngine('failed_seed_collection', 'id', [{ id: 'seed-record' }]),
+      /Refusing to overwrite existing data file/
+    );
+    assert.equal(fs.existsSync(failedSeedPath), false,
+      'failed first-time seed must not create a falsely initialized collection file');
+    assert.equal(
+      fs.readdirSync(tempDir).some((name) => name.startsWith('failed_seed_collection.json.tmp.')),
+      false,
+      'failed initial seed must clean up its incomplete temporary file'
+    );
+  } finally {
+    mutableFsForSeed.renameSync = originalRenameSyncForSeed;
+  }
+
   const mutableFs = fs as unknown as { renameSync: typeof fs.renameSync };
   const originalRenameSync = fs.renameSync;
   try {
