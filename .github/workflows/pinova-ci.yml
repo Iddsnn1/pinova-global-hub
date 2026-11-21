@@ -2,7 +2,7 @@ name: PiNova CI
 
 on:
   push:
-    branches: [main, design/premium-landing-preview, migration/neon-durable-storage]
+    branches: [main, design/premium-landing-preview, migration/neon-durable-storage, fix/verified-utility-fulfillment-preview-20261117]
   pull_request:
     branches: [main, design/premium-landing-preview, migration/neon-durable-storage]
   workflow_dispatch:
