@@ -62,3 +62,14 @@ assert.match(guardianRepositorySource, /invoiceCurrencies\.length > 1/, 'guardia
 assert.match(guardianRepositorySource, /hasMixedCurrencies \? 0/, 'mixed-currency legacy totals must fail closed instead of being added');
 assert.match(guardianRepositorySource, /currency,\s*totalBilledFiat: totalBilled/, 'guardian summaries must expose the authoritative invoice currency');
 console.log('GUARDIAN INVOICE CURRENCY AND CANCELLATION SAFETY CONTRACT: PASS');
+
+
+const serverSource = fs.readFileSync(path.resolve(process.cwd(), 'server.ts'), 'utf8');
+const guardianRoute = serverSource.slice(
+  serverSource.indexOf("app.get('/api/education/guardians/:id/children'"),
+  serverSource.indexOf("// 4. Invoices & Authoritative School Fees Engine")
+);
+assert.match(guardianRoute, /isGlobalAdmin\s*\|\|\s*isInstitutionAdmin/, 'institution admins may access guardian summaries only through the later institution-scoped filter');
+assert.match(guardianRoute, /if \(isInstitutionAdmin\)[\s\S]*?INSTITUTION_SCOPE_REQUIRED[\s\S]*?child\.institutionId === institutionId/, 'institution admin guardian reads must require and enforce institution scope');
+assert.match(serverSource, /educationRepo\.updateAdmissionStatus\(id, status, updatedBy, reason\)/, 'admission status audit must attribute the authenticated actor and preserve decision notes');
+console.log('EDUCATION GUARDIAN SCOPE AND ADMISSION AUDIT ACTOR CONTRACT: PASS');
