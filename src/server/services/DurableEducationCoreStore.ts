@@ -30,8 +30,11 @@ export class DurableEducationCoreStore {
     const rawCountry = filter?.countryCode || filter?.country;
     const normalizedCountry = rawCountry ? normalizeCountryCode(rawCountry) : undefined;
     const country = normalizedCountry && normalizedCountry !== 'ALL' && normalizedCountry !== 'GLOBAL' ? normalizedCountry.toUpperCase() : null;
-    const type = clean(filter?.institutionType) || null;
-    const status = clean(filter?.verificationStatus) || null;
+    const rawType = clean(filter?.institutionType);
+    const rawStatus = clean(filter?.verificationStatus);
+    // Match the legacy directory's "all" sentinels: they mean no filter.
+    const type = rawType && rawType.toLowerCase() !== 'all' ? rawType : null;
+    const status = rawStatus && rawStatus.toUpperCase() !== 'ALL' ? rawStatus : null;
     const rows = await sql`SELECT data FROM education_institutions
       WHERE (${country}::text IS NULL OR country_code = ${country})
         AND (${type}::text IS NULL OR institution_type = ${type})
