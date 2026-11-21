@@ -18,6 +18,7 @@ console.log('EDUCATION CORE STORE CONTRACT: PASS');
 for (const filter of ['state', 'tier', 'isPublic', 'search']) {
   assert.match(source, new RegExp('filter\\?\\.' + filter), 'institution directory must preserve ' + filter + ' filtering');
 }
+assert.match(source, /rawStatus\.toUpperCase\(\) !== 'ALL'/, 'admissions status ALL sentinel must disable filtering');
 assert.match(source, /normalizeCountryCode/);
 assert.match(source, /matchesSubdivision/);
 assert.match(source, /rawType\.toLowerCase\(\) !== 'all'/, 'institution type all sentinel must disable filtering');
