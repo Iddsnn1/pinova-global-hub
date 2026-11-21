@@ -8,7 +8,7 @@ for (const method of [
   'getStudentById', 'getStudentsByGuardian', 'createStudent',
   'getGuardianChildren', 'saveGuardianChildSummary',
   'getAdmissions', 'getAdmissionById', 'createAdmission', 'updateAdmissionStatus',
-  'getScholarships', 'createScholarship'
+  'getScholarships', 'createScholarship', 'updateScholarship'
 ]) assert.match(source, new RegExp('async ' + method + '\\('), method + ' must be implemented');
 assert.match(source, /DURABLE_EDUCATION_STORAGE_UNAVAILABLE/);
 assert.match(source, /ON CONFLICT \(id\) DO NOTHING/);
@@ -41,3 +41,15 @@ assert.ok(transitionSource.includes('INSERT INTO education_audit_logs') && trans
 assert.match(transitionSource, /EDUCATION_ADMISSION_TRANSITION_BINDING_MISMATCH/, 'admission transition payload must be bound to its record and actor');
 console.log('EDUCATION ATOMIC ADMISSION TRANSITION CONTRACT: PASS');
 
+
+
+const scholarshipSource = source.slice(source.indexOf('async getScholarships('));
+assert.ok(scholarshipSource.includes("item.applicableTiers.includes(tier as any)"), 'scholarship listing must filter by tier');
+assert.ok(scholarshipSource.includes("item.eligibleCountries.some(code => clean(code).toUpperCase() === country)"), 'scholarship listing must filter country codes case-insensitively');
+assert.ok(scholarshipSource.includes('async updateScholarship('), 'durable scholarship updates must be available');
+assert.ok(scholarshipSource.includes('EDUCATION_SCHOLARSHIP_UPDATE_ID_MISMATCH'), 'scholarship update cannot change its ID');
+assert.ok(scholarshipSource.includes('EDUCATION_SCHOLARSHIP_UPDATE_FIELD_NOT_ALLOWED'), 'scholarship updates must reject unknown fields');
+assert.ok(scholarshipSource.includes('EDUCATION_SCHOLARSHIP_SPONSOR_TYPE_INVALID'), 'scholarship updates must validate sponsor type');
+assert.ok(scholarshipSource.includes('data = data || ${patchJson}::jsonb'), 'scholarship updates must merge only supplied JSON fields');
+assert.ok(scholarshipSource.includes("INSERT INTO education_audit_logs") && scholarshipSource.includes("FROM updated") && scholarshipSource.includes("RETURNING id"), 'scholarship update and audit must be atomic');
+console.log('EDUCATION DURABLE SCHOLARSHIP CONTRACT: PASS');
