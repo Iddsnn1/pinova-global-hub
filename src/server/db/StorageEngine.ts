@@ -40,15 +40,17 @@ export class StorageEngine<T extends { id?: string; [key: string]: any }> {
     try {
       if (fs.existsSync(this.filePath)) {
         const fileContent = fs.readFileSync(this.filePath, 'utf-8');
-        if (fileContent.trim()) {
-          const parsed = JSON.parse(fileContent);
-          if (Array.isArray(parsed)) {
-            for (const item of parsed) {
-              const key = String(item[this.primaryKey] || item.id || '');
-              if (key) {
-                this.cache.set(key, item);
-              }
-            }
+        if (!fileContent.trim()) {
+          throw new Error('Existing collection file is empty');
+        }
+        const parsed: unknown = JSON.parse(fileContent);
+        if (!Array.isArray(parsed)) {
+          throw new Error('Existing collection file must contain a JSON array');
+        }
+        for (const item of parsed) {
+          const key = String(item[this.primaryKey] || item.id || '');
+          if (key) {
+            this.cache.set(key, item);
           }
         }
       } else {
@@ -63,16 +65,12 @@ export class StorageEngine<T extends { id?: string; [key: string]: any }> {
       }
       this.isLoaded = true;
     } catch (err) {
-      console.warn(`[StorageEngine:${this.collectionName}] Recovery mode triggered:`, err);
-      // Populate cache with seed data if file is corrupted
-      for (const item of initialData) {
-        const key = String(item[this.primaryKey] || item.id || '');
-        if (key) {
-          this.cache.set(key, item);
-        }
-      }
-      this.saveSync();
-      this.isLoaded = true;
+      console.error(`[StorageEngine:${this.collectionName}] Existing data could not be loaded; refusing to overwrite the source file:`, err);
+      // Fail closed: never replace an existing, unreadable collection with seed or empty data.
+      throw new Error(
+        `[StorageEngine:${this.collectionName}] Refusing to overwrite existing data file after load failure; source preserved.`,
+        { cause: err }
+      );
     }
   }
 
