@@ -14,6 +14,8 @@ assert.match(route, /await durableEducationStore\.getReceiptByNumber\(/, 'authen
 assert.doesNotMatch(route, /educationRepo\.getReceiptByNumber\(/, 'authenticated receipt retrieval must not read legacy local storage');
 assert.match(route, /res\.status\(unavailable \? 503 : 500\)/, 'durable storage outage must fail closed with 503');
 assert.match(route, /receipt\.studentId/, 'student ownership check must remain enforced');
-assert.match(route, /PLATFORM_ADMIN.*BURSAR.*FINANCE_ADMIN.*INSTITUTION_ADMIN/, 'authorized finance/admin roles must retain access');
+assert.match(route, /\['PLATFORM_ADMIN', 'COMPLIANCE_OFFICER', 'COMPLIANCE_ADMIN', 'BURSAR', 'FINANCE_ADMIN'\]\.includes\(r\)/, 'global finance/compliance roles must retain cross-institution access');
+assert.match(route, /roles\.includes\('INSTITUTION_ADMIN'\)/, 'institution administrators must retain institution-scoped access');
+assert.match(route, /!isGlobalAdmin[\s\S]*institutionId[\s\S]*receipt\.institutionId/, 'institution administrators must be scoped to their authenticated institution unless also global admins');
 
 console.log('EDUCATION RECEIPT SOURCE CONSISTENCY SUITE: PASS');
