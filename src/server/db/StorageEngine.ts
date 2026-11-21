@@ -40,16 +40,25 @@ export class StorageEngine<T extends { id?: string; [key: string]: any }> {
     try {
       if (fs.existsSync(this.filePath)) {
         const fileContent = fs.readFileSync(this.filePath, 'utf-8');
-        if (fileContent.trim()) {
-          const parsed = JSON.parse(fileContent);
-          if (Array.isArray(parsed)) {
-            for (const item of parsed) {
-              const key = String(item[this.primaryKey] || item.id || '');
-              if (key) {
-                this.cache.set(key, item);
-              }
-            }
+        if (!fileContent.trim()) {
+          throw new Error('Existing collection file is empty');
+        }
+        const parsed: unknown = JSON.parse(fileContent);
+        if (!Array.isArray(parsed)) {
+          throw new Error('Existing collection file must contain a JSON array');
+        }
+        for (const [index, item] of parsed.entries()) {
+          if (item === null || typeof item !== 'object' || Array.isArray(item)) {
+            throw new Error(`Existing collection record at index ${index} must be a JSON object`);
           }
+          const key = String(item[this.primaryKey] || item.id || '');
+          if (!key) {
+            throw new Error(`Existing collection record at index ${index} has no usable primary key`);
+          }
+          if (this.cache.has(key)) {
+            throw new Error(`Existing collection contains duplicate primary key "${key}"`);
+          }
+          this.cache.set(key, item);
         }
       } else {
         // First-time seed load
@@ -59,31 +68,37 @@ export class StorageEngine<T extends { id?: string; [key: string]: any }> {
             this.cache.set(key, item);
           }
         }
-        this.saveSync();
+        if (!this.saveSync()) {
+          throw new Error('Unable to persist initial collection seed; refusing to report successful initialization');
+        }
       }
       this.isLoaded = true;
     } catch (err) {
-      console.warn(`[StorageEngine:${this.collectionName}] Recovery mode triggered:`, err);
-      // Populate cache with seed data if file is corrupted
-      for (const item of initialData) {
-        const key = String(item[this.primaryKey] || item.id || '');
-        if (key) {
-          this.cache.set(key, item);
-        }
-      }
-      this.saveSync();
-      this.isLoaded = true;
+      console.error(`[StorageEngine:${this.collectionName}] Existing data could not be loaded; refusing to overwrite the source file:`, err);
+      // Fail closed: never replace an existing, unreadable collection with seed or empty data.
+      throw new Error(
+        `[StorageEngine:${this.collectionName}] Refusing to overwrite existing data file after load failure; source preserved.`,
+        { cause: err }
+      );
     }
   }
 
   private saveSync(): boolean {
+    let tempPath: string | undefined;
     try {
       const items = Array.from(this.cache.values());
-      const tempPath = `${this.filePath}.tmp.${Date.now()}.${Math.random().toString(36).substring(2, 6)}`;
+      tempPath = `${this.filePath}.tmp.${Date.now()}.${Math.random().toString(36).substring(2, 6)}`;
       fs.writeFileSync(tempPath, JSON.stringify(items, null, 2), 'utf-8');
       fs.renameSync(tempPath, this.filePath);
       return true;
     } catch (err) {
+      if (tempPath) {
+        try {
+          if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+        } catch (cleanupError) {
+          console.error(`[StorageEngine:${this.collectionName}] Failed to remove incomplete temp file:`, cleanupError);
+        }
+      }
       console.error(`[StorageEngine:${this.collectionName}] Failed to sync to disk:`, err);
       return false;
     }
@@ -117,8 +132,13 @@ export class StorageEngine<T extends { id?: string; [key: string]: any }> {
   }
 
   public set(key: string, value: T): boolean {
+    const hadPrevious = this.cache.has(key);
+    const previous = this.cache.get(key);
     this.cache.set(key, value);
-    return this.saveSync();
+    if (this.saveSync()) return true;
+    if (hadPrevious) this.cache.set(key, previous as T);
+    else this.cache.delete(key);
+    return false;
   }
 
   public unshift(value: T): boolean {
@@ -131,16 +151,22 @@ export class StorageEngine<T extends { id?: string; [key: string]: any }> {
         newMap.set(k, v);
       }
     }
+    const previousCache = this.cache;
     this.cache = newMap;
-    return this.saveSync();
+    if (this.saveSync()) return true;
+    this.cache = previousCache;
+    return false;
   }
 
   public delete(key: string): boolean {
-    const deleted = this.cache.delete(key);
-    if (deleted) {
-      this.saveSync();
-    }
-    return deleted;
+    if (!this.cache.has(key)) return false;
+    const previousCache = this.cache;
+    const nextCache = new Map(this.cache);
+    nextCache.delete(key);
+    this.cache = nextCache;
+    if (this.saveSync()) return true;
+    this.cache = previousCache;
+    return false;
   }
 
   public count(): number {

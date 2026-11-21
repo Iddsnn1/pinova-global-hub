@@ -259,16 +259,16 @@ async function runTestSuite() {
     countryCode: 'NG'
   });
   assert(!validVerification.verified, 'Scenario 5.1: Student verification fails closed without an authoritative provider');
-  assert(validVerification.verificationStatus === 'REJECTED' && validVerification.status === 'UNAVAILABLE', 'Scenario 5.2: Verification status remains unavailable/rejected');
+  assert(validVerification.verificationStatus === 'UNAVAILABLE' && validVerification.status === 'UNAVAILABLE', 'Scenario 5.2: Unconfigured provider remains UNAVAILABLE, not REJECTED');
 
-  // 5.2 Invalid Student Rejection
+  // 5.2 Unknown Student With No Authoritative Provider
   const invalidVerification = await verificationService.verifyStudent({
     studentReference: 'FAKE/999/000',
     institutionId: 'inst-unilag-001',
     countryCode: 'NG'
   });
   assert(!invalidVerification.verified, 'Scenario 5.3: Unknown student fails verification');
-  assert(invalidVerification.verificationStatus === 'REJECTED', 'Scenario 5.4: Status is REJECTED');
+  assert(invalidVerification.verificationStatus === 'UNAVAILABLE' && invalidVerification.status === 'UNAVAILABLE', 'Scenario 5.4: Unknown student is UNAVAILABLE until an authoritative provider can check the record');
 
   // 5.3 Institution Accreditation
   const instAccreditation = await verificationService.verifyInstitution('NG-FED-001', 'NG');
@@ -338,6 +338,31 @@ async function runTestSuite() {
 
   // 6.3 Overpayment Prevention in EducationRepository
   const eduRepo = new EducationRepository();
+
+  // Seed a minimal institution in the isolated test StorageEngine.
+  (eduRepo as any).institutionsEngine.set('audit-test-institution', {
+    id: 'audit-test-institution',
+    name: 'Audit Test Institution',
+    accreditation: { officialNotes: 'Initial test state' }
+  });
+  // Institution verification audit must preserve the verified actor, not a hard-coded service identity.
+  const auditTestInstitution = eduRepo.getInstitutions()[0];
+  if (auditTestInstitution) {
+    const auditedInstitution = eduRepo.verifyInstitution(
+      auditTestInstitution.id,
+      'REJECTED',
+      'Preview audit actor regression test',
+      { username: 'test_compliance_admin', role: 'COMPLIANCE_OFFICER' }
+    );
+    const institutionAudit = eduRepo.getAuditLogs('INSTITUTION').find((entry) =>
+      entry.entityId === auditTestInstitution.id && entry.action === 'VERIFY_INSTITUTION'
+    );
+    assert(Boolean(auditedInstitution), 'Scenario 6.0a: Institution verification updates an existing institution');
+    assert(institutionAudit?.actorUsername === 'test_compliance_admin', 'Scenario 6.0b: Institution audit records the authenticated admin username');
+    assert(institutionAudit?.actorRole === 'COMPLIANCE_OFFICER', 'Scenario 6.0c: Institution audit records the authenticated admin role');
+  } else {
+    assert(false, 'Scenario 6.0a: Seed institution available for audit actor regression test');
+  }
 
   const invoice = eduRepo.createInvoice({
     id: `inv-test-${Date.now()}`,

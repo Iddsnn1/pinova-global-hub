@@ -1032,125 +1032,74 @@ function MainAppContent() {
             userBalancePi={userBalancePi}
             buyerUsername={user.username}
             onSelectCategory={(cat) => setSelectedUtilityCategory(cat)}
-            onTransactionSuccess={(receipt) => {
-              const transactionId = receipt.transactionId || `UTIL-TX-${Date.now()}`;
-              const orderId = transactionId.startsWith('ORD-') ? transactionId : `ORD-${transactionId}`;
-              
-              const providerTitle = receipt.providerName || 'Utility Service';
-              const categoryName = (receipt.category || 'utility').toUpperCase();
-              const pkgTitle = receipt.packageName ? ` (${receipt.packageName})` : '';
-
-              const newUtilityOrder: Order = {
-                id: orderId,
-                buyerUsername: user.username,
-                items: [
-                  {
-                    product: {
-                      id: `prod-util-${providerTitle.toLowerCase().replace(/\s+/g, '-')}-${Date.now().toString().slice(-4)}`,
-                      title: `${providerTitle}${pkgTitle}`,
-                      description: `Utility fulfillment for account ${receipt.accountNumber} via ${providerTitle}. Category: ${categoryName}.`,
-                      pricePi: receipt.piAmount,
-                      category: 'utility',
-                      subcategory: receipt.category || 'utility',
-                      images: ['https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&fit=crop&w=800&q=80'],
-                      stock: 999,
-                      rating: 5.0,
-                      reviewsCount: 1,
-                      sellerId: 'system-utility-gateway',
-                      sellerName: providerTitle,
-                      sellerVerified: true,
-                      features: ['Instant Digital Fulfillment', 'PSTP Order Protection Active'],
-                      shippingWeightKg: 0,
-                      tags: ['utility', receipt.category || 'utility', providerTitle],
-                      utilityProvider: providerTitle
-                    },
-                    quantity: 1,
-                    customDetails: {
-                      accountNumber: receipt.accountNumber,
-                      phoneNumber: receipt.accountNumber
-                    }
-                  }
-                ],
-                totalPi: receipt.piAmount,
-                escrowStatus: 'released',
-                pstpStatus: 'Completed',
-                piPaymentId: receipt.piPaymentId || `pi_pay_util_${Date.now()}`,
-                piTxid: receipt.piTxid || `0x${Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('')}`,
-                trackingNumber: receipt.tokenOrCode ? `TOKEN-${receipt.tokenOrCode}` : `UTIL-REF-${transactionId}`,
-                carrier: 'Digital Direct Fulfillment',
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString(),
-                serverVerified: true,
-                digitalDeliveries: receipt.tokenOrCode ? [
-                  {
-                    productId: `prod-util-${providerTitle.toLowerCase().replace(/\s+/g, '-')}`,
-                    codeOrUrl: receipt.tokenOrCode,
-                    title: `${providerTitle} Digital Voucher / Ref Token`
-                  }
-                ] : undefined,
-                timeline: [
-                  {
-                    status: 'Pending Payment',
-                    timestamp: new Date(Date.now() - 5000).toISOString(),
-                    actor: user.username,
-                    actorRole: 'buyer',
-                    note: 'Utility payment initiated via Pi Network SDK.'
-                  },
-                  {
-                    status: 'Payment Verified',
-                    timestamp: new Date(Date.now() - 2000).toISOString(),
-                    actor: 'PSTP_Protection_Server',
-                    actorRole: 'system',
-                    note: 'Payment completed & verified server-side via Pi Platform API.'
-                  },
-                  {
-                    status: 'Completed',
-                    timestamp: new Date().toISOString(),
-                    actor: providerTitle,
-                    actorRole: 'seller',
-                    note: receipt.tokenOrCode
-                      ? `Service fulfilled. Digital Token/Code: ${receipt.tokenOrCode}`
-                      : `Service fulfilled & applied directly to account ${receipt.accountNumber}.`
-                  }
-                ]
-              };
-
-              setOrders((previousOrders) => {
-                if (
-                  previousOrders.some(
-                    (order) =>
-                      (receipt.piPaymentId && order.piPaymentId === receipt.piPaymentId) ||
-                      order.id === orderId ||
-                      (receipt.transactionId && order.id === receipt.transactionId)
-                  )
-                ) {
-                  return previousOrders;
-                }
-
-                const updatedOrders = [newUtilityOrder, ...previousOrders];
-
-                try {
-                  localStorage.setItem('pinova_user_orders', JSON.stringify(updatedOrders));
-                } catch (e) {
-                  console.warn('Failed to persist orders:', e);
-                }
-
-                return updatedOrders;
-              });
-
-              setUserBalancePi((prev) => Math.max(0, prev - receipt.piAmount));
-
-              setNotifications((prev) => [
-                {
+            onTransactionSuccess={async (receipt) => {
+              if (!receipt?.piPaymentId || !receipt.piTxid || !receipt.transactionId || receipt.status === 'FAILED' || receipt.status === 'REFUNDED') {
+                setNotifications((prev) => [{
                   id: `notif-${Date.now()}`,
-                  title: 'Utility Purchase Fulfilled & Order Recorded',
-                  message: `Successfully purchased ${providerTitle} (${receipt.accountNumber}) for ${formatPiAmount(receipt.piAmount)} π. Order ID: ${orderId}. Token: ${receipt.tokenOrCode || 'Delivered'}`,
-                  type: 'order_protection',
+                  title: 'Utility payment requires verification',
+                  message: 'The payment identifiers are incomplete. Check Pi payment history before retrying; do not pay twice.',
+                  type: 'security',
                   timestamp: new Date().toISOString(),
                   read: false
-                },
-                ...prev
+                }, ...prev]);
+                return;
+              }
+
+              const providerTitle = receipt.providerName || 'Utility Service';
+              let response: Response;
+              let payload: any;
+              try {
+                response = await vendorAuthenticatedFetch('/api/orders/utility', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'Idempotency-Key': receipt.piPaymentId },
+                  body: JSON.stringify({
+                    paymentId: receipt.piPaymentId,
+                    amountPi: receipt.piAmount,
+                    category: receipt.category,
+                    providerName: providerTitle,
+                    accountNumber: receipt.accountNumber
+                  })
+                });
+                payload = await response.json();
+              } catch (error) {
+                console.error('[Utility] Durable order submission failed:', error);
+                setNotifications((prev) => [{
+                  id: `notif-${Date.now()}`,
+                  title: 'Payment needs order confirmation',
+                  message: 'Pi payment may already be complete, but the durable order service could not be reached. Do not pay again; contact support with payment ID ' + receipt.piPaymentId,
+                  type: 'security',
+                  timestamp: new Date().toISOString(),
+                  read: false
+                }, ...prev]);
+                return;
+              }
+
+              if (!response.ok || payload?.ok !== true || payload?.verified !== true || !payload?.order) {
+                setNotifications((prev) => [{
+                  id: `notif-${Date.now()}`,
+                  title: 'Utility order not yet recorded',
+                  message: String(payload?.message || payload?.error || 'The server did not confirm this payment. Do not pay again until payment history is checked.'),
+                  type: 'security',
+                  timestamp: new Date().toISOString(),
+                  read: false
+                }, ...prev]);
+                return;
+              }
+
+              const durableOrder = payload.order as Order;
+              setOrders((previousOrders) => [
+                durableOrder,
+                ...previousOrders.filter((order) => order.id !== durableOrder.id && order.piPaymentId !== durableOrder.piPaymentId)
               ]);
+              setUserBalancePi((prev) => Math.max(0, prev - receipt.piAmount));
+              setNotifications((prev) => [{
+                id: `notif-${Date.now()}`,
+                title: 'Utility Payment Verified — Fulfillment Pending',
+                message: `Pi payment independently verified and saved. ${providerTitle} fulfillment is not yet confirmed. Do not pay again. Order ID: ${durableOrder.id}.`,
+                type: 'order_protection',
+                timestamp: new Date().toISOString(),
+                read: false
+              }, ...prev]);
             }}
           />
         )}
@@ -1171,7 +1120,18 @@ function MainAppContent() {
               userBalancePi={userBalancePi}
               buyerUsername={user.username}
               onTransactionSuccess={(receipt) => {
-                const transactionId = receipt.transactionId || `EDU-TX-${Date.now()}`;
+                if (!receipt?.serverVerified || receipt.status !== 'SUCCESS' || !receipt.piPaymentId || !receipt.piTxid || !receipt.transactionId) {
+                  setNotifications((prev) => [{
+                    id: `notif-${Date.now()}`,
+                    title: 'Education payment not recorded',
+                    message: 'The education transaction was not marked complete because a server-verified successful payment and genuine Pi identifiers were not supplied.',
+                    type: 'security',
+                    timestamp: new Date().toISOString(),
+                    read: false
+                  }, ...prev]);
+                  return;
+                }
+                const transactionId = receipt.transactionId;
                 const orderId = transactionId.startsWith('ORD-') ? transactionId : `ORD-${transactionId}`;
                 const providerTitle = receipt.providerName || receipt.institutionName || 'Education Portal';
                 const pkgTitle = receipt.packageName ? ` (${receipt.packageName})` : '';
@@ -1206,10 +1166,12 @@ function MainAppContent() {
                     }
                   ],
                   totalPi: receipt.amountPi || receipt.piAmount || 0,
-                  escrowStatus: 'released',
-                  pstpStatus: 'Completed',
-                  piPaymentId: receipt.piPaymentId || `pi_pay_edu_${Date.now()}`,
-                  piTxid: receipt.piTxid || `0x${Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('')}`,
+                  // A verified payment is not evidence that Pi has been paid out to a provider.
+                  escrowStatus: 'approved',
+                  // A verified Pi payment alone does not prove academic/provider fulfillment.
+                  pstpStatus: 'Processing',
+                  piPaymentId: receipt.piPaymentId,
+                  piTxid: receipt.piTxid,
                   trackingNumber: receipt.receiptNumber || receipt.tokenOrCode || `EDU-REF-${transactionId}`,
                   carrier: 'Digital Academic Fulfillment',
                   createdAt: new Date().toISOString(),

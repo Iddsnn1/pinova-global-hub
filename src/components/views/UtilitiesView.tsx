@@ -188,6 +188,8 @@ interface UtilitiesViewProps {
     packageName?: string;
     piPaymentId?: string;
     piTxid?: string;
+    serverVerified?: boolean;
+    status?: 'SUCCESS' | 'PROCESSING' | 'FAILED' | 'REFUNDED';
   }) => void;
 }
 
@@ -895,7 +897,9 @@ export const UtilitiesView: React.FC<UtilitiesViewProps> = ({
                     category: receipt.category,
                     packageName: receipt.packageName,
                     piPaymentId: receipt.piPaymentId,
-                    piTxid: receipt.piTxid
+                    piTxid: receipt.piTxid,
+                    serverVerified: receipt.serverVerified,
+                    status: receipt.status
                   });
                 }}
               />

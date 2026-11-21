@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * scripts/patch-vendor-branding-blob.mjs
+ * scripts/verify-vendor-branding-storage.mjs
  * 
- * Verifies and ensures the production server source contains the native
+ * Verifies that the server source contains the native
  * durable object storage integration, MIME validation, file signature enforcement,
  * and robust error codes before esbuild bundles dist/server.cjs.
  */
@@ -17,7 +17,7 @@ const rootDir = path.resolve(__dirname, '..');
 const serverPath = path.join(rootDir, 'server.ts');
 
 if (!fs.existsSync(serverPath)) {
-  console.error('[patch-vendor-branding-blob] server.ts not found at:', serverPath);
+  console.error('[verify-vendor-branding-storage] server.ts not found at:', serverPath);
   process.exit(1);
 }
 
@@ -53,14 +53,14 @@ const allPassed = Object.values(checks).every(Boolean);
 
 if (allPassed) {
   if (process.env.DEBUG || process.argv.includes('--verbose')) {
-    console.log('[patch-vendor-branding-blob] server.ts verified: durable object storage, magic-byte checks, structured errors, and legacy Blob dependencies are absent.');
+    console.log('[verify-vendor-branding-storage] server.ts verified: durable object storage, magic-byte checks, structured errors, and legacy Blob dependencies are absent.');
   }
   process.exit(0);
 } else {
-  console.error('[patch-vendor-branding-blob] Critical server integrity check failed:', checks);
+  console.error('[verify-vendor-branding-storage] Critical server integrity check failed:', checks);
   const failedChecks = Object.entries(checks)
     .filter(([, passed]) => !passed)
     .map(([name]) => name);
-  console.error(`[patch-vendor-branding-blob] Missing required architectural components: ${failedChecks.join(', ')}`);
+  console.error(`[verify-vendor-branding-storage] Missing required architectural components: ${failedChecks.join(', ')}`);
   process.exit(1);
 }

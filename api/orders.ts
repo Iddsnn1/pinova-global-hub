@@ -4,8 +4,65 @@ import { authService, paymentLedgerRepo, pstpAuditRepo, verifyPiPaymentAuthorita
 import { listDurableVendorApplications } from '../dist/server.cjs';
 import { durableProductStorageEnabled, getDurableProduct } from '../dist/server.cjs';
 import type { Order, OrderItem, PstpOrderStatus } from '../src/types';
-import { isAllowedOrderTransition, isAllowedSellerTransition, expectedCarrierTransition } from '../src/modules/orders/lifecycle';
-import { getPiAuthoritativeTransactionId, matchesPiAmountAt12Decimals } from '../src/server/services/PiOrderPaymentContract';
+// Keep API route helpers self-contained: Vercel compiles api/*.ts as isolated
+// functions and does not resolve extensionless imports from src/*.ts at runtime.
+const SELLER_FULFILLMENT_TRANSITIONS: Partial<Record<PstpOrderStatus, PstpOrderStatus[]>> = {
+  'Payment Verified': ['Seller Accepted'],
+  'Seller Accepted': ['Preparing Order'],
+  'Preparing Order': ['Packed'],
+  'Packed': ['Shipped'],
+};
+const CARRIER_FULFILLMENT_TRANSITIONS: Partial<Record<PstpOrderStatus, PstpOrderStatus>> = {
+  'Shipped': 'In Transit',
+  'In Transit': 'Out for Delivery',
+  'Out for Delivery': 'Delivered',
+};
+const ORDER_LIFECYCLE_TRANSITIONS: Partial<Record<PstpOrderStatus, PstpOrderStatus[]>> = {
+  'Draft': ['Pending Payment', 'Cancelled'],
+  'Pending Payment': ['Payment Authorized', 'Cancelled'],
+  'Payment Authorized': ['Payment Verified', 'Cancelled'],
+  'Payment Verified': ['Transaction Recorded', 'Seller Accepted', 'Refunded', 'Cancelled'],
+  'Transaction Recorded': ['Order Confirmed', 'Refunded', 'Cancelled'],
+  'Order Confirmed': ['Seller Accepted', 'Processing', 'Preparing Shipment', 'Refunded', 'Cancelled'],
+  'Seller Accepted': ['Preparing Order'],
+  'Processing': ['Preparing Order', 'Preparing Shipment'],
+  'Preparing Order': ['Packed'],
+  'Preparing Shipment': ['Packed'],
+  'Packed': ['Shipped'],
+  'Shipped': ['In Transit'],
+  'In Transit': ['Out for Delivery'],
+  'Out for Delivery': ['Delivered'],
+  'Delivered': ['Buyer Confirmation', 'Refund Requested', 'Disputed'],
+  'Buyer Confirmation': ['Completed', 'Disputed', 'Refunded'],
+  'Completed': ['Closed', 'Refunded', 'Disputed'],
+  'Cancelled': ['Closed'],
+  'Refund Requested': ['Refund Completed', 'Refunded', 'Disputed'],
+  'Refund Completed': ['Closed'],
+  'Refunded': ['Closed'],
+  'Disputed': ['Resolved', 'Completed', 'Refunded', 'Closed'],
+  'Resolved': ['Closed'],
+  'Closed': [],
+};
+function isAllowedOrderTransition(current: PstpOrderStatus, next: PstpOrderStatus): boolean {
+  return (ORDER_LIFECYCLE_TRANSITIONS[current] || []).includes(next);
+}
+function isAllowedSellerTransition(current: PstpOrderStatus, next: PstpOrderStatus): boolean {
+  return (SELLER_FULFILLMENT_TRANSITIONS[current] || []).includes(next);
+}
+function expectedCarrierTransition(current: PstpOrderStatus): PstpOrderStatus | null {
+  return CARRIER_FULFILLMENT_TRANSITIONS[current] || null;
+}
+function matchesPiAmountAt12Decimals(actual: unknown, expected: unknown): boolean {
+  const a = typeof actual === 'number' ? actual : Number(actual);
+  const e = typeof expected === 'number' ? expected : Number(expected);
+  return Number.isFinite(a) && Number.isFinite(e) && a > 0 && e > 0 && Math.round(a * 1e12) === Math.round(e * 1e12);
+}
+function getPiAuthoritativeTransactionId(paymentData: unknown): string {
+  if (!paymentData || typeof paymentData !== 'object') return '';
+  const data = paymentData as { transaction?: { txid?: unknown; hash?: unknown } | null };
+  const candidate = data.transaction?.txid || data.transaction?.hash || '';
+  return typeof candidate === 'string' || typeof candidate === 'number' ? String(candidate).trim() : '';
+}
 
 function json(res: ServerResponse, status: number, body: unknown) {
   res.statusCode = status;
@@ -408,8 +465,120 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     if (!token) return json(res, 401, { ok: false, error: 'AUTHENTICATION_REQUIRED' });
     const user = await authService.authenticateToken(token);
     if (!user?.username) return json(res, 401, { ok: false, error: 'INVALID_SESSION' });
-    if (!durableProductStorageEnabled()) return json(res, 503, { ok: false, error: 'DURABLE_PRODUCT_STORAGE_UNAVAILABLE' });
     if (!durableOrderStorageEnabled()) return json(res, 503, { ok: false, error: 'DURABLE_ORDER_STORAGE_UNAVAILABLE' });
+    // Dedicated durable service-order intake. Utility payments are verified against Pi
+    // here; browser callback flags and transaction identifiers are never settlement authority.
+    if (req.method === 'POST' && path === 'utility') {
+      const body = await readJson(req);
+      const paymentId = String(body.paymentId || '').trim();
+      if (!paymentId) return json(res, 400, { ok: false, error: 'PI_PAYMENT_ID_REQUIRED' });
+      const requestKey = idempotencyKey(req);
+      if (!requestKey || requestKey !== paymentId) return json(res, 400, { ok: false, error: 'UTILITY_IDEMPOTENCY_KEY_MUST_MATCH_PAYMENT_ID' });
+
+      const category = String(body.category || '').trim().toLowerCase();
+      const providerName = String(body.providerName || '').trim().slice(0, 120);
+      const accountNumber = String(body.accountNumber || '').trim().slice(0, 120);
+      const amountPi = Number(body.amountPi);
+      if (!category || !providerName || !accountNumber || !Number.isFinite(amountPi) || amountPi <= 0) {
+        return json(res, 400, { ok: false, error: 'INVALID_UTILITY_ORDER_DETAILS' });
+      }
+
+      const verification = await verifyPiPaymentAuthoritative(paymentId);
+      if (!verification.verified) {
+        return json(res, 402, { ok: false, verified: false, error: 'PI_PAYMENT_NOT_VERIFIED', message: verification.message });
+      }
+      const paymentData = verification.paymentData || {};
+      if (!matchesPiAmountAt12Decimals(paymentData.amount, amountPi)) {
+        return json(res, 409, { ok: false, verified: false, error: 'PI_PAYMENT_AMOUNT_MISMATCH' });
+      }
+      const piUserUid = extractPiUserUid(paymentData);
+      if (!piUserUid || !user.piUid || piUserUid !== user.piUid) {
+        return json(res, 403, { ok: false, verified: false, error: 'PI_PAYMENT_BUYER_MISMATCH' });
+      }
+      const txid = getPiAuthoritativeTransactionId(paymentData);
+      // Durable orders are the replay authority; the in-process payment ledger is only a cache.
+      const durableOrdersForReplay = await listDurableOrders();
+      const txidReplay = txid ? durableOrdersForReplay.find((candidate: any) => String(candidate.piTxid || '').trim() === txid) : null;
+      if (txidReplay && String(txidReplay.piPaymentId || '').trim() !== paymentId) {
+        return json(res, 409, { ok: false, verified: false, error: 'PI_TRANSACTION_ALREADY_USED' });
+      }
+      if (process.env.NODE_ENV === 'production' && !txid) {
+        return json(res, 409, { ok: false, verified: false, error: 'PI_TRANSACTION_ID_REQUIRED' });
+      }
+      const existingLedger = paymentLedgerRepo.findByPaymentId(paymentId);
+      if (existingLedger?.orderId) {
+        const existingOrder = await getDurableOrder(existingLedger.orderId);
+        if (existingOrder?.buyerUsername === user.username && existingOrder.piPaymentId === paymentId && existingOrder.serverVerified) {
+          return json(res, 200, { ok: true, verified: true, duplicate: true, order: existingOrder, serverAuthoritative: true });
+        }
+        return json(res, 409, { ok: false, verified: false, error: 'PI_PAYMENT_ALREADY_USED' });
+      }
+
+      const orderId = 'UTIL-' + createHash('sha256').update(paymentId).digest('hex').slice(0, 32);
+      const existingOrder = await getDurableOrder(orderId);
+      if (existingOrder) {
+        if (existingOrder.buyerUsername === user.username && existingOrder.piPaymentId === paymentId && existingOrder.serverVerified) {
+          return json(res, 200, { ok: true, verified: true, duplicate: true, order: existingOrder, serverAuthoritative: true });
+        }
+        return json(res, 409, { ok: false, verified: false, error: 'UTILITY_ORDER_ID_CONFLICT' });
+      }
+
+      const now = new Date().toISOString();
+      const safeProvider = providerName || 'Utility Provider';
+      const order: Order = {
+        id: orderId,
+        buyerUsername: user.username,
+        items: [{
+          product: {
+            id: 'utility-service-' + createHash('sha256').update(category + ':' + safeProvider).digest('hex').slice(0, 20),
+            title: safeProvider,
+            description: 'Utility service transaction. Account details are access-controlled.',
+            pricePi: amountPi,
+            category: 'utility',
+            subcategory: category,
+            images: [],
+            stock: 0,
+            rating: 0,
+            reviewsCount: 0,
+            sellerId: 'system-utility-gateway',
+            sellerName: safeProvider,
+            sellerVerified: false,
+            features: ['Server-verified Pi payment', 'Provider fulfillment pending'],
+            tags: ['utility', category],
+            utilityProvider: safeProvider
+          },
+          quantity: 1,
+          customDetails: { accountNumber, phoneNumber: accountNumber }
+        }],
+        totalPi: amountPi,
+        escrowStatus: 'approved',
+        pstpStatus: 'Processing',
+        piPaymentId: paymentId,
+        ...(txid ? { piTxid: txid } : {}),
+        trackingNumber: 'UTIL-REF-' + orderId.slice(-12),
+        carrier: 'Utility Provider Fulfillment',
+        createdAt: now,
+        updatedAt: now,
+        serverVerified: true,
+        timeline: [
+          { status: 'Payment Verified', timestamp: now, actor: 'PSTP_Protection_Server', actorRole: 'system', note: 'Pi payment independently verified against Pi Platform; provider fulfillment remains pending.' }
+        ]
+      };
+      try {
+        const saved = await saveDurableOrder(order);
+        const ledger = txid
+          ? paymentLedgerRepo.recordCompletion(paymentId, txid, { orderId, buyerUsername: user.username, amountPi, piUserUid })
+          : paymentLedgerRepo.recordApproval(paymentId, { orderId, buyerUsername: user.username, amountPi, piUserUid });
+        pstpAuditRepo.appendLog({ orderId, paymentId, actor: 'system', actorRole: 'system', action: 'UTILITY_PAYMENT_SERVER_VERIFIED_AND_RECORDED', details: 'Utility Pi payment independently verified and recorded in durable order storage; provider fulfillment is pending.', ipAddress: 'server', deviceInfo: 'PiNova Utility Order API' });
+        return json(res, 201, { ok: true, verified: true, order: saved, paymentLedger: ledger, serverAuthoritative: true });
+      } catch (error) {
+        if (error instanceof Error && (error.message === 'PI_PAYMENT_ID_REPLAY_CONFLICT' || error.message === 'PI_TXID_REPLAY_CONFLICT')) {
+          return json(res, 409, { ok: false, verified: false, error: 'PI_PAYMENT_ALREADY_USED' });
+        }
+        throw error;
+      }
+    }
+
     // One-time-safe-by-cutoff legacy cleanup: only PLATFORM_ADMIN may invoke it.
     // The fixed cutoff prevents future orders from being swept accidentally.
     if (req.method === 'POST' && path === 'admin/legacy-test-cleanup') {
@@ -813,6 +982,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     }
 
     if (req.method === 'POST' && !path) {
+      if (!durableProductStorageEnabled()) return json(res, 503, { ok: false, error: 'DURABLE_PRODUCT_STORAGE_UNAVAILABLE' });
       const body = await readJson(req);
       if (!Array.isArray(body.items) || body.items.length === 0) return json(res, 400, { ok: false, error: 'ORDER_ITEMS_REQUIRED' });
       const key = idempotencyKey(req);

@@ -2,7 +2,7 @@ name: PiNova Global Hub CI
 
 on:
   push:
-    branches: ["main"]
+    branches: ["main", "fix/verified-utility-fulfillment-preview-20261117"]
   pull_request:
     branches: ["main"]
 
