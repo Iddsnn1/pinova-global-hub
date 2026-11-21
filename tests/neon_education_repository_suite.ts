@@ -70,7 +70,7 @@ async function run() {
     const result = await repository.getAdmissionById('adm-2', { institutionId: 'inst-2' });
     assert.deepEqual(result, { id: 'adm-2', institutionId: 'inst-2' });
     assert.ok(mock.calls[0].query.includes('institution_id'));
-    assert.deepEqual(mock.calls[0].values, ['adm-2', 'inst-2', null, null]);
+    assert.deepEqual(mock.calls[0].values, ['adm-2', 'inst-2', 'inst-2', null, null]);
   }
 
   {
