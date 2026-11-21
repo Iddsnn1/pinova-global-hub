@@ -40,6 +40,8 @@ import { StudentVerificationService } from './src/server/services/StudentVerific
 import { getNigeriaAuthoritativeProviderForCapability } from './src/server/services/AuthoritativeEducationProviderRegistry';
 import { verifyJambCapsAuthorization } from './src/server/services/JambCapsAuthorizationService';
 import { EducationRepository } from './src/server/db/repositories/EducationRepository';
+import { NeonEducationRepository } from './src/server/db/repositories/NeonEducationRepository';
+import { createEducationDirectoryV2Handler } from './src/server/routes/educationDirectoryV2';
 import { ProductRepository } from './src/server/db/repositories/ProductRepository';
 import { durableProductStorageEnabled, getDurableProduct, listDurableProducts, saveDurableProduct, updateDurableProductAvailability, reserveDurableProductStockBatch, softDeleteDurableProduct, deleteDurableProductBlob } from './src/server/services/DurableProductCatalog';
 import { durableOrderStorageEnabled, getDurableOrder, listDurableOrders, saveDurableOrder, createDurableOrderWithStockReservation, createDurableOrderWithIdempotency, markDurableOrderPaymentVerified, softDeleteDurableOrder } from './src/server/services/DurableOrderStore';
@@ -3279,6 +3281,16 @@ app.post('/api/v2/utility/vtu/webhook', (req, res) => {
 // ==========================================
 // PINOVA GLOBAL EDUCATION ECOSYSTEM API
 // ==========================================
+
+// Additive Neon-backed directory contract. Disabled by default and never enabled in Production.
+app.get(
+  '/api/education/v2/institutions',
+  createEducationDirectoryV2Handler(
+    () => new NeonEducationRepository(getNeonSql()),
+    () => process.env.NODE_ENV !== 'production' &&
+      process.env.PINOVA_EDUCATION_DIRECTORY_V2_ENABLED === 'true'
+  )
+);
 
 // 1. Institution Directory & Verification Registry
 app.get('/api/education/institutions', (req, res) => {
