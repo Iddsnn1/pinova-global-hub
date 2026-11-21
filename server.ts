@@ -3605,7 +3605,10 @@ app.get('/api/education/invoices', authenticate, (req: AuthenticatedRequest, res
 
     const filter: any = {};
     if (studentId) filter.studentId = String(studentId);
-    if (institutionId) filter.institutionId = String(institutionId);
+    // Institution staff must always be scoped to their authenticated institution,
+    // including when the client omits the institutionId query parameter.
+    if (isInstitutionStaff) filter.institutionId = String(req.user?.institutionId);
+    else if (institutionId) filter.institutionId = String(institutionId);
     if (status) filter.status = String(status);
     if (guardianId) filter.guardianId = String(guardianId);
 
