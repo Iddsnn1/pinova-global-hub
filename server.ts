@@ -4051,31 +4051,36 @@ app.get('/api/education/admissions/documents', authenticate, async (req: Authent
       return;
     }
     const applicationId = typeof req.query.applicationId === 'string' ? req.query.applicationId.trim() : undefined;
+    const roles = req.user?.roles || [];
+    const isGlobalAdmin = roles.some((r) => ['PLATFORM_ADMIN', 'COMPLIANCE_OFFICER'].includes(r));
+    const isInstitutionAdmin = roles.includes('INSTITUTION_ADMIN');
+    let documentOwner = username;
+
     if (applicationId) {
       const admission = educationRepo.getAdmissionById(applicationId);
-      const owner = String(admission?.applicantEmail || '').trim().toLowerCase();
-      const current = username.toLowerCase();
-      const roles = req.user?.roles || [];
-      const isGlobalAdmin = roles.some((r) => ['PLATFORM_ADMIN', 'COMPLIANCE_OFFICER'].includes(r));
-      const isInstitutionAdmin = roles.includes('INSTITUTION_ADMIN');
       if (!admission) {
         res.status(404).json({ success: false, error: 'ADMISSION_NOT_FOUND' });
         return;
       }
-      if (isInstitutionAdmin) {
-        if (!req.user?.institutionId || req.user.institutionId !== admission.institutionId) {
-          res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Institution administrator document access is limited to the authenticated institution.' });
-          return;
-        }
-        res.status(403).json({ success: false, error: 'DOCUMENT_SCOPE_UNAVAILABLE', message: 'Institution-scoped academic document listing is not enabled yet.' });
+      const owner = String(admission.applicantEmail || '').trim().toLowerCase();
+      const current = username.toLowerCase();
+
+      if (isInstitutionAdmin && (!req.user?.institutionId || req.user.institutionId !== admission.institutionId)) {
+        res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Institution administrator document access is limited to the authenticated institution.' });
         return;
       }
-      if (!isGlobalAdmin && owner !== current) {
+      if (isGlobalAdmin || isInstitutionAdmin) {
+        documentOwner = owner;
+      } else if (owner !== current) {
         res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Document access is limited to the authenticated applicant.' });
         return;
       }
+    } else if (isGlobalAdmin || isInstitutionAdmin) {
+      res.status(400).json({ success: false, error: 'APPLICATION_ID_REQUIRED', message: 'Administrators must specify an admission application to access its documents.' });
+      return;
     }
-    const documents = await listEducationAdmissionDocuments(username, applicationId);
+
+    const documents = await listEducationAdmissionDocuments(documentOwner, applicationId);
     res.json({ success: true, count: documents.length, documents, availability: educationDocumentStorageEnabled() ? 'AVAILABLE' : 'UNAVAILABLE' });
   } catch (err: any) {
     res.status(503).json({ success: false, error: 'EDUCATION_DOCUMENTS_UNAVAILABLE', message: err?.message || 'Academic document storage is unavailable.' });
