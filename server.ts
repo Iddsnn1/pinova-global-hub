@@ -3497,6 +3497,18 @@ app.get('/api/education/students/:id', authenticate, (req: AuthenticatedRequest,
       res.status(404).json({ success: false, error: 'STUDENT_NOT_FOUND' });
       return;
     }
+    const isInstitutionAdmin = roles.includes('INSTITUTION_ADMIN');
+    if (
+      isInstitutionAdmin &&
+      (!req.user?.institutionId || req.user.institutionId !== student.institutionId)
+    ) {
+      res.status(403).json({
+        success: false,
+        error: 'FORBIDDEN',
+        message: 'Institution administrator access is limited to students enrolled at the authenticated institution.'
+      });
+      return;
+    }
     res.json({ success: true, student });
   } catch (err: any) {
     res.status(500).json({ success: false, error: 'STUDENT_FETCH_FAILED', message: err.message });
