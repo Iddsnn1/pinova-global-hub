@@ -79,7 +79,7 @@ const studentRoute = serverSource.slice(
   serverSource.indexOf("app.get('/api/education/guardians/me/children'")
 );
 assert.match(studentRoute, /const isInstitutionAdmin = roles\.includes\('INSTITUTION_ADMIN'\)/, 'student route must identify institution administrators separately');
-assert.match(studentRoute, /!req\.user\?\.institutionId \|\| req\.user\.institutionId !== student\.institutionId/, 'institution administrators must be restricted to students at their authenticated institution');
+assert.match(studentRoute, /!req\.user\?\.institutionId \|\| req\.user\.institutionId !== student\.currentInstitutionId/, 'institution administrators must be restricted to students at their authenticated institution');
 assert.match(studentRoute, /Institution administrator access is limited to students enrolled at the authenticated institution/, 'cross-institution student access must be denied explicitly');
 console.log('EDUCATION STUDENT INSTITUTION SCOPE CONTRACT: PASS');
 
