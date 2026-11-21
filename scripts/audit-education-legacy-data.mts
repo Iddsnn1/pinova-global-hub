@@ -22,6 +22,7 @@ type CollectionReport = {
   records: number | null;
   duplicateKeys: number | null;
   missingKeys: number | null;
+  invalidRecordShapes?: number;
   sha256: string | null;
   bytes: number | null;
   currencyCounts?: Record<string, number>;
@@ -67,9 +68,11 @@ for (const spec of collections) {
   const seen = new Set<string>();
   let duplicateKeys = 0;
   let missingKeys = 0;
+  let invalidRecordShapes = 0;
   const currencyCounts: Record<string, number> = {};
   for (const value of parsed) {
-    const record = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+    if (!value || typeof value !== 'object' || Array.isArray(value)) invalidRecordShapes++;
+    const record = value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
     const key = String(record[spec.primaryKey] ?? record.id ?? '').trim();
     if (!key) missingKeys++;
     else if (seen.has(key)) duplicateKeys++;
@@ -82,8 +85,10 @@ for (const spec of collections) {
   }
 
   report.push({
-    collection: spec.name, primaryKey: spec.primaryKey, status: 'PRESENT',
-    records: parsed.length, duplicateKeys, missingKeys, sha256, bytes: raw.byteLength,
+    collection: spec.name, primaryKey: spec.primaryKey,
+    status: invalidRecordShapes > 0 ? 'INVALID_SHAPE' : 'PRESENT',
+    records: parsed.length, duplicateKeys, missingKeys, invalidRecordShapes, sha256, bytes: raw.byteLength,
+    ...(invalidRecordShapes > 0 ? { error: 'One or more array entries are not JSON objects; source left untouched' } : {}),
     ...(spec.name === 'education_invoices' ? { currencyCounts } : {})
   });
 }
@@ -101,11 +106,12 @@ const summary = {
     invalidCollections: report.filter(item => item.status === 'INVALID_JSON' || item.status === 'INVALID_SHAPE').length,
     records: report.reduce((sum, item) => sum + (item.records ?? 0), 0),
     duplicateKeys: report.reduce((sum, item) => sum + (item.duplicateKeys ?? 0), 0),
-    missingKeys: report.reduce((sum, item) => sum + (item.missingKeys ?? 0), 0)
+    missingKeys: report.reduce((sum, item) => sum + (item.missingKeys ?? 0), 0),
+    invalidRecordShapes: report.reduce((sum, item) => sum + (item.invalidRecordShapes ?? 0), 0)
   }
 };
 
 process.stdout.write(JSON.stringify(summary, null, 2) + '\\n');
-if (summary.totals.invalidCollections > 0 || summary.totals.duplicateKeys > 0 || summary.totals.missingKeys > 0) {
+if (summary.totals.invalidCollections > 0 || summary.totals.duplicateKeys > 0 || summary.totals.missingKeys > 0 || summary.totals.invalidRecordShapes > 0) {
   process.exitCode = 2;
 }
