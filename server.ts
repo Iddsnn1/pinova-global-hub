@@ -3732,7 +3732,7 @@ app.post('/api/education/invoices/pay', paymentRateLimiter, authenticate, async 
     );
     const isInvoiceOwner = isGuardianOwner || isStudentOwner;
 
-    if (isProduction && !isPlatformAdmin && !isInstitutionStaff && !isInvoiceOwner) {
+    if (!isPlatformAdmin && !isInstitutionStaff && !isInvoiceOwner) {
       res.status(403).json({
         success: false,
         error: 'FORBIDDEN',
@@ -3924,7 +3924,7 @@ app.get('/api/education/invoices/:id/payments', authenticate, (req: Authenticate
     );
     const isAuthorized = isPlatformAdmin || isInstitutionStaff || isGuardianOwner || isStudentOwner;
 
-    if (isProduction && !isAuthorized) {
+    if (!isAuthorized) {
       res.status(403).json({
         success: false,
         error: 'FORBIDDEN',
