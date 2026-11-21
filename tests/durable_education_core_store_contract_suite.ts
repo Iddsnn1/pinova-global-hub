@@ -92,4 +92,14 @@ assert.match(invoiceListRoute, /else if \(institutionId\) filter\.institutionId 
 assert.match(invoiceListRoute, /!isGlobalAdmin &&[\s\S]*?roles\.includes\('INSTITUTION_ADMIN'\)/, 'global administrators must retain global invoice access even if they also hold an institution role');
 console.log('EDUCATION INVOICE INSTITUTION SCOPE CONTRACT: PASS');
 
+const receiptRoute = serverSource.slice(
+  serverSource.indexOf("app.get('/api/education/receipts/:receiptNumber', authenticate"),
+  serverSource.indexOf("// 7. Admissions & Application Pipeline")
+);
+assert.match(receiptRoute, /receipt\.institutionId/, 'institution administrators must be restricted to the institution recorded on the receipt');
+assert.match(receiptRoute, /!isGlobalAdmin &&[\s\S]*?institutionId !== String\(receipt\.institutionId/, 'institution receipt scope must not override global administrator access');
+assert.match(receiptRoute, /!isGlobalAdmin && !isInstitutionAdmin && !isStudentOwner/, 'receipt access must require global admin, matching institution admin, or student ownership');
+console.log('EDUCATION RECEIPT INSTITUTION SCOPE CONTRACT: PASS');
+
+
 
