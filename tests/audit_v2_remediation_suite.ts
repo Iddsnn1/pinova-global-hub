@@ -139,7 +139,7 @@ async function runTestSuite() {
   assert(serverSource.includes('INSTITUTION_ADMIN') && serverSource.includes('Institution administrators cannot upload academic documents on behalf of applicants.'), 'Scenario 1.14: Institution admin cannot impersonate applicant document uploads');
   assert(serverSource.includes('req.user?.institutionId !== requestedInstitution'), 'Scenario 1.15: Institution invoice access rejects cross-institution requests');
   assert(serverSource.includes('requestedGuardianId') && serverSource.includes('scopedChildren'), 'Scenario 1.16: Guardian children endpoint enforces caller ownership/institution scope');
-  assert(serverSource.includes('req.user.institutionId === admission.institutionId') && serverSource.includes('/api/education/admissions/:id/offer/accept'), 'Scenario 1.17: Admission offer acceptance enforces institution scope');
+  assert(serverSource.includes('Only the authenticated applicant may accept this admission offer.') && serverSource.includes('if (!isOwner)') && serverSource.includes('/api/education/admissions/:id/offer/accept'), 'Scenario 1.17: Admission offer acceptance requires authenticated applicant consent and rejects admin impersonation');
   assert(serverSource.includes('req.user.institutionId !== admissionForAuthorization.institutionId') && serverSource.includes('/api/education/admissions/:id/status'), 'Scenario 1.18: Admission status mutation enforces institution scope');
 
   // --- 2. PSTP DISPUTE RESOLUTION & SECURITY ---
