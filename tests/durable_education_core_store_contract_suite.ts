@@ -34,7 +34,7 @@ assert.match(settlementSource, /DURABLE_EDUCATION_STORAGE_UNAVAILABLE/, 'durable
 console.log('EDUCATION DURABLE HISTORY AND AUDIT READ CONTRACT: PASS');
 
 const transitionSource = fs.readFileSync(path.resolve(process.cwd(), 'src/server/services/DurableEducationCoreStore.ts'), 'utf8');
-assert.match(transitionSource, /async transitionAdmissionStatus\\(/, 'durable admission transitions must be available');
+assert.match(transitionSource, /async transitionAdmissionStatus\(/, 'durable admission transitions must be available');
 assert.match(transitionSource, /EDUCATION_ADMISSION_ILLEGAL_STATUS_TRANSITION/, 'durable admission transitions must enforce the state machine');
 assert.match(transitionSource, /WHERE id = \\$\\{key\\} AND status = \\$\\{expected\\}/, 'admission transitions must compare-and-set the expected current status');
 assert.match(transitionSource, /INSERT INTO education_audit_logs[\\s\\S]*?FROM updated[\\s\\S]*?RETURNING id/, 'admission transition audit must commit atomically with the status update');
