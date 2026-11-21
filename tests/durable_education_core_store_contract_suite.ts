@@ -89,6 +89,7 @@ const invoiceListRoute = serverSource.slice(
 );
 assert.match(invoiceListRoute, /if \(isInstitutionStaff\) filter\.institutionId = String\(req\.user\?\.institutionId\)/, 'institution invoice lists must enforce authenticated institution scope even when the client omits institutionId');
 assert.match(invoiceListRoute, /else if \(institutionId\) filter\.institutionId = String\(institutionId\)/, 'non-institution-staff invoice filters must preserve explicit institution filtering');
+assert.match(invoiceListRoute, /!isGlobalAdmin &&[\s\S]*?roles\.includes\('INSTITUTION_ADMIN'\)/, 'global administrators must retain global invoice access even if they also hold an institution role');
 console.log('EDUCATION INVOICE INSTITUTION SCOPE CONTRACT: PASS');
 
 
