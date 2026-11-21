@@ -2,7 +2,8 @@ import crypto from 'crypto';
 import type {
   EducationInvoice,
   EducationPaymentTransaction,
-  DigitalEducationReceipt
+  DigitalEducationReceipt,
+  EducationAuditLog
 } from '../../types/education';
 import { getNeonSql, neonDatabaseEnabled } from '../db/NeonDatabase';
 import { piDecimalForStorage } from './piDecimal';
@@ -149,14 +150,14 @@ export class DurableEducationStore {
     return rows.map((row) => decodeJson<EducationPaymentTransaction>(row.data));
   }
 
-  async getAuditLogs(entityType?: string): Promise<DbRow[]> {
+  async getAuditLogs(entityType?: string): Promise<EducationAuditLog[]> {
     if (!neonDatabaseEnabled()) throw new Error('DURABLE_EDUCATION_STORAGE_UNAVAILABLE');
     const type = clean(entityType) || null;
     const sql = getNeonSql();
     const rows = await sql`SELECT data FROM education_audit_logs
       WHERE (${type}::text IS NULL OR entity_type = ${type})
       ORDER BY created_at DESC` as unknown as DbRow[];
-    return rows.map((row) => decodeJson<DbRow>(row.data));
+    return rows.map((row) => decodeJson<EducationAuditLog>(row.data));
   }
 
   async getReceiptByNumber(receiptNumber: string): Promise<DigitalEducationReceipt | null> {
