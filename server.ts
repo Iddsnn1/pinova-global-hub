@@ -4118,7 +4118,6 @@ app.post(
         const owner = String(admission?.applicantEmail || '').trim().toLowerCase();
         const current = username.toLowerCase();
         const roles = req.user?.roles || [];
-        const isGlobalAdmin = roles.some((r) => ['PLATFORM_ADMIN', 'COMPLIANCE_OFFICER'].includes(r));
         const isInstitutionAdmin = roles.includes('INSTITUTION_ADMIN');
         if (!admission) {
           res.status(404).json({ success: false, error: 'ADMISSION_NOT_FOUND' });
@@ -4128,8 +4127,8 @@ app.post(
           res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Institution administrators cannot upload academic documents on behalf of applicants.' });
           return;
         }
-        if (!isGlobalAdmin && owner !== current) {
-          res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Document upload is limited to the authenticated applicant.' });
+        if (owner !== current) {
+          res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Document upload is limited to the authenticated applicant; administrators cannot upload on an applicant\'s behalf.' });
           return;
         }
       }
