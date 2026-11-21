@@ -53,3 +53,11 @@ assert.ok(scholarshipSource.includes('EDUCATION_SCHOLARSHIP_SPONSOR_TYPE_INVALID
 assert.ok(scholarshipSource.includes('data = data || ${patchJson}::jsonb'), 'scholarship updates must merge only supplied JSON fields');
 assert.ok(scholarshipSource.includes("INSERT INTO education_audit_logs") && scholarshipSource.includes("FROM updated") && scholarshipSource.includes("RETURNING id"), 'scholarship update and audit must be atomic');
 console.log('EDUCATION DURABLE SCHOLARSHIP CONTRACT: PASS');
+
+
+const guardianRepositorySource = fs.readFileSync(path.resolve(process.cwd(), 'src/server/db/repositories/EducationRepository.ts'), 'utf8');
+assert.match(guardianRepositorySource, /status !== 'CANCELLED'/, 'cancelled invoices must be excluded from guardian balances');
+assert.match(guardianRepositorySource, /invoiceCurrencies\.length > 1/, 'guardian summaries must detect mixed invoice currencies');
+assert.match(guardianRepositorySource, /hasMixedCurrencies \? 0/, 'mixed-currency legacy totals must fail closed instead of being added');
+assert.match(guardianRepositorySource, /currency,\s*totalBilledFiat: totalBilled/, 'guardian summaries must expose the authoritative invoice currency');
+console.log('GUARDIAN INVOICE CURRENCY AND CANCELLATION SAFETY CONTRACT: PASS');
