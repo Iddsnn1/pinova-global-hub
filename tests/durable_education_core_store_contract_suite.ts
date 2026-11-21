@@ -83,3 +83,12 @@ assert.match(studentRoute, /!req\.user\?\.institutionId \|\| req\.user\.institut
 assert.match(studentRoute, /Institution administrator access is limited to students enrolled at the authenticated institution/, 'cross-institution student access must be denied explicitly');
 console.log('EDUCATION STUDENT INSTITUTION SCOPE CONTRACT: PASS');
 
+const invoiceListRoute = serverSource.slice(
+  serverSource.indexOf("app.get('/api/education/invoices'"),
+  serverSource.indexOf("app.get('/api/education/invoices/:id'")
+);
+assert.match(invoiceListRoute, /if \(isInstitutionStaff\) filter\.institutionId = String\(req\.user\?\.institutionId\)/, 'institution invoice lists must enforce authenticated institution scope even when the client omits institutionId');
+assert.match(invoiceListRoute, /else if \(institutionId\) filter\.institutionId = String\(institutionId\)/, 'non-institution-staff invoice filters must preserve explicit institution filtering');
+console.log('EDUCATION INVOICE INSTITUTION SCOPE CONTRACT: PASS');
+
+
