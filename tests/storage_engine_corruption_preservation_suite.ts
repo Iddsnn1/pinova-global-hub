@@ -58,7 +58,7 @@ try {
   assert.equal(fs.readFileSync(duplicateKeyPath, 'utf8'), duplicateKeyContents,
     'duplicate keys must not silently collapse distinct source records');
 
-  const seeded = new StorageEngine('new_collection', 'id', [{ id: 'seed-record' }]);
+  const seeded = new StorageEngine<{ id: string; value?: string }>('new_collection', 'id', [{ id: 'seed-record' }]);
   assert.equal(seeded.get('seed-record')?.id, 'seed-record',
     'first-time initialization must still seed a genuinely missing collection');
 
