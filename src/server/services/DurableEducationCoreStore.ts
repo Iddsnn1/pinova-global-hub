@@ -321,6 +321,23 @@ export class DurableEducationCoreStore {
     if (Object.prototype.hasOwnProperty.call(updates, 'id') && clean(updates.id) !== key) {
       throw new Error('EDUCATION_SCHOLARSHIP_UPDATE_ID_MISMATCH');
     }
+    const allowedKeys = new Set([
+      'title', 'sponsorName', 'sponsorType', 'badge', 'description',
+      'coverageType', 'amountValue', 'coverageAmountUsd', 'applicableTiers',
+      'eligibleCountries', 'deadline', 'eligibilityCriteria', 'numberOfAwards',
+      'applicationCount'
+    ]);
+    if (Object.keys(updates).some(field => field !== 'id' && !allowedKeys.has(field))) {
+      throw new Error('EDUCATION_SCHOLARSHIP_UPDATE_FIELD_NOT_ALLOWED');
+    }
+    if (Object.prototype.hasOwnProperty.call(updates, 'sponsorType') &&
+        !['government', 'ngo', 'corporate', 'institution'].includes(clean(updates.sponsorType))) {
+      throw new Error('EDUCATION_SCHOLARSHIP_SPONSOR_TYPE_INVALID');
+    }
+    if (Object.prototype.hasOwnProperty.call(updates, 'deadline') && clean(updates.deadline) &&
+        Number.isNaN(Date.parse(clean(updates.deadline)))) {
+      throw new Error('EDUCATION_SCHOLARSHIP_DEADLINE_INVALID');
+    }
     const patch: Partial<ScholarshipOpportunity> = { ...updates };
     delete patch.id;
     if (Object.keys(patch).length === 0) throw new Error('EDUCATION_SCHOLARSHIP_UPDATE_EMPTY');
