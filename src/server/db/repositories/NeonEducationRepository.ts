@@ -1,5 +1,10 @@
 import { getNeonSql } from '../NeonDatabase';
-import { normalizeCountryCode } from '../../../data/countrySubdivisions';
+import {
+  normalizeCountryCode,
+  resolveSubdivisionCode,
+  getSubdivisionInfo,
+  SUBDIVISION_PARENT_MAP
+} from '../../../data/countrySubdivisions';
 import type {
   InstitutionProfile,
   UniversityFaculty,
@@ -13,6 +18,41 @@ import type {
 type Sql = ReturnType<typeof getNeonSql>;
 type QueryResult = Awaited<ReturnType<Sql>>;
 type JsonRow = { data: unknown };
+
+/**
+ * Build the case-insensitive state/region aliases accepted by the legacy
+ * matchesSubdivision contract, without fetching an unbounded directory set.
+ */
+function getSubdivisionAliases(countryCode: string | undefined, target: string): string[] {
+  const normalizedCountry = countryCode ? normalizeCountryCode(countryCode) : undefined;
+  const country = normalizedCountry && normalizedCountry !== 'ALL' ? normalizedCountry : undefined;
+  const targetName = target.trim().toLowerCase();
+  const aliases = new Set<string>([targetName]);
+  if (!country) return [...aliases];
+
+  const parentMap = SUBDIVISION_PARENT_MAP[country];
+  if (parentMap) {
+    for (const [parent, children] of Object.entries(parentMap)) {
+      const parentName = parent.toLowerCase();
+      const childNames = children.map((child) => child.toLowerCase());
+      if (parentName === targetName) {
+        childNames.forEach((child) => aliases.add(child));
+      } else if (childNames.includes(targetName)) {
+        aliases.add(parentName);
+      }
+    }
+  }
+
+  const targetCode = resolveSubdivisionCode(country, target).toLowerCase();
+  const subdivisionItems = getSubdivisionInfo(country).subdivisionItems ?? [];
+  for (const item of subdivisionItems) {
+    if (resolveSubdivisionCode(country, item.name).toLowerCase() === targetCode) {
+      aliases.add(item.name.toLowerCase());
+      aliases.add(item.code.toLowerCase());
+    }
+  }
+  return [...aliases];
+}
 
 /**
  * Async, Neon-backed Education read repository.
@@ -87,6 +127,7 @@ export class NeonEducationRepository {
     const normalizedCountry = normalizeCountryCode(filter.countryCode || filter.country);
     const countryCode = normalizedCountry && normalizedCountry !== 'ALL' ? normalizedCountry : null;
     const state = filter.state?.trim() && filter.state.trim().toLowerCase() !== 'all' ? filter.state.trim() : null;
+    const stateAliases = state ? getSubdivisionAliases(countryCode ?? undefined, state) : null;
     const tier = filter.tier?.trim() && filter.tier !== 'all' ? filter.tier.trim() : null;
     const institutionType = filter.institutionType?.trim() && filter.institutionType !== 'all'
       ? filter.institutionType.trim()
@@ -101,7 +142,7 @@ export class NeonEducationRepository {
       SELECT data
       FROM education_institutions
       WHERE (${countryCode}::text IS NULL OR upper(country_code) = ${countryCode})
-        AND (${state}::text IS NULL OR lower(data->>'state') = lower(${state}))
+        AND (${stateAliases}::text[] IS NULL OR lower(data->>'state') = ANY(${stateAliases}::text[]))
         AND (${tier}::text IS NULL OR COALESCE(data->'supportedTiers', '[]'::jsonb) ? ${tier})
         AND (${institutionType}::text IS NULL OR institution_type = ${institutionType})
         AND (${isPublic}::text IS NULL OR lower(data->>'isPublic') = lower(${isPublic}))
