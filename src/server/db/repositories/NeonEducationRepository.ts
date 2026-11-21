@@ -2,6 +2,9 @@ import { getNeonSql } from '../NeonDatabase';
 import { normalizeCountryCode } from '../../../data/countrySubdivisions';
 import type {
   InstitutionProfile,
+  UniversityFaculty,
+  AcademicDepartment,
+  EducationProgramme,
   StudentIdentity,
   EducationInvoice,
   AdmissionApplication
@@ -124,6 +127,38 @@ export class NeonEducationRepository {
       SELECT data FROM education_institutions WHERE id = ${key} LIMIT 1
     `);
     return this.decode<InstitutionProfile>(rows[0]);
+  }
+
+  /** Academic hierarchy is currently stored inside the institution JSONB aggregate. */
+  public async listFaculties(institutionId: string): Promise<UniversityFaculty[]> {
+    const institution = await this.getInstitutionById(institutionId);
+    return institution?.faculties ?? [];
+  }
+
+  public async listDepartments(
+    institutionId: string,
+    facultyId: string
+  ): Promise<AcademicDepartment[]> {
+    const faculties = await this.listFaculties(institutionId);
+    return faculties.find((faculty) => faculty.id === facultyId)?.departments ?? [];
+  }
+
+  public async listProgrammes(
+    institutionId: string,
+    facultyId: string,
+    departmentId: string
+  ): Promise<EducationProgramme[]> {
+    const departments = await this.listDepartments(institutionId, facultyId);
+    return departments.find((department) => department.id === departmentId)?.programmes ?? [];
+  }
+
+  public async listInstitutionProgrammes(institutionId: string): Promise<EducationProgramme[]> {
+    const institution = await this.getInstitutionById(institutionId);
+    if (!institution) return [];
+    if (institution.programmes?.length) return institution.programmes;
+    return (institution.faculties ?? []).flatMap((faculty) =>
+      (faculty.departments ?? []).flatMap((department) => department.programmes ?? [])
+    );
   }
 
   /**
