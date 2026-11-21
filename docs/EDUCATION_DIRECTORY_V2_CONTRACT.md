@@ -117,6 +117,18 @@ Contract rules:
 - The directory UI has no pagination state or total-count display.
 - The admin portal currently loads the global directory and chooses its first row; this must be replaced with trusted institution scoping.
 - The US/Canada/UK adapters merge complete local and remote datasets in memory and are not page-aware.
-- Route-level test coverage for an async Neon-backed Express handler has not yet been added.
+- The admin portal still requires a trusted institution identity endpoint; `/api/auth/me` exposes the authenticated user, but no verified institution-to-user mapping contract has yet been established.
 
 This proposal is a design artifact only; it does not authorize route wiring, data changes, migration, deployment, merge, or Production enablement.
+
+
+## Implementation status — 2026-11-21
+
+- Added `src/server/routes/educationDirectoryV2.ts` with a default-off, fail-closed handler.
+- Registered additive `GET /api/education/v2/institutions` in `server.ts`. The flag is accepted only outside Production and only when `PINOVA_EDUCATION_DIRECTORY_V2_ENABLED=true`.
+- Added `tests/education_directory_v2_route_suite.ts` covering disabled behavior, normalized filters, exact totals, pagination metadata, invalid query values, schema-not-ready, Neon outage, and final-page behavior.
+- Added the route suite to the full `npm test` chain and a dedicated `test:edu:directory:v2` script.
+- CI runs #1338 and #1339 completed successfully. The route remains disabled; no Preview deployment or feature-flag enablement has occurred.
+- The legacy `/api/education/institutions` route and its response contract remain unchanged.
+- The national registry adapters remain on their existing full-dataset path. They are intentionally not redirected through the paginated Neon endpoint.
+- The next implementation stage is a separately typed paginated client contract and UI load-more behavior, behind an explicit client feature flag, after registry-source paging semantics are defined. The institution admin portal remains excluded until trusted institution identity resolution is designed and tested.
