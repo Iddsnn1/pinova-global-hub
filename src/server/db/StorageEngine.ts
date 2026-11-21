@@ -82,13 +82,21 @@ export class StorageEngine<T extends { id?: string; [key: string]: any }> {
   }
 
   private saveSync(): boolean {
+    let tempPath: string | undefined;
     try {
       const items = Array.from(this.cache.values());
-      const tempPath = `${this.filePath}.tmp.${Date.now()}.${Math.random().toString(36).substring(2, 6)}`;
+      tempPath = `${this.filePath}.tmp.${Date.now()}.${Math.random().toString(36).substring(2, 6)}`;
       fs.writeFileSync(tempPath, JSON.stringify(items, null, 2), 'utf-8');
       fs.renameSync(tempPath, this.filePath);
       return true;
     } catch (err) {
+      if (tempPath) {
+        try {
+          if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
+        } catch (cleanupError) {
+          console.error(`[StorageEngine:${this.collectionName}] Failed to remove incomplete temp file:`, cleanupError);
+        }
+      }
       console.error(`[StorageEngine:${this.collectionName}] Failed to sync to disk:`, err);
       return false;
     }
@@ -122,8 +130,13 @@ export class StorageEngine<T extends { id?: string; [key: string]: any }> {
   }
 
   public set(key: string, value: T): boolean {
+    const hadPrevious = this.cache.has(key);
+    const previous = this.cache.get(key);
     this.cache.set(key, value);
-    return this.saveSync();
+    if (this.saveSync()) return true;
+    if (hadPrevious) this.cache.set(key, previous as T);
+    else this.cache.delete(key);
+    return false;
   }
 
   public unshift(value: T): boolean {
@@ -136,16 +149,22 @@ export class StorageEngine<T extends { id?: string; [key: string]: any }> {
         newMap.set(k, v);
       }
     }
+    const previousCache = this.cache;
     this.cache = newMap;
-    return this.saveSync();
+    if (this.saveSync()) return true;
+    this.cache = previousCache;
+    return false;
   }
 
   public delete(key: string): boolean {
-    const deleted = this.cache.delete(key);
-    if (deleted) {
-      this.saveSync();
-    }
-    return deleted;
+    if (!this.cache.has(key)) return false;
+    const previousCache = this.cache;
+    const nextCache = new Map(this.cache);
+    nextCache.delete(key);
+    this.cache = nextCache;
+    if (this.saveSync()) return true;
+    this.cache = previousCache;
+    return false;
   }
 
   public count(): number {
