@@ -73,3 +73,13 @@ assert.match(guardianRoute, /isGlobalAdmin\s*\|\|\s*isInstitutionAdmin/, 'instit
 assert.match(guardianRoute, /if \(isInstitutionAdmin\)[\s\S]*?INSTITUTION_SCOPE_REQUIRED[\s\S]*?child\.institutionId === institutionId/, 'institution admin guardian reads must require and enforce institution scope');
 assert.match(serverSource, /educationRepo\.updateAdmissionStatus\(id, status, updatedBy, reason\)/, 'admission status audit must attribute the authenticated actor and preserve decision notes');
 console.log('EDUCATION GUARDIAN SCOPE AND ADMISSION AUDIT ACTOR CONTRACT: PASS');
+
+const studentRoute = serverSource.slice(
+  serverSource.indexOf("app.get('/api/education/students/:id'"),
+  serverSource.indexOf("app.get('/api/education/guardians/me/children'")
+);
+assert.match(studentRoute, /const isInstitutionAdmin = roles\.includes\('INSTITUTION_ADMIN'\)/, 'student route must identify institution administrators separately');
+assert.match(studentRoute, /!req\.user\?\.institutionId \|\| req\.user\.institutionId !== student\.institutionId/, 'institution administrators must be restricted to students at their authenticated institution');
+assert.match(studentRoute, /Institution administrator access is limited to students enrolled at the authenticated institution/, 'cross-institution student access must be denied explicitly');
+console.log('EDUCATION STUDENT INSTITUTION SCOPE CONTRACT: PASS');
+
