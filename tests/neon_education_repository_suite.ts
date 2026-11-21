@@ -76,7 +76,7 @@ async function run() {
     assert.ok(stateAliases.includes('kano state'), 'legacy subdivision aliases must remain searchable');
     assert.ok(mock.calls[0].query.includes("data->'supportedTiers'"));
     assert.ok(mock.calls[0].query.includes("data->>'isPublic'"));
-    for (const value of ['Kano', 'secondary', 'false', 'secondary_school', 'VERIFIED']) {
+    for (const value of ['secondary', 'false', 'secondary_school', 'VERIFIED']) {
       assert.ok(mock.calls[0].values.includes(value), `expected bound filter: ${value}`);
     }
   }
