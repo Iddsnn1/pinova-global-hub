@@ -71,6 +71,7 @@ const guardianRoute = serverSource.slice(
 );
 assert.match(guardianRoute, /isGlobalAdmin\s*\|\|\s*isInstitutionAdmin/, 'institution admins may access guardian summaries only through the later institution-scoped filter');
 assert.match(guardianRoute, /if \(isInstitutionAdmin\)[\s\S]*?INSTITUTION_SCOPE_REQUIRED[\s\S]*?child\.institutionId === institutionId/, 'institution admin guardian reads must require and enforce institution scope');
+assert.match(guardianRoute, /const isInstitutionAdmin = !isGlobalAdmin && roles\.includes\('INSTITUTION_ADMIN'\)/, 'global administrator access must take precedence when an account also has an institution role');
 assert.match(serverSource, /educationRepo\.updateAdmissionStatus\(id, status, updatedBy, reason\)/, 'admission status audit must attribute the authenticated actor and preserve decision notes');
 console.log('EDUCATION GUARDIAN SCOPE AND ADMISSION AUDIT ACTOR CONTRACT: PASS');
 
