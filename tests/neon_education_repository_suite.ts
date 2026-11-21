@@ -39,6 +39,52 @@ async function run() {
   }
 
   {
+    const record = {
+      id: 'inst-global',
+      name: 'International School',
+      state: 'Kano',
+      supportedTiers: ['primary', 'secondary'],
+      isPublic: false
+    };
+    const mock = makeSql([[{ data: record }]]);
+    const repository = new NeonEducationRepository(mock.sql);
+    const result = await repository.listInstitutions({
+      state: 'Kano',
+      tier: 'secondary',
+      isPublic: false,
+      institutionType: 'secondary_school',
+      verificationStatus: 'VERIFIED'
+    });
+    assert.deepEqual(result, [record]);
+    assert.ok(mock.calls[0].query.includes("data->>'state'"));
+    assert.ok(mock.calls[0].query.includes("data->'supportedTiers'"));
+    assert.ok(mock.calls[0].query.includes("data->>'isPublic'"));
+    for (const value of ['Kano', 'secondary', 'false', 'secondary_school', 'VERIFIED']) {
+      assert.ok(mock.calls[0].values.includes(value), `expected bound filter: ${value}`);
+    }
+  }
+
+  {
+    const mock = makeSql([[{ data: { id: 'adm-2', institutionId: 'inst-2' } }]]);
+    const repository = new NeonEducationRepository(mock.sql);
+    const result = await repository.getAdmissionById('adm-2', { institutionId: 'inst-2' });
+    assert.deepEqual(result, { id: 'adm-2', institutionId: 'inst-2' });
+    assert.ok(mock.calls[0].query.includes('institution_id'));
+    assert.deepEqual(mock.calls[0].values, ['adm-2', 'inst-2', null, null]);
+  }
+
+  {
+    const mock = makeSql([[]]);
+    const repository = new NeonEducationRepository(mock.sql);
+    assert.equal(await repository.getAdmissionById('adm-3', {}), null);
+    assert.equal(mock.calls.length, 0, 'unscoped admission lookup must not query Neon');
+    const result = await repository.getAdmissionById('adm-3', { applicantEmail: 'APPLICANT@EXAMPLE.ORG' });
+    assert.equal(result, null);
+    assert.equal(mock.calls.length, 1);
+    assert.ok(mock.calls[0].values.includes('applicant@example.org'));
+  }
+
+  {
     // Neon FullQueryResults mode wraps returned rows in a rows property.
     const record = { id: 'inst-2', name: 'International Academy' };
     const mock = makeSql([{ rows: [{ data: record }], fields: [], rowCount: 1 }]);
