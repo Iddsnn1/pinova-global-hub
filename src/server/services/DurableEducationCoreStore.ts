@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import type {
   InstitutionProfile,
   StudentIdentity,
@@ -189,6 +190,83 @@ export class DurableEducationCoreStore {
     const rows = await sql`UPDATE education_admissions
       SET status = ${clean(status)}, data = ${JSON.stringify(updated)}::jsonb, updated_at = NOW()
       WHERE id = ${key} RETURNING data` as unknown as DbRow[];
+    return rows.length ? decode<AdmissionApplication>(rows[0].data) : null;
+  }
+
+  /**
+   * Atomically transition an admission only from the caller's observed state.
+   * The status update and audit event are committed in the same SQL statement,
+   * preventing concurrent reviewers from silently overwriting one another.
+   */
+  async transitionAdmissionStatus(
+    id: string,
+    expectedStatus: AdmissionApplicationStatus,
+    targetStatus: AdmissionApplicationStatus,
+    updated: AdmissionApplication,
+    actorUsername: string,
+    notes = ''
+  ): Promise<AdmissionApplication | null> {
+    this.assertReady();
+    const key = clean(id);
+    const actor = clean(actorUsername);
+    const expected = clean(expectedStatus);
+    const target = clean(targetStatus);
+    if (!key || clean(updated.id) !== key || clean(updated.status) !== target || !actor) {
+      throw new Error('EDUCATION_ADMISSION_TRANSITION_BINDING_MISMATCH');
+    }
+
+    const allowed: Record<string, string[]> = {
+      DRAFT: ['SUBMITTED', 'WITHDRAWN'],
+      SUBMITTED: ['UNDER_REVIEW', 'REJECTED', 'WITHDRAWN'],
+      UNDER_REVIEW: ['DOCUMENTS_REQUIRED', 'ADDITIONAL_INFO_REQUIRED', 'ACCEPTED', 'OFFERED', 'OFFER_ISSUED', 'REJECTED', 'WITHDRAWN'],
+      DOCUMENTS_REQUIRED: ['UNDER_REVIEW', 'WITHDRAWN', 'EXPIRED'],
+      ADDITIONAL_INFO_REQUIRED: ['UNDER_REVIEW', 'WITHDRAWN', 'EXPIRED'],
+      OFFERED: ['ACCEPTED', 'OFFER_ACCEPTED', 'REJECTED', 'WITHDRAWN', 'EXPIRED'],
+      OFFER_ISSUED: ['ACCEPTED', 'OFFER_ACCEPTED', 'REJECTED', 'WITHDRAWN', 'EXPIRED'],
+      ACCEPTED: ['OFFER_ISSUED', 'OFFER_ACCEPTED', 'ENROLLED', 'WITHDRAWN'],
+      OFFER_ACCEPTED: ['ENROLLED', 'REGISTRATION_COMPLETED', 'WITHDRAWN'],
+      REGISTRATION_COMPLETED: ['ENROLLED'],
+      ENROLLED: [],
+      REJECTED: [],
+      WITHDRAWN: [],
+      EXPIRED: []
+    };
+    if (!(allowed[expected] || []).includes(target)) {
+      throw new Error('EDUCATION_ADMISSION_ILLEGAL_STATUS_TRANSITION');
+    }
+
+    const timestamp = new Date().toISOString();
+    const auditId = `AUD-EDU-${crypto.randomUUID()}`;
+    const auditHash = crypto.createHash('sha256')
+      .update([auditId, key, expected, target, actor, timestamp, clean(notes)].join('|'))
+      .digest('hex');
+    const auditRecord = {
+      id: auditId,
+      entityType: 'ADMISSION',
+      entityId: key,
+      action: 'UPDATE_ADMISSION_STATUS',
+      actorUsername: actor,
+      actorRole: 'ADMISSIONS_OFFICER',
+      details: `Status transitioned from ${expected} to ${target}. Notes: ${clean(notes) || 'None'}`,
+      timestamp,
+      auditHash
+    };
+    const sql = getNeonSql();
+    const rows = await sql`WITH updated AS (
+      UPDATE education_admissions
+      SET status = ${target}, data = ${JSON.stringify(updated)}::jsonb, updated_at = NOW()
+      WHERE id = ${key} AND status = ${expected}
+      RETURNING data
+    ), audited AS (
+      INSERT INTO education_audit_logs
+        (id, entity_type, entity_id, action, actor_username, audit_hash, data, created_at)
+      SELECT ${auditId}, 'ADMISSION', ${key}, 'UPDATE_ADMISSION_STATUS', ${actor},
+        ${auditHash}, ${JSON.stringify(auditRecord)}::jsonb, ${timestamp}
+      FROM updated
+      RETURNING id
+    )
+    SELECT updated.data FROM updated
+    JOIN audited ON TRUE` as unknown as DbRow[];
     return rows.length ? decode<AdmissionApplication>(rows[0].data) : null;
   }
 
