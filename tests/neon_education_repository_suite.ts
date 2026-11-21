@@ -207,6 +207,42 @@ async function run() {
     ], 'direct institution programmes take precedence over nested programmes');
   }
 
+  {
+    // Nigeria's FCT aliases must resolve in both parent-to-child directions.
+    const mock = makeSql([[], []]);
+    const repository = new NeonEducationRepository(mock.sql);
+    await repository.listInstitutions({ countryCode: 'NG', state: 'Federal Capital Territory' });
+    await repository.listInstitutions({ countryCode: 'NG', state: 'Abuja' });
+    const parentAliases = mock.calls[0].values.find((value) => Array.isArray(value)) as string[];
+    const childAliases = mock.calls[1].values.find((value) => Array.isArray(value)) as string[];
+    for (const alias of ['federal capital territory', 'fct', 'abuja', 'f.c.t.']) {
+      assert.ok(parentAliases.includes(alias), `FCT parent alias missing: ${alias}`);
+    }
+    assert.ok(childAliases.includes('federal capital territory'));
+  }
+
+  {
+    // UK regional filters must include their counties and resolve a county back to its parent.
+    const mock = makeSql([[], []]);
+    const repository = new NeonEducationRepository(mock.sql);
+    await repository.listInstitutions({ countryCode: 'GB', state: 'South East England' });
+    await repository.listInstitutions({ countryCode: 'GB', state: 'Oxfordshire' });
+    const regionAliases = mock.calls[0].values.find((value) => Array.isArray(value)) as string[];
+    const countyAliases = mock.calls[1].values.find((value) => Array.isArray(value)) as string[];
+    assert.ok(regionAliases.includes('oxfordshire'));
+    assert.ok(regionAliases.includes('berkshire'));
+    assert.ok(countyAliases.includes('south east england'));
+  }
+
+  {
+    // Without a recognized country, subdivision matching deliberately stays exact.
+    const mock = makeSql([[]]);
+    const repository = new NeonEducationRepository(mock.sql);
+    await repository.listInstitutions({ state: 'Kano' });
+    const aliases = mock.calls[0].values.find((value) => Array.isArray(value)) as string[];
+    assert.deepEqual(aliases, ['kano']);
+  }
+
   console.log('Neon Education repository contract suite passed.');
 }
 
