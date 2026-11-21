@@ -68,7 +68,9 @@ export class StorageEngine<T extends { id?: string; [key: string]: any }> {
             this.cache.set(key, item);
           }
         }
-        this.saveSync();
+        if (!this.saveSync()) {
+          throw new Error('Unable to persist initial collection seed; refusing to report successful initialization');
+        }
       }
       this.isLoaded = true;
     } catch (err) {
