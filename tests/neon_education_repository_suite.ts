@@ -61,6 +61,7 @@ async function run() {
     const mock = makeSql([[{ data: record }]]);
     const repository = new NeonEducationRepository(mock.sql);
     const result = await repository.listInstitutions({
+      countryCode: 'NG',
       state: 'Kano',
       tier: 'secondary',
       isPublic: false,
@@ -69,6 +70,10 @@ async function run() {
     });
     assert.deepEqual(result, [record]);
     assert.ok(mock.calls[0].query.includes("data->>'state'"));
+    assert.ok(mock.calls[0].query.includes('ANY('), 'state filters must support canonical aliases');
+    const stateAliases = mock.calls[0].values.find((value) => Array.isArray(value)) as string[];
+    assert.ok(stateAliases.includes('kano'));
+    assert.ok(stateAliases.includes('kano state'), 'legacy subdivision aliases must remain searchable');
     assert.ok(mock.calls[0].query.includes("data->'supportedTiers'"));
     assert.ok(mock.calls[0].query.includes("data->>'isPublic'"));
     for (const value of ['Kano', 'secondary', 'false', 'secondary_school', 'VERIFIED']) {
