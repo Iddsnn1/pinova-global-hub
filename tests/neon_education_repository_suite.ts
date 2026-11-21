@@ -43,9 +43,11 @@ async function run() {
     const repository = new NeonEducationRepository(mock.sql);
     await repository.listInstitutions({ countryCode: 'Nigeria', state: 'all' });
     await repository.listInstitutions({ countryCode: 'GLOBAL' });
+    await repository.listInstitutions({ country: 'Nigeria' });
     assert.ok(mock.calls[0].values.includes('NG'), 'country names must normalize to ISO-2');
     assert.ok(mock.calls[0].values.includes(null), 'state=all must not filter the directory');
     assert.ok(mock.calls[1].values.includes(null), 'GLOBAL must not become a literal country filter');
+    assert.ok(mock.calls[2].values.includes('NG'), 'legacy country alias must normalize to ISO-2');
   }
 
   {
