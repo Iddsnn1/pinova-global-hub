@@ -7,6 +7,7 @@ import type {
   ScholarshipOpportunity
 } from '../../types/education';
 import { getNeonSql, neonDatabaseEnabled } from '../db/NeonDatabase';
+import { normalizeCountryCode, matchesSubdivision } from '../../data/countrySubdivisions';
 
 type DbRow = Record<string, any>;
 const clean = (value: unknown) => String(value ?? '').trim();
@@ -23,10 +24,12 @@ export class DurableEducationCoreStore {
     if (!neonDatabaseEnabled()) throw new Error('DURABLE_EDUCATION_STORAGE_UNAVAILABLE');
   }
 
-  async getInstitutions(filter?: { countryCode?: string; institutionType?: string; verificationStatus?: string }): Promise<InstitutionProfile[]> {
+  async getInstitutions(filter?: { countryCode?: string; country?: string; state?: string; tier?: string; institutionType?: string; isPublic?: boolean; verificationStatus?: string; search?: string }): Promise<InstitutionProfile[]> {
     this.assertReady();
     const sql = getNeonSql();
-    const country = clean(filter?.countryCode).toUpperCase() || null;
+    const rawCountry = filter?.countryCode || filter?.country;
+    const normalizedCountry = rawCountry ? normalizeCountryCode(rawCountry) : undefined;
+    const country = normalizedCountry && normalizedCountry !== 'ALL' && normalizedCountry !== 'GLOBAL' ? normalizedCountry.toUpperCase() : null;
     const type = clean(filter?.institutionType) || null;
     const status = clean(filter?.verificationStatus) || null;
     const rows = await sql`SELECT data FROM education_institutions
@@ -34,7 +37,24 @@ export class DurableEducationCoreStore {
         AND (${type}::text IS NULL OR institution_type = ${type})
         AND (${status}::text IS NULL OR verification_status = ${status})
       ORDER BY created_at DESC` as unknown as DbRow[];
-    return rows.map(row => decode<InstitutionProfile>(row.data));
+    let institutions = rows.map(row => decode<InstitutionProfile>(row.data));
+    if (filter?.state && filter.state !== 'all') {
+      institutions = institutions.filter(item => matchesSubdivision(item.countryCode, item.state, filter.state!));
+    }
+    if (filter?.tier && filter.tier !== 'all') {
+      institutions = institutions.filter(item => Array.isArray(item.supportedTiers) && item.supportedTiers.includes(filter.tier as any));
+    }
+    if (filter?.isPublic !== undefined) {
+      institutions = institutions.filter(item => item.isPublic === filter.isPublic);
+    }
+    if (filter?.search?.trim()) {
+      const query = filter.search.trim().toLowerCase();
+      institutions = institutions.filter(item =>
+        [item.name, item.institutionCode, item.city, item.state, item.legalName]
+          .some(value => String(value || '').toLowerCase().includes(query))
+      );
+    }
+    return institutions;
   }
 
   async getInstitutionById(id: string): Promise<InstitutionProfile | null> {
