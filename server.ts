@@ -3536,7 +3536,7 @@ app.get('/api/education/guardians/:id/children', authenticate, (req: Authenticat
     const currentUserId = String(req.user?.id || '').trim();
     const roles = req.user?.roles || [];
     const isGlobalAdmin = roles.some((r: string) => ['PLATFORM_ADMIN', 'BURSAR', 'FINANCE_ADMIN'].includes(r));
-    const isInstitutionAdmin = roles.includes('INSTITUTION_ADMIN');
+    const isInstitutionAdmin = !isGlobalAdmin && roles.includes('INSTITUTION_ADMIN');
     const ownsGuardian = Boolean(
       isGlobalAdmin ||
       isInstitutionAdmin ||
