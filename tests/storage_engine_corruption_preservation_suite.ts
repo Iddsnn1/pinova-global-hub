@@ -61,6 +61,28 @@ try {
   const seeded = new StorageEngine('new_collection', 'id', [{ id: 'seed-record' }]);
   assert.equal(seeded.get('seed-record')?.id, 'seed-record',
     'first-time initialization must still seed a genuinely missing collection');
+
+  const mutableFs = fs as unknown as { renameSync: typeof fs.renameSync };
+  const originalRenameSync = fs.renameSync;
+  try {
+    mutableFs.renameSync = (() => { throw new Error('simulated disk commit failure'); }) as typeof fs.renameSync;
+    assert.equal(seeded.set('seed-record', { id: 'seed-record', value: 'uncommitted' }), false,
+      'set must report persistence failure');
+    assert.equal(seeded.get('seed-record')?.value, undefined,
+      'set must roll back its in-memory mutation when persistence fails');
+
+    assert.equal(seeded.unshift({ id: 'unshifted-record' }), false,
+      'unshift must report persistence failure');
+    assert.equal(seeded.get('unshifted-record'), null,
+      'unshift must roll back its in-memory mutation when persistence fails');
+
+    assert.equal(seeded.delete('seed-record'), false,
+      'delete must report persistence failure');
+    assert.equal(seeded.get('seed-record')?.id, 'seed-record',
+      'delete must restore the in-memory record when persistence fails');
+  } finally {
+    mutableFs.renameSync = originalRenameSync;
+  }
   console.log('STORAGE ENGINE CORRUPTION PRESERVATION CONTRACT: PASS');
 } finally {
   if (originalDataDir === undefined) delete process.env.PINOVA_DATA_DIR;
