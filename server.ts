@@ -4272,18 +4272,12 @@ app.post('/api/education/admissions/:id/offer/accept', authenticate, async (req:
     const currentUser = String(req.user?.username || '').trim().toLowerCase();
     const applicantEmail = String(admission.applicantEmail || '').trim().toLowerCase();
     const isOwner = Boolean(currentUser && applicantEmail && applicantEmail === currentUser);
-    const offerRoles = req.user?.roles || [];
-    const isGlobalAdmin = offerRoles.includes('PLATFORM_ADMIN');
-    const isInstitutionAdmin = offerRoles.includes('INSTITUTION_ADMIN');
-    const institutionScopedAdmin = Boolean(
-      isInstitutionAdmin &&
-      req.user?.institutionId &&
-      req.user.institutionId === admission.institutionId
-    );
-    const isAdmin = isGlobalAdmin || institutionScopedAdmin;
 
-    if (!isAdmin && !isOwner) {
-      res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Access denied: You are not authorized to accept this offer.' });
+    // Accepting an admission offer is the applicant's personal decision.
+    // Institution and platform administrators may manage admission status,
+    // but must not accept an offer on behalf of the applicant.
+    if (!isOwner) {
+      res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Only the authenticated applicant may accept this admission offer.' });
       return;
     }
 
