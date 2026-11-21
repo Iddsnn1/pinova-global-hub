@@ -29,6 +29,33 @@ async function run() {
   }
 
   {
+    const mock = makeSql([[{ count: '237' }]]);
+    const repository = new NeonEducationRepository(mock.sql);
+    const count = await repository.countInstitutions({
+      country: 'Nigeria',
+      state: 'Kano',
+      tier: 'secondary',
+      institutionType: 'secondary_school',
+      isPublic: false,
+      verificationStatus: 'VERIFIED',
+      search: 'academy'
+    });
+    assert.equal(count, 237, 'directory count must represent all matches, not the current page');
+    assert.match(mock.calls[0].query, /COUNT\(\*\)/);
+    assert.ok(mock.calls[0].values.includes('NG'));
+    assert.ok(mock.calls[0].values.includes('secondary'));
+    assert.ok(mock.calls[0].values.includes('false'));
+    assert.ok(mock.calls[0].values.includes('academy'));
+    assert.ok(!mock.calls[0].values.includes(100), 'count query must not apply page limit');
+  }
+
+  {
+    const mock = makeSql([[{ count: 'not-a-number' }]]);
+    const repository = new NeonEducationRepository(mock.sql);
+    await assert.rejects(repository.countInstitutions(), /EDUCATION_NEON_COUNT_INVALID/);
+  }
+
+  {
     const record = { id: 'inst-1', name: 'Global University', countryCode: 'NG' };
     const mock = makeSql([[{ data: record }]]);
     const repository = new NeonEducationRepository(mock.sql);
