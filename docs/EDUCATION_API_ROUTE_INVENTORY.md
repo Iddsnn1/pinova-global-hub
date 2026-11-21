@@ -10,8 +10,8 @@ The Education route block in `server.ts` uses the synchronous `educationRepo` (l
 
 | Route family | Current repository calls | Required durable read contract | Scope / migration gate |
 |---|---|---|---|
-| `GET /api/education/institutions` | `getInstitutions(filter)` | `listInstitutions` with country, state/subdivision, tier, public flag, type, verification, search, bounded pagination | Public catalog; preserve normalization and response fields. Current Neon method omits state, tier, and isPublic filters. |
-| `GET /institutions/:id` and hierarchy routes | `getInstitutionById`, faculty/department/programme getters | Institution aggregate read, then hierarchy extraction | Hierarchy is embedded in institution JSON today; do not invent separate tables or flattening semantics without a schema decision. |
+| `GET /api/education/institutions` | `getInstitutions(filter)` | `listInstitutions` with country, state/subdivision aliases, tier, public flag, type, verification, search, bounded pagination | Public catalog; Neon adapter now implements these filters, including country-name normalization, `GLOBAL`/`ALL`, and known subdivision aliases. Route response parity and Preview integration remain unverified. |
+| `GET /institutions/:id` and hierarchy routes | `getInstitutionById`, faculty/department/programme getters | Institution aggregate read, then hierarchy extraction | Neon adapter now exposes read-only faculty, department, programme, and institution-programme extraction from the existing JSON aggregate. No separate hierarchy tables are assumed; route response parity remains unverified. |
 | `GET /students/:id` | `getStudentById` | `getStudentById(id, institutionId)` plus an explicit self/global-admin policy | Institution staff must be scoped to authenticated institution. For self access, derive institution scope from trusted identity mapping; do not perform an unscoped read then filter. |
 | Guardian child routes | `getGuardianChildrenSummaries` | Guardian-child list scoped by guardian identity and, where relevant, institution; invoice aggregation in SQL or a tested service | Current implementation reads guardian children and invoices from local stores. Institution admin must not load other-institution rows before filtering. |
 | `GET /invoices`, `GET /invoices/:id` | `getInvoices`, `getInvoiceById` | Scoped invoice list/get, with trusted guardian/student identity and institution scope | Existing list authorization supports global roles, institution staff, guardian owner, or student owner. SQL filters must enforce the same policy, not merely hide results after loading. |
@@ -26,9 +26,9 @@ The Education route block in `server.ts` uses the synchronous `educationRepo` (l
 
 ## Gaps confirmed in current Neon adapter/schema
 
-1. The current adapter provides institution list/get, scoped student get, scoped invoice get/list, and scoped admissions list only.
-2. Institution list adapter currently lacks legacy filters for state/subdivision, tier, and public/private status.
-3. Academic hierarchy is stored inside institution JSON payload; there are no dedicated faculty, department, or programme tables in the inspected Preview schema.
+1. The current adapter provides institution list/get and hierarchy reads; scoped student get; scoped invoice get/list; scoped admissions list; and admission-by-id lookup requiring exactly one institution or applicant scope.
+2. Institution directory filters now include state/subdivision aliases, tier, and public/private status. Broader country-specific alias parity still needs fixture coverage beyond the currently tested Nigeria and UK cases.
+3. Academic hierarchy is stored inside institution JSON payload; there are no dedicated faculty, department, or programme tables in the inspected Preview schema. The Neon adapter reads this aggregate but does not write it.
 4. Guardian summary aggregation is not implemented in the Neon adapter.
 5. Payment, receipt, scholarship, audit-log, admission-by-id, and document-metadata repository methods are not implemented in the adapter.
 6. `education_admission_documents` has owner and nullable application id, but no institution id and no FK to admissions. Ownership is currently resolved through the legacy admission repository in route handlers.
