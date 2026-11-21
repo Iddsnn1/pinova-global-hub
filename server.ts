@@ -3484,14 +3484,20 @@ app.get('/api/education/students/:id', authenticate, (req: AuthenticatedRequest,
   try {
     const requestedId = String(req.params.id || '').trim();
     const roles = req.user?.roles || [];
-    const isAdmin = roles.some((r: string) => ['PLATFORM_ADMIN', 'BURSAR', 'FINANCE_ADMIN', 'INSTITUTION_ADMIN'].includes(r));
-    if (!isAdmin && ![String(req.user?.id || ''), String(req.user?.username || '')].includes(requestedId)) {
+    const isGlobalAdmin = roles.some((r: string) => ['PLATFORM_ADMIN', 'BURSAR', 'FINANCE_ADMIN'].includes(r));
+    const isInstitutionAdmin = roles.includes('INSTITUTION_ADMIN');
+    const ownsStudentIdentity = [String(req.user?.id || ''), String(req.user?.username || '')].includes(requestedId);
+    if (!isGlobalAdmin && !isInstitutionAdmin && !ownsStudentIdentity) {
       res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Student access requires the authenticated student context.' });
       return;
     }
     const student = educationRepo.getStudentById(requestedId);
     if (!student) {
       res.status(404).json({ success: false, error: 'STUDENT_NOT_FOUND' });
+      return;
+    }
+    if (isInstitutionAdmin && (!req.user?.institutionId || String(student.institutionId || '') !== String(req.user.institutionId))) {
+      res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Institution administrator student access is limited to the authenticated institution.' });
       return;
     }
     res.json({ success: true, student });
@@ -3986,10 +3992,13 @@ app.get('/api/education/receipts/:receiptNumber', authenticate, (req: Authentica
       return;
     }
     const roles = req.user?.roles || [];
-    const isAdmin = roles.some((r: string) => ['PLATFORM_ADMIN', 'BURSAR', 'FINANCE_ADMIN', 'INSTITUTION_ADMIN'].includes(r));
-    const userRefs = [String(req.user?.id || ''), String(req.user?.username || ''), ''].map(v => v.trim().toLowerCase()).filter(Boolean);
-    if (!isAdmin && (!receipt.studentId || !userRefs.includes(receipt.studentId.trim().toLowerCase()))) {
-      res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Receipt access requires the authenticated student context.' });
+    const isGlobalAdmin = roles.some((r: string) => ['PLATFORM_ADMIN', 'BURSAR', 'FINANCE_ADMIN'].includes(r));
+    const isInstitutionAdmin = roles.includes('INSTITUTION_ADMIN');
+    const userRefs = [String(req.user?.id || ''), String(req.user?.username || '')].map(v => v.trim().toLowerCase()).filter(Boolean);
+    const ownsReceipt = Boolean(receipt.studentId && userRefs.includes(receipt.studentId.trim().toLowerCase()));
+    const institutionScoped = Boolean(isInstitutionAdmin && req.user?.institutionId && String(receipt.institutionId || '') === String(req.user.institutionId));
+    if (!isGlobalAdmin && !institutionScoped && !ownsReceipt) {
+      res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Receipt access requires the authenticated student or institution context.' });
       return;
     }
     res.json({ success: true, receipt });
