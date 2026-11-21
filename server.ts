@@ -3527,6 +3527,7 @@ app.get('/api/education/guardians/:id/children', authenticate, (req: Authenticat
     const isInstitutionAdmin = roles.includes('INSTITUTION_ADMIN');
     const ownsGuardian = Boolean(
       isGlobalAdmin ||
+      isInstitutionAdmin ||
       (currentUser && requestedGuardianId.toLowerCase() === currentUser.toLowerCase()) ||
       (currentUserId && requestedGuardianId === currentUserId) ||
       (req.user?.guardianId && requestedGuardianId.toLowerCase() === String(req.user.guardianId).toLowerCase())
@@ -4280,7 +4281,8 @@ app.post('/api/education/admissions/:id/status', authenticate, requireRole(['PLA
     }
 
     const updatedBy = req.user?.username || 'Admissions_Committee';
-    const updated = educationRepo.updateAdmissionStatus(id, status, reason, updatedBy);
+    // EducationRepository expects actor username before decision notes.
+    const updated = educationRepo.updateAdmissionStatus(id, status, updatedBy, reason);
 
     res.json({
       success: true,
