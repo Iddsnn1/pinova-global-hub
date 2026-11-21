@@ -23,3 +23,12 @@ assert.match(source, /matchesSubdivision/);
 assert.match(source, /rawType\.toLowerCase\(\) !== 'all'/, 'institution type all sentinel must disable filtering');
 assert.match(source, /rawStatus\.toUpperCase\(\) !== 'ALL'/, 'verification status ALL sentinel must disable filtering');
 console.log('EDUCATION INSTITUTION FILTER PARITY: PASS');
+
+
+const settlementSource = fs.readFileSync(path.resolve(process.cwd(), 'src/server/services/DurableEducationStore.ts'), 'utf8');
+assert.match(settlementSource, /async getPaymentsByInvoiceId\(/, 'durable payment history read must be available');
+assert.match(settlementSource, /FROM education_payments[\s\S]*?WHERE invoice_id = \$\{id\}[\s\S]*?ORDER BY verified_at DESC/, 'payment history must be scoped to invoice and ordered newest first');
+assert.match(settlementSource, /async getAuditLogs\(/, 'durable audit log read must be available');
+assert.match(settlementSource, /FROM education_audit_logs[\s\S]*?entity_type = \$\{type\}[\s\S]*?ORDER BY created_at DESC/, 'audit log reads must support entity filtering and newest-first order');
+assert.match(settlementSource, /DURABLE_EDUCATION_STORAGE_UNAVAILABLE/, 'durable reads must fail closed when Neon is unavailable');
+console.log('EDUCATION DURABLE HISTORY AND AUDIT READ CONTRACT: PASS');
