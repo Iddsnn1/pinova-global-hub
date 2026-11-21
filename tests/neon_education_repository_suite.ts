@@ -159,6 +159,49 @@ async function run() {
     assert.ok(mock.calls[0].values.includes('student@example.org'));
   }
 
+  {
+    const institution = {
+      id: 'inst-hierarchy',
+      faculties: [{
+        id: 'fac-1',
+        departments: [{
+          id: 'dept-1',
+          programmes: [{ id: 'prog-1', name: 'Computer Science' }]
+        }]
+      }]
+    };
+    const mock = makeSql([
+      [{ data: institution }],
+      [{ data: institution }],
+      [{ data: institution }],
+      [{ data: institution }]
+    ]);
+    const repository = new NeonEducationRepository(mock.sql);
+    assert.equal((await repository.listFaculties('inst-hierarchy')).length, 1);
+    assert.equal((await repository.listDepartments('inst-hierarchy', 'fac-1')).length, 1);
+    assert.equal((await repository.listProgrammes('inst-hierarchy', 'fac-1', 'dept-1')).length, 1);
+    assert.deepEqual(await repository.listInstitutionProgrammes('inst-hierarchy'), [
+      { id: 'prog-1', name: 'Computer Science' }
+    ]);
+    assert.equal(mock.calls.length, 4);
+  }
+
+  {
+    const institution = {
+      id: 'inst-direct-programmes',
+      programmes: [{ id: 'prog-direct', name: 'Basic Education' }],
+      faculties: [{
+        id: 'fac-1',
+        departments: [{ id: 'dept-1', programmes: [{ id: 'prog-nested' }] }]
+      }]
+    };
+    const mock = makeSql([[{ data: institution }]]);
+    const repository = new NeonEducationRepository(mock.sql);
+    assert.deepEqual(await repository.listInstitutionProgrammes('inst-direct-programmes'), [
+      { id: 'prog-direct', name: 'Basic Education' }
+    ], 'direct institution programmes take precedence over nested programmes');
+  }
+
   console.log('Neon Education repository contract suite passed.');
 }
 
