@@ -270,11 +270,23 @@ export class DurableEducationCoreStore {
     return rows.length ? decode<AdmissionApplication>(rows[0].data) : null;
   }
 
-  async getScholarships(): Promise<ScholarshipOpportunity[]> {
+  async getScholarships(tier?: string, countryCode?: string): Promise<ScholarshipOpportunity[]> {
     this.assertReady();
     const sql = getNeonSql();
-    const rows = await sql`SELECT data FROM education_scholarships ORDER BY deadline ASC NULLS LAST, created_at DESC` as unknown as DbRow[];
-    return rows.map(row => decode<ScholarshipOpportunity>(row.data));
+    const rows = await sql`SELECT data FROM education_scholarships
+      ORDER BY deadline ASC NULLS LAST, created_at DESC` as unknown as DbRow[];
+    let scholarships = rows.map(row => decode<ScholarshipOpportunity>(row.data));
+    if (tier && tier !== 'all') {
+      scholarships = scholarships.filter(item => Array.isArray(item.applicableTiers) && item.applicableTiers.includes(tier as any));
+    }
+    const country = clean(countryCode).toUpperCase();
+    if (country && country !== 'ALL' && country !== 'GLOBAL') {
+      scholarships = scholarships.filter(item =>
+        Array.isArray(item.eligibleCountries) &&
+        item.eligibleCountries.some(code => clean(code).toUpperCase() === country)
+      );
+    }
+    return scholarships;
   }
 
   async createScholarship(record: ScholarshipOpportunity): Promise<ScholarshipOpportunity> {
@@ -291,4 +303,67 @@ export class DurableEducationCoreStore {
     if (!rows.length) throw new Error('EDUCATION_SCHOLARSHIP_ALREADY_EXISTS');
     return decode<ScholarshipOpportunity>(rows[0].data);
   }
+  /**
+   * Merge a scholarship update without allowing the payload to change its ID.
+   * The durable row update and its audit record commit atomically.
+   */
+  async updateScholarship(
+    id: string,
+    updates: Partial<ScholarshipOpportunity>,
+    actorUsername: string
+  ): Promise<ScholarshipOpportunity | null> {
+    this.assertReady();
+    const key = clean(id);
+    const actor = clean(actorUsername);
+    if (!key || !actor || !updates || typeof updates !== 'object' || Array.isArray(updates)) {
+      throw new Error('EDUCATION_SCHOLARSHIP_UPDATE_FIELDS_REQUIRED');
+    }
+    if (Object.prototype.hasOwnProperty.call(updates, 'id') && clean(updates.id) !== key) {
+      throw new Error('EDUCATION_SCHOLARSHIP_UPDATE_ID_MISMATCH');
+    }
+    const patch: Partial<ScholarshipOpportunity> = { ...updates };
+    delete patch.id;
+    if (Object.keys(patch).length === 0) throw new Error('EDUCATION_SCHOLARSHIP_UPDATE_EMPTY');
+
+    const timestamp = new Date().toISOString();
+    const auditId = `AUD-EDU-${crypto.randomUUID()}`;
+    const patchJson = JSON.stringify(patch);
+    const auditHash = crypto.createHash('sha256')
+      .update([auditId, key, actor, timestamp, patchJson].join('|'))
+      .digest('hex');
+    const auditRecord = {
+      id: auditId,
+      entityType: 'SCHOLARSHIP',
+      entityId: key,
+      action: 'UPDATE_SCHOLARSHIP',
+      actorUsername: actor,
+      actorRole: 'INSTITUTION_ADMIN',
+      details: 'Scholarship record updated',
+      timestamp,
+      auditHash
+    };
+    const sql = getNeonSql();
+    const rows = await sql`WITH updated AS (
+      UPDATE education_scholarships
+      SET sponsor_type = CASE WHEN ${Object.prototype.hasOwnProperty.call(patch, 'sponsorType')}
+            THEN ${clean(patch.sponsorType)} ELSE sponsor_type END,
+          deadline = CASE WHEN ${Object.prototype.hasOwnProperty.call(patch, 'deadline')}
+            THEN NULLIF(${clean(patch.deadline)}, '')::timestamptz ELSE deadline END,
+          data = data || ${patchJson}::jsonb,
+          updated_at = NOW()
+      WHERE id = ${key}
+      RETURNING data
+    ), audited AS (
+      INSERT INTO education_audit_logs
+        (id, entity_type, entity_id, action, actor_username, audit_hash, data, created_at)
+      SELECT ${auditId}, 'SCHOLARSHIP', ${key}, 'UPDATE_SCHOLARSHIP', ${actor},
+        ${auditHash}, ${JSON.stringify(auditRecord)}::jsonb, ${timestamp}
+      FROM updated
+      RETURNING id
+    )
+    SELECT updated.data FROM updated
+    JOIN audited ON TRUE` as unknown as DbRow[];
+    return rows.length ? decode<ScholarshipOpportunity>(rows[0].data) : null;
+  }
+
 }
