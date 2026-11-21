@@ -77,7 +77,15 @@ async function run() {
     const mock = makeSql([[]]);
     const repository = new NeonEducationRepository(mock.sql);
     assert.equal(await repository.getAdmissionById('adm-3', {}), null);
-    assert.equal(mock.calls.length, 0, 'unscoped admission lookup must not query Neon');
+    assert.equal(
+      await repository.getAdmissionById('adm-3', {
+        institutionId: 'inst-3',
+        applicantEmail: 'applicant@example.org'
+      }),
+      null,
+      'ambiguous combined scopes must be rejected'
+    );
+    assert.equal(mock.calls.length, 0, 'unscoped or ambiguous admission lookup must not query Neon');
     const result = await repository.getAdmissionById('adm-3', { applicantEmail: 'APPLICANT@EXAMPLE.ORG' });
     assert.equal(result, null);
     assert.equal(mock.calls.length, 1);
