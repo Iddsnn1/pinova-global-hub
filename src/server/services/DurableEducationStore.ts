@@ -138,6 +138,27 @@ export class DurableEducationStore {
     return rows.length ? decodeJson<EducationPaymentTransaction>(rows[0].data) : null;
   }
 
+  async getPaymentsByInvoiceId(invoiceId: string): Promise<EducationPaymentTransaction[]> {
+    const id = clean(invoiceId);
+    if (!id) return [];
+    if (!neonDatabaseEnabled()) throw new Error('DURABLE_EDUCATION_STORAGE_UNAVAILABLE');
+    const sql = getNeonSql();
+    const rows = await sql`SELECT data FROM education_payments
+      WHERE invoice_id = ${id}
+      ORDER BY verified_at DESC` as unknown as DbRow[];
+    return rows.map((row) => decodeJson<EducationPaymentTransaction>(row.data));
+  }
+
+  async getAuditLogs(entityType?: string): Promise<DbRow[]> {
+    if (!neonDatabaseEnabled()) throw new Error('DURABLE_EDUCATION_STORAGE_UNAVAILABLE');
+    const type = clean(entityType) || null;
+    const sql = getNeonSql();
+    const rows = await sql`SELECT data FROM education_audit_logs
+      WHERE (${type}::text IS NULL OR entity_type = ${type})
+      ORDER BY created_at DESC` as unknown as DbRow[];
+    return rows.map((row) => decodeJson<DbRow>(row.data));
+  }
+
   async getReceiptByNumber(receiptNumber: string): Promise<DigitalEducationReceipt | null> {
     const number = clean(receiptNumber).toUpperCase();
     if (!number || !neonDatabaseEnabled()) return null;
