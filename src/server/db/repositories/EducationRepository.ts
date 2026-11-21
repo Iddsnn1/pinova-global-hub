@@ -133,7 +133,8 @@ export class EducationRepository {
   public verifyInstitution(
     id: string,
     status: 'VERIFIED' | 'VERIFIED_WITH_LIMITATIONS' | 'SUSPENDED' | 'REJECTED',
-    adminNotes?: string
+    adminNotes?: string,
+    actor: { username: string; role: string } = { username: 'unknown_admin', role: 'UNKNOWN' }
   ): InstitutionProfile | null {
     const inst = this.institutionsEngine.get(id);
     if (!inst) return null;
@@ -153,8 +154,8 @@ export class EducationRepository {
       action: 'VERIFY_INSTITUTION',
       entityType: 'INSTITUTION',
       entityId: id,
-      actorUsername: 'compliance_admin',
-      actorRole: 'COMPLIANCE_ADMIN',
+      actorUsername: actor.username.trim() || 'unknown_admin',
+      actorRole: actor.role.trim() || 'UNKNOWN',
       details: `Institution ${inst.name} verification updated to ${status}. Notes: ${adminNotes || 'None'}`
     });
 
@@ -237,13 +238,26 @@ export class EducationRepository {
     );
     return children.map((c) => {
       const studentInvoices = this.invoicesEngine.filter((inv) => inv.studentId === c.studentId);
-      const activeInvoices = studentInvoices.filter((inv) => inv.status !== 'PAID' && inv.status !== 'CANCELLED');
-      const totalBilled = studentInvoices.reduce((sum, inv) => sum + inv.totalAmount, 0);
-      const totalPaid = studentInvoices.reduce((sum, inv) => sum + inv.amountPaid, 0);
-      const balance = Math.max(0, totalBilled - totalPaid);
+      // Cancelled invoices must not contribute to billed, paid, or outstanding totals.
+      const billableInvoices = studentInvoices.filter((inv) => inv.status !== 'CANCELLED');
+      const activeInvoices = billableInvoices.filter((inv) => inv.status !== 'PAID');
+      const invoiceCurrencies = Array.from(new Set(
+        billableInvoices.map((inv) => String(inv.currency || '').trim().toUpperCase()).filter(Boolean)
+      ));
+      // A single child summary cannot safely represent a sum across currencies.
+      // Fail closed for mixed-currency legacy data rather than displaying a false total.
+      const hasMixedCurrencies = invoiceCurrencies.length > 1;
+      const currency = hasMixedCurrencies ? 'MIXED' : (invoiceCurrencies[0] || c.currency || 'UNKNOWN');
+      const totalBilled = hasMixedCurrencies ? 0 : billableInvoices.reduce((sum, inv) => sum + (Number.isFinite(inv.totalAmount) ? inv.totalAmount : 0), 0);
+      const totalPaid = hasMixedCurrencies ? 0 : billableInvoices.reduce((sum, inv) => sum + (Number.isFinite(inv.amountPaid) ? inv.amountPaid : 0), 0);
+      const balance = hasMixedCurrencies ? 0 : billableInvoices.reduce(
+        (sum, inv) => sum + (inv.status === 'PAID' ? 0 : Math.max(0, Number.isFinite(inv.outstandingBalance) ? inv.outstandingBalance : inv.totalAmount - inv.amountPaid)),
+        0
+      );
 
       return {
         ...c,
+        currency,
         totalBilledFiat: totalBilled,
         totalPaidFiat: totalPaid,
         outstandingBalanceFiat: balance,

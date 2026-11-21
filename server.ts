@@ -15,6 +15,7 @@ import {
   idempotencyRepo,
   vendorApplicationRepo,
   educationRepo,
+  durableEducationStore,
   FlightFulfillmentEntity,
   orderRepo,
   productRepo
@@ -38,6 +39,7 @@ import { AuditService } from './src/server/services/AuditService';
 import { EducationClassificationEngine } from './src/server/services/EducationClassificationEngine';
 import { StudentVerificationService } from './src/server/services/StudentVerificationService';
 import { getNigeriaAuthoritativeProviderForCapability } from './src/server/services/AuthoritativeEducationProviderRegistry';
+import { authoritativeEducationConnectorRegistry } from './src/server/services/AuthoritativeEducationConnectorRegistry';
 import { verifyJambCapsAuthorization } from './src/server/services/JambCapsAuthorizationService';
 import { EducationRepository } from './src/server/db/repositories/EducationRepository';
 import { ProductRepository } from './src/server/db/repositories/ProductRepository';
@@ -3441,7 +3443,7 @@ app.get(['/api/education/taxonomy', '/api/education/taxonomy/:countryCode?'], (r
 // 3. Student Identity & Verification Engine (Phase 7 Remediation)
 app.post('/api/education/students/verify', studentVerifyRateLimiter, authenticate, async (req: AuthenticatedRequest, res) => {
   try {
-    const { studentId, matricOrRegistrationNumber, institutionId, countryCode, claimedFullName, nationalStudentNumber } = req.body;
+    const { studentId, matricOrRegistrationNumber, institutionId, countryCode, providerId, claimedFullName, nationalStudentNumber } = req.body;
     if (!studentId && !matricOrRegistrationNumber) {
       res.status(400).json({
         success: false,
@@ -3456,6 +3458,7 @@ app.post('/api/education/students/verify', studentVerifyRateLimiter, authenticat
       matricOrRegistrationNumber,
       institutionId,
       countryCode: countryCode || 'NG',
+      providerId,
       claimedFullName,
       nationalStudentNumber
     });
@@ -3472,8 +3475,8 @@ app.post('/api/education/students/verify', studentVerifyRateLimiter, authenticat
 app.post('/api/education/institutions/:id/verify-accreditation', studentVerifyRateLimiter, authenticate, async (req: AuthenticatedRequest, res) => {
   try {
     const { id } = req.params;
-    const { countryCode, registryNumber } = req.body;
-    const result = await studentVerificationService.verifyInstitution(id, countryCode || 'NG', registryNumber);
+    const { countryCode, registryNumber, providerId } = req.body;
+    const result = await studentVerificationService.verifyInstitution(id, countryCode || 'NG', registryNumber, providerId);
     res.json({ success: true, accreditation: result });
   } catch (err: any) {
     res.status(500).json({ success: false, error: 'ACCREDITATION_CHECK_FAILED', message: err.message });
@@ -3492,6 +3495,18 @@ app.get('/api/education/students/:id', authenticate, (req: AuthenticatedRequest,
     const student = educationRepo.getStudentById(requestedId);
     if (!student) {
       res.status(404).json({ success: false, error: 'STUDENT_NOT_FOUND' });
+      return;
+    }
+    const isInstitutionAdmin = roles.includes('INSTITUTION_ADMIN');
+    if (
+      isInstitutionAdmin &&
+      (!req.user?.institutionId || req.user.institutionId !== student.currentInstitutionId)
+    ) {
+      res.status(403).json({
+        success: false,
+        error: 'FORBIDDEN',
+        message: 'Institution administrator access is limited to students enrolled at the authenticated institution.'
+      });
       return;
     }
     res.json({ success: true, student });
@@ -3521,9 +3536,10 @@ app.get('/api/education/guardians/:id/children', authenticate, (req: Authenticat
     const currentUserId = String(req.user?.id || '').trim();
     const roles = req.user?.roles || [];
     const isGlobalAdmin = roles.some((r: string) => ['PLATFORM_ADMIN', 'BURSAR', 'FINANCE_ADMIN'].includes(r));
-    const isInstitutionAdmin = roles.includes('INSTITUTION_ADMIN');
+    const isInstitutionAdmin = !isGlobalAdmin && roles.includes('INSTITUTION_ADMIN');
     const ownsGuardian = Boolean(
       isGlobalAdmin ||
+      isInstitutionAdmin ||
       (currentUser && requestedGuardianId.toLowerCase() === currentUser.toLowerCase()) ||
       (currentUserId && requestedGuardianId === currentUserId) ||
       (req.user?.guardianId && requestedGuardianId.toLowerCase() === String(req.user.guardianId).toLowerCase())
@@ -3559,6 +3575,7 @@ app.get('/api/education/invoices', authenticate, (req: AuthenticatedRequest, res
     const isGlobalAdmin = roles.some((r: string) => ['PLATFORM_ADMIN', 'BURSAR', 'FINANCE_ADMIN'].includes(r));
     const requestedInstitution = institutionId ? String(institutionId) : undefined;
     const isInstitutionStaff = Boolean(
+      !isGlobalAdmin &&
       roles.includes('INSTITUTION_ADMIN') &&
       req.user?.institutionId &&
       (!requestedInstitution || req.user.institutionId === requestedInstitution)
@@ -3589,7 +3606,10 @@ app.get('/api/education/invoices', authenticate, (req: AuthenticatedRequest, res
 
     const filter: any = {};
     if (studentId) filter.studentId = String(studentId);
-    if (institutionId) filter.institutionId = String(institutionId);
+    // Institution staff must always be scoped to their authenticated institution,
+    // including when the client omits the institutionId query parameter.
+    if (isInstitutionStaff) filter.institutionId = String(req.user?.institutionId);
+    else if (institutionId) filter.institutionId = String(institutionId);
     if (status) filter.status = String(status);
     if (guardianId) filter.guardianId = String(guardianId);
 
@@ -3671,6 +3691,19 @@ app.post('/api/education/invoices/:id/apply-scholarship', authenticate, requireR
 // 5. Secure Pi School Fees Settlement & Digital Receipt Issuance (Phase 5 & 12 Remediation)
 app.post('/api/education/invoices/pay', paymentRateLimiter, authenticate, async (req: AuthenticatedRequest, res) => {
   try {
+    // Fail closed: DurableEducationStore and its atomic Neon settlement adapter exist,
+    // but the application still uses the legacy synchronous EducationRepository for
+    // invoice reads/writes. Do not accept Pi funds until legacy-data migration, durable
+    // repository integration, authoritative payment verification, and route-level tests
+    // are complete.
+    res.status(503).json({
+      success: false,
+      error: 'EDUCATION_DURABLE_SETTLEMENT_NOT_READY',
+      availability: 'UNAVAILABLE',
+      message: 'School-fee Pi settlement is temporarily unavailable while durable transaction storage is being completed. No payment has been accepted.'
+    });
+    return;
+
     const {
       invoiceId,
       amountPaid,
@@ -3942,59 +3975,100 @@ app.get('/api/education/invoices/:id/payments', authenticate, (req: Authenticate
 });
 
 // 6. Digital Receipt Verification (Tamper-Resistant Cryptographic Validation)
-app.get('/api/education/receipts/:receiptNumber/verify', receiptVerifyRateLimiter, (req, res) => {
+// Public verification is Neon-authoritative; legacy in-memory/Blob snapshots are never trusted.
+app.get('/api/education/receipts/:receiptNumber/verify', receiptVerifyRateLimiter, async (req, res) => {
   try {
     const { receiptNumber } = req.params;
-    const verification = educationRepo.verifyReceipt(receiptNumber);
-    if (!verification.found || !verification.receipt) {
+    const verification = await durableEducationStore.verifyReceipt(receiptNumber);
+    if (!verification.found) {
       res.status(404).json({
         success: false,
         status: 'NOT_FOUND',
         isAuthentic: false,
         error: 'RECEIPT_NOT_FOUND',
-        message: `No authentic education fee receipt matches reference "${receiptNumber}".`
+        message: `No verified educational fee record was found matching reference "${receiptNumber}". Please check the spelling or contact the issuing institution.`
+      });
+      return;
+    }
+
+    if (!verification.valid || !verification.receipt) {
+      res.status(200).json({
+        success: false,
+        status: 'TAMPERED',
+        isAuthentic: false,
+        algorithm: verification.algorithm,
+        error: 'RECEIPT_INTEGRITY_CHECK_FAILED',
+        message: 'The receipt record failed its integrity checks. Do not accept it as proof of payment.'
       });
       return;
     }
 
     res.json({
       success: true,
-      status: verification.status,
-      isAuthentic: verification.status === 'VERIFIED',
+      status: 'VERIFIED',
+      isAuthentic: true,
       algorithm: verification.algorithm,
       digest: verification.digest,
       receiptNumber: verification.receipt.receiptNumber,
       verificationReference: verification.receipt.verificationReference,
-      verificationHash: verification.receipt.verificationHash,
       institutionName: verification.receipt.institutionName,
       academicSession: verification.receipt.academicSession,
       termOrSemester: verification.receipt.termOrSemester,
       educationLevel: verification.receipt.educationLevel,
-      verifiedByServer: verification.receipt.verifiedByServer,
+      verifiedByServer: true,
       publicSummary: verification.receipt.publicSafeSummary
     });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: 'VERIFICATION_FAILED', message: err.message });
+    const unavailable = String(err?.message || '').includes('DURABLE_EDUCATION_STORAGE_UNAVAILABLE');
+    res.status(unavailable ? 503 : 500).json({
+      success: false,
+      error: unavailable ? 'DURABLE_EDUCATION_STORAGE_UNAVAILABLE' : 'VERIFICATION_FAILED',
+      message: unavailable ? 'Receipt verification is temporarily unavailable.' : 'Unable to verify this receipt right now.'
+    });
   }
 });
 
-app.get('/api/education/receipts/:receiptNumber', authenticate, (req: AuthenticatedRequest, res) => {
+app.get('/api/education/receipts/:receiptNumber', authenticate, async (req: AuthenticatedRequest, res) => {
   try {
-    const receipt = educationRepo.getReceiptByNumber(req.params.receiptNumber);
+    // Keep authenticated receipt retrieval on the same Neon-authoritative source
+    // as public cryptographic verification; never fall back to local snapshots.
+    const receipt = await durableEducationStore.getReceiptByNumber(req.params.receiptNumber);
     if (!receipt) {
       res.status(404).json({ success: false, error: 'RECEIPT_NOT_FOUND' });
       return;
     }
     const roles = req.user?.roles || [];
-    const isAdmin = roles.some((r: string) => ['PLATFORM_ADMIN', 'BURSAR', 'FINANCE_ADMIN', 'INSTITUTION_ADMIN'].includes(r));
-    const userRefs = [String(req.user?.id || ''), String(req.user?.username || ''), ''].map(v => v.trim().toLowerCase()).filter(Boolean);
-    if (!isAdmin && (!receipt.studentId || !userRefs.includes(receipt.studentId.trim().toLowerCase()))) {
+    const isGlobalAdmin = roles.some((r: string) =>
+      ['PLATFORM_ADMIN', 'COMPLIANCE_OFFICER', 'COMPLIANCE_ADMIN', 'BURSAR', 'FINANCE_ADMIN'].includes(r)
+    );
+    const isInstitutionAdmin = roles.includes('INSTITUTION_ADMIN');
+    const institutionId = String(req.user?.institutionId || '').trim();
+    if (
+      isInstitutionAdmin &&
+      !isGlobalAdmin &&
+      (!institutionId || institutionId !== String(receipt.institutionId || '').trim())
+    ) {
+      res.status(403).json({
+        success: false,
+        error: 'FORBIDDEN',
+        message: 'Institution administrator receipt access is limited to the authenticated institution.'
+      });
+      return;
+    }
+    const userRefs = [String(req.user?.id || ''), String(req.user?.username || '')].map(v => v.trim().toLowerCase()).filter(Boolean);
+    const isStudentOwner = Boolean(receipt.studentId && userRefs.includes(receipt.studentId.trim().toLowerCase()));
+    if (!isGlobalAdmin && !isInstitutionAdmin && !isStudentOwner) {
       res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Receipt access requires the authenticated student context.' });
       return;
     }
     res.json({ success: true, receipt });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: 'RECEIPT_FETCH_FAILED', message: 'Unable to retrieve receipt.' });
+    const unavailable = String(err?.message || '').includes('DURABLE_EDUCATION_STORAGE_UNAVAILABLE');
+    res.status(unavailable ? 503 : 500).json({
+      success: false,
+      error: unavailable ? 'DURABLE_EDUCATION_STORAGE_UNAVAILABLE' : 'RECEIPT_FETCH_FAILED',
+      message: unavailable ? 'Receipt retrieval is temporarily unavailable.' : 'Unable to retrieve receipt.'
+    });
   }
 });
 
@@ -4240,7 +4314,8 @@ app.post('/api/education/admissions/:id/status', authenticate, requireRole(['PLA
     }
 
     const updatedBy = req.user?.username || 'Admissions_Committee';
-    const updated = educationRepo.updateAdmissionStatus(id, status, reason, updatedBy);
+    // EducationRepository expects actor username before decision notes.
+    const updated = educationRepo.updateAdmissionStatus(id, status, updatedBy, reason);
 
     res.json({
       success: true,
@@ -4402,15 +4477,18 @@ app.post('/api/education/admin/institutions/:id/verify', async (req, res) => {
     // provider-backed verification result for this exact institution.
     if (authoritativeStatuses.has(requestedStatus)) {
       const providers = getNigeriaAuthoritativeProviderForCapability('INSTITUTION_REGISTRY');
-      const configuredProvider = providers.find((provider) => provider.integrationStatus === 'CONFIGURED');
+      const providerId = typeof req.body.providerId === 'string' ? req.body.providerId.trim() : '';
+      const configuredConnector = providerId
+        ? authoritativeEducationConnectorRegistry.resolve('NG', 'INSTITUTION_REGISTRY', providerId)
+        : null;
 
-      if (!configuredProvider) {
+      if (!configuredConnector?.isConfigured) {
         res.status(503).json({
           success: false,
           error: 'PROVIDER_INTEGRATION_REQUIRED',
           availability: 'UNAVAILABLE',
           provider: providers.map((provider) => provider.id),
-          message: 'Institution verification cannot be marked as authoritative until an authorized NUC/NBTE institution registry integration is configured.'
+          message: 'Select an explicitly authorized providerId with a configured institution-registry connector. No provider was guessed and no verification status was changed.'
         });
         return;
       }
@@ -4418,7 +4496,8 @@ app.post('/api/education/admin/institutions/:id/verify', async (req, res) => {
       const verification = await studentVerificationService.verifyInstitution(
         req.params.id,
         'NG',
-        typeof req.body.registryNumber === 'string' ? req.body.registryNumber : undefined
+        typeof req.body.registryNumber === 'string' ? req.body.registryNumber : undefined,
+        providerId
       );
 
       if (!verification.accredited) {
@@ -4438,7 +4517,10 @@ app.post('/api/education/admin/institutions/:id/verify', async (req, res) => {
       return;
     }
 
-    const updated = educationRepo.verifyInstitution(req.params.id, requestedStatus as any, notes);
+    const updated = educationRepo.verifyInstitution(req.params.id, requestedStatus as any, notes, {
+      username: auth.user?.username || 'system_admin',
+      role: auth.user?.roles?.[0] || 'PLATFORM_ADMIN'
+    });
     if (!updated) {
       res.status(404).json({ success: false, error: 'INSTITUTION_NOT_FOUND' });
       return;

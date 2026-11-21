@@ -17,33 +17,32 @@ let inMemoryServerToken: string | null = null;
 let tokenExpiresAt: number | null = null;
 let serverSessionPromise: Promise<string | null> | null = null;
 
+function isServerSessionToken(token: string | null | undefined): token is string {
+  return typeof token === 'string' && token.startsWith('pinova_sess_v2_');
+}
+
 export function getVendorAuthToken(): string | null {
   try {
-    // 1. Check in-memory server session token if still valid
-    if (inMemoryServerToken && (!tokenExpiresAt || Date.now() < tokenExpiresAt)) {
+    // Only accept the signed, server-issued session format. Older storage keys
+    // may contain raw Pi access tokens and must never be treated as app sessions.
+    if (isServerSessionToken(inMemoryServerToken) &&
+        (!tokenExpiresAt || Date.now() < tokenExpiresAt)) {
       return inMemoryServerToken;
     }
 
     if (typeof window !== 'undefined' && window.localStorage) {
-      // 2. Check storage for established server auth_token
-      const token =
-        localStorage.getItem('auth_token') ||
-        localStorage.getItem('pi_auth_token') ||
-        localStorage.getItem('pinova_token') ||
-        localStorage.getItem('pinova_access_token');
-      if (token && token.trim()) {
-        inMemoryServerToken = token.trim();
-        return token.trim();
+      const token = localStorage.getItem('auth_token');
+      if (isServerSessionToken(token)) {
+        inMemoryServerToken = token;
+        return token;
       }
 
-      // 3. Check sessionStorage
-      const sessionToken = sessionStorage.getItem('auth_token') || sessionStorage.getItem('pi_auth_token');
-      if (sessionToken && sessionToken.trim()) return sessionToken.trim();
+      const sessionToken = sessionStorage.getItem('auth_token');
+      if (isServerSessionToken(sessionToken)) return sessionToken;
     }
   } catch {
     // Ignore storage errors in restricted contexts
   }
-  // Rule 8: NEVER substitute raw Pi access token as the protected vendor authorization credential.
   return null;
 }
 
@@ -68,15 +67,20 @@ export function getVendorUsername(): string | null {
 }
 
 export function syncVendorAuth(token?: string | null, username?: string | null, expiresAt?: number | null): void {
-  if (token) {
+  if (isServerSessionToken(token)) {
     inMemoryServerToken = token;
     tokenExpiresAt = expiresAt || null;
   }
   if (typeof window === 'undefined' || !window.localStorage) return;
   try {
-    if (token) {
+    if (isServerSessionToken(token)) {
       localStorage.setItem('auth_token', token);
-      localStorage.setItem('pi_auth_token', token);
+      // Do not mirror server sessions into legacy Pi-token storage keys.
+      localStorage.removeItem('pi_auth_token');
+      localStorage.removeItem('pinova_token');
+      localStorage.removeItem('pinova_access_token');
+      sessionStorage.setItem('auth_token', token);
+      sessionStorage.removeItem('pi_auth_token');
     }
     if (username) {
       localStorage.setItem('pinova_pioneer_username', username);

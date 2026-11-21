@@ -897,8 +897,7 @@ export function isPiBrowser(): boolean {
     );
 
   const hasUrlParam =
-    /pi_browser=1|pi_browser=true|env=pi/i.test(
-      window.location.search
+    /pi_browser=1|pi_browser=true|env=pi/i.test(      window.location.search
     );
 
   let embeddedInPi = false;
@@ -1027,6 +1026,10 @@ export function getPiRuntimePreflight(): PiRuntimePreflightResult {
     domainInfo.classification ===
       'OFFICIAL_REGISTERED_DOMAIN';
 
+  const isUnregisteredPreviewOrigin =
+    domainInfo.classification === 'VERCEL_PREVIEW_ORIGIN' &&
+    !originMatches;
+
   const isExternal =
     isExternalBrowserNonPi();
 
@@ -1036,7 +1039,15 @@ export function getPiRuntimePreflight(): PiRuntimePreflightResult {
     | PiDiagnosticCategory
     | undefined;
 
-  if (
+  if (isUnregisteredPreviewOrigin) {
+    canAttemptAuth = false;
+
+    failReason =
+      'Pi authentication is blocked on this Vercel Preview URL because it is not confirmed as an authorized Pi app origin. Use https://iddsnn.com for Pi authentication, or register this exact Preview URL as the Development URL in the Pi Developer Portal before testing.';
+
+    category =
+      'ENVIRONMENT_CONFIGURATION_INVALID';
+  } else if (
     isExternal ||
     (
       !inPiBrowser &&
@@ -1797,8 +1808,7 @@ export class PiSdkManagerService {
       bridgeReadinessTelemetry:
         this.getBridgeReadinessTelemetry(),
 
-      bridgeEvents:
-        [...this.bridgeEvents],
+      bridgeEvents:        [...this.bridgeEvents],
 
       piAuthenticationState:
         authStateSummary,
@@ -2503,10 +2513,7 @@ export class PiSdkManagerService {
      * STEP 0 — Runtime preflight
      * ------------------------------------------------------------
      */
-    if (
-      !preflight.canAttemptAuth &&
-      preflight.category === 'CATEGORY_C_BROWSER_BRIDGE_UNAVAILABLE'
-    ) {
+    if (!preflight.canAttemptAuth) {
       this.sdkLoaded = false;
       this.sdkInitialized = false;
       this.authenticated = false;
@@ -2522,7 +2529,8 @@ export class PiSdkManagerService {
       this.nativeBridgeState = 'idle';
 
       this.authenticationError =
-        'Pi Network SDK is unavailable. Please open PiNova Global Hub in the official Pi Browser.';
+        preflight.failReason ||
+        'Pi authentication is unavailable in the current browser or origin.';
 
       this.authRejectionTimeMs = 0;
 
@@ -2697,8 +2705,7 @@ export class PiSdkManagerService {
           throw new Error(this.authenticationError);
         }
 
-        /*
-         * --------------------------------------------------------
+        /*         * --------------------------------------------------------
          * STEP 6 — Verify authenticate API
          * --------------------------------------------------------
          */
@@ -3598,7 +3605,6 @@ export class PiSdkManagerService {
       params.onStatusUpdate?.(
         'Creating Pi payment...'
       );
-
       this.notifyDiagnosticStateChange();
 
       const result =
@@ -3850,16 +3856,16 @@ export class PiSdkManagerService {
                         const metadata = params.metadata || {};
                         const normalizedCategory = String(metadata.category || '').trim().toLowerCase();
                         const requiresUtilityFulfillment = ['airtime', 'mobile_data', 'data'].includes(normalizedCategory);
-                        let fulfillmentStatus: 'FULFILLED' | 'FULFILLMENT_PENDING' = requiresUtilityFulfillment
-                          ? 'FULFILLMENT_PENDING'
-                          : 'FULFILLED';
+                        // Payment completion alone never proves that the utility provider fulfilled the service.
+                        // Only the dedicated provider workflow below may promote this to FULFILLED.
+                        let fulfillmentStatus: 'FULFILLED' | 'FULFILLMENT_PENDING' = 'FULFILLMENT_PENDING';
                         let resultData: any = {
                           ...data,
                           transactionId: data.transactionId || paymentId,
                           paymentId,
                           txid
                         };
-                        let resultMessage = 'Pi payment completed and verified successfully.';
+                        let resultMessage = 'Pi payment completed and server-verified. Provider fulfillment is pending confirmation.';
 
                         if (requiresUtilityFulfillment) {
                           try {
