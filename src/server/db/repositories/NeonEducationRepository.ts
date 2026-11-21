@@ -1,4 +1,5 @@
 import { getNeonSql } from '../NeonDatabase';
+import { normalizeCountryCode } from '../../../data/countrySubdivisions';
 import type {
   InstitutionProfile,
   StudentIdentity,
@@ -79,8 +80,9 @@ export class NeonEducationRepository {
   } = {}): Promise<InstitutionProfile[]> {
     const limit = Math.min(100, Math.max(1, Math.trunc(filter.limit ?? 50)));
     const offset = Math.max(0, Math.trunc(filter.offset ?? 0));
-    const countryCode = filter.countryCode?.trim().toUpperCase() || null;
-    const state = filter.state?.trim() || null;
+    const normalizedCountry = normalizeCountryCode(filter.countryCode);
+    const countryCode = normalizedCountry && normalizedCountry !== 'ALL' ? normalizedCountry : null;
+    const state = filter.state?.trim() && filter.state.trim().toLowerCase() !== 'all' ? filter.state.trim() : null;
     const tier = filter.tier?.trim() && filter.tier !== 'all' ? filter.tier.trim() : null;
     const institutionType = filter.institutionType?.trim() && filter.institutionType !== 'all'
       ? filter.institutionType.trim()
@@ -106,6 +108,7 @@ export class NeonEducationRepository {
           OR data->>'legalName' ILIKE '%' || ${search} || '%'
           OR data->>'institutionCode' ILIKE '%' || ${search} || '%'
           OR data->>'city' ILIKE '%' || ${search} || '%'
+          OR data->>'state' ILIKE '%' || ${search} || '%'
         )
       ORDER BY data->>'name' ASC, id ASC
       LIMIT ${limit} OFFSET ${offset}
