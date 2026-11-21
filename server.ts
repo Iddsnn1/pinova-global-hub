@@ -3496,7 +3496,7 @@ app.get('/api/education/students/:id', authenticate, (req: AuthenticatedRequest,
       res.status(404).json({ success: false, error: 'STUDENT_NOT_FOUND' });
       return;
     }
-    if (isInstitutionAdmin && (!req.user?.institutionId || String(student.institutionId || '') !== String(req.user.institutionId))) {
+    if (isInstitutionAdmin && (!req.user?.institutionId || String(student.currentInstitutionId || '') !== String(req.user.institutionId))) {
       res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Institution administrator student access is limited to the authenticated institution.' });
       return;
     }
