@@ -53,7 +53,7 @@ async function run() {
 
     {
       globalThis.fetch = (async () => new Response(JSON.stringify({
-        success: true, count: 3, institutions: [{ id: 'inst-1' }],
+        success: true, count: 2, institutions: [{ id: 'inst-1' }],
         pagination: { limit: 50, offset: 0, total: 3, hasMore: true }
       }), { status: 200, headers: { 'Content-Type': 'application/json' } })) as typeof fetch;
       await assert.rejects(
