@@ -47,11 +47,18 @@ export class StorageEngine<T extends { id?: string; [key: string]: any }> {
         if (!Array.isArray(parsed)) {
           throw new Error('Existing collection file must contain a JSON array');
         }
-        for (const item of parsed) {
-          const key = String(item[this.primaryKey] || item.id || '');
-          if (key) {
-            this.cache.set(key, item);
+        for (const [index, item] of parsed.entries()) {
+          if (item === null || typeof item !== 'object' || Array.isArray(item)) {
+            throw new Error(`Existing collection record at index ${index} must be a JSON object`);
           }
+          const key = String(item[this.primaryKey] || item.id || '');
+          if (!key) {
+            throw new Error(`Existing collection record at index ${index} has no usable primary key`);
+          }
+          if (this.cache.has(key)) {
+            throw new Error(`Existing collection contains duplicate primary key "${key}"`);
+          }
+          this.cache.set(key, item);
         }
       } else {
         // First-time seed load
