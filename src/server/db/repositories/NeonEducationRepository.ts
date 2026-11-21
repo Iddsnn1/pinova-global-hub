@@ -68,7 +68,10 @@ export class NeonEducationRepository {
 
   public async listInstitutions(filter: {
     countryCode?: string;
+    state?: string;
+    tier?: string;
     institutionType?: string;
+    isPublic?: boolean;
     verificationStatus?: string;
     search?: string;
     limit?: number;
@@ -77,15 +80,25 @@ export class NeonEducationRepository {
     const limit = Math.min(100, Math.max(1, Math.trunc(filter.limit ?? 50)));
     const offset = Math.max(0, Math.trunc(filter.offset ?? 0));
     const countryCode = filter.countryCode?.trim().toUpperCase() || null;
-    const institutionType = filter.institutionType?.trim() || null;
-    const verificationStatus = filter.verificationStatus?.trim() || null;
+    const state = filter.state?.trim() || null;
+    const tier = filter.tier?.trim() && filter.tier !== 'all' ? filter.tier.trim() : null;
+    const institutionType = filter.institutionType?.trim() && filter.institutionType !== 'all'
+      ? filter.institutionType.trim()
+      : null;
+    const isPublic = filter.isPublic === undefined ? null : String(filter.isPublic);
+    const verificationStatus = filter.verificationStatus?.trim() && filter.verificationStatus !== 'ALL'
+      ? filter.verificationStatus.trim()
+      : null;
     const search = filter.search?.trim() || null;
 
     const rows = this.toRows<JsonRow>(await this.sql`
       SELECT data
       FROM education_institutions
       WHERE (${countryCode}::text IS NULL OR upper(country_code) = ${countryCode})
+        AND (${state}::text IS NULL OR lower(data->>'state') = lower(${state}))
+        AND (${tier}::text IS NULL OR COALESCE(data->'supportedTiers', '[]'::jsonb) ? ${tier})
         AND (${institutionType}::text IS NULL OR institution_type = ${institutionType})
+        AND (${isPublic}::text IS NULL OR lower(data->>'isPublic') = lower(${isPublic}))
         AND (${verificationStatus}::text IS NULL OR verification_status = ${verificationStatus})
         AND (
           ${search}::text IS NULL
@@ -107,6 +120,31 @@ export class NeonEducationRepository {
       SELECT data FROM education_institutions WHERE id = ${key} LIMIT 1
     `);
     return this.decode<InstitutionProfile>(rows[0]);
+  }
+
+  /**
+   * Admission lookup must be scoped to either the owning institution or the
+   * authenticated applicant. An ID alone is never sufficient for a tenant read.
+   */
+  public async getAdmissionById(
+    id: string,
+    scope: { institutionId?: string; applicantEmail?: string }
+  ): Promise<AdmissionApplication | null> {
+    const key = id.trim();
+    const institutionId = scope.institutionId?.trim() || null;
+    const applicantEmail = scope.applicantEmail?.trim().toLowerCase() || null;
+    if (!key || (!institutionId && !applicantEmail)) return null;
+    const rows = this.toRows<JsonRow>(await this.sql`
+      SELECT data FROM education_admissions
+      WHERE id = ${key}
+        AND (
+          (${institutionId}::text IS NOT NULL AND institution_id = ${institutionId})
+          OR
+          (${applicantEmail}::text IS NOT NULL AND lower(applicant_email) = ${applicantEmail})
+        )
+      LIMIT 1
+    `);
+    return this.decode<AdmissionApplication>(rows[0]);
   }
 
   /** Student lookup is institution-scoped to prevent cross-school IDOR. */
