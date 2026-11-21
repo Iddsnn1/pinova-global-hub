@@ -3575,6 +3575,7 @@ app.get('/api/education/invoices', authenticate, (req: AuthenticatedRequest, res
     const isGlobalAdmin = roles.some((r: string) => ['PLATFORM_ADMIN', 'BURSAR', 'FINANCE_ADMIN'].includes(r));
     const requestedInstitution = institutionId ? String(institutionId) : undefined;
     const isInstitutionStaff = Boolean(
+      !isGlobalAdmin &&
       roles.includes('INSTITUTION_ADMIN') &&
       req.user?.institutionId &&
       (!requestedInstitution || req.user.institutionId === requestedInstitution)
