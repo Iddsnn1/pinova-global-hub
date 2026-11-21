@@ -133,7 +133,9 @@ export class NeonEducationRepository {
     const key = id.trim();
     const institutionId = scope.institutionId?.trim() || null;
     const applicantEmail = scope.applicantEmail?.trim().toLowerCase() || null;
-    if (!key || (!institutionId && !applicantEmail)) return null;
+    // Do not combine tenant and applicant scopes: the OR predicate would
+    // widen access beyond either caller's intended authorization boundary.
+    if (!key || Boolean(institutionId) === Boolean(applicantEmail)) return null;
     const rows = this.toRows<JsonRow>(await this.sql`
       SELECT data FROM education_admissions
       WHERE id = ${key}
