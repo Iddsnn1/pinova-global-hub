@@ -14,6 +14,8 @@ assert.match(source, /PINOVA_DATA_DIR/);
 assert.match(source, /createHash\('sha256'\)/);
 assert.match(source, /duplicateKeys/);
 assert.match(source, /missingKeys/);
+assert.match(source, /invalidRecordShapes/);
+assert.match(source, /One or more array entries are not JSON objects; source left untouched/);
 assert.match(source, /INVALID_JSON/);
 assert.match(source, /INVALID_SHAPE/);
 assert.match(source, /readOnly: true/);
