@@ -161,6 +161,56 @@ export class NeonEducationRepository {
     return rows.map((row) => this.decode<InstitutionProfile>(row)).filter((item): item is InstitutionProfile => item !== null);
   }
 
+  /** Count all matching institutions independently of the bounded page size. */
+  public async countInstitutions(filter: {
+    countryCode?: string;
+    country?: string;
+    state?: string;
+    tier?: string;
+    institutionType?: string;
+    isPublic?: boolean;
+    verificationStatus?: string;
+    search?: string;
+  } = {}): Promise<number> {
+    const normalizedCountry = normalizeCountryCode(filter.countryCode || filter.country);
+    const countryCode = normalizedCountry && normalizedCountry !== 'ALL' ? normalizedCountry : null;
+    const state = filter.state?.trim() && filter.state.trim().toLowerCase() !== 'all' ? filter.state.trim() : null;
+    const stateAliases = state ? getSubdivisionAliases(countryCode ?? undefined, state) : null;
+    const tier = filter.tier?.trim() && filter.tier !== 'all' ? filter.tier.trim() : null;
+    const institutionType = filter.institutionType?.trim() && filter.institutionType !== 'all'
+      ? filter.institutionType.trim()
+      : null;
+    const isPublic = filter.isPublic === undefined ? null : String(filter.isPublic);
+    const verificationStatus = filter.verificationStatus?.trim() && filter.verificationStatus !== 'ALL'
+      ? filter.verificationStatus.trim()
+      : null;
+    const search = filter.search?.trim() || null;
+
+    const rows = this.toRows<{ count: string | number }>(await this.sql`
+      SELECT COUNT(*)::bigint AS count
+      FROM education_institutions
+      WHERE (${countryCode}::text IS NULL OR upper(country_code) = ${countryCode})
+        AND (${stateAliases}::text[] IS NULL OR lower(data->>'state') = ANY(${stateAliases}::text[]))
+        AND (${tier}::text IS NULL OR COALESCE(data->'supportedTiers', '[]'::jsonb) ? ${tier})
+        AND (${institutionType}::text IS NULL OR institution_type = ${institutionType})
+        AND (${isPublic}::text IS NULL OR lower(data->>'isPublic') = lower(${isPublic}))
+        AND (${verificationStatus}::text IS NULL OR verification_status = ${verificationStatus})
+        AND (
+          ${search}::text IS NULL
+          OR data->>'name' ILIKE '%' || ${search} || '%'
+          OR data->>'legalName' ILIKE '%' || ${search} || '%'
+          OR data->>'institutionCode' ILIKE '%' || ${search} || '%'
+          OR data->>'city' ILIKE '%' || ${search} || '%'
+          OR data->>'state' ILIKE '%' || ${search} || '%'
+        )
+    `);
+    const count = Number(rows[0]?.count);
+    if (!Number.isSafeInteger(count) || count < 0) {
+      throw new Error('EDUCATION_NEON_COUNT_INVALID');
+    }
+    return count;
+  }
+
   public async getInstitutionById(id: string): Promise<InstitutionProfile | null> {
     const key = id.trim();
     if (!key) return null;
