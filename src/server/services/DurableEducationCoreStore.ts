@@ -148,7 +148,9 @@ export class DurableEducationCoreStore {
     this.assertReady();
     const sql = getNeonSql();
     const institution = clean(filter?.institutionId) || null;
-    const status = clean(filter?.status) || null;
+    const rawStatus = clean(filter?.status);
+    // Match the legacy repository's ALL sentinel: it means no status filter.
+    const status = rawStatus && rawStatus.toUpperCase() !== 'ALL' ? rawStatus : null;
     const email = clean(filter?.applicantEmail).toLowerCase() || null;
     const rows = await sql`SELECT data FROM education_admissions
       WHERE (${institution}::text IS NULL OR institution_id = ${institution})
