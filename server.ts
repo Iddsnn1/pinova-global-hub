@@ -3500,7 +3500,7 @@ app.get('/api/education/students/:id', authenticate, (req: AuthenticatedRequest,
     const isInstitutionAdmin = roles.includes('INSTITUTION_ADMIN');
     if (
       isInstitutionAdmin &&
-      (!req.user?.institutionId || req.user.institutionId !== student.institutionId)
+      (!req.user?.institutionId || req.user.institutionId !== student.currentInstitutionId)
     ) {
       res.status(403).json({
         success: false,
