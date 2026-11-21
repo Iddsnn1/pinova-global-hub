@@ -53,8 +53,27 @@ export const ParentDashboard: React.FC<ParentDashboardProps> = ({ onPayForChild 
     }
   };
 
-  const totalFamilyOutstanding = children.reduce((sum, c) => sum + c.outstandingBalanceFiat, 0);
-  const totalFamilyPaid = children.reduce((sum, c) => sum + c.totalPaidFiat, 0);
+  // Never add balances across currencies: each institution's invoice currency is authoritative.
+  const normalizeCurrency = (value?: string) => String(value || '').trim().toUpperCase() || 'UNKNOWN';
+  const formatMoney = (amount: number, currency?: string) => {
+    const code = normalizeCurrency(currency);
+    const safeAmount = Number.isFinite(amount) ? amount : 0;
+    if (code === 'PI') return `π ${safeAmount.toFixed(2)}`;
+    try {
+      return new Intl.NumberFormat(undefined, { style: 'currency', currency: code }).format(safeAmount);
+    } catch {
+      return `${code} ${safeAmount.toFixed(2)}`;
+    }
+  };
+  const familyTotalsByCurrency = children.reduce<Record<string, { paid: number; outstanding: number }>>((totals, child) => {
+    const currency = normalizeCurrency(child.currency);
+    const current = totals[currency] || { paid: 0, outstanding: 0 };
+    current.paid += Number.isFinite(child.totalPaidFiat) ? child.totalPaidFiat : 0;
+    current.outstanding += Number.isFinite(child.outstandingBalanceFiat) ? child.outstandingBalanceFiat : 0;
+    totals[currency] = current;
+    return totals;
+  }, {});
+  const familyCurrencyTotals = Object.entries(familyTotalsByCurrency).sort(([a], [b]) => a.localeCompare(b));
 
   const tierBadgeLabels: Record<string, string> = {
     early_childhood: 'Early Years / Nursery',
@@ -83,21 +102,19 @@ export const ParentDashboard: React.FC<ParentDashboardProps> = ({ onPayForChild 
           </div>
 
           {/* Quick Metrics */}
-          <div className="flex gap-3 bg-slate-950 p-3 rounded-xl border border-slate-800 text-xs">
-            <div>
+          <div className="flex flex-wrap gap-3 bg-slate-950 p-3 rounded-xl border border-slate-800 text-xs">
+            <div className="min-w-[100px]">
               <span className="text-slate-400 block mb-0.5">Learners Enrolled</span>
               <span className="text-base font-bold text-white">{children.length} Children</span>
             </div>
-            <div className="h-8 w-px bg-slate-800" />
-            <div>
-              <span className="text-slate-400 block mb-0.5">Total Settled</span>
-              <span className="text-base font-bold text-emerald-400">${totalFamilyPaid.toFixed(2)}</span>
-            </div>
-            <div className="h-8 w-px bg-slate-800" />
-            <div>
-              <span className="text-slate-400 block mb-0.5">Outstanding Balance</span>
-              <span className="text-base font-bold text-amber-400">${totalFamilyOutstanding.toFixed(2)}</span>
-            </div>
+            {familyCurrencyTotals.map(([currency, totals]) => (
+              <div key={currency} className="border-l border-slate-800 pl-3">
+                <span className="text-slate-400 block mb-0.5">Settled ({currency})</span>
+                <span className="text-base font-bold text-emerald-400">{formatMoney(totals.paid, currency)}</span>
+                <span className="text-slate-400 block mt-1 mb-0.5">Outstanding ({currency})</span>
+                <span className="text-base font-bold text-amber-400">{formatMoney(totals.outstanding, currency)}</span>
+              </div>
+            ))}
           </div>
         </div>
       </div>
@@ -164,7 +181,7 @@ export const ParentDashboard: React.FC<ParentDashboardProps> = ({ onPayForChild 
                   <div>
                     <span className="text-slate-500 text-[10px] block">Billed / Paid</span>
                     <span className="text-slate-200 font-medium text-[11px] block">
-                      ${child.totalBilledFiat} / <span className="text-emerald-400">${child.totalPaidFiat}</span>
+                      {formatMoney(child.totalBilledFiat, child.currency)} / <span className="text-emerald-400">{formatMoney(child.totalPaidFiat, child.currency)}</span>
                     </span>
                     <span className="text-slate-500 text-[10px] block">{child.activeInvoiceCount} Active Invoice</span>
                   </div>
@@ -176,7 +193,7 @@ export const ParentDashboard: React.FC<ParentDashboardProps> = ({ onPayForChild 
                         hasBalance ? 'text-amber-400' : 'text-slate-400'
                       }`}
                     >
-                      ${child.outstandingBalanceFiat.toFixed(2)}
+                      {formatMoney(child.outstandingBalanceFiat, child.currency)}
                     </span>
                     {child.nextDueDate && (
                       <span className="text-[10px] text-slate-500 block">Due: {child.nextDueDate}</span>
@@ -201,7 +218,7 @@ export const ParentDashboard: React.FC<ParentDashboardProps> = ({ onPayForChild 
                       onClick={() => onPayForChild && onPayForChild(child)}
                       className="flex-1 py-2 px-3 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold rounded-xl transition shadow-md shadow-amber-500/10 flex items-center justify-center gap-1.5"
                     >
-                      <span>Pay Fees (${child.outstandingBalanceFiat.toFixed(2)})</span>
+                      <span>Pay Fees ({formatMoney(child.outstandingBalanceFiat, child.currency)})</span>
                       <ChevronRight className="w-3.5 h-3.5" />
                     </button>
                   ) : (
