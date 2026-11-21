@@ -38,6 +38,26 @@ try {
   assert.equal(fs.readFileSync(emptyPath, 'utf8'), '',
     'empty existing source must remain unchanged');
 
+  const missingKeyPath = path.join(tempDir, 'missing_key_collection.json');
+  const missingKeyContents = '[{"id":"valid-record"},{"name":"record-without-key"}]';
+  fs.writeFileSync(missingKeyPath, missingKeyContents, 'utf8');
+  assert.throws(
+    () => new StorageEngine('missing_key_collection', 'id', [{ id: 'seed-record' }]),
+    /Refusing to overwrite existing data file/
+  );
+  assert.equal(fs.readFileSync(missingKeyPath, 'utf8'), missingKeyContents,
+    'records without keys must not be silently dropped from the source');
+
+  const duplicateKeyPath = path.join(tempDir, 'duplicate_key_collection.json');
+  const duplicateKeyContents = '[{"id":"duplicate"},{"id":"duplicate"}]';
+  fs.writeFileSync(duplicateKeyPath, duplicateKeyContents, 'utf8');
+  assert.throws(
+    () => new StorageEngine('duplicate_key_collection', 'id', [{ id: 'seed-record' }]),
+    /Refusing to overwrite existing data file/
+  );
+  assert.equal(fs.readFileSync(duplicateKeyPath, 'utf8'), duplicateKeyContents,
+    'duplicate keys must not silently collapse distinct source records');
+
   const seeded = new StorageEngine('new_collection', 'id', [{ id: 'seed-record' }]);
   assert.equal(seeded.get('seed-record')?.id, 'seed-record',
     'first-time initialization must still seed a genuinely missing collection');
