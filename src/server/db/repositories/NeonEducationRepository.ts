@@ -7,6 +7,7 @@ import type {
 } from '../../../types/education';
 
 type Sql = ReturnType<typeof getNeonSql>;
+type QueryResult = Awaited<ReturnType<Sql>>;
 type JsonRow = { data: unknown };
 
 /**
@@ -21,14 +22,36 @@ export class NeonEducationRepository {
     this.sql = sql;
   }
 
+  /**
+   * Neon exposes row arrays in its default mode, while its public result type
+   * also permits FullQueryResults. Normalize both shapes at this boundary.
+   */
+  private toRows<T>(result: QueryResult): T[] {
+    if (Array.isArray(result)) return result as T[];
+    if (
+      result &&
+      typeof result === 'object' &&
+      'rows' in result &&
+      Array.isArray(result.rows)
+    ) {
+      return result.rows as T[];
+    }
+    throw new Error('EDUCATION_NEON_QUERY_RESULT_INVALID');
+  }
+
   public async assertSchemaReady(): Promise<void> {
-    const rows = await this.sql`
+    const rows = this.toRows<{
+      institutions: string | null;
+      students: string | null;
+      invoices: string | null;
+      admissions: string | null;
+    }>(await this.sql`
       SELECT
         to_regclass('public.education_institutions') AS institutions,
         to_regclass('public.education_students') AS students,
         to_regclass('public.education_invoices') AS invoices,
         to_regclass('public.education_admissions') AS admissions
-    `;
+    `);
     const row = rows[0];
     if (!row?.institutions || !row?.students || !row?.invoices || !row?.admissions) {
       throw new Error('EDUCATION_NEON_SCHEMA_NOT_READY');
@@ -58,7 +81,7 @@ export class NeonEducationRepository {
     const verificationStatus = filter.verificationStatus?.trim() || null;
     const search = filter.search?.trim() || null;
 
-    const rows = await this.sql`
+    const rows = this.toRows<JsonRow>(await this.sql`
       SELECT data
       FROM education_institutions
       WHERE (${countryCode}::text IS NULL OR upper(country_code) = ${countryCode})
@@ -73,16 +96,16 @@ export class NeonEducationRepository {
         )
       ORDER BY data->>'name' ASC, id ASC
       LIMIT ${limit} OFFSET ${offset}
-    `;
+    `);
     return rows.map((row) => this.decode<InstitutionProfile>(row)).filter((item): item is InstitutionProfile => item !== null);
   }
 
   public async getInstitutionById(id: string): Promise<InstitutionProfile | null> {
     const key = id.trim();
     if (!key) return null;
-    const rows = await this.sql`
+    const rows = this.toRows<JsonRow>(await this.sql`
       SELECT data FROM education_institutions WHERE id = ${key} LIMIT 1
-    `;
+    `);
     return this.decode<InstitutionProfile>(rows[0]);
   }
 
@@ -91,11 +114,11 @@ export class NeonEducationRepository {
     const key = id.trim();
     const tenant = institutionId.trim();
     if (!key || !tenant) return null;
-    const rows = await this.sql`
+    const rows = this.toRows<JsonRow>(await this.sql`
       SELECT data FROM education_students
       WHERE id = ${key} AND institution_id = ${tenant}
       LIMIT 1
-    `;
+    `);
     return this.decode<StudentIdentity>(rows[0]);
   }
 
@@ -104,11 +127,11 @@ export class NeonEducationRepository {
     const key = id.trim();
     const tenant = institutionId.trim();
     if (!key || !tenant) return null;
-    const rows = await this.sql`
+    const rows = this.toRows<JsonRow>(await this.sql`
       SELECT data FROM education_invoices
       WHERE id = ${key} AND institution_id = ${tenant}
       LIMIT 1
-    `;
+    `);
     return this.decode<EducationInvoice>(rows[0]);
   }
 
@@ -125,14 +148,14 @@ export class NeonEducationRepository {
     const status = filter.status?.trim() || null;
     const limit = Math.min(100, Math.max(1, Math.trunc(filter.limit ?? 50)));
     const offset = Math.max(0, Math.trunc(filter.offset ?? 0));
-    const rows = await this.sql`
+    const rows = this.toRows<JsonRow>(await this.sql`
       SELECT data FROM education_invoices
       WHERE institution_id = ${institutionId}
         AND (${studentId}::text IS NULL OR student_id = ${studentId})
         AND (${status}::text IS NULL OR ${status} = 'ALL' OR status = ${status})
       ORDER BY created_at DESC, id DESC
       LIMIT ${limit} OFFSET ${offset}
-    `;
+    `);
     return rows.map((row) => this.decode<EducationInvoice>(row)).filter((item): item is EducationInvoice => item !== null);
   }
 
@@ -149,14 +172,14 @@ export class NeonEducationRepository {
     const applicantEmail = filter.applicantEmail?.trim().toLowerCase() || null;
     const limit = Math.min(100, Math.max(1, Math.trunc(filter.limit ?? 50)));
     const offset = Math.max(0, Math.trunc(filter.offset ?? 0));
-    const rows = await this.sql`
+    const rows = this.toRows<JsonRow>(await this.sql`
       SELECT data FROM education_admissions
       WHERE institution_id = ${institutionId}
         AND (${status}::text IS NULL OR ${status} = 'ALL' OR status = ${status})
         AND (${applicantEmail}::text IS NULL OR lower(applicant_email) = ${applicantEmail})
       ORDER BY created_at DESC, id DESC
       LIMIT ${limit} OFFSET ${offset}
-    `;
+    `);
     return rows.map((row) => this.decode<AdmissionApplication>(row)).filter((item): item is AdmissionApplication => item !== null);
   }
 }
