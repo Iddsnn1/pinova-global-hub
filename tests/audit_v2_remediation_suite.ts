@@ -147,6 +147,12 @@ async function runTestSuite() {
   assert(!serverSource.includes('const scopedChildren =') && !serverSource.includes('getGuardianChildrenSummaries(requestedGuardianId)'), 'Scenario 1.16e: Guardian endpoint does not broad-fetch then filter legacy children');
   assert(serverSource.includes('Only the authenticated applicant may accept this admission offer.') && serverSource.includes('if (!isOwner)') && serverSource.includes('/api/education/admissions/:id/offer/accept'), 'Scenario 1.17: Admission offer acceptance requires authenticated applicant consent and rejects admin impersonation');
   assert(serverSource.includes('req.user.institutionId !== admissionForAuthorization.institutionId') && serverSource.includes('/api/education/admissions/:id/status'), 'Scenario 1.18: Admission status mutation enforces institution scope');
+  const neonEducationRepositorySource = await import('fs/promises').then((fs) => fs.readFile(path.join(process.cwd(), 'src/server/db/repositories/NeonEducationRepository.ts'), 'utf8'));
+  assert(serverSource.includes('EDUCATION_STUDENT_ADMISSIONS_NEON_READ_ENABLED') && serverSource.includes('new NeonEducationRepository().getStudentById(requestedId, institutionId)'), 'Scenario 1.19: Student reads are Preview-flagged and institution-scoped in Neon');
+  assert(serverSource.includes('EDUCATION_ADMISSIONS_NEON_READ_DISABLED') && serverSource.includes('new NeonEducationRepository().listAdmissions('), 'Scenario 1.20: Admissions reads use Neon behind a fail-closed Preview flag');
+  assert(serverSource.includes('scope = { applicantEmail: currentUsername }') && serverSource.includes('scope = { institutionId: ownInstitution }'), 'Scenario 1.21: Applicant and institution-admin admission reads derive scope from authenticated identity');
+  assert(neonEducationRepositorySource.includes('EDUCATION_ADMISSION_SCOPE_REQUIRED') && neonEducationRepositorySource.includes('lower(applicant_email) = ${applicantEmail}') && neonEducationRepositorySource.includes('institution_id = ${institutionId}'), 'Scenario 1.22: Neon admissions SQL requires exactly one trusted tenant or applicant scope');
+  assert(!serverSource.includes('const student = educationRepo.getStudentById(requestedId)') && !serverSource.includes('const list = educationRepo.getAdmissions(filter)'), 'Scenario 1.23: Student and admissions read routes no longer use legacy file-backed repository reads');
 
   // --- 2. PSTP DISPUTE RESOLUTION & SECURITY ---
   console.log('\n--- SECTION 2: PSTP DISPUTE SECURITY & STATE MACHINE AUDIT ---');
