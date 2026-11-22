@@ -40,6 +40,8 @@ import { StudentVerificationService } from './src/server/services/StudentVerific
 import { getNigeriaAuthoritativeProviderForCapability } from './src/server/services/AuthoritativeEducationProviderRegistry';
 import { verifyJambCapsAuthorization } from './src/server/services/JambCapsAuthorizationService';
 import { EducationRepository } from './src/server/db/repositories/EducationRepository';
+import { NeonEducationRepository } from './src/server/db/repositories/NeonEducationRepository';
+import { createEducationDirectoryV2Handler } from './src/server/routes/educationDirectoryV2';
 import { ProductRepository } from './src/server/db/repositories/ProductRepository';
 import { durableProductStorageEnabled, getDurableProduct, listDurableProducts, saveDurableProduct, updateDurableProductAvailability, reserveDurableProductStockBatch, softDeleteDurableProduct, deleteDurableProductBlob } from './src/server/services/DurableProductCatalog';
 import { durableOrderStorageEnabled, getDurableOrder, listDurableOrders, saveDurableOrder, createDurableOrderWithStockReservation, createDurableOrderWithIdempotency, markDurableOrderPaymentVerified, softDeleteDurableOrder } from './src/server/services/DurableOrderStore';
@@ -3280,6 +3282,16 @@ app.post('/api/v2/utility/vtu/webhook', (req, res) => {
 // PINOVA GLOBAL EDUCATION ECOSYSTEM API
 // ==========================================
 
+// Additive Neon-backed directory contract. Disabled by default and never enabled in Production.
+app.get(
+  '/api/education/v2/institutions',
+  createEducationDirectoryV2Handler(
+    () => new NeonEducationRepository(getNeonSql()),
+    () => process.env.NODE_ENV !== 'production' &&
+      process.env.PINOVA_EDUCATION_DIRECTORY_V2_ENABLED === 'true'
+  )
+);
+
 // 1. Institution Directory & Verification Registry
 app.get('/api/education/institutions', (req, res) => {
   try {
@@ -3484,14 +3496,20 @@ app.get('/api/education/students/:id', authenticate, (req: AuthenticatedRequest,
   try {
     const requestedId = String(req.params.id || '').trim();
     const roles = req.user?.roles || [];
-    const isAdmin = roles.some((r: string) => ['PLATFORM_ADMIN', 'BURSAR', 'FINANCE_ADMIN', 'INSTITUTION_ADMIN'].includes(r));
-    if (!isAdmin && ![String(req.user?.id || ''), String(req.user?.username || '')].includes(requestedId)) {
+    const isGlobalAdmin = roles.some((r: string) => ['PLATFORM_ADMIN', 'BURSAR', 'FINANCE_ADMIN'].includes(r));
+    const isInstitutionAdmin = roles.includes('INSTITUTION_ADMIN');
+    const ownsStudentIdentity = [String(req.user?.id || ''), String(req.user?.username || '')].includes(requestedId);
+    if (!isGlobalAdmin && !isInstitutionAdmin && !ownsStudentIdentity) {
       res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Student access requires the authenticated student context.' });
       return;
     }
     const student = educationRepo.getStudentById(requestedId);
     if (!student) {
       res.status(404).json({ success: false, error: 'STUDENT_NOT_FOUND' });
+      return;
+    }
+    if (isInstitutionAdmin && (!req.user?.institutionId || String(student.currentInstitutionId || '') !== String(req.user.institutionId))) {
+      res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Institution administrator student access is limited to the authenticated institution.' });
       return;
     }
     res.json({ success: true, student });
@@ -3732,7 +3750,7 @@ app.post('/api/education/invoices/pay', paymentRateLimiter, authenticate, async 
     );
     const isInvoiceOwner = isGuardianOwner || isStudentOwner;
 
-    if (isProduction && !isPlatformAdmin && !isInstitutionStaff && !isInvoiceOwner) {
+    if (!isPlatformAdmin && !isInstitutionStaff && !isInvoiceOwner) {
       res.status(403).json({
         success: false,
         error: 'FORBIDDEN',
@@ -3924,7 +3942,7 @@ app.get('/api/education/invoices/:id/payments', authenticate, (req: Authenticate
     );
     const isAuthorized = isPlatformAdmin || isInstitutionStaff || isGuardianOwner || isStudentOwner;
 
-    if (isProduction && !isAuthorized) {
+    if (!isAuthorized) {
       res.status(403).json({
         success: false,
         error: 'FORBIDDEN',
@@ -3986,10 +4004,13 @@ app.get('/api/education/receipts/:receiptNumber', authenticate, (req: Authentica
       return;
     }
     const roles = req.user?.roles || [];
-    const isAdmin = roles.some((r: string) => ['PLATFORM_ADMIN', 'BURSAR', 'FINANCE_ADMIN', 'INSTITUTION_ADMIN'].includes(r));
-    const userRefs = [String(req.user?.id || ''), String(req.user?.username || ''), ''].map(v => v.trim().toLowerCase()).filter(Boolean);
-    if (!isAdmin && (!receipt.studentId || !userRefs.includes(receipt.studentId.trim().toLowerCase()))) {
-      res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Receipt access requires the authenticated student context.' });
+    const isGlobalAdmin = roles.some((r: string) => ['PLATFORM_ADMIN', 'BURSAR', 'FINANCE_ADMIN'].includes(r));
+    const isInstitutionAdmin = roles.includes('INSTITUTION_ADMIN');
+    const userRefs = [String(req.user?.id || ''), String(req.user?.username || '')].map(v => v.trim().toLowerCase()).filter(Boolean);
+    const ownsReceipt = Boolean(receipt.studentId && userRefs.includes(receipt.studentId.trim().toLowerCase()));
+    const institutionScoped = Boolean(isInstitutionAdmin && req.user?.institutionId && String(receipt.institutionId || '') === String(req.user.institutionId));
+    if (!isGlobalAdmin && !institutionScoped && !ownsReceipt) {
+      res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Receipt access requires the authenticated student or institution context.' });
       return;
     }
     res.json({ success: true, receipt });
@@ -4042,31 +4063,36 @@ app.get('/api/education/admissions/documents', authenticate, async (req: Authent
       return;
     }
     const applicationId = typeof req.query.applicationId === 'string' ? req.query.applicationId.trim() : undefined;
+    const roles = req.user?.roles || [];
+    const isGlobalAdmin = roles.some((r) => ['PLATFORM_ADMIN', 'COMPLIANCE_OFFICER'].includes(r));
+    const isInstitutionAdmin = roles.includes('INSTITUTION_ADMIN');
+    let documentOwner = username;
+
     if (applicationId) {
       const admission = educationRepo.getAdmissionById(applicationId);
-      const owner = String(admission?.applicantEmail || '').trim().toLowerCase();
-      const current = username.toLowerCase();
-      const roles = req.user?.roles || [];
-      const isGlobalAdmin = roles.some((r) => ['PLATFORM_ADMIN', 'COMPLIANCE_OFFICER'].includes(r));
-      const isInstitutionAdmin = roles.includes('INSTITUTION_ADMIN');
       if (!admission) {
         res.status(404).json({ success: false, error: 'ADMISSION_NOT_FOUND' });
         return;
       }
-      if (isInstitutionAdmin) {
-        if (!req.user?.institutionId || req.user.institutionId !== admission.institutionId) {
-          res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Institution administrator document access is limited to the authenticated institution.' });
-          return;
-        }
-        res.status(403).json({ success: false, error: 'DOCUMENT_SCOPE_UNAVAILABLE', message: 'Institution-scoped academic document listing is not enabled yet.' });
+      const owner = String(admission.applicantEmail || '').trim().toLowerCase();
+      const current = username.toLowerCase();
+
+      if (isInstitutionAdmin && (!req.user?.institutionId || req.user.institutionId !== admission.institutionId)) {
+        res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Institution administrator document access is limited to the authenticated institution.' });
         return;
       }
-      if (!isGlobalAdmin && owner !== current) {
+      if (isGlobalAdmin || isInstitutionAdmin) {
+        documentOwner = owner;
+      } else if (owner !== current) {
         res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Document access is limited to the authenticated applicant.' });
         return;
       }
+    } else if (isGlobalAdmin || isInstitutionAdmin) {
+      res.status(400).json({ success: false, error: 'APPLICATION_ID_REQUIRED', message: 'Administrators must specify an admission application to access its documents.' });
+      return;
     }
-    const documents = await listEducationAdmissionDocuments(username, applicationId);
+
+    const documents = await listEducationAdmissionDocuments(documentOwner, applicationId);
     res.json({ success: true, count: documents.length, documents, availability: educationDocumentStorageEnabled() ? 'AVAILABLE' : 'UNAVAILABLE' });
   } catch (err: any) {
     res.status(503).json({ success: false, error: 'EDUCATION_DOCUMENTS_UNAVAILABLE', message: err?.message || 'Academic document storage is unavailable.' });
@@ -4109,7 +4135,6 @@ app.post(
         const owner = String(admission?.applicantEmail || '').trim().toLowerCase();
         const current = username.toLowerCase();
         const roles = req.user?.roles || [];
-        const isGlobalAdmin = roles.some((r) => ['PLATFORM_ADMIN', 'COMPLIANCE_OFFICER'].includes(r));
         const isInstitutionAdmin = roles.includes('INSTITUTION_ADMIN');
         if (!admission) {
           res.status(404).json({ success: false, error: 'ADMISSION_NOT_FOUND' });
@@ -4119,8 +4144,8 @@ app.post(
           res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Institution administrators cannot upload academic documents on behalf of applicants.' });
           return;
         }
-        if (!isGlobalAdmin && owner !== current) {
-          res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Document upload is limited to the authenticated applicant.' });
+        if (owner !== current) {
+          res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Document upload is limited to the authenticated applicant; administrators cannot upload on an applicant\'s behalf.' });
           return;
         }
       }
@@ -4263,18 +4288,12 @@ app.post('/api/education/admissions/:id/offer/accept', authenticate, async (req:
     const currentUser = String(req.user?.username || '').trim().toLowerCase();
     const applicantEmail = String(admission.applicantEmail || '').trim().toLowerCase();
     const isOwner = Boolean(currentUser && applicantEmail && applicantEmail === currentUser);
-    const offerRoles = req.user?.roles || [];
-    const isGlobalAdmin = offerRoles.includes('PLATFORM_ADMIN');
-    const isInstitutionAdmin = offerRoles.includes('INSTITUTION_ADMIN');
-    const institutionScopedAdmin = Boolean(
-      isInstitutionAdmin &&
-      req.user?.institutionId &&
-      req.user.institutionId === admission.institutionId
-    );
-    const isAdmin = isGlobalAdmin || institutionScopedAdmin;
 
-    if (!isAdmin && !isOwner) {
-      res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Access denied: You are not authorized to accept this offer.' });
+    // Accepting an admission offer is the applicant's personal decision.
+    // Institution and platform administrators may manage admission status,
+    // but must not accept an offer on behalf of the applicant.
+    if (!isOwner) {
+      res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Only the authenticated applicant may accept this admission offer.' });
       return;
     }
 
