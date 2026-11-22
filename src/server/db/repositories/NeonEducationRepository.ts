@@ -278,6 +278,25 @@ export class NeonEducationRepository {
       outstandingBalanceFiat: string | number;
       activeInvoiceCount: string | number;
     }>(await this.sql`
+      WITH guardian_children AS (
+        SELECT student_id, institution_id, guardian_id, data
+        FROM education_guardian_children
+        WHERE lower(guardian_id) = lower(${guardian})
+          AND (${institution}::text IS NULL OR institution_id = ${institution})
+      ),
+      invoice_totals AS (
+        SELECT
+          i.student_id,
+          i.institution_id,
+          SUM(i.total_amount) AS total_billed,
+          SUM(i.amount_paid) AS total_paid,
+          COUNT(*) FILTER (WHERE i.status NOT IN ('PAID', 'CANCELLED')) AS active_invoice_count
+        FROM education_invoices i
+        INNER JOIN guardian_children gc
+          ON gc.student_id = i.student_id
+         AND gc.institution_id = i.institution_id
+        GROUP BY i.student_id, i.institution_id
+      )
       SELECT
         gc.data,
         gc.guardian_id AS "guardianId",
@@ -288,21 +307,10 @@ export class NeonEducationRepository {
           0
         )::text AS "outstandingBalanceFiat",
         COALESCE(invoice_totals.active_invoice_count, 0)::int AS "activeInvoiceCount"
-      FROM education_guardian_children gc
-      LEFT JOIN (
-        SELECT
-          student_id,
-          institution_id,
-          SUM(total_amount) AS total_billed,
-          SUM(amount_paid) AS total_paid,
-          COUNT(*) FILTER (WHERE status NOT IN ('PAID', 'CANCELLED')) AS active_invoice_count
-        FROM education_invoices
-        GROUP BY student_id, institution_id
-      ) invoice_totals
+      FROM guardian_children gc
+      LEFT JOIN invoice_totals
         ON invoice_totals.student_id = gc.student_id
        AND invoice_totals.institution_id = gc.institution_id
-      WHERE lower(gc.guardian_id) = lower(${guardian})
-        AND (${institution}::text IS NULL OR gc.institution_id = ${institution})
       ORDER BY gc.data->>'fullName' ASC, gc.student_id ASC
     `);
 
