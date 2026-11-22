@@ -4,7 +4,7 @@ on:
   push:
     branches: [main, design/premium-landing-preview, migration/neon-durable-storage]
   pull_request:
-    branches: [main, design/premium-landing-preview, migration/neon-durable-storage]
+    branches: [main, design/premium-landing-preview, migration/neon-durable-storage, fix/education-global-neon-integrity]
   workflow_dispatch:
 
 jobs:
