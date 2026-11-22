@@ -26,9 +26,14 @@ function clean(value: unknown): string {
  */
 export function createGuardianChildrenHandler(
   getRepository: () => GuardianChildrenRepository,
-  mode: 'self' | 'scoped'
+  mode: 'self' | 'scoped',
+  enabled: () => boolean = () => true
 ): RequestHandler {
   return async (req, res) => {
+    if (!enabled()) {
+      res.status(503).json({ success: false, error: 'EDUCATION_GUARDIAN_NEON_READ_DISABLED' });
+      return;
+    }
     const request = req as typeof req & AuthenticatedGuardianRequest;
     const user = request.user;
     if (!user) {
