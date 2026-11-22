@@ -270,6 +270,60 @@ async function run() {
     assert.deepEqual(aliases, ['kano']);
   }
 
+  {
+    const summary = {
+      studentId: 'student-1',
+      fullName: 'Amina Example',
+      institutionId: 'inst-1',
+      institutionName: 'Global Academy',
+      tier: 'secondary',
+      currentLevel: 'SS2',
+      academicSession: '2026/2027',
+      currentTermOrSemester: 'First Term',
+      totalBilledFiat: 0,
+      totalPaidFiat: 0,
+      outstandingBalanceFiat: 0,
+      currency: 'NGN',
+      activeInvoiceCount: 0
+    };
+    const mock = makeSql([[
+      {
+        data: summary,
+        guardianId: 'guardian-1',
+        totalBilledFiat: '150000.00',
+        totalPaidFiat: '50000.00',
+        outstandingBalanceFiat: '100000.00',
+        activeInvoiceCount: '2'
+      }
+    ]]);
+    const repository = new NeonEducationRepository(mock.sql);
+    const result = await repository.listGuardianChildrenSummaries(' GUARDIAN-1 ', 'inst-1');
+    assert.equal(result.length, 1);
+    assert.equal(result[0].guardianId, 'guardian-1');
+    assert.equal(result[0].totalBilledFiat, 150000);
+    assert.equal(result[0].totalPaidFiat, 50000);
+    assert.equal(result[0].outstandingBalanceFiat, 100000);
+    assert.equal(result[0].activeInvoiceCount, 2);
+    assert.ok(mock.calls[0].query.includes('gc.guardian_id'));
+    assert.ok(mock.calls[0].query.includes('gc.institution_id'));
+    assert.ok(mock.calls[0].query.includes('GROUP BY student_id, institution_id'));
+    assert.deepEqual(mock.calls[0].values, ['GUARDIAN-1', 'inst-1', 'inst-1']);
+  }
+
+  {
+    const mock = makeSql([[]]);
+    const repository = new NeonEducationRepository(mock.sql);
+    await assert.rejects(
+      repository.listGuardianChildrenSummaries('guardian-1', '  '),
+      /EDUCATION_INSTITUTION_SCOPE_REQUIRED/
+    );
+    await assert.rejects(
+      repository.listGuardianChildrenSummaries('  '),
+      /EDUCATION_GUARDIAN_SCOPE_REQUIRED/
+    );
+    assert.equal(mock.calls.length, 0, 'missing guardian or malformed institution scope must not query Neon');
+  }
+
   console.log('Neon Education repository contract suite passed.');
 }
 
