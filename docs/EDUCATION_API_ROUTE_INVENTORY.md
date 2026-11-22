@@ -39,11 +39,11 @@ Compatibility decision: do not change the legacy endpoint's response or silently
 
 ## Gaps confirmed in current Neon adapter/schema
 
-1. The current adapter provides institution list/get and hierarchy reads; scoped student get; scoped invoice get/list; scoped admissions list; and admission-by-id lookup requiring exactly one institution or applicant scope.
+1. The current adapter provides institution list/get and hierarchy reads; scoped student get; scoped invoice get/list; scoped admissions list; and admission-by-id lookup requiring exactly one institution or applicant scope. The admission-by-id method is implemented and covered by repository tests; it is no longer an outstanding adapter gap.
 2. Institution directory filters now include state/subdivision aliases, tier, and public/private status. Broader country-specific alias parity still needs fixture coverage beyond the currently tested Nigeria and UK cases.
 3. Academic hierarchy is stored inside institution JSON payload; there are no dedicated faculty, department, or programme tables in the inspected Preview schema. The Neon adapter reads this aggregate but does not write it.
 4. Guardian summary aggregation is not implemented in the Neon adapter.
-5. Payment, receipt, scholarship, audit-log, admission-by-id, and document-metadata repository methods are not implemented in the adapter.
+5. Payment, receipt, scholarship, audit-log, guardian-summary, and document-metadata repository methods are not implemented in the adapter. Admission-by-id lookup is implemented with mutually exclusive institution/applicant scope; document route ownership still depends on the legacy repository.
 6. `education_admission_documents` has owner and nullable application id, but no institution id and no FK to admissions. Ownership is currently resolved through the legacy admission repository in route handlers.
 7. `EducationRepository` and `StorageEngine` still use synchronous JSON file persistence; a serverless local filesystem is not a shared durable database.
 8. Directory UI and global registry adapter are not pagination-aware. Institution Admin Portal also loads the entire public institution list and selects its first result; this must be corrected to an authenticated institution-scoped selector before relying on paginated directory data.
@@ -63,7 +63,7 @@ Compatibility decision: do not change the legacy endpoint's response or silently
 1. Implement the additive v2 directory response contract and tests while keeping the legacy route unchanged.
 2. Add a typed page-based client method, migrate the public directory to page/load-more behavior, and separately test the US/Canada/UK adapter merge so it cannot report partial results as complete.
 3. Replace the Institution Admin Portal's unscoped full-directory load with a server-authorized institution-scoped selector before connecting it to Neon.
-4. Extend and test Neon read contracts for institution aggregate, admission-by-id, guardian summaries, scholarship catalog, and audit reads.
+4. Extend and test Neon read contracts for guardian summaries, scholarship catalog, and audit reads; keep admission-by-id coverage in the existing repository suite and add route-level ownership tests before rewiring document/admission routes.
 5. Add an explicit, default-off Preview-only feature flag and test schema readiness/fail-closed behavior.
 6. Wire only low-risk public institution directory reads first, preserving exact filtering and response shape; then test Preview.
 7. Wire private reads only after tenant-scoped query contracts and route integration tests pass.
