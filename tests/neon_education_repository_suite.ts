@@ -179,16 +179,27 @@ async function run() {
   }
 
   {
-    const mock = makeSql([[{ data: { id: 'adm-1', institutionId: 'inst-9' } }]]);
+    const mock = makeSql([[{ data: { id: 'adm-1', institutionId: 'inst-9' } }], [{ data: { id: 'adm-2', applicantEmail: 'student@example.org' } }]]);
     const repository = new NeonEducationRepository(mock.sql);
-    const result = await repository.listAdmissions({
+    const institutionResults = await repository.listAdmissions({
       institutionId: 'inst-9',
+      limit: 20
+    });
+    assert.deepEqual(institutionResults, [{ id: 'adm-1', institutionId: 'inst-9' }]);
+    assert.ok(mock.calls[0].query.includes('institution_id = ?'));
+    assert.ok(mock.calls[0].values.includes('inst-9'));
+    const applicantResults = await repository.listAdmissions({
       applicantEmail: 'STUDENT@EXAMPLE.ORG',
       limit: 20
     });
-    assert.deepEqual(result, [{ id: 'adm-1', institutionId: 'inst-9' }]);
-    assert.ok(mock.calls[0].query.includes('institution_id = ?'));
-    assert.ok(mock.calls[0].values.includes('student@example.org'));
+    assert.deepEqual(applicantResults, [{ id: 'adm-2', applicantEmail: 'student@example.org' }]);
+    assert.ok(mock.calls[1].query.includes('lower(applicant_email) = ?'));
+    assert.ok(mock.calls[1].values.includes('student@example.org'));
+    await assert.rejects(
+      repository.listAdmissions({ institutionId: 'inst-9', applicantEmail: 'student@example.org' }),
+      /EDUCATION_ADMISSION_SCOPE_REQUIRED/
+    );
+    assert.equal(mock.calls.length, 2, 'ambiguous dual scope must not issue a query');
   }
 
   {
