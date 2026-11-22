@@ -415,7 +415,10 @@ export class NeonEducationRepository {
     const institutionId = filter.institutionId?.trim() || null;
     const applicantEmail = filter.applicantEmail?.trim().toLowerCase() || null;
     // Exactly one trusted scope is required: institution staff OR applicant.
-    if (Boolean(institutionId) === Boolean(applicantEmail)) {
+    if (!institutionId && !applicantEmail) {
+      throw new Error('EDUCATION_INSTITUTION_SCOPE_REQUIRED');
+    }
+    if (institutionId && applicantEmail) {
       throw new Error('EDUCATION_ADMISSION_SCOPE_REQUIRED');
     }
     const status = filter.status?.trim() || null;
