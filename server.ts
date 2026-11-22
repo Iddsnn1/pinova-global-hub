@@ -3520,7 +3520,7 @@ app.get('/api/education/students/:id', authenticate, (req: AuthenticatedRequest,
 });
 
 const guardianNeonReadEnabled = () =>
-  !isProduction && process.env.EDUCATION_GUARDIAN_NEON_READ_ENABLED === 'true';
+  process.env.VERCEL_ENV === 'preview' && process.env.EDUCATION_GUARDIAN_NEON_READ_ENABLED === 'true';
 const getGuardianNeonRepository = () => new NeonEducationRepository();
 
 app.get(
