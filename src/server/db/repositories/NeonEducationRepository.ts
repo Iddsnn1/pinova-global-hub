@@ -412,17 +412,23 @@ export class NeonEducationRepository {
     limit?: number;
     offset?: number;
   }): Promise<AdmissionApplication[]> {
-    const institutionId = filter.institutionId.trim();
-    if (!institutionId) throw new Error('EDUCATION_INSTITUTION_SCOPE_REQUIRED');
-    const status = filter.status?.trim() || null;
+    const institutionId = filter.institutionId?.trim() || null;
     const applicantEmail = filter.applicantEmail?.trim().toLowerCase() || null;
+    // Exactly one trusted scope is required: institution staff OR applicant.
+    if (Boolean(institutionId) === Boolean(applicantEmail)) {
+      throw new Error('EDUCATION_ADMISSION_SCOPE_REQUIRED');
+    }
+    const status = filter.status?.trim() || null;
     const limit = Math.min(100, Math.max(1, Math.trunc(filter.limit ?? 50)));
     const offset = Math.max(0, Math.trunc(filter.offset ?? 0));
     const rows = this.toRows<JsonRow>(await this.sql`
       SELECT data FROM education_admissions
-      WHERE institution_id = ${institutionId}
+      WHERE (
+          (${institutionId}::text IS NOT NULL AND institution_id = ${institutionId})
+          OR
+          (${applicantEmail}::text IS NOT NULL AND lower(applicant_email) = ${applicantEmail})
+        )
         AND (${status}::text IS NULL OR ${status} = 'ALL' OR status = ${status})
-        AND (${applicantEmail}::text IS NULL OR lower(applicant_email) = ${applicantEmail})
       ORDER BY created_at DESC, id DESC
       LIMIT ${limit} OFFSET ${offset}
     `);
