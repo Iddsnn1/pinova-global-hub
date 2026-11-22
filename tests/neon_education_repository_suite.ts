@@ -324,6 +324,35 @@ async function run() {
     assert.equal(mock.calls.length, 0, 'missing guardian or malformed institution scope must not query Neon');
   }
 
+  {
+    const summary = {
+      studentId: 'student-json',
+      fullName: 'JSONB Student',
+      institutionId: 'inst-json',
+      institutionName: 'JSONB Academy',
+      tier: 'secondary',
+      currentLevel: 'SS1',
+      academicSession: '2026/2027',
+      currentTermOrSemester: 'First Term',
+      totalBilledFiat: 0,
+      totalPaidFiat: 0,
+      outstandingBalanceFiat: 0,
+      currency: 'NGN',
+      activeInvoiceCount: 0
+    };
+    const mock = makeSql([[{
+      data: JSON.stringify(summary),
+      guardianId: 'guardian-json',
+      totalBilledFiat: '0',
+      totalPaidFiat: '0',
+      outstandingBalanceFiat: '0',
+      activeInvoiceCount: '0'
+    }]]);
+    const repository = new NeonEducationRepository(mock.sql);
+    const result = await repository.listGuardianChildrenSummaries('guardian-json');
+    assert.equal(result[0].fullName, 'JSONB Student', 'JSONB strings must deserialize at the repository boundary');
+    assert.equal(result[0].institutionId, 'inst-json');
+  }
   console.log('Neon Education repository contract suite passed.');
 }
 
