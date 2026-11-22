@@ -11,6 +11,7 @@ import type {
   AcademicDepartment,
   EducationProgramme,
   StudentIdentity,
+  GuardianChildSummary,
   EducationInvoice,
   AdmissionApplication
 } from '../../../types/education';
@@ -250,6 +251,73 @@ export class NeonEducationRepository {
     return (institution.faculties ?? []).flatMap((faculty) =>
       (faculty.departments ?? []).flatMap((department) => department.programmes ?? [])
     );
+  }
+
+  /**
+   * Guardian dashboard read. The guardian identity is always required and the
+   * optional institution scope is applied inside SQL, never after fetching rows.
+   * Invoice totals are aggregated per student + institution to avoid cross-tenant
+   * joins and duplicate invoice multiplication.
+   */
+  public async listGuardianChildrenSummaries(
+    guardianId: string,
+    institutionId?: string
+  ): Promise<GuardianChildSummary[]> {
+    const guardian = guardianId.trim();
+    const institution = institutionId?.trim() || null;
+    if (!guardian) throw new Error('EDUCATION_GUARDIAN_SCOPE_REQUIRED');
+    if (institutionId !== undefined && !institution) {
+      throw new Error('EDUCATION_INSTITUTION_SCOPE_REQUIRED');
+    }
+
+    const rows = this.toRows<{
+      data: unknown;
+      guardianId: string;
+      totalBilledFiat: string | number;
+      totalPaidFiat: string | number;
+      outstandingBalanceFiat: string | number;
+      activeInvoiceCount: string | number;
+    }>(await this.sql`
+      SELECT
+        gc.data,
+        gc.guardian_id AS "guardianId",
+        COALESCE(invoice_totals.total_billed, 0)::text AS "totalBilledFiat",
+        COALESCE(invoice_totals.total_paid, 0)::text AS "totalPaidFiat",
+        GREATEST(
+          COALESCE(invoice_totals.total_billed, 0) - COALESCE(invoice_totals.total_paid, 0),
+          0
+        )::text AS "outstandingBalanceFiat",
+        COALESCE(invoice_totals.active_invoice_count, 0)::int AS "activeInvoiceCount"
+      FROM education_guardian_children gc
+      LEFT JOIN (
+        SELECT
+          student_id,
+          institution_id,
+          SUM(total_amount) AS total_billed,
+          SUM(amount_paid) AS total_paid,
+          COUNT(*) FILTER (WHERE status NOT IN ('PAID', 'CANCELLED')) AS active_invoice_count
+        FROM education_invoices
+        GROUP BY student_id, institution_id
+      ) invoice_totals
+        ON invoice_totals.student_id = gc.student_id
+       AND invoice_totals.institution_id = gc.institution_id
+      WHERE lower(gc.guardian_id) = lower(${guardian})
+        AND (${institution}::text IS NULL OR gc.institution_id = ${institution})
+      ORDER BY gc.data->>'fullName' ASC, gc.student_id ASC
+    `);
+
+    return rows.map((row) => {
+      const summary = this.decode<GuardianChildSummary>({ data: row.data });
+      if (!summary) throw new Error('EDUCATION_NEON_ROW_DATA_INVALID');
+      return {
+        ...summary,
+        guardianId: row.guardianId,
+        totalBilledFiat: Number(row.totalBilledFiat),
+        totalPaidFiat: Number(row.totalPaidFiat),
+        outstandingBalanceFiat: Number(row.outstandingBalanceFiat),
+        activeInvoiceCount: Number(row.activeInvoiceCount)
+      };
+    });
   }
 
   /**
