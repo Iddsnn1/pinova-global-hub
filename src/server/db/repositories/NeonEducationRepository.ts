@@ -406,7 +406,7 @@ export class NeonEducationRepository {
   }
 
   public async listAdmissions(filter: {
-    institutionId: string;
+    institutionId?: string;
     status?: string;
     applicantEmail?: string;
     limit?: number;
