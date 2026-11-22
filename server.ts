@@ -3493,29 +3493,37 @@ app.post('/api/education/institutions/:id/verify-accreditation', studentVerifyRa
   }
 });
 
-app.get('/api/education/students/:id', authenticate, (req: AuthenticatedRequest, res) => {
+const educationStudentAdmissionsNeonReadEnabled = () =>
+  process.env.VERCEL_ENV === 'preview' && process.env.EDUCATION_STUDENT_ADMISSIONS_NEON_READ_ENABLED === 'true';
+
+app.get('/api/education/students/:id', authenticate, async (req: AuthenticatedRequest, res) => {
+  if (!educationStudentAdmissionsNeonReadEnabled()) {
+    res.status(503).json({ success: false, error: 'EDUCATION_STUDENT_NEON_READ_DISABLED' });
+    return;
+  }
+  const requestedId = String(req.params.id || '').trim();
+  const roles = req.user?.roles || [];
+  const isGlobalAdmin = roles.some((r: string) => ['PLATFORM_ADMIN', 'BURSAR', 'FINANCE_ADMIN'].includes(r));
+  const isInstitutionAdmin = roles.includes('INSTITUTION_ADMIN');
+  const requestedInstitution = String(req.query.institutionId || '').trim();
+  const institutionId = isInstitutionAdmin ? String(req.user?.institutionId || '').trim() : requestedInstitution;
+  if (!requestedId || (!isGlobalAdmin && !isInstitutionAdmin)) {
+    res.status(403).json({ success: false, error: 'FORBIDDEN' });
+    return;
+  }
+  if (!institutionId || (isInstitutionAdmin && requestedInstitution && requestedInstitution !== institutionId)) {
+    res.status(403).json({ success: false, error: 'INSTITUTION_SCOPE_REQUIRED' });
+    return;
+  }
   try {
-    const requestedId = String(req.params.id || '').trim();
-    const roles = req.user?.roles || [];
-    const isGlobalAdmin = roles.some((r: string) => ['PLATFORM_ADMIN', 'BURSAR', 'FINANCE_ADMIN'].includes(r));
-    const isInstitutionAdmin = roles.includes('INSTITUTION_ADMIN');
-    const ownsStudentIdentity = [String(req.user?.id || ''), String(req.user?.username || '')].includes(requestedId);
-    if (!isGlobalAdmin && !isInstitutionAdmin && !ownsStudentIdentity) {
-      res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Student access requires the authenticated student context.' });
-      return;
-    }
-    const student = educationRepo.getStudentById(requestedId);
+    const student = await new NeonEducationRepository().getStudentById(requestedId, institutionId);
     if (!student) {
       res.status(404).json({ success: false, error: 'STUDENT_NOT_FOUND' });
       return;
     }
-    if (isInstitutionAdmin && (!req.user?.institutionId || String(student.currentInstitutionId || '') !== String(req.user.institutionId))) {
-      res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Institution administrator student access is limited to the authenticated institution.' });
-      return;
-    }
     res.json({ success: true, student });
-  } catch (err: any) {
-    res.status(500).json({ success: false, error: 'STUDENT_FETCH_FAILED', message: err.message });
+  } catch {
+    res.status(503).json({ success: false, error: 'STUDENT_NEON_UNAVAILABLE' });
   }
 });
 
@@ -3988,38 +3996,50 @@ app.get('/api/education/receipts/:receiptNumber', authenticate, (req: Authentica
 });
 
 // 7. Admissions & Application Pipeline (Phase 5 & 10 Remediation)
-app.get('/api/education/admissions', authenticate, (req: AuthenticatedRequest, res) => {
+app.get('/api/education/admissions', authenticate, async (req: AuthenticatedRequest, res) => {
+  if (!educationStudentAdmissionsNeonReadEnabled()) {
+    res.status(503).json({ success: false, error: 'EDUCATION_ADMISSIONS_NEON_READ_DISABLED' });
+    return;
+  }
+  const roles = req.user?.roles || [];
+  const isGlobalAdmin = roles.some((r: string) => ['PLATFORM_ADMIN', 'COMPLIANCE_OFFICER'].includes(r));
+  const isInstitutionAdmin = roles.includes('INSTITUTION_ADMIN');
+  const currentUsername = String(req.user?.username || '').trim().toLowerCase();
+  const requestedInstitution = String(req.query.institutionId || '').trim();
+  const requestedApplicant = String(req.query.applicantEmail || '').trim().toLowerCase();
+  const status = req.query.status ? String(req.query.status) : undefined;
+  let scope: { institutionId?: string; applicantEmail?: string };
+  if (isInstitutionAdmin) {
+    const ownInstitution = String(req.user?.institutionId || '').trim();
+    if (!ownInstitution || (requestedInstitution && requestedInstitution !== ownInstitution)) {
+      res.status(403).json({ success: false, error: 'INSTITUTION_SCOPE_REQUIRED' });
+      return;
+    }
+    scope = { institutionId: ownInstitution };
+  } else if (isGlobalAdmin) {
+    if (!requestedInstitution) {
+      res.status(400).json({ success: false, error: 'INSTITUTION_SCOPE_REQUIRED' });
+      return;
+    }
+    scope = { institutionId: requestedInstitution };
+  } else {
+    if (!currentUsername) {
+      res.status(401).json({ success: false, error: 'AUTHENTICATION_CONTEXT_REQUIRED' });
+      return;
+    }
+    if (requestedApplicant && requestedApplicant !== currentUsername) {
+      res.status(403).json({ success: false, error: 'FORBIDDEN' });
+      return;
+    }
+    scope = { applicantEmail: currentUsername };
+  }
   try {
-    const { institutionId, status, applicantEmail } = req.query;
-    const roles = req.user?.roles || [];
-    const isGlobalAdmin = roles.some((r: string) => ['PLATFORM_ADMIN', 'COMPLIANCE_OFFICER'].includes(r));
-    const isInstitutionAdmin = roles.includes('INSTITUTION_ADMIN');
-    const currentUsername = String(req.user?.username || '').trim().toLowerCase();
-    if (!isGlobalAdmin && !isInstitutionAdmin && !currentUsername) {
-      res.status(401).json({ success: false, error: 'AUTHENTICATION_CONTEXT_REQUIRED', message: 'Authenticated applicant context is required.' });
-      return;
-    }
-    if (!isGlobalAdmin && !isInstitutionAdmin && applicantEmail && String(applicantEmail).trim().toLowerCase() !== currentUsername) {
-      res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Admission access is limited to the authenticated applicant.' });
-      return;
-    }
-    const filter: any = {};
-    if (isInstitutionAdmin && (!req.user?.institutionId || !institutionId || req.user.institutionId !== String(institutionId))) {
-      res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Institution administrator access is limited to the authenticated institution.' });
-      return;
-    }
-    if (institutionId) filter.institutionId = String(institutionId);
-    if (status) filter.status = String(status);
-    if (applicantEmail) {
-      filter.applicantEmail = String(applicantEmail);
-    } else if (!isGlobalAdmin && !isInstitutionAdmin) {
-      filter.applicantEmail = currentUsername;
-    }
-
-    const list = educationRepo.getAdmissions(filter);
-    res.json({ success: true, count: list.length, applications: list });
-  } catch (err: any) {
-    res.status(500).json({ success: false, error: 'ADMISSIONS_FETCH_FAILED', message: err.message });
+    const applications = await new NeonEducationRepository().listAdmissions({
+      ...scope, status, limit: 50, offset: 0
+    });
+    res.json({ success: true, count: applications.length, applications });
+  } catch {
+    res.status(503).json({ success: false, error: 'ADMISSIONS_NEON_UNAVAILABLE' });
   }
 });
 
