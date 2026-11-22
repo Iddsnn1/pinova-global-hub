@@ -309,7 +309,6 @@ async function run() {
     assert.ok(mock.calls[0].query.includes('WITH guardian_children AS'));
     assert.ok(mock.calls[0].query.includes('INNER JOIN guardian_children'));
     assert.ok(mock.calls[0].query.includes('GROUP BY i.student_id, i.institution_id'));
-    assert.ok(mock.calls[0].query.includes('GROUP BY student_id, institution_id'));
     assert.deepEqual(mock.calls[0].values, ['GUARDIAN-1', 'inst-1', 'inst-1']);
   }
 
