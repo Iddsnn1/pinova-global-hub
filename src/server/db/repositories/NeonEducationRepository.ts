@@ -11,6 +11,7 @@ import type {
   AcademicDepartment,
   EducationProgramme,
   StudentIdentity,
+  GuardianChildSummary,
   EducationInvoice,
   AdmissionApplication
 } from '../../../types/education';
@@ -253,6 +254,81 @@ export class NeonEducationRepository {
   }
 
   /**
+   * Guardian dashboard read. The guardian identity is always required and the
+   * optional institution scope is applied inside SQL, never after fetching rows.
+   * Invoice totals are aggregated per student + institution to avoid cross-tenant
+   * joins and duplicate invoice multiplication.
+   */
+  public async listGuardianChildrenSummaries(
+    guardianId: string,
+    institutionId?: string
+  ): Promise<GuardianChildSummary[]> {
+    const guardian = guardianId.trim();
+    const institution = institutionId?.trim() || null;
+    if (!guardian) throw new Error('EDUCATION_GUARDIAN_SCOPE_REQUIRED');
+    if (institutionId !== undefined && !institution) {
+      throw new Error('EDUCATION_INSTITUTION_SCOPE_REQUIRED');
+    }
+
+    const rows = this.toRows<{
+      data: unknown;
+      guardianId: string;
+      totalBilledFiat: string | number;
+      totalPaidFiat: string | number;
+      outstandingBalanceFiat: string | number;
+      activeInvoiceCount: string | number;
+    }>(await this.sql`
+      WITH guardian_children AS (
+        SELECT student_id, institution_id, guardian_id, data
+        FROM education_guardian_children
+        WHERE lower(guardian_id) = lower(${guardian})
+          AND (${institution}::text IS NULL OR institution_id = ${institution})
+      ),
+      invoice_totals AS (
+        SELECT
+          i.student_id,
+          i.institution_id,
+          SUM(i.total_amount) AS total_billed,
+          SUM(i.amount_paid) AS total_paid,
+          COUNT(*) FILTER (WHERE i.status NOT IN ('PAID', 'CANCELLED')) AS active_invoice_count
+        FROM education_invoices i
+        INNER JOIN guardian_children gc
+          ON gc.student_id = i.student_id
+         AND gc.institution_id = i.institution_id
+        GROUP BY i.student_id, i.institution_id
+      )
+      SELECT
+        gc.data,
+        gc.guardian_id AS "guardianId",
+        COALESCE(invoice_totals.total_billed, 0)::text AS "totalBilledFiat",
+        COALESCE(invoice_totals.total_paid, 0)::text AS "totalPaidFiat",
+        GREATEST(
+          COALESCE(invoice_totals.total_billed, 0) - COALESCE(invoice_totals.total_paid, 0),
+          0
+        )::text AS "outstandingBalanceFiat",
+        COALESCE(invoice_totals.active_invoice_count, 0)::int AS "activeInvoiceCount"
+      FROM guardian_children gc
+      LEFT JOIN invoice_totals
+        ON invoice_totals.student_id = gc.student_id
+       AND invoice_totals.institution_id = gc.institution_id
+      ORDER BY gc.data->>'fullName' ASC, gc.student_id ASC
+    `);
+
+    return rows.map((row) => {
+      const summary = this.decode<GuardianChildSummary>({ data: row.data });
+      if (!summary) throw new Error('EDUCATION_NEON_ROW_DATA_INVALID');
+      return {
+        ...summary,
+        guardianId: row.guardianId,
+        totalBilledFiat: Number(row.totalBilledFiat),
+        totalPaidFiat: Number(row.totalPaidFiat),
+        outstandingBalanceFiat: Number(row.outstandingBalanceFiat),
+        activeInvoiceCount: Number(row.activeInvoiceCount)
+      };
+    });
+  }
+
+  /**
    * Admission lookup must be scoped to either the owning institution or the
    * authenticated applicant. An ID alone is never sufficient for a tenant read.
    */
@@ -330,23 +406,32 @@ export class NeonEducationRepository {
   }
 
   public async listAdmissions(filter: {
-    institutionId: string;
+    institutionId?: string;
     status?: string;
     applicantEmail?: string;
     limit?: number;
     offset?: number;
   }): Promise<AdmissionApplication[]> {
-    const institutionId = filter.institutionId.trim();
-    if (!institutionId) throw new Error('EDUCATION_INSTITUTION_SCOPE_REQUIRED');
-    const status = filter.status?.trim() || null;
+    const institutionId = filter.institutionId?.trim() || null;
     const applicantEmail = filter.applicantEmail?.trim().toLowerCase() || null;
+    // Exactly one trusted scope is required: institution staff OR applicant.
+    if (!institutionId && !applicantEmail) {
+      throw new Error('EDUCATION_INSTITUTION_SCOPE_REQUIRED');
+    }
+    if (institutionId && applicantEmail) {
+      throw new Error('EDUCATION_ADMISSION_SCOPE_REQUIRED');
+    }
+    const status = filter.status?.trim() || null;
     const limit = Math.min(100, Math.max(1, Math.trunc(filter.limit ?? 50)));
     const offset = Math.max(0, Math.trunc(filter.offset ?? 0));
     const rows = this.toRows<JsonRow>(await this.sql`
       SELECT data FROM education_admissions
-      WHERE institution_id = ${institutionId}
+      WHERE (
+          (${institutionId}::text IS NOT NULL AND institution_id = ${institutionId})
+          OR
+          (${applicantEmail}::text IS NOT NULL AND lower(applicant_email) = ${applicantEmail})
+        )
         AND (${status}::text IS NULL OR ${status} = 'ALL' OR status = ${status})
-        AND (${applicantEmail}::text IS NULL OR lower(applicant_email) = ${applicantEmail})
       ORDER BY created_at DESC, id DESC
       LIMIT ${limit} OFFSET ${offset}
     `);

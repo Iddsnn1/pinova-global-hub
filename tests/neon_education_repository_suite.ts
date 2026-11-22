@@ -179,16 +179,27 @@ async function run() {
   }
 
   {
-    const mock = makeSql([[{ data: { id: 'adm-1', institutionId: 'inst-9' } }]]);
+    const mock = makeSql([[{ data: { id: 'adm-1', institutionId: 'inst-9' } }], [{ data: { id: 'adm-2', applicantEmail: 'student@example.org' } }]]);
     const repository = new NeonEducationRepository(mock.sql);
-    const result = await repository.listAdmissions({
+    const institutionResults = await repository.listAdmissions({
       institutionId: 'inst-9',
+      limit: 20
+    });
+    assert.deepEqual(institutionResults, [{ id: 'adm-1', institutionId: 'inst-9' }]);
+    assert.ok(mock.calls[0].query.includes('institution_id = ?'));
+    assert.ok(mock.calls[0].values.includes('inst-9'));
+    const applicantResults = await repository.listAdmissions({
       applicantEmail: 'STUDENT@EXAMPLE.ORG',
       limit: 20
     });
-    assert.deepEqual(result, [{ id: 'adm-1', institutionId: 'inst-9' }]);
-    assert.ok(mock.calls[0].query.includes('institution_id = ?'));
-    assert.ok(mock.calls[0].values.includes('student@example.org'));
+    assert.deepEqual(applicantResults, [{ id: 'adm-2', applicantEmail: 'student@example.org' }]);
+    assert.ok(mock.calls[1].query.includes('lower(applicant_email) = ?'));
+    assert.ok(mock.calls[1].values.includes('student@example.org'));
+    await assert.rejects(
+      repository.listAdmissions({ institutionId: 'inst-9', applicantEmail: 'student@example.org' }),
+      /EDUCATION_ADMISSION_SCOPE_REQUIRED/
+    );
+    assert.equal(mock.calls.length, 2, 'ambiguous dual scope must not issue a query');
   }
 
   {
@@ -270,6 +281,91 @@ async function run() {
     assert.deepEqual(aliases, ['kano']);
   }
 
+  {
+    const summary = {
+      studentId: 'student-1',
+      fullName: 'Amina Example',
+      institutionId: 'inst-1',
+      institutionName: 'Global Academy',
+      tier: 'secondary',
+      currentLevel: 'SS2',
+      academicSession: '2026/2027',
+      currentTermOrSemester: 'First Term',
+      totalBilledFiat: 0,
+      totalPaidFiat: 0,
+      outstandingBalanceFiat: 0,
+      currency: 'NGN',
+      activeInvoiceCount: 0
+    };
+    const mock = makeSql([[
+      {
+        data: summary,
+        guardianId: 'guardian-1',
+        totalBilledFiat: '150000.00',
+        totalPaidFiat: '50000.00',
+        outstandingBalanceFiat: '100000.00',
+        activeInvoiceCount: '2'
+      }
+    ]]);
+    const repository = new NeonEducationRepository(mock.sql);
+    const result = await repository.listGuardianChildrenSummaries(' GUARDIAN-1 ', 'inst-1');
+    assert.equal(result.length, 1);
+    assert.equal(result[0].guardianId, 'guardian-1');
+    assert.equal(result[0].totalBilledFiat, 150000);
+    assert.equal(result[0].totalPaidFiat, 50000);
+    assert.equal(result[0].outstandingBalanceFiat, 100000);
+    assert.equal(result[0].activeInvoiceCount, 2);
+    assert.ok(mock.calls[0].query.includes('gc.guardian_id'));
+    assert.ok(mock.calls[0].query.includes('gc.institution_id'));
+    assert.ok(mock.calls[0].query.includes('WITH guardian_children AS'));
+    assert.ok(mock.calls[0].query.includes('INNER JOIN guardian_children'));
+    assert.ok(mock.calls[0].query.includes('GROUP BY i.student_id, i.institution_id'));
+    assert.deepEqual(mock.calls[0].values, ['GUARDIAN-1', 'inst-1', 'inst-1']);
+  }
+
+  {
+    const mock = makeSql([[]]);
+    const repository = new NeonEducationRepository(mock.sql);
+    await assert.rejects(
+      repository.listGuardianChildrenSummaries('guardian-1', '  '),
+      /EDUCATION_INSTITUTION_SCOPE_REQUIRED/
+    );
+    await assert.rejects(
+      repository.listGuardianChildrenSummaries('  '),
+      /EDUCATION_GUARDIAN_SCOPE_REQUIRED/
+    );
+    assert.equal(mock.calls.length, 0, 'missing guardian or malformed institution scope must not query Neon');
+  }
+
+  {
+    const summary = {
+      studentId: 'student-json',
+      fullName: 'JSONB Student',
+      institutionId: 'inst-json',
+      institutionName: 'JSONB Academy',
+      tier: 'secondary',
+      currentLevel: 'SS1',
+      academicSession: '2026/2027',
+      currentTermOrSemester: 'First Term',
+      totalBilledFiat: 0,
+      totalPaidFiat: 0,
+      outstandingBalanceFiat: 0,
+      currency: 'NGN',
+      activeInvoiceCount: 0
+    };
+    const mock = makeSql([[{
+      data: JSON.stringify(summary),
+      guardianId: 'guardian-json',
+      totalBilledFiat: '0',
+      totalPaidFiat: '0',
+      outstandingBalanceFiat: '0',
+      activeInvoiceCount: '0'
+    }]]);
+    const repository = new NeonEducationRepository(mock.sql);
+    const result = await repository.listGuardianChildrenSummaries('guardian-json');
+    assert.equal(result[0].fullName, 'JSONB Student', 'JSONB strings must deserialize at the repository boundary');
+    assert.equal(result[0].institutionId, 'inst-json');
+  }
   console.log('Neon Education repository contract suite passed.');
 }
 
