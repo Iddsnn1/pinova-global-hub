@@ -42,6 +42,7 @@ import { verifyJambCapsAuthorization } from './src/server/services/JambCapsAutho
 import { EducationRepository } from './src/server/db/repositories/EducationRepository';
 import { NeonEducationRepository } from './src/server/db/repositories/NeonEducationRepository';
 import { createEducationDirectoryV2Handler } from './src/server/routes/educationDirectoryV2';
+import { createGuardianChildrenHandler } from './src/server/routes/guardianChildren';
 import { ProductRepository } from './src/server/db/repositories/ProductRepository';
 import { durableProductStorageEnabled, getDurableProduct, listDurableProducts, saveDurableProduct, updateDurableProductAvailability, reserveDurableProductStockBatch, softDeleteDurableProduct, deleteDurableProductBlob } from './src/server/services/DurableProductCatalog';
 import { durableOrderStorageEnabled, getDurableOrder, listDurableOrders, saveDurableOrder, createDurableOrderWithStockReservation, createDurableOrderWithIdempotency, markDurableOrderPaymentVerified, softDeleteDurableOrder } from './src/server/services/DurableOrderStore';
@@ -3518,54 +3519,21 @@ app.get('/api/education/students/:id', authenticate, (req: AuthenticatedRequest,
   }
 });
 
-app.get('/api/education/guardians/me/children', authenticate, (req: AuthenticatedRequest, res) => {
-  try {
-    const guardianId = String(req.user?.guardianId || req.user?.username || req.user?.id || '').trim();
-    if (!guardianId) {
-      res.status(401).json({ success: false, error: 'AUTHENTICATION_CONTEXT_REQUIRED', message: 'Authenticated guardian context is required.' });
-      return;
-    }
-    const children = educationRepo.getGuardianChildrenSummaries(guardianId);
-    res.json({ success: true, count: children.length, children });
-  } catch {
-    res.status(500).json({ success: false, error: 'GUARDIAN_CHILDREN_FETCH_FAILED', message: 'Unable to load guardian children.' });
-  }
-});
+const guardianNeonReadEnabled = () =>
+  !isProduction && process.env.EDUCATION_GUARDIAN_NEON_READ_ENABLED === 'true';
+const getGuardianNeonRepository = () => new NeonEducationRepository();
 
-app.get('/api/education/guardians/:id/children', authenticate, (req: AuthenticatedRequest, res) => {
-  try {
-    const requestedGuardianId = String(req.params.id || '').trim();
-    const currentUser = String(req.user?.username || '').trim();
-    const currentUserId = String(req.user?.id || '').trim();
-    const roles = req.user?.roles || [];
-    const isGlobalAdmin = roles.some((r: string) => ['PLATFORM_ADMIN', 'BURSAR', 'FINANCE_ADMIN'].includes(r));
-    const isInstitutionAdmin = roles.includes('INSTITUTION_ADMIN');
-    const ownsGuardian = Boolean(
-      isGlobalAdmin ||
-      (currentUser && requestedGuardianId.toLowerCase() === currentUser.toLowerCase()) ||
-      (currentUserId && requestedGuardianId === currentUserId) ||
-      (req.user?.guardianId && requestedGuardianId.toLowerCase() === String(req.user.guardianId).toLowerCase())
-    );
-    if (!ownsGuardian) {
-      res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Guardian child access requires the authenticated guardian context.' });
-      return;
-    }
-    const children = educationRepo.getGuardianChildrenSummaries(requestedGuardianId);
-    if (isInstitutionAdmin) {
-      const institutionId = String(req.user?.institutionId || '').trim();
-      if (!institutionId) {
-        res.status(403).json({ success: false, error: 'INSTITUTION_SCOPE_REQUIRED', message: 'Institution administrator scope is required.' });
-        return;
-      }
-      const scopedChildren = children.filter((child) => child.institutionId === institutionId);
-      res.json({ success: true, count: scopedChildren.length, children: scopedChildren });
-      return;
-    }
-    res.json({ success: true, count: children.length, children });
-  } catch (err: any) {
-    res.status(500).json({ success: false, error: 'GUARDIAN_CHILDREN_FETCH_FAILED', message: 'Unable to load guardian children.' });
-  }
-});
+app.get(
+  '/api/education/guardians/me/children',
+  authenticate,
+  createGuardianChildrenHandler(getGuardianNeonRepository, 'self', guardianNeonReadEnabled)
+);
+
+app.get(
+  '/api/education/guardians/:id/children',
+  authenticate,
+  createGuardianChildrenHandler(getGuardianNeonRepository, 'scoped', guardianNeonReadEnabled)
+);
 
 // 4. Invoices & Authoritative School Fees Engine (Phase 5 & 11 Remediation)
 app.get('/api/education/invoices', authenticate, (req: AuthenticatedRequest, res) => {
