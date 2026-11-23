@@ -3557,8 +3557,7 @@ app.get('/api/education/invoices', authenticate, (req: AuthenticatedRequest, res
       query: { studentId, institutionId, status, guardianId }
     });
     if (!scope.allowed) {
-      const statusCode = scope.error === 'INSTITUTION_SCOPE_REQUIRED' ? 403 : 403;
-      res.status(statusCode).json({
+      res.status(403).json({
         success: false,
         error: scope.error || 'FORBIDDEN',
         message: 'Invoice access must be limited to the authenticated guardian, student, or institution.'
