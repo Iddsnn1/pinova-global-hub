@@ -44,6 +44,7 @@ import { NeonEducationRepository } from './src/server/db/repositories/NeonEducat
 import { createEducationDirectoryV2Handler } from './src/server/routes/educationDirectoryV2';
 import { createGuardianChildrenHandler } from './src/server/routes/guardianChildren';
 import { resolveEducationInvoiceListScope } from './src/server/routes/educationInvoiceAccess';
+import { resolveEducationPaymentHistoryAccess } from './src/server/routes/educationPaymentHistoryAccess';
 import { canVerifyInstitutionAccreditation, resolveStudentVerificationAccess } from './src/server/routes/educationVerificationAccess';
 import { ProductRepository } from './src/server/db/repositories/ProductRepository';
 import { durableProductStorageEnabled, getDurableProduct, listDurableProducts, saveDurableProduct, updateDurableProductAvailability, reserveDurableProductStockBatch, softDeleteDurableProduct, deleteDurableProductBlob } from './src/server/services/DurableProductCatalog';
@@ -3897,24 +3898,16 @@ app.get('/api/education/invoices/:id/payments', authenticate, (req: Authenticate
       return;
     }
 
-    const currentUser = req.user?.username;
-    const currentUserId = req.user?.id;
-    const userRoles = req.user?.roles || [];
-    const isPlatformAdmin = userRoles.includes('PLATFORM_ADMIN') || userRoles.includes('BURSAR') || userRoles.includes('FINANCE_ADMIN');
-    const isInstitutionStaff = Boolean(userRoles.includes('INSTITUTION_ADMIN') && req.user?.institutionId && req.user.institutionId === invoice.institutionId);
-
-    const isGuardianOwner = Boolean(
-      (currentUser && invoice.guardianId && invoice.guardianId.toLowerCase() === currentUser.toLowerCase()) ||
-      (currentUserId && invoice.guardianId && invoice.guardianId === currentUserId) ||
-      (req.user?.guardianId && invoice.guardianId && req.user.guardianId.toLowerCase() === invoice.guardianId.toLowerCase())
-    );
-    const isStudentOwner = Boolean(
-      (currentUser && invoice.studentId && invoice.studentId.toLowerCase() === currentUser.toLowerCase()) ||
-      (currentUserId && invoice.studentId && invoice.studentId === currentUserId) ||
-      (currentUser && invoice.studentName && invoice.studentName.toLowerCase() === currentUser.toLowerCase()) ||
-      ((req.user as any)?.studentId && invoice.studentId && (req.user as any).studentId.toLowerCase() === invoice.studentId.toLowerCase())
-    );
-    const isAuthorized = isPlatformAdmin || isInstitutionStaff || isGuardianOwner || isStudentOwner;
+    const access = resolveEducationPaymentHistoryAccess({
+      roles: req.user?.roles || [],
+      institutionId: req.user?.institutionId,
+      username: req.user?.username,
+      userId: req.user?.id,
+      guardianId: req.user?.guardianId,
+      studentId: (req.user as any)?.studentId,
+      invoice
+    });
+    const isAuthorized = access.allowed;
 
     if (!isAuthorized) {
       res.status(403).json({
