@@ -4000,7 +4000,7 @@ app.get('/api/education/admissions', authenticate, async (req: AuthenticatedRequ
     return;
   }
   const roles = req.user?.roles || [];
-  const isGlobalAdmin = roles.some((r: string) => ['PLATFORM_ADMIN', 'COMPLIANCE_OFFICER'].includes(r));
+  const isGlobalAdmin = roles.some((r: string) => ['PLATFORM_ADMIN', 'COMPLIANCE_OFFICER', 'COMPLIANCE_ADMIN'].includes(r));
   const isInstitutionAdmin = roles.includes('INSTITUTION_ADMIN');
   const currentUsername = String(req.user?.username || '').trim().toLowerCase();
   const requestedInstitution = String(req.query.institutionId || '').trim();
@@ -4199,7 +4199,7 @@ app.post('/api/education/admissions/apply', authenticate, async (req: Authentica
 });
 
 // Admissions State Machine Transition (Requires Institution Admin or Compliance Officer)
-app.post('/api/education/admissions/:id/status', authenticate, requireRole(['PLATFORM_ADMIN', 'INSTITUTION_ADMIN', 'COMPLIANCE_OFFICER']), async (req: AuthenticatedRequest, res) => {
+app.post('/api/education/admissions/:id/status', authenticate, requireRole(['PLATFORM_ADMIN', 'INSTITUTION_ADMIN', 'COMPLIANCE_OFFICER', 'COMPLIANCE_ADMIN']), async (req: AuthenticatedRequest, res) => {
   try {
     const { id } = req.params;
     const { status, reason } = req.body;
