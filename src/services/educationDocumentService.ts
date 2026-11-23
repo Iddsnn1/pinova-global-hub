@@ -9,7 +9,7 @@ export const educationDocumentService = {
     return Array.isArray(data.documents) ? data.documents : [];
   },
 
-  async upload(input: {
+  async download(documentId: string): Promise<Blob> {\n    const res = await fetch(`/api/education/admissions/documents/${encodeURIComponent(documentId)}/download`);\n    if (!res.ok) throw new Error('Academic document download failed');\n    return res.blob();\n  },\n\n  async upload(input: {
     file: File;
     documentType: AdmissionDocument['type'];
     applicationId?: string;
