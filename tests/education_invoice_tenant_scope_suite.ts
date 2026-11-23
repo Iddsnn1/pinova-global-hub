@@ -35,6 +35,27 @@ function run() {
 
   {
     const result = resolveEducationInvoiceListScope({
+      roles: ['BURSAR'],
+      institutionId: 'school-a',
+      query: {}
+    });
+    assert.equal(result.allowed, true);
+    assert.deepEqual(result.filter, { institutionId: 'school-a' },
+      'bursars must be restricted to their bound institution');
+  }
+
+  {
+    const result = resolveEducationInvoiceListScope({
+      roles: ['FINANCE_ADMIN'],
+      institutionId: 'school-a',
+      query: { institutionId: 'school-b' }
+    });
+    assert.equal(result.allowed, false);
+    assert.equal(result.error, 'FORBIDDEN');
+  }
+
+  {
+    const result = resolveEducationInvoiceListScope({
       roles: ['PLATFORM_ADMIN'],
       query: { institutionId: 'school-b', status: 'PENDING' }
     });
