@@ -48,6 +48,10 @@ function run() {
   assert.ok(route.includes('getEducationAdmissionDocument(username, req.params.documentId)'), 'download endpoint must retrieve only the authenticated owner document');
   assert.ok(route.includes("'Cache-Control', 'private, no-store'"), 'download response must not be publicly cached');
   assert.ok(route.includes('body.pipe(res)'), 'download endpoint must stream the private object body');
+  const documentListRouteStart = serverSource.indexOf("app.get('/api/education/admissions/documents'");
+  const documentListRouteEnd = serverSource.indexOf("app.get('/api/education/admissions/documents/:documentId/download'");
+  const documentListRoute = serverSource.slice(documentListRouteStart, documentListRouteEnd);
+  assert.ok(documentListRoute.includes("['PLATFORM_ADMIN', 'COMPLIANCE_OFFICER', 'COMPLIANCE_ADMIN'].includes(r)"), 'document listing must recognize the same global compliance roles as admissions review');
 
   console.log('Education document download security suite passed');
 }
