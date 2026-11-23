@@ -53,7 +53,7 @@ import { durableVendorStorageEnabled, getDurableVendorApplication, getDurableVen
 import { objectStorageEnabled, putObject, getObject, deleteObject, publicObjectUrl } from './src/server/services/ObjectStorage';
 import { vendorDocumentStorageEnabled, putVendorDocument, getVendorDocument } from './src/server/services/VendorDocumentStorage';
 import { verifyVendorDocumentIntegrity } from './src/server/services/VendorDocumentIntegrity';
-import { saveEducationAdmissionDocument, listEducationAdmissionDocuments, educationDocumentStorageEnabled, EDUCATION_DOCUMENT_MAX_BYTES, EDUCATION_DOCUMENT_TYPES } from './src/server/services/EducationDocumentStorage';
+import { saveEducationAdmissionDocument, listEducationAdmissionDocuments, getEducationAdmissionDocument, educationDocumentStorageEnabled, EDUCATION_DOCUMENT_MAX_BYTES, EDUCATION_DOCUMENT_TYPES } from './src/server/services/EducationDocumentStorage';
 import { quoteFiatToPiReference, signPiNovaFxQuote, verifyPiNovaFxQuoteToken, FxConfigurationError, FxProviderError } from './src/server/services/PiNovaFxService';
 
 dotenv.config();
@@ -4075,6 +4075,43 @@ app.get('/api/education/admissions/documents', authenticate, async (req: Authent
     res.json({ success: true, count: documents.length, documents, availability: educationDocumentStorageEnabled() ? 'AVAILABLE' : 'UNAVAILABLE' });
   } catch (err: any) {
     res.status(503).json({ success: false, error: 'EDUCATION_DOCUMENTS_UNAVAILABLE', message: err?.message || 'Academic document storage is unavailable.' });
+  }
+});
+
+
+app.get('/api/education/admissions/documents/:documentId/download', authenticate, async (req: AuthenticatedRequest, res) => {
+  try {
+    const username = String(req.user?.username || '').trim();
+    if (!username) {
+      res.status(401).json({ success: false, error: 'AUTHENTICATION_CONTEXT_REQUIRED' });
+      return;
+    }
+    if (!educationDocumentStorageEnabled()) {
+      res.status(503).json({ success: false, error: 'EDUCATION_DOCUMENT_STORAGE_UNAVAILABLE' });
+      return;
+    }
+    // Downloads are applicant-owner-only. Staff review access requires a separate,
+    // institution-scoped authorization path and is intentionally not inferred here.
+    const document = await getEducationAdmissionDocument(username, req.params.documentId);
+    if (!document) {
+      res.status(404).json({ success: false, error: 'EDUCATION_DOCUMENT_NOT_FOUND' });
+      return;
+    }
+    res.setHeader('Content-Type', document.contentType);
+    res.setHeader('Content-Disposition', `attachment; filename="${document.fileName}"`);
+    res.setHeader('Cache-Control', 'private, no-store');
+    const body = document.body as any;
+    if (typeof body.pipe !== 'function') {
+      res.status(503).json({ success: false, error: 'EDUCATION_DOCUMENT_STREAM_UNAVAILABLE' });
+      return;
+    }
+    body.on('error', () => {
+      if (!res.headersSent) res.status(503).json({ success: false, error: 'EDUCATION_DOCUMENT_DOWNLOAD_FAILED' });
+      else res.destroy();
+    });
+    body.pipe(res);
+  } catch (err: any) {
+    res.status(503).json({ success: false, error: 'EDUCATION_DOCUMENT_DOWNLOAD_FAILED', message: err?.message || 'Unable to download document.' });
   }
 });
 
