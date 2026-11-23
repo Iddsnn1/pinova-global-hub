@@ -3523,8 +3523,8 @@ app.get('/api/education/students/:id', authenticate, async (req: AuthenticatedRe
   }
   const requestedId = String(req.params.id || '').trim();
   const roles = req.user?.roles || [];
-  const isGlobalAdmin = roles.some((r: string) => ['PLATFORM_ADMIN', 'BURSAR', 'FINANCE_ADMIN'].includes(r));
-  const isInstitutionAdmin = roles.includes('INSTITUTION_ADMIN');
+  const isGlobalAdmin = roles.some((r: string) => ['PLATFORM_ADMIN', 'COMPLIANCE_ADMIN', 'COMPLIANCE_OFFICER'].includes(r));
+  const isInstitutionAdmin = roles.some((r: string) => ['INSTITUTION_ADMIN', 'BURSAR', 'FINANCE_ADMIN', 'ADMISSIONS_OFFICER', 'TEACHER'].includes(r));
   const requestedInstitution = String(req.query.institutionId || '').trim();
   const institutionId = isInstitutionAdmin ? String(req.user?.institutionId || '').trim() : requestedInstitution;
   if (!requestedId || (!isGlobalAdmin && !isInstitutionAdmin)) {
@@ -3599,11 +3599,12 @@ app.get('/api/education/invoices/:id', authenticate, (req: AuthenticatedRequest,
       return;
     }
     const roles = req.user?.roles || [];
-    const isGlobalAdmin = roles.some((r: string) => ['PLATFORM_ADMIN', 'BURSAR', 'FINANCE_ADMIN'].includes(r));
+    const isGlobalAdmin = roles.includes('PLATFORM_ADMIN');
+    const isInstitutionStaff = Boolean(roles.some((r: string) => ['INSTITUTION_ADMIN', 'BURSAR', 'FINANCE_ADMIN'].includes(r)) && req.user?.institutionId && req.user.institutionId === invoice.institutionId);
     const currentUser = req.user?.username;
     const currentUserId = req.user?.id;
     const authorized = isGlobalAdmin ||
-      Boolean(roles.includes('INSTITUTION_ADMIN') && req.user?.institutionId && req.user.institutionId === invoice.institutionId) ||
+      isInstitutionStaff ||
       Boolean(currentUser && invoice.guardianId && invoice.guardianId.toLowerCase() === currentUser.toLowerCase()) ||
       Boolean(currentUserId && invoice.guardianId === currentUserId) ||
       Boolean(req.user?.guardianId && invoice.guardianId && req.user.guardianId.toLowerCase() === invoice.guardianId.toLowerCase()) ||
@@ -3977,8 +3978,8 @@ app.get('/api/education/receipts/:receiptNumber', authenticate, (req: Authentica
       return;
     }
     const roles = req.user?.roles || [];
-    const isGlobalAdmin = roles.some((r: string) => ['PLATFORM_ADMIN', 'BURSAR', 'FINANCE_ADMIN'].includes(r));
-    const isInstitutionAdmin = roles.includes('INSTITUTION_ADMIN');
+    const isGlobalAdmin = roles.includes('PLATFORM_ADMIN');
+    const isInstitutionAdmin = roles.some((r: string) => ['INSTITUTION_ADMIN', 'BURSAR', 'FINANCE_ADMIN'].includes(r));
     const userRefs = [String(req.user?.id || ''), String(req.user?.username || '')].map(v => v.trim().toLowerCase()).filter(Boolean);
     const ownsReceipt = Boolean(receipt.studentId && userRefs.includes(receipt.studentId.trim().toLowerCase()));
     const institutionScoped = Boolean(isInstitutionAdmin && req.user?.institutionId && String(receipt.institutionId || '') === String(req.user.institutionId));
