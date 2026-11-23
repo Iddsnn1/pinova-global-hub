@@ -43,6 +43,7 @@ import { EducationRepository } from './src/server/db/repositories/EducationRepos
 import { NeonEducationRepository } from './src/server/db/repositories/NeonEducationRepository';
 import { createEducationDirectoryV2Handler } from './src/server/routes/educationDirectoryV2';
 import { createGuardianChildrenHandler } from './src/server/routes/guardianChildren';
+import { resolveEducationInvoiceListScope } from './src/server/routes/educationInvoiceAccess';
 import { ProductRepository } from './src/server/db/repositories/ProductRepository';
 import { durableProductStorageEnabled, getDurableProduct, listDurableProducts, saveDurableProduct, updateDurableProductAvailability, reserveDurableProductStockBatch, softDeleteDurableProduct, deleteDurableProductBlob } from './src/server/services/DurableProductCatalog';
 import { durableOrderStorageEnabled, getDurableOrder, listDurableOrders, saveDurableOrder, createDurableOrderWithStockReservation, createDurableOrderWithIdempotency, markDurableOrderPaymentVerified, softDeleteDurableOrder } from './src/server/services/DurableOrderStore';
@@ -3288,7 +3289,7 @@ app.get(
   '/api/education/v2/institutions',
   createEducationDirectoryV2Handler(
     () => new NeonEducationRepository(getNeonSql()),
-    () => process.env.NODE_ENV !== 'production' &&
+    () => process.env.VERCEL_ENV === 'preview' &&
       process.env.PINOVA_EDUCATION_DIRECTORY_V2_ENABLED === 'true'
   )
 );
@@ -3547,47 +3548,25 @@ app.get(
 app.get('/api/education/invoices', authenticate, (req: AuthenticatedRequest, res) => {
   try {
     const { studentId, institutionId, status, guardianId } = req.query;
-    const currentUser = req.user?.username;
-    const currentUserId = req.user?.id;
-    const roles = req.user?.roles || [];
-    const isGlobalAdmin = roles.some((r: string) => ['PLATFORM_ADMIN', 'BURSAR', 'FINANCE_ADMIN'].includes(r));
-    const requestedInstitution = institutionId ? String(institutionId) : undefined;
-    const isInstitutionStaff = Boolean(
-      roles.includes('INSTITUTION_ADMIN') &&
-      req.user?.institutionId &&
-      (!requestedInstitution || req.user.institutionId === requestedInstitution)
-    );
-    const requestedGuardian = guardianId ? String(guardianId) : undefined;
-    const ownsGuardianFilter = Boolean(
-      requestedGuardian &&
-      ((currentUser && requestedGuardian.toLowerCase() === currentUser.toLowerCase()) ||
-       (currentUserId && requestedGuardian === currentUserId) ||
-       (req.user?.guardianId && requestedGuardian.toLowerCase() === req.user.guardianId.toLowerCase()))
-    );
-    const ownsStudentFilter = Boolean(
-      studentId &&
-      ((currentUser && String(studentId).toLowerCase() === currentUser.toLowerCase()) ||
-       (currentUserId && String(studentId) === currentUserId) ||
-       false)
-    );
-
-    if (!isGlobalAdmin && !isInstitutionStaff && !ownsGuardianFilter && !ownsStudentFilter) {
-      res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Invoice access requires an authorized student, guardian, or institution context.' });
+    const scope = resolveEducationInvoiceListScope({
+      roles: req.user?.roles || [],
+      username: req.user?.username,
+      userId: req.user?.id,
+      guardianId: req.user?.guardianId,
+      institutionId: req.user?.institutionId,
+      query: { studentId, institutionId, status, guardianId }
+    });
+    if (!scope.allowed) {
+      const statusCode = scope.error === 'INSTITUTION_SCOPE_REQUIRED' ? 403 : 403;
+      res.status(statusCode).json({
+        success: false,
+        error: scope.error || 'FORBIDDEN',
+        message: 'Invoice access must be limited to the authenticated guardian, student, or institution.'
+      });
       return;
     }
 
-    if (isInstitutionStaff && requestedInstitution && req.user?.institutionId !== requestedInstitution) {
-      res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Institution administrator access is limited to the authenticated institution.' });
-      return;
-    }
-
-    const filter: any = {};
-    if (studentId) filter.studentId = String(studentId);
-    if (institutionId) filter.institutionId = String(institutionId);
-    if (status) filter.status = String(status);
-    if (guardianId) filter.guardianId = String(guardianId);
-
-    const invoices = educationRepo.getInvoices(filter);
+    const invoices = educationRepo.getInvoices(scope.filter);
     res.json({ success: true, count: invoices.length, invoices });
   } catch (err: any) {
     res.status(500).json({ success: false, error: 'INVOICES_FETCH_FAILED', message: err.message });
