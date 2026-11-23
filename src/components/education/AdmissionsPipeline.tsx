@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { AdmissionApplication, InstitutionProfile } from '../../types/education';
 import { educationService } from '../../services/educationService';
+import { educationDocumentService } from '../../services/educationDocumentService';
 import {
   GraduationCap,
   Building2,
@@ -14,7 +15,8 @@ import {
   FileText,
   ChevronRight,
   ShieldCheck,
-  Award
+  Award,
+  Download
 } from 'lucide-react';
 
 interface AdmissionsPipelineProps {
@@ -49,6 +51,29 @@ export const AdmissionsPipeline: React.FC<AdmissionsPipelineProps> = ({
   const [documentType, setDocumentType] = useState<import('../../types/education').AdmissionDocument['type']>('other');
   const [documentUploading, setDocumentUploading] = useState(false);
   const [uploadedDocuments, setUploadedDocuments] = useState<import('../../types/education').AdmissionDocument[]>([]);
+  const [downloadingDocumentId, setDownloadingDocumentId] = useState<string | null>(null);
+  const [documentDownloadError, setDocumentDownloadError] = useState<string | null>(null);
+
+  const handleDocumentDownload = async (document: import('../../types/education').AdmissionDocument) => {
+    setDownloadingDocumentId(document.id);
+    setDocumentDownloadError(null);
+    try {
+      const blob = await educationDocumentService.download(document.id);
+      const objectUrl = URL.createObjectURL(blob);
+      const anchor = window.document.createElement('a');
+      anchor.href = objectUrl;
+      anchor.download = document.fileName || 'academic-document';
+      anchor.style.display = 'none';
+      window.document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+    } catch (error: any) {
+      setDocumentDownloadError(error?.message || 'Academic document download failed.');
+    } finally {
+      setDownloadingDocumentId(null);
+    }
+  };
 
   useEffect(() => {
     loadApplications();
@@ -350,12 +375,24 @@ export const AdmissionsPipeline: React.FC<AdmissionsPipelineProps> = ({
                   Selected: {documentFile.name} ({Math.ceil(documentFile.size / 1024)} KB). It will upload only after the authoritative application is created.
                 </p>
               )}
+              {documentDownloadError && (
+                <p role="alert" className="text-[11px] text-rose-400">{documentDownloadError}</p>
+              )}
               {uploadedDocuments.length > 0 && (
                 <div className="space-y-1">
                   {uploadedDocuments.map((doc) => (
-                    <div key={doc.id} className="flex items-center gap-2 text-[11px] text-slate-400">
+                    <div key={doc.id} className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
                       <FileCheck className="w-3.5 h-3.5 text-amber-400" />
-                      <span>{doc.fileName} — pending verification</span>
+                      <span className="flex-1">{doc.fileName} — pending verification</span>
+                      <button
+                        type="button"
+                        onClick={() => handleDocumentDownload(doc)}
+                        disabled={downloadingDocumentId === doc.id}
+                        className="inline-flex items-center gap-1 rounded-lg border border-slate-700 px-2.5 py-1.5 text-amber-300 hover:bg-slate-800 disabled:opacity-50"
+                      >
+                        <Download className="w-3 h-3" />
+                        {downloadingDocumentId === doc.id ? 'Downloading…' : 'Download'}
+                      </button>
                     </div>
                   ))}
                 </div>
