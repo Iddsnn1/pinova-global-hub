@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { neon } from '@neondatabase/serverless';
 import crypto from 'crypto';
 
@@ -174,4 +174,24 @@ export async function listEducationAdmissionDocuments(ownerUsername: string, app
     verificationStatus: row.verificationStatus,
     applicationId: row.applicationId || null
   }));
+}
+
+export async function getEducationAdmissionDocument(ownerUsername: string, documentId: string) {
+  const owner = normalizeOwner(ownerUsername);
+  const id = String(documentId || '').trim();
+  if (!/^edu-doc-[0-9a-f-]{36}$/i.test(id)) return null;
+  const sql = database();
+  const rows = await sql`
+    SELECT document_id AS "id", original_file_name AS "fileName",
+           content_type AS "contentType", object_key AS "objectKey"
+    FROM education_admission_documents
+    WHERE document_id = ${id} AND owner_username = ${owner}
+    LIMIT 1
+  `;
+  const row = rows[0] as any;
+  if (!row) return null;
+  const { s3 } = client();
+  const object = await s3.send(new GetObjectCommand({ Bucket: BUCKET, Key: row.objectKey }));
+  if (!object.Body) throw new Error('EDUCATION_DOCUMENT_OBJECT_EMPTY');
+  return { body: object.Body, fileName: safeFileName(row.fileName), contentType: String(row.contentType || 'application/octet-stream') };
 }
