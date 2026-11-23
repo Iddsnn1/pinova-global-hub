@@ -44,6 +44,7 @@ import { NeonEducationRepository } from './src/server/db/repositories/NeonEducat
 import { createEducationDirectoryV2Handler } from './src/server/routes/educationDirectoryV2';
 import { createGuardianChildrenHandler } from './src/server/routes/guardianChildren';
 import { resolveEducationInvoiceListScope } from './src/server/routes/educationInvoiceAccess';
+import { canVerifyInstitutionAccreditation, resolveStudentVerificationAccess } from './src/server/routes/educationVerificationAccess';
 import { ProductRepository } from './src/server/db/repositories/ProductRepository';
 import { durableProductStorageEnabled, getDurableProduct, listDurableProducts, saveDurableProduct, updateDurableProductAvailability, reserveDurableProductStockBatch, softDeleteDurableProduct, deleteDurableProductBlob } from './src/server/services/DurableProductCatalog';
 import { durableOrderStorageEnabled, getDurableOrder, listDurableOrders, saveDurableOrder, createDurableOrderWithStockReservation, createDurableOrderWithIdempotency, markDurableOrderPaymentVerified, softDeleteDurableOrder } from './src/server/services/DurableOrderStore';
@@ -3453,7 +3454,7 @@ app.get(['/api/education/taxonomy', '/api/education/taxonomy/:countryCode?'], (r
 });
 
 // 3. Student Identity & Verification Engine (Phase 7 Remediation)
-app.post('/api/education/students/verify', studentVerifyRateLimiter, authenticate, async (req: AuthenticatedRequest, res) => {
+app.post('/api/education/students/verify', studentVerifyRateLimiter, authenticate, requireAuthenticatedUser, async (req: AuthenticatedRequest, res) => {
   try {
     const { studentId, matricOrRegistrationNumber, institutionId, countryCode, claimedFullName, nationalStudentNumber } = req.body;
     if (!studentId && !matricOrRegistrationNumber) {
@@ -3465,10 +3466,24 @@ app.post('/api/education/students/verify', studentVerifyRateLimiter, authenticat
       return;
     }
 
+    const access = resolveStudentVerificationAccess({
+      roles: req.user?.roles || [],
+      authenticatedInstitutionId: req.user?.institutionId,
+      requestedInstitutionId: institutionId
+    });
+    if (!access.allowed || !access.institutionId) {
+      res.status(403).json({
+        success: false,
+        error: access.error || 'FORBIDDEN',
+        message: 'Student verification requires authorized institutional or compliance access.'
+      });
+      return;
+    }
+
     const verificationResult = await studentVerificationService.verifyStudent({
       studentId,
       matricOrRegistrationNumber,
-      institutionId,
+      institutionId: access.institutionId,
       countryCode: countryCode || 'NG',
       claimedFullName,
       nationalStudentNumber
@@ -3483,9 +3498,13 @@ app.post('/api/education/students/verify', studentVerifyRateLimiter, authenticat
   }
 });
 
-app.post('/api/education/institutions/:id/verify-accreditation', studentVerifyRateLimiter, authenticate, async (req: AuthenticatedRequest, res) => {
+app.post('/api/education/institutions/:id/verify-accreditation', studentVerifyRateLimiter, authenticate, requireAuthenticatedUser, requirePermission('education.institution.verify'), async (req: AuthenticatedRequest, res) => {
   try {
     const { id } = req.params;
+    if (!canVerifyInstitutionAccreditation(req.user?.roles || [])) {
+      res.status(403).json({ success: false, error: 'FORBIDDEN' });
+      return;
+    }
     const { countryCode, registryNumber } = req.body;
     const result = await studentVerificationService.verifyInstitution(id, countryCode || 'NG', registryNumber);
     res.json({ success: true, accreditation: result });
