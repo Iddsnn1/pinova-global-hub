@@ -38,10 +38,10 @@ export function resolveEducationInvoiceListScope(
   input: EducationInvoiceListScopeInput
 ): EducationInvoiceListScopeResult {
   const roles = input.roles || [];
-  const isGlobalAdmin = roles.some((role) =>
-    ['PLATFORM_ADMIN', 'BURSAR', 'FINANCE_ADMIN'].includes(role)
+  const isGlobalAdmin = roles.includes('PLATFORM_ADMIN');
+  const isInstitutionAdmin = roles.some((role) =>
+    ['INSTITUTION_ADMIN', 'BURSAR', 'FINANCE_ADMIN'].includes(role)
   );
-  const isInstitutionAdmin = roles.includes('INSTITUTION_ADMIN');
   const requestedInstitution = queryValue(input.query.institutionId);
   const requestedGuardian = queryValue(input.query.guardianId);
   const requestedStudent = queryValue(input.query.studentId);
