@@ -4043,7 +4043,7 @@ app.get('/api/education/admissions/documents', authenticate, async (req: Authent
     }
     const applicationId = typeof req.query.applicationId === 'string' ? req.query.applicationId.trim() : undefined;
     const roles = req.user?.roles || [];
-    const isGlobalAdmin = roles.some((r) => ['PLATFORM_ADMIN', 'COMPLIANCE_OFFICER'].includes(r));
+    const isGlobalAdmin = roles.some((r) => ['PLATFORM_ADMIN', 'COMPLIANCE_OFFICER', 'COMPLIANCE_ADMIN'].includes(r));
     const isInstitutionAdmin = roles.includes('INSTITUTION_ADMIN');
     let documentOwner = username;
 
