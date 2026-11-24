@@ -51,6 +51,7 @@ export const AdmissionsPipeline: React.FC<AdmissionsPipelineProps> = ({
   const [documentType, setDocumentType] = useState<import('../../types/education').AdmissionDocument['type']>('other');
   const [documentUploading, setDocumentUploading] = useState(false);
   const [uploadedDocuments, setUploadedDocuments] = useState<import('../../types/education').AdmissionDocument[]>([]);
+  const [documentsLoading, setDocumentsLoading] = useState(true);
   const [downloadingDocumentId, setDownloadingDocumentId] = useState<string | null>(null);
   const [documentDownloadError, setDocumentDownloadError] = useState<string | null>(null);
 
@@ -67,13 +68,25 @@ export const AdmissionsPipeline: React.FC<AdmissionsPipelineProps> = ({
       window.document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
-      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 30000);
     } catch (error: any) {
       setDocumentDownloadError(error?.message || 'Academic document download failed.');
     } finally {
       setDownloadingDocumentId(null);
     }
   };
+
+  useEffect(() => {
+    let cancelled = false;
+    educationDocumentService.list().then((documents) => {
+      if (!cancelled) setUploadedDocuments(documents);
+    }).catch(() => {
+      if (!cancelled) setDocumentDownloadError('Previously uploaded academic documents could not be loaded.');
+    }).finally(() => {
+      if (!cancelled) setDocumentsLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     loadApplications();
@@ -429,6 +442,41 @@ export const AdmissionsPipeline: React.FC<AdmissionsPipelineProps> = ({
           </form>
         </div>
       ) : null}
+
+      {/* Applicant-owned private academic documents */}
+      <section className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3" aria-labelledby="uploaded-academic-documents">
+        <div className="flex items-center justify-between gap-3">
+          <h4 id="uploaded-academic-documents" className="text-sm font-bold text-slate-200 flex items-center gap-2">
+            <FileCheck className="w-4 h-4 text-amber-400" /> My Academic Documents
+          </h4>
+          <span className="text-[11px] text-slate-500">Private storage</span>
+        </div>
+        {documentDownloadError && <p role="alert" className="text-xs text-rose-400">{documentDownloadError}</p>}
+        {documentsLoading ? (
+          <p className="text-xs text-slate-500">Loading your uploaded documents…</p>
+        ) : uploadedDocuments.length === 0 ? (
+          <p className="text-xs text-slate-500">No uploaded academic documents found for this account.</p>
+        ) : (
+          <ul className="space-y-2">
+            {uploadedDocuments.map((doc) => (
+              <li key={doc.id} className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-800 bg-slate-950 p-3 text-xs">
+                <FileText className="w-4 h-4 text-amber-400" />
+                <span className="min-w-0 flex-1 text-slate-300 break-all">{doc.fileName}</span>
+                <span className="text-[10px] text-slate-500">{doc.verificationStatus || 'Pending verification'}</span>
+                <button
+                  type="button"
+                  onClick={() => handleDocumentDownload(doc)}
+                  disabled={downloadingDocumentId === doc.id}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 px-3 py-2 text-amber-300 hover:bg-slate-800 disabled:opacity-50"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  {downloadingDocumentId === doc.id ? 'Downloading…' : 'Download'}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       {/* Applications List */}
       <div className="space-y-4">
