@@ -15,6 +15,15 @@ import {
 } from '../types/education';
 import { getTaxonomyByCountry } from '../data/educationTaxonomyData';
 import { normalizeCountryCode, matchesSubdivision } from '../data/countrySubdivisions';
+
+function educationAuthHeaders(extra: Record<string, string> = {}): Record<string, string> {
+  const headers = { ...extra };
+  if (typeof window !== 'undefined') {
+    const token = window.localStorage.getItem('auth_token') || window.localStorage.getItem('pi_auth_token') || window.localStorage.getItem('pinova_token');
+    if (token) headers.Authorization = `Bearer ${token}`;
+  }
+  return headers;
+}
 export const educationService = {
   async getInstitutions(filter?: {
     countryCode?: string;
@@ -295,7 +304,7 @@ export const educationService = {
   async getAdmissionDocuments(applicationId?: string): Promise<import('../types/education').AdmissionDocument[]> {
     try {
       const params = applicationId ? `?applicationId=${encodeURIComponent(applicationId)}` : '';
-      const res = await fetch(`/api/education/admissions/documents${params}`);
+      const res = await fetch(`/api/education/admissions/documents${params}`, { credentials: 'same-origin', headers: educationAuthHeaders() });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.message || data.error || 'Academic document listing is unavailable');
       return Array.isArray(data.documents) ? data.documents : [];
