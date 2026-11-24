@@ -44,6 +44,9 @@ function run() {
   assert.ok(educationServiceSource.includes("'X-File-Name': input.file.name"), 'document upload must send the filename header expected by the API');
   assert.ok(educationServiceSource.includes('if (!res.ok) throw new Error(data.message || data.error'), 'document-list API failures must be surfaced instead of appearing as an empty list');
 
+  const documentServiceSource = fs.readFileSync(path.join(process.cwd(), 'src/services/educationDocumentService.ts'), 'utf8');
+  assert.ok(documentServiceSource.includes('if (!res.ok) throw new Error(data.message || data.error'), 'private document listing failures must be surfaced to the Admissions UI');
+
   const admissionsUiSource = fs.readFileSync(path.join(process.cwd(), 'src/components/education/AdmissionsPipeline.tsx'), 'utf8');
   assert.ok(admissionsUiSource.includes('educationDocumentService.list()'), 'Admissions UI must load the authenticated applicant document list');
   assert.ok(admissionsUiSource.includes('handleDocumentDownload(doc)'), 'Admissions UI must expose a download action for each listed document');
