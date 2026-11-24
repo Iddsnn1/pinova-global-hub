@@ -40,6 +40,11 @@ function run() {
     'document metadata lookup must bind both document ID and normalized owner'
   );
 
+  const admissionsUiSource = fs.readFileSync(path.join(process.cwd(), 'src/components/education/AdmissionsPipeline.tsx'), 'utf8');
+  assert.ok(admissionsUiSource.includes('educationDocumentService.list()'), 'Admissions UI must load the authenticated applicant document list');
+  assert.ok(admissionsUiSource.includes('handleDocumentDownload(doc)'), 'Admissions UI must expose a download action for each listed document');
+  assert.ok(admissionsUiSource.includes('My Academic Documents'), 'Admissions UI must render the applicant document section outside the application form');
+
   const serverSource = fs.readFileSync(path.join(process.cwd(), 'server.ts'), 'utf8');
   const routeStart = serverSource.indexOf("app.get('/api/education/admissions/documents/:documentId/download'");
   const routeEnd = serverSource.indexOf("app.post(", routeStart);
