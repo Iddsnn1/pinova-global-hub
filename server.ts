@@ -43,6 +43,9 @@ import { EducationRepository } from './src/server/db/repositories/EducationRepos
 import { NeonEducationRepository } from './src/server/db/repositories/NeonEducationRepository';
 import { createEducationDirectoryV2Handler } from './src/server/routes/educationDirectoryV2';
 import { createGuardianChildrenHandler } from './src/server/routes/guardianChildren';
+import { resolveEducationInvoiceListScope } from './src/server/routes/educationInvoiceAccess';
+import { resolveEducationPaymentHistoryAccess } from './src/server/routes/educationPaymentHistoryAccess';
+import { canVerifyInstitutionAccreditation, resolveStudentVerificationAccess } from './src/server/routes/educationVerificationAccess';
 import { ProductRepository } from './src/server/db/repositories/ProductRepository';
 import { durableProductStorageEnabled, getDurableProduct, listDurableProducts, saveDurableProduct, updateDurableProductAvailability, reserveDurableProductStockBatch, softDeleteDurableProduct, deleteDurableProductBlob } from './src/server/services/DurableProductCatalog';
 import { durableOrderStorageEnabled, getDurableOrder, listDurableOrders, saveDurableOrder, createDurableOrderWithStockReservation, createDurableOrderWithIdempotency, markDurableOrderPaymentVerified, softDeleteDurableOrder } from './src/server/services/DurableOrderStore';
@@ -50,7 +53,7 @@ import { durableVendorStorageEnabled, getDurableVendorApplication, getDurableVen
 import { objectStorageEnabled, putObject, getObject, deleteObject, publicObjectUrl } from './src/server/services/ObjectStorage';
 import { vendorDocumentStorageEnabled, putVendorDocument, getVendorDocument } from './src/server/services/VendorDocumentStorage';
 import { verifyVendorDocumentIntegrity } from './src/server/services/VendorDocumentIntegrity';
-import { saveEducationAdmissionDocument, listEducationAdmissionDocuments, educationDocumentStorageEnabled, EDUCATION_DOCUMENT_MAX_BYTES, EDUCATION_DOCUMENT_TYPES } from './src/server/services/EducationDocumentStorage';
+import { saveEducationAdmissionDocument, listEducationAdmissionDocuments, getEducationAdmissionDocument, educationDocumentStorageEnabled, EDUCATION_DOCUMENT_MAX_BYTES, EDUCATION_DOCUMENT_TYPES } from './src/server/services/EducationDocumentStorage';
 import { quoteFiatToPiReference, signPiNovaFxQuote, verifyPiNovaFxQuoteToken, FxConfigurationError, FxProviderError } from './src/server/services/PiNovaFxService';
 
 dotenv.config();
@@ -204,7 +207,7 @@ app.use((req, res, next) => {
   }
 
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Admin-Key, X-Idempotency-Key, Idempotency-Key, X-Branding-Type, X-Filename, X-Pioneer-Username, X-Username, Range');
+  res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Admin-Key, X-Idempotency-Key, Idempotency-Key, X-Branding-Type, X-Filename, X-File-Name, X-Document-Type, X-Application-Id, X-Pioneer-Username, X-Username, Range');
   // Allow Pi Browser & Google AI Studio iframe embedding strictly without wildcard leak
   res.removeHeader('X-Frame-Options');
   res.setHeader('Content-Security-Policy', "frame-ancestors 'self' https://*.minepi.com https://app-cdn.minepi.com pi: https://ai.studio https://*.google.com https://*.run.app https://localhost.corp.google.com:26001;");
@@ -3288,7 +3291,7 @@ app.get(
   '/api/education/v2/institutions',
   createEducationDirectoryV2Handler(
     () => new NeonEducationRepository(getNeonSql()),
-    () => process.env.NODE_ENV !== 'production' &&
+    () => process.env.VERCEL_ENV === 'preview' &&
       process.env.PINOVA_EDUCATION_DIRECTORY_V2_ENABLED === 'true'
   )
 );
@@ -3452,7 +3455,7 @@ app.get(['/api/education/taxonomy', '/api/education/taxonomy/:countryCode?'], (r
 });
 
 // 3. Student Identity & Verification Engine (Phase 7 Remediation)
-app.post('/api/education/students/verify', studentVerifyRateLimiter, authenticate, async (req: AuthenticatedRequest, res) => {
+app.post('/api/education/students/verify', studentVerifyRateLimiter, authenticate, requireAuthenticatedUser, async (req: AuthenticatedRequest, res) => {
   try {
     const { studentId, matricOrRegistrationNumber, institutionId, countryCode, claimedFullName, nationalStudentNumber } = req.body;
     if (!studentId && !matricOrRegistrationNumber) {
@@ -3464,10 +3467,24 @@ app.post('/api/education/students/verify', studentVerifyRateLimiter, authenticat
       return;
     }
 
+    const access = resolveStudentVerificationAccess({
+      roles: req.user?.roles || [],
+      authenticatedInstitutionId: req.user?.institutionId,
+      requestedInstitutionId: institutionId
+    });
+    if (!access.allowed || !access.institutionId) {
+      res.status(403).json({
+        success: false,
+        error: access.error || 'FORBIDDEN',
+        message: 'Student verification requires authorized institutional or compliance access.'
+      });
+      return;
+    }
+
     const verificationResult = await studentVerificationService.verifyStudent({
       studentId,
       matricOrRegistrationNumber,
-      institutionId,
+      institutionId: access.institutionId,
       countryCode: countryCode || 'NG',
       claimedFullName,
       nationalStudentNumber
@@ -3482,9 +3499,13 @@ app.post('/api/education/students/verify', studentVerifyRateLimiter, authenticat
   }
 });
 
-app.post('/api/education/institutions/:id/verify-accreditation', studentVerifyRateLimiter, authenticate, async (req: AuthenticatedRequest, res) => {
+app.post('/api/education/institutions/:id/verify-accreditation', studentVerifyRateLimiter, authenticate, requireAuthenticatedUser, requirePermission('education.institution.verify'), async (req: AuthenticatedRequest, res) => {
   try {
     const { id } = req.params;
+    if (!canVerifyInstitutionAccreditation(req.user?.roles || [])) {
+      res.status(403).json({ success: false, error: 'FORBIDDEN' });
+      return;
+    }
     const { countryCode, registryNumber } = req.body;
     const result = await studentVerificationService.verifyInstitution(id, countryCode || 'NG', registryNumber);
     res.json({ success: true, accreditation: result });
@@ -3503,8 +3524,8 @@ app.get('/api/education/students/:id', authenticate, async (req: AuthenticatedRe
   }
   const requestedId = String(req.params.id || '').trim();
   const roles = req.user?.roles || [];
-  const isGlobalAdmin = roles.some((r: string) => ['PLATFORM_ADMIN', 'BURSAR', 'FINANCE_ADMIN'].includes(r));
-  const isInstitutionAdmin = roles.includes('INSTITUTION_ADMIN');
+  const isGlobalAdmin = roles.some((r: string) => ['PLATFORM_ADMIN', 'COMPLIANCE_ADMIN', 'COMPLIANCE_OFFICER'].includes(r));
+  const isInstitutionAdmin = roles.some((r: string) => ['INSTITUTION_ADMIN', 'BURSAR', 'FINANCE_ADMIN', 'ADMISSIONS_OFFICER', 'TEACHER'].includes(r));
   const requestedInstitution = String(req.query.institutionId || '').trim();
   const institutionId = isInstitutionAdmin ? String(req.user?.institutionId || '').trim() : requestedInstitution;
   if (!requestedId || (!isGlobalAdmin && !isInstitutionAdmin)) {
@@ -3547,47 +3568,24 @@ app.get(
 app.get('/api/education/invoices', authenticate, (req: AuthenticatedRequest, res) => {
   try {
     const { studentId, institutionId, status, guardianId } = req.query;
-    const currentUser = req.user?.username;
-    const currentUserId = req.user?.id;
-    const roles = req.user?.roles || [];
-    const isGlobalAdmin = roles.some((r: string) => ['PLATFORM_ADMIN', 'BURSAR', 'FINANCE_ADMIN'].includes(r));
-    const requestedInstitution = institutionId ? String(institutionId) : undefined;
-    const isInstitutionStaff = Boolean(
-      roles.includes('INSTITUTION_ADMIN') &&
-      req.user?.institutionId &&
-      (!requestedInstitution || req.user.institutionId === requestedInstitution)
-    );
-    const requestedGuardian = guardianId ? String(guardianId) : undefined;
-    const ownsGuardianFilter = Boolean(
-      requestedGuardian &&
-      ((currentUser && requestedGuardian.toLowerCase() === currentUser.toLowerCase()) ||
-       (currentUserId && requestedGuardian === currentUserId) ||
-       (req.user?.guardianId && requestedGuardian.toLowerCase() === req.user.guardianId.toLowerCase()))
-    );
-    const ownsStudentFilter = Boolean(
-      studentId &&
-      ((currentUser && String(studentId).toLowerCase() === currentUser.toLowerCase()) ||
-       (currentUserId && String(studentId) === currentUserId) ||
-       false)
-    );
-
-    if (!isGlobalAdmin && !isInstitutionStaff && !ownsGuardianFilter && !ownsStudentFilter) {
-      res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Invoice access requires an authorized student, guardian, or institution context.' });
+    const scope = resolveEducationInvoiceListScope({
+      roles: req.user?.roles || [],
+      username: req.user?.username,
+      userId: req.user?.id,
+      guardianId: req.user?.guardianId,
+      institutionId: req.user?.institutionId,
+      query: { studentId, institutionId, status, guardianId }
+    });
+    if (!scope.allowed) {
+      res.status(403).json({
+        success: false,
+        error: scope.error || 'FORBIDDEN',
+        message: 'Invoice access must be limited to the authenticated guardian, student, or institution.'
+      });
       return;
     }
 
-    if (isInstitutionStaff && requestedInstitution && req.user?.institutionId !== requestedInstitution) {
-      res.status(403).json({ success: false, error: 'FORBIDDEN', message: 'Institution administrator access is limited to the authenticated institution.' });
-      return;
-    }
-
-    const filter: any = {};
-    if (studentId) filter.studentId = String(studentId);
-    if (institutionId) filter.institutionId = String(institutionId);
-    if (status) filter.status = String(status);
-    if (guardianId) filter.guardianId = String(guardianId);
-
-    const invoices = educationRepo.getInvoices(filter);
+    const invoices = educationRepo.getInvoices(scope.filter);
     res.json({ success: true, count: invoices.length, invoices });
   } catch (err: any) {
     res.status(500).json({ success: false, error: 'INVOICES_FETCH_FAILED', message: err.message });
@@ -3602,11 +3600,12 @@ app.get('/api/education/invoices/:id', authenticate, (req: AuthenticatedRequest,
       return;
     }
     const roles = req.user?.roles || [];
-    const isGlobalAdmin = roles.some((r: string) => ['PLATFORM_ADMIN', 'BURSAR', 'FINANCE_ADMIN'].includes(r));
+    const isGlobalAdmin = roles.includes('PLATFORM_ADMIN');
+    const isInstitutionStaff = Boolean(roles.some((r: string) => ['INSTITUTION_ADMIN', 'BURSAR', 'FINANCE_ADMIN'].includes(r)) && req.user?.institutionId && req.user.institutionId === invoice.institutionId);
     const currentUser = req.user?.username;
     const currentUserId = req.user?.id;
     const authorized = isGlobalAdmin ||
-      Boolean(roles.includes('INSTITUTION_ADMIN') && req.user?.institutionId && req.user.institutionId === invoice.institutionId) ||
+      isInstitutionStaff ||
       Boolean(currentUser && invoice.guardianId && invoice.guardianId.toLowerCase() === currentUser.toLowerCase()) ||
       Boolean(currentUserId && invoice.guardianId === currentUserId) ||
       Boolean(req.user?.guardianId && invoice.guardianId && req.user.guardianId.toLowerCase() === invoice.guardianId.toLowerCase()) ||
@@ -3899,24 +3898,16 @@ app.get('/api/education/invoices/:id/payments', authenticate, (req: Authenticate
       return;
     }
 
-    const currentUser = req.user?.username;
-    const currentUserId = req.user?.id;
-    const userRoles = req.user?.roles || [];
-    const isPlatformAdmin = userRoles.includes('PLATFORM_ADMIN') || userRoles.includes('BURSAR') || userRoles.includes('FINANCE_ADMIN');
-    const isInstitutionStaff = Boolean(userRoles.includes('INSTITUTION_ADMIN') && req.user?.institutionId && req.user.institutionId === invoice.institutionId);
-
-    const isGuardianOwner = Boolean(
-      (currentUser && invoice.guardianId && invoice.guardianId.toLowerCase() === currentUser.toLowerCase()) ||
-      (currentUserId && invoice.guardianId && invoice.guardianId === currentUserId) ||
-      (req.user?.guardianId && invoice.guardianId && req.user.guardianId.toLowerCase() === invoice.guardianId.toLowerCase())
-    );
-    const isStudentOwner = Boolean(
-      (currentUser && invoice.studentId && invoice.studentId.toLowerCase() === currentUser.toLowerCase()) ||
-      (currentUserId && invoice.studentId && invoice.studentId === currentUserId) ||
-      (currentUser && invoice.studentName && invoice.studentName.toLowerCase() === currentUser.toLowerCase()) ||
-      ((req.user as any)?.studentId && invoice.studentId && (req.user as any).studentId.toLowerCase() === invoice.studentId.toLowerCase())
-    );
-    const isAuthorized = isPlatformAdmin || isInstitutionStaff || isGuardianOwner || isStudentOwner;
+    const access = resolveEducationPaymentHistoryAccess({
+      roles: req.user?.roles || [],
+      institutionId: req.user?.institutionId,
+      username: req.user?.username,
+      userId: req.user?.id,
+      guardianId: req.user?.guardianId,
+      studentId: (req.user as any)?.studentId,
+      invoice
+    });
+    const isAuthorized = access.allowed;
 
     if (!isAuthorized) {
       res.status(403).json({
@@ -3980,8 +3971,8 @@ app.get('/api/education/receipts/:receiptNumber', authenticate, (req: Authentica
       return;
     }
     const roles = req.user?.roles || [];
-    const isGlobalAdmin = roles.some((r: string) => ['PLATFORM_ADMIN', 'BURSAR', 'FINANCE_ADMIN'].includes(r));
-    const isInstitutionAdmin = roles.includes('INSTITUTION_ADMIN');
+    const isGlobalAdmin = roles.includes('PLATFORM_ADMIN');
+    const isInstitutionAdmin = roles.some((r: string) => ['INSTITUTION_ADMIN', 'BURSAR', 'FINANCE_ADMIN'].includes(r));
     const userRefs = [String(req.user?.id || ''), String(req.user?.username || '')].map(v => v.trim().toLowerCase()).filter(Boolean);
     const ownsReceipt = Boolean(receipt.studentId && userRefs.includes(receipt.studentId.trim().toLowerCase()));
     const institutionScoped = Boolean(isInstitutionAdmin && req.user?.institutionId && String(receipt.institutionId || '') === String(req.user.institutionId));
@@ -4002,7 +3993,7 @@ app.get('/api/education/admissions', authenticate, async (req: AuthenticatedRequ
     return;
   }
   const roles = req.user?.roles || [];
-  const isGlobalAdmin = roles.some((r: string) => ['PLATFORM_ADMIN', 'COMPLIANCE_OFFICER'].includes(r));
+  const isGlobalAdmin = roles.some((r: string) => ['PLATFORM_ADMIN', 'COMPLIANCE_OFFICER', 'COMPLIANCE_ADMIN'].includes(r));
   const isInstitutionAdmin = roles.includes('INSTITUTION_ADMIN');
   const currentUsername = String(req.user?.username || '').trim().toLowerCase();
   const requestedInstitution = String(req.query.institutionId || '').trim();
@@ -4052,7 +4043,7 @@ app.get('/api/education/admissions/documents', authenticate, async (req: Authent
     }
     const applicationId = typeof req.query.applicationId === 'string' ? req.query.applicationId.trim() : undefined;
     const roles = req.user?.roles || [];
-    const isGlobalAdmin = roles.some((r) => ['PLATFORM_ADMIN', 'COMPLIANCE_OFFICER'].includes(r));
+    const isGlobalAdmin = roles.some((r) => ['PLATFORM_ADMIN', 'COMPLIANCE_OFFICER', 'COMPLIANCE_ADMIN'].includes(r));
     const isInstitutionAdmin = roles.includes('INSTITUTION_ADMIN');
     let documentOwner = username;
 
@@ -4084,6 +4075,43 @@ app.get('/api/education/admissions/documents', authenticate, async (req: Authent
     res.json({ success: true, count: documents.length, documents, availability: educationDocumentStorageEnabled() ? 'AVAILABLE' : 'UNAVAILABLE' });
   } catch (err: any) {
     res.status(503).json({ success: false, error: 'EDUCATION_DOCUMENTS_UNAVAILABLE', message: err?.message || 'Academic document storage is unavailable.' });
+  }
+});
+
+
+app.get('/api/education/admissions/documents/:documentId/download', authenticate, async (req: AuthenticatedRequest, res) => {
+  try {
+    const username = String(req.user?.username || '').trim();
+    if (!username) {
+      res.status(401).json({ success: false, error: 'AUTHENTICATION_CONTEXT_REQUIRED' });
+      return;
+    }
+    if (!educationDocumentStorageEnabled()) {
+      res.status(503).json({ success: false, error: 'EDUCATION_DOCUMENT_STORAGE_UNAVAILABLE' });
+      return;
+    }
+    // Downloads are applicant-owner-only. Staff review access requires a separate,
+    // institution-scoped authorization path and is intentionally not inferred here.
+    const document = await getEducationAdmissionDocument(username, req.params.documentId);
+    if (!document) {
+      res.status(404).json({ success: false, error: 'EDUCATION_DOCUMENT_NOT_FOUND' });
+      return;
+    }
+    res.setHeader('Content-Type', document.contentType);
+    res.setHeader('Content-Disposition', `attachment; filename="${document.fileName}"`);
+    res.setHeader('Cache-Control', 'private, no-store');
+    const body = document.body as any;
+    if (typeof body.pipe !== 'function') {
+      res.status(503).json({ success: false, error: 'EDUCATION_DOCUMENT_STREAM_UNAVAILABLE' });
+      return;
+    }
+    body.on('error', () => {
+      if (!res.headersSent) res.status(503).json({ success: false, error: 'EDUCATION_DOCUMENT_DOWNLOAD_FAILED' });
+      else res.destroy();
+    });
+    body.pipe(res);
+  } catch (err: any) {
+    res.status(503).json({ success: false, error: 'EDUCATION_DOCUMENT_DOWNLOAD_FAILED', message: err?.message || 'Unable to download document.' });
   }
 });
 
@@ -4201,7 +4229,7 @@ app.post('/api/education/admissions/apply', authenticate, async (req: Authentica
 });
 
 // Admissions State Machine Transition (Requires Institution Admin or Compliance Officer)
-app.post('/api/education/admissions/:id/status', authenticate, requireRole(['PLATFORM_ADMIN', 'INSTITUTION_ADMIN', 'COMPLIANCE_OFFICER']), async (req: AuthenticatedRequest, res) => {
+app.post('/api/education/admissions/:id/status', authenticate, requireRole(['PLATFORM_ADMIN', 'INSTITUTION_ADMIN', 'COMPLIANCE_OFFICER', 'COMPLIANCE_ADMIN']), async (req: AuthenticatedRequest, res) => {
   try {
     const { id } = req.params;
     const { status, reason } = req.body;

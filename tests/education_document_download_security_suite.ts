@@ -1,0 +1,73 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import {
+  isValidEducationAdmissionDocumentId,
+  safeEducationAdmissionDocumentFileName
+} from '../src/server/services/EducationDocumentStorage';
+
+function run() {
+  assert.equal(
+    isValidEducationAdmissionDocumentId('edu-doc-123e4567-e89b-12d3-a456-426614174000'),
+    true,
+    'valid generated document identifiers are accepted'
+  );
+  assert.equal(isValidEducationAdmissionDocumentId('../private/document.pdf'), false);
+  assert.equal(isValidEducationAdmissionDocumentId('edu-doc-not-a-uuid'), false);
+  assert.equal(isValidEducationAdmissionDocumentId(''), false);
+
+  assert.equal(
+    safeEducationAdmissionDocumentFileName('../../private/passport.pdf'),
+    'passport.pdf',
+    'download filenames must not preserve directory traversal segments'
+  );
+  assert.equal(
+    safeEducationAdmissionDocumentFileName('passport\r\nX-Injected: yes.pdf'),
+    'passport_X-Injected_yes.pdf',
+    'download filenames must strip header control characters'
+  );
+  assert.ok(
+    safeEducationAdmissionDocumentFileName('a'.repeat(200) + '.pdf').length <= 120,
+    'download filenames must be length bounded'
+  );
+
+  const storageSource = fs.readFileSync(
+    path.join(process.cwd(), 'src/server/services/EducationDocumentStorage.ts'),
+    'utf8'
+  );
+  assert.ok(
+    storageSource.includes('WHERE document_id = ${id} AND owner_username = ${owner}'),
+    'document metadata lookup must bind both document ID and normalized owner'
+  );
+
+  const educationServiceSource = fs.readFileSync(path.join(process.cwd(), 'src/services/educationService.ts'), 'utf8');
+  assert.ok(educationServiceSource.includes("'X-File-Name': input.file.name"), 'document upload must send the filename header expected by the API');
+  assert.ok(educationServiceSource.includes('if (!res.ok) throw new Error(data.message || data.error'), 'document-list API failures must be surfaced instead of appearing as an empty list');
+
+  const documentServiceSource = fs.readFileSync(path.join(process.cwd(), 'src/services/educationDocumentService.ts'), 'utf8');
+  assert.ok(documentServiceSource.includes('if (!res.ok) throw new Error(data.message || data.error'), 'private document listing failures must be surfaced to the Admissions UI');
+
+  const admissionsUiSource = fs.readFileSync(path.join(process.cwd(), 'src/components/education/AdmissionsPipeline.tsx'), 'utf8');
+  assert.ok(admissionsUiSource.includes('educationDocumentService.list()'), 'Admissions UI must load the authenticated applicant document list');
+  assert.ok(admissionsUiSource.includes('handleDocumentDownload(doc)'), 'Admissions UI must expose a download action for each listed document');
+  assert.ok(admissionsUiSource.includes('My Academic Documents'), 'Admissions UI must render the applicant document section outside the application form');
+
+  const serverSource = fs.readFileSync(path.join(process.cwd(), 'server.ts'), 'utf8');
+  assert.ok(serverSource.includes('X-File-Name, X-Document-Type, X-Application-Id'), 'CORS must allow the custom headers used by academic document uploads');
+
+  const routeStart = serverSource.indexOf("app.get('/api/education/admissions/documents/:documentId/download'");
+  const routeEnd = serverSource.indexOf("app.post(", routeStart);
+  const route = serverSource.slice(routeStart, routeEnd);
+  assert.ok(route.includes('authenticate'), 'download endpoint must require an authenticated session');
+  assert.ok(route.includes('getEducationAdmissionDocument(username, req.params.documentId)'), 'download endpoint must retrieve only the authenticated owner document');
+  assert.ok(route.includes("'Cache-Control', 'private, no-store'"), 'download response must not be publicly cached');
+  assert.ok(route.includes('body.pipe(res)'), 'download endpoint must stream the private object body');
+  const documentListRouteStart = serverSource.indexOf("app.get('/api/education/admissions/documents'");
+  const documentListRouteEnd = serverSource.indexOf("app.get('/api/education/admissions/documents/:documentId/download'");
+  const documentListRoute = serverSource.slice(documentListRouteStart, documentListRouteEnd);
+  assert.ok(documentListRoute.includes("['PLATFORM_ADMIN', 'COMPLIANCE_OFFICER', 'COMPLIANCE_ADMIN'].includes(r)"), 'document listing must recognize the same global compliance roles as admissions review');
+
+  console.log('Education document download security suite passed');
+}
+
+run();

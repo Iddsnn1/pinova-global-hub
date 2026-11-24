@@ -296,8 +296,8 @@ export const educationService = {
     try {
       const params = applicationId ? `?applicationId=${encodeURIComponent(applicationId)}` : '';
       const res = await fetch(`/api/education/admissions/documents${params}`);
-      if (!res.ok) return [];
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message || data.error || 'Academic document listing is unavailable');
       return Array.isArray(data.documents) ? data.documents : [];
     } catch (e) {
       console.warn('[educationService] Academic document listing unavailable:', e);
@@ -313,7 +313,7 @@ export const educationService = {
     const headers: Record<string, string> = {
       'Content-Type': input.file.type,
       'X-Document-Type': input.documentType,
-      'X-Filename': input.file.name
+      'X-File-Name': input.file.name
     };
     if (input.applicationId) headers['X-Application-Id'] = input.applicationId;
 

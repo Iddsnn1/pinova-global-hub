@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { neon } from '@neondatabase/serverless';
 import crypto from 'crypto';
 
@@ -93,7 +93,11 @@ function signatureMatches(bytes: Uint8Array, contentType: string): boolean {
   return bytes.length >= png.length && png.every((v, i) => bytes[i] === v);
 }
 
-function safeFileName(value: string): string {
+export function isValidEducationAdmissionDocumentId(value: string): boolean {
+  return /^edu-doc-[0-9a-f-]{36}$/i.test(String(value || '').trim());
+}
+
+export function safeEducationAdmissionDocumentFileName(value: string): string {
   const base = String(value || 'document').replace(/\\/g, '/').split('/').pop() || 'document';
   return base.replace(/[^a-zA-Z0-9._-]+/g, '_').slice(0, 120) || 'document';
 }
@@ -125,7 +129,7 @@ export async function saveEducationAdmissionDocument(input: {
       INSERT INTO education_admission_documents
         (document_id, owner_username, application_id, document_type, original_file_name, content_type, size_bytes, object_key, sha256)
       VALUES
-        (${documentId}, ${owner}, ${input.applicationId || null}, ${input.documentType}, ${safeFileName(input.fileName)}, ${input.contentType}, ${input.bytes.length}, ${objectKey}, ${sha256})
+        (${documentId}, ${owner}, ${input.applicationId || null}, ${input.documentType}, ${safeEducationAdmissionDocumentFileName(input.fileName)}, ${input.contentType}, ${input.bytes.length}, ${objectKey}, ${sha256})
     `;
   } catch (error) {
     await deleteEducationDocument(objectKey).catch(() => undefined);
@@ -135,7 +139,7 @@ export async function saveEducationAdmissionDocument(input: {
   return {
     id: documentId,
     type: input.documentType,
-    fileName: safeFileName(input.fileName),
+    fileName: safeEducationAdmissionDocumentFileName(input.fileName),
     fileSizeKb: Math.ceil(input.bytes.length / 1024),
     uploadedAt: new Date().toISOString(),
     verificationStatus: 'pending' as const,
@@ -174,4 +178,24 @@ export async function listEducationAdmissionDocuments(ownerUsername: string, app
     verificationStatus: row.verificationStatus,
     applicationId: row.applicationId || null
   }));
+}
+
+export async function getEducationAdmissionDocument(ownerUsername: string, documentId: string) {
+  const owner = normalizeOwner(ownerUsername);
+  const id = String(documentId || '').trim();
+  if (!isValidEducationAdmissionDocumentId(id)) return null;
+  const sql = database();
+  const rows = await sql`
+    SELECT document_id AS "id", original_file_name AS "fileName",
+           content_type AS "contentType", object_key AS "objectKey"
+    FROM education_admission_documents
+    WHERE document_id = ${id} AND owner_username = ${owner}
+    LIMIT 1
+  `;
+  const row = rows[0] as any;
+  if (!row) return null;
+  const { s3 } = client();
+  const object = await s3.send(new GetObjectCommand({ Bucket: BUCKET, Key: row.objectKey }));
+  if (!object.Body) throw new Error('EDUCATION_DOCUMENT_OBJECT_EMPTY');
+  return { body: object.Body, fileName: safeEducationAdmissionDocumentFileName(row.fileName), contentType: String(row.contentType || 'application/octet-stream') };
 }

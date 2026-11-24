@@ -2,9 +2,12 @@ name: PiNova CI
 
 on:
   push:
-    branches: [main, design/premium-landing-preview, migration/neon-durable-storage]
+    branches:
+      - main
+      - design/premium-landing-preview
+      - migration/neon-durable-storage
+      - fix/education-guardian-neon-read-preview-20261122
   pull_request:
-    branches: [main, design/premium-landing-preview, migration/neon-durable-storage]
   workflow_dispatch:
 
 jobs:
