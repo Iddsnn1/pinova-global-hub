@@ -319,16 +319,17 @@ export const educationService = {
     documentType: import('../types/education').AdmissionDocument['type'];
     applicationId?: string;
   }): Promise<import('../types/education').AdmissionDocument> {
-    const headers: Record<string, string> = {
+    const headers: Record<string, string> = educationAuthHeaders({
       'Content-Type': input.file.type,
       'X-Document-Type': input.documentType,
-      'X-File-Name': input.file.name
-    };
-    if (input.applicationId) headers['X-Application-Id'] = input.applicationId;
+      'X-File-Name': input.file.name,
+      ...(input.applicationId ? { 'X-Application-Id': input.applicationId } : {})
+    });
 
     const res = await fetch('/api/education/admissions/documents/upload', {
       method: 'POST',
       headers,
+      credentials: 'same-origin',
       body: input.file
     });
     const data = await res.json().catch(() => ({}));
