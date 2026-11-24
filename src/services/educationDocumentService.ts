@@ -4,8 +4,8 @@ export const educationDocumentService = {
   async list(applicationId?: string): Promise<AdmissionDocument[]> {
     const query = applicationId ? `?applicationId=${encodeURIComponent(applicationId)}` : '';
     const res = await fetch(`/api/education/admissions/documents${query}`);
-    if (!res.ok) return [];
     const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.message || data.error || 'Academic document listing is unavailable');
     return Array.isArray(data.documents) ? data.documents : [];
   },
 
