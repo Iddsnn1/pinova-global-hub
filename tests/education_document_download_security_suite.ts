@@ -53,6 +53,8 @@ function run() {
   assert.ok(admissionsUiSource.includes('My Academic Documents'), 'Admissions UI must render the applicant document section outside the application form');
 
   const serverSource = fs.readFileSync(path.join(process.cwd(), 'server.ts'), 'utf8');
+  assert.ok(serverSource.includes('X-File-Name, X-Document-Type, X-Application-Id'), 'CORS must allow the custom headers used by academic document uploads');
+
   const routeStart = serverSource.indexOf("app.get('/api/education/admissions/documents/:documentId/download'");
   const routeEnd = serverSource.indexOf("app.post(", routeStart);
   const route = serverSource.slice(routeStart, routeEnd);
