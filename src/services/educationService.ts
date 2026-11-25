@@ -15,14 +15,8 @@ import {
 } from '../types/education';
 import { getTaxonomyByCountry } from '../data/educationTaxonomyData';
 import { normalizeCountryCode, matchesSubdivision } from '../data/countrySubdivisions';
-import { getVendorAuthToken } from '../lib/vendorAuthBridge';
+import { vendorAuthenticatedFetch } from '../lib/vendorAuthBridge';
 
-function educationAuthHeaders(extra: Record<string, string> = {}): Record<string, string> {
-  const headers = { ...extra };
-  const token = getVendorAuthToken();
-  if (token) headers.Authorization = `Bearer ${token}`;
-  return headers;
-}
 export const educationService = {
   async getInstitutions(filter?: {
     countryCode?: string;
@@ -303,7 +297,7 @@ export const educationService = {
   async getAdmissionDocuments(applicationId?: string): Promise<import('../types/education').AdmissionDocument[]> {
     try {
       const params = applicationId ? `?applicationId=${encodeURIComponent(applicationId)}` : '';
-      const res = await fetch(`/api/education/admissions/documents${params}`, { credentials: 'same-origin', headers: educationAuthHeaders() });
+      const res = await vendorAuthenticatedFetch(`/api/education/admissions/documents${params}`, { credentials: 'same-origin' });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.message || data.error || 'Academic document listing is unavailable');
       return Array.isArray(data.documents) ? data.documents : [];
@@ -318,14 +312,14 @@ export const educationService = {
     documentType: import('../types/education').AdmissionDocument['type'];
     applicationId?: string;
   }): Promise<import('../types/education').AdmissionDocument> {
-    const headers: Record<string, string> = educationAuthHeaders({
+    const headers: Record<string, string> = {
       'Content-Type': input.file.type,
       'X-Document-Type': input.documentType,
       'X-File-Name': input.file.name,
       ...(input.applicationId ? { 'X-Application-Id': input.applicationId } : {})
-    });
+    };
 
-    const res = await fetch('/api/education/admissions/documents/upload', {
+    const res = await vendorAuthenticatedFetch('/api/education/admissions/documents/upload', {
       method: 'POST',
       headers,
       credentials: 'same-origin',
