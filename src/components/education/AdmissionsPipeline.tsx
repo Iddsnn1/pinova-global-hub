@@ -38,8 +38,11 @@ export const AdmissionsPipeline: React.FC<AdmissionsPipelineProps> = ({
   const [programmeId, setProgrammeId] = useState('');
   const [programmeName, setProgrammeName] = useState('');
   const [institutionOptions, setInstitutionOptions] = useState<InstitutionProfile[]>([]);
+  const [institutionLoading, setInstitutionLoading] = useState(true);
+  const [institutionError, setInstitutionError] = useState<string | null>(null);
   const [programmeOptions, setProgrammeOptions] = useState<import('../../types/education').EducationProgramme[]>([]);
   const [hierarchyLoading, setHierarchyLoading] = useState(false);
+  const [programmeError, setProgrammeError] = useState<string | null>(null);
   const [providerUnavailable, setProviderUnavailable] = useState(false);
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
@@ -54,6 +57,7 @@ export const AdmissionsPipeline: React.FC<AdmissionsPipelineProps> = ({
   const [documentsLoading, setDocumentsLoading] = useState(true);
   const [downloadingDocumentId, setDownloadingDocumentId] = useState<string | null>(null);
   const [documentDownloadError, setDocumentDownloadError] = useState<string | null>(null);
+  const [documentLoadError, setDocumentLoadError] = useState<string | null>(null);
 
   const handleDocumentDownload = async (document: import('../../types/education').AdmissionDocument) => {
     setDownloadingDocumentId(document.id);
@@ -76,33 +80,50 @@ export const AdmissionsPipeline: React.FC<AdmissionsPipelineProps> = ({
     }
   };
 
+  const loadDocuments = async () => {
+    setDocumentsLoading(true);
+    setDocumentLoadError(null);
+    try {
+      const documents = await educationDocumentService.list();
+      setUploadedDocuments(documents);
+    } catch (error: any) {
+      setDocumentLoadError(error?.message || 'Previously uploaded academic documents could not be loaded.');
+    } finally {
+      setDocumentsLoading(false);
+    }
+  };
+
   useEffect(() => {
-    let cancelled = false;
-    educationDocumentService.list().then((documents) => {
-      if (!cancelled) setUploadedDocuments(documents);
-    }).catch(() => {
-      if (!cancelled) setDocumentDownloadError('Previously uploaded academic documents could not be loaded.');
-    }).finally(() => {
-      if (!cancelled) setDocumentsLoading(false);
-    });
-    return () => { cancelled = true; };
+    void loadDocuments();
   }, []);
 
   useEffect(() => {
     loadApplications();
     let cancelled = false;
+    setInstitutionLoading(true);
+    setInstitutionError(null);
+    setProviderUnavailable(false);
     (async () => {
-      const institutions = await educationService.getInstitutions({ tier: 'tertiary', verificationStatus: 'VERIFIED' });
-      if (cancelled) return;
-      setInstitutionOptions(institutions);
-      if (preselectedInstitution?.id) {
-        setInstitutionId(preselectedInstitution.id);
-        setInstitutionName(preselectedInstitution.name);
-      } else if (institutions.length === 1) {
-        setInstitutionId(institutions[0].id);
-        setInstitutionName(institutions[0].name);
+      try {
+        const institutions = await educationService.getInstitutions({ tier: 'tertiary', verificationStatus: 'VERIFIED' });
+        if (cancelled) return;
+        setInstitutionOptions(institutions);
+        if (preselectedInstitution?.id) {
+          setInstitutionId(preselectedInstitution.id);
+          setInstitutionName(preselectedInstitution.name);
+        } else if (institutions.length === 1) {
+          setInstitutionId(institutions[0].id);
+          setInstitutionName(institutions[0].name);
+        }
+        setProviderUnavailable(institutions.length === 0);
+      } catch (error: any) {
+        if (cancelled) return;
+        setInstitutionOptions([]);
+        setProviderUnavailable(true);
+        setInstitutionError(error?.message || 'The authoritative institution directory is unavailable.');
+      } finally {
+        if (!cancelled) setInstitutionLoading(false);
       }
-      if (institutions.length === 0) setProviderUnavailable(true);
     })();
     return () => { cancelled = true; };
   }, [preselectedInstitution?.id, preselectedInstitution?.name]);
@@ -116,21 +137,25 @@ export const AdmissionsPipeline: React.FC<AdmissionsPipelineProps> = ({
     }
     let cancelled = false;
     setHierarchyLoading(true);
+    setProgrammeError(null);
     (async () => {
-      const programmes = await educationService.getProgrammes(institutionId);
-      if (cancelled) return;
-      setProgrammeOptions(programmes);
-      setProgrammeId('');
-      setProgrammeName('');
-      setHierarchyLoading(false);
-    })().catch(() => {
-      if (!cancelled) {
-        setProgrammeOptions([]);
+      try {
+        const programmes = await educationService.getProgrammes(institutionId);
+        if (cancelled) return;
+        setProgrammeOptions(programmes);
         setProgrammeId('');
         setProgrammeName('');
-        setHierarchyLoading(false);
+      } catch (error: any) {
+        if (!cancelled) {
+          setProgrammeOptions([]);
+          setProgrammeId('');
+          setProgrammeName('');
+          setProgrammeError(error?.message || 'The authoritative programme directory is unavailable.');
+        }
+      } finally {
+        if (!cancelled) setHierarchyLoading(false);
       }
-    });
+    })();
     return () => { cancelled = true; };
   }, [institutionId]);
 
@@ -274,14 +299,18 @@ export const AdmissionsPipeline: React.FC<AdmissionsPipelineProps> = ({
                     setInstitutionId(selected?.id || '');
                     setInstitutionName(selected?.name || '');
                   }}
-                  disabled={institutionOptions.length === 0}
+                  disabled={institutionLoading || !!institutionError || institutionOptions.length === 0}
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-slate-200 focus:outline-none focus:border-amber-500 disabled:opacity-60"
                 >
-                  <option value="">{institutionOptions.length ? 'Select an authoritative institution...' : 'No verified institutions available'}</option>
+                  <option value="">{institutionLoading ? 'Loading verified institutions...' : institutionError ? 'Institution directory unavailable' : institutionOptions.length ? 'Select an authoritative institution...' : 'No verified institutions listed'}</option>
                   {institutionOptions.map((institution) => (
                     <option key={institution.id} value={institution.id}>{institution.name}</option>
                   ))}
                 </select>
+                {institutionError && <p role="alert" className="mt-1 text-[11px] text-rose-400">{institutionError}</p>}
+                {!institutionLoading && !institutionError && institutionOptions.length === 0 && (
+                  <p className="mt-1 text-[11px] text-slate-400">No verified institutions are currently listed by the connected authoritative provider.</p>
+                )}
               </div>
 
               {/* Programme */}
@@ -297,11 +326,15 @@ export const AdmissionsPipeline: React.FC<AdmissionsPipelineProps> = ({
                   disabled={!institutionId || hierarchyLoading || programmeOptions.length === 0}
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-slate-200 focus:outline-none focus:border-amber-500 disabled:opacity-60"
                 >
-                  <option value="">{hierarchyLoading ? 'Loading verified programmes...' : programmeOptions.length ? 'Select an authoritative programme...' : 'No verified programmes available'}</option>
+                  <option value="">{hierarchyLoading ? 'Loading verified programmes...' : programmeError ? 'Programme directory unavailable' : programmeOptions.length ? 'Select an authoritative programme...' : institutionId ? 'No verified programmes listed' : 'Select an institution first'}</option>
                   {programmeOptions.map((programme) => (
                     <option key={programme.id} value={programme.id}>{programme.name}{programme.code ? ' — ' + programme.code : ''}</option>
                   ))}
                 </select>
+                {programmeError && <p role="alert" className="mt-1 text-[11px] text-rose-400">{programmeError}</p>}
+                {!hierarchyLoading && !programmeError && institutionId && programmeOptions.length === 0 && (
+                  <p className="mt-1 text-[11px] text-slate-400">No verified programmes are currently listed for this institution.</p>
+                )}
               </div>
 
               {/* Candidate Full Name */}
@@ -454,6 +487,11 @@ export const AdmissionsPipeline: React.FC<AdmissionsPipelineProps> = ({
         {documentDownloadError && <p role="alert" className="text-xs text-rose-400">{documentDownloadError}</p>}
         {documentsLoading ? (
           <p className="text-xs text-slate-500">Loading your uploaded documents…</p>
+        ) : documentLoadError ? (
+          <div className="space-y-2">
+            <p role="alert" className="text-xs text-rose-400">Could not load your academic documents: {documentLoadError}</p>
+            <button type="button" onClick={() => void loadDocuments()} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-amber-300 hover:bg-slate-800">Retry loading documents</button>
+          </div>
         ) : uploadedDocuments.length === 0 ? (
           <p className="text-xs text-slate-500">No uploaded academic documents found for this account.</p>
         ) : (
