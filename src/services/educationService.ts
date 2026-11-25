@@ -28,27 +28,25 @@ export const educationService = {
     search?: string;
     verificationStatus?: string;
   }): Promise<InstitutionProfile[]> {
-    try {
-      const params = new URLSearchParams();
-      if (filter?.countryCode) params.append('countryCode', filter.countryCode);
-      if (filter?.country) params.append('country', filter.country);
-      if (filter?.state) params.append('state', filter.state);
-      if (filter?.tier) params.append('tier', filter.tier);
-      if (filter?.institutionType) params.append('institutionType', filter.institutionType);
-      if (filter?.isPublic !== undefined) params.append('isPublic', String(filter.isPublic));
-      if (filter?.search) params.append('search', filter.search);
-      if (filter?.verificationStatus) params.append('verificationStatus', filter.verificationStatus);
+    const params = new URLSearchParams();
+    if (filter?.countryCode) params.append('countryCode', filter.countryCode);
+    if (filter?.country) params.append('country', filter.country);
+    if (filter?.state) params.append('state', filter.state);
+    if (filter?.tier) params.append('tier', filter.tier);
+    if (filter?.institutionType) params.append('institutionType', filter.institutionType);
+    if (filter?.isPublic !== undefined) params.append('isPublic', String(filter.isPublic));
+    if (filter?.search) params.append('search', filter.search);
+    if (filter?.verificationStatus) params.append('verificationStatus', filter.verificationStatus);
 
-      const res = await fetch(`/api/education/institutions?${params.toString()}`);
-      if (res.ok) {
-        const data = await res.json();
-        return data.institutions || [];
-      }
-    } catch (e) {
-      console.warn('[educationService] Authoritative institution API unavailable:', e);
+    const res = await vendorAuthenticatedFetch(`/api/education/institutions?${params.toString()}`, { credentials: 'same-origin' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.message || data.error || `Institution directory unavailable (HTTP ${res.status})`);
     }
-    // Production safety: never expose static institution records when the authoritative provider API is unavailable.
-    return [];
+    if (!Array.isArray(data.institutions)) {
+      throw new Error('Institution directory returned an invalid response.');
+    }
+    return data.institutions;
   },
 
   async getInstitution(id: string): Promise<InstitutionProfile | null> {
@@ -98,28 +96,19 @@ export const educationService = {
     facultyId?: string,
     departmentId?: string
   ): Promise<EducationProgramme[]> {
-    try {
-      if (facultyId && departmentId) {
-        const res = await fetch(
-          `/api/education/institutions/${encodeURIComponent(institutionId)}/faculties/${encodeURIComponent(facultyId)}/departments/${encodeURIComponent(departmentId)}/programmes`
-        );
-        if (res.ok) {
-          const data = await res.json();
-          return data.programmes || [];
-        }
-      } else {
-        const res = await fetch(`/api/education/institutions/${encodeURIComponent(institutionId)}/programmes`);
-        if (res.ok) {
-          const data = await res.json();
-          return data.programmes || [];
-        }
-      }
-    } catch (e) {
-      console.warn('[educationService] Failed fetching programmes via API:', e);
+    let endpoint = `/api/education/institutions/${encodeURIComponent(institutionId)}/programmes`;
+    if (facultyId && departmentId) {
+      endpoint = `/api/education/institutions/${encodeURIComponent(institutionId)}/faculties/${encodeURIComponent(facultyId)}/departments/${encodeURIComponent(departmentId)}/programmes`;
     }
-
-    // No local/static programme fallback.
-    return [];
+    const res = await vendorAuthenticatedFetch(endpoint, { credentials: 'same-origin' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.message || data.error || `Programme directory unavailable (HTTP ${res.status})`);
+    }
+    if (!Array.isArray(data.programmes)) {
+      throw new Error('Programme directory returned an invalid response.');
+    }
+    return data.programmes;
   },
 
   async getTaxonomy(countryCode: string = 'NG'): Promise<CountryEducationTaxonomy | null> {
