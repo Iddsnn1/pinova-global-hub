@@ -1,11 +1,10 @@
 import { AdmissionDocument } from '../types/education';
+import { getVendorAuthToken } from '../lib/vendorAuthBridge';
 
 function educationAuthHeaders(extra: Record<string, string> = {}): Record<string, string> {
   const headers = { ...extra };
-  if (typeof window !== 'undefined') {
-    const token = window.localStorage.getItem('auth_token') || window.localStorage.getItem('pi_auth_token') || window.localStorage.getItem('pinova_token');
-    if (token) headers.Authorization = `Bearer ${token}`;
-  }
+  const token = getVendorAuthToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
   return headers;
 }
 
