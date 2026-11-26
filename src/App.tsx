@@ -24,7 +24,7 @@ import {
 
 import { Product, Order, OrderItem, Vendor, Review, Coupon, Notification, Message, PiUser, ProductCategory, PstpOrderStatus, UserRole } from './types';
 import { INITIAL_PRODUCTS, MOCK_VENDORS, MOCK_REVIEWS, MOCK_COUPONS, SAMPLE_ORDERS } from './data/mockData';
-import { initAndAuthenticateProactively, subscribePiSdkState, authenticatePiUser } from './lib/piSdk';
+import { initAndAuthenticateProactively, subscribePiSdkState, authenticatePiUserFromGesture } from './lib/piSdk';
 import { AuthStatus } from './components/auth/ConnectPiButton';
 
 import { MainSection, MarketplaceCategory, UtilityCategory, BreadcrumbItem, VisitedCategory, AiHubSubTab } from './types/navigation';
@@ -346,7 +346,7 @@ function MainAppContent() {
     setAuthStatus('connecting');
     setAuthError(null);
     try {
-      const authResult = await authenticatePiUser(['username', 'payments']);
+      const authResult = await authenticatePiUserFromGesture(['username', 'payments']);
       if (authResult && authResult.username) {
         setUser((prev) => ({
           ...prev,
