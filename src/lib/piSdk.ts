@@ -2486,7 +2486,8 @@ export class PiSdkManagerService {
   public async authenticate(
     scopes: string[] = ['username', 'payments'],
     onIncompletePaymentFound?: (payment: PiPayment) => void,
-    forceReauth: boolean = false
+    forceReauth: boolean = false,
+    sdkAlreadyInitialized: boolean = false
   ): Promise<PiUser> {
 
     const requestedScopes = scopes.includes('wallet_address')
@@ -2664,7 +2665,11 @@ export class PiSdkManagerService {
          * STEP 5 — Initialize SDK
          * --------------------------------------------------------
          */
-        const hasSdk = await this.initialize();
+        // Gesture-bound Connect Pi calls must not await initialization here.
+        // The app pre-initializes Pi.init() before the user presses Connect.
+        const hasSdk = sdkAlreadyInitialized
+          ? this.isReady() && typeof window !== 'undefined' && Boolean(window.Pi)
+          : await this.initialize();
 
         if (
           !hasSdk ||
@@ -4096,6 +4101,37 @@ export function isPiSdkInitialized(): boolean {
 
 export function isPaymentScopeReady(): boolean {
   return PiSdkManager.isPaymentScopeReady();
+}
+
+/**
+ * Gesture-bound authentication for the primary Connect Pi action.
+ * SDK initialization must already have completed before the click.
+ * This function deliberately performs no await before invoking the manager,
+ * so Pi.authenticate() can be reached synchronously within the click task.
+ */
+export function authenticatePiUserFromGesture(
+  scopes: string[] = ['username', 'payments']
+): Promise<PiUser> {
+  const preflight = getPiRuntimePreflight();
+  if (!preflight.canAttemptAuth) {
+    throw new Error(
+      preflight.failReason ||
+        'Please open PiNova Global Hub in the official Pi Browser.'
+    );
+  }
+
+  if (!PiSdkManager.isReady()) {
+    throw new Error(
+      'Pi SDK is still initializing. Please wait for the Pi connection to become ready, then try again.'
+    );
+  }
+
+  return PiSdkManager.authenticate(
+    scopes,
+    undefined,
+    false,
+    true
+  );
 }
 
 export async function authenticatePiUser(
